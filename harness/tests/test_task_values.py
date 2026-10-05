@@ -69,7 +69,7 @@ def test_conform_rejects_values_outside_the_type(value, type_):
         (-3, "int", "-3", "-3"),
         (3.0, "f64", "3.0", "3.0"),
         (1e-07, "f64", "1e-07", "1e-07"),
-        ("it's \"x\"\n", "str", '"it\'s \\"x\\"\\n"', '"it\'s \\"x\\"\\n"'),
+        ('it\'s "x"\n', "str", '"it\'s \\"x\\"\\n"', '"it\'s \\"x\\"\\n"'),
         (True, "bool", "True", "True"),
         (None, "int?", "None", "none"),
         ([1, 2], "[int]", "[1, 2]", "[1, 2]"),

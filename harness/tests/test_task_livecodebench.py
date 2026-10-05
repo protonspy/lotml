@@ -21,7 +21,9 @@ def record(**overrides) -> dict:
         "question_id": "3500",
         "contest_id": "weekly-contest-430",
         "contest_date": "2025-01-04T00:00:00",
-        "starter_code": "class Solution:\n    def maxSum(self, nums: List[int], k: int) -> int:\n        ",
+        "starter_code": (
+            "class Solution:\n    def maxSum(self, nums: List[int], k: int) -> int:\n        "
+        ),
         "difficulty": "medium",
         "public_test_cases": json.dumps(
             [{"input": "[1, 2, 3]\n2", "output": "5", "testtype": "functional"}]
@@ -92,10 +94,7 @@ def test_oversized_cases_are_left_out_and_a_task_needs_one():
 
 
 def test_unsupported_signatures_are_refused():
-    starter = (
-        "class Solution:\n"
-        "    def f(self, root: Optional[TreeNode]) -> int:\n        "
-    )
+    starter = "class Solution:\n    def f(self, root: Optional[TreeNode]) -> int:\n        "
     with pytest.raises(Untranslatable):
         from_record(record(starter_code=starter, metadata='{"func_name": "f"}'))
 

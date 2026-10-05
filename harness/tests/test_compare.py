@@ -29,8 +29,6 @@ from lotml_harness.tasks.types import parse
         (2**64, 2**64, "eq", "int", False),
     ],
 )
-def test_matches_compares_a_result_as_its_case_says(
-    actual, expected, compare, returns, verdict
-):
+def test_matches_compares_a_result_as_its_case_says(actual, expected, compare, returns, verdict):
     case = Case(args=[], expected=expected, compare=compare)
     assert matches(actual, case, parse(returns)) is verdict

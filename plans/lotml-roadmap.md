@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: auto
-checksum: 7ad3b96fc9a71e01c8f8718d243ebfe3cf5f4e05ab849cc6be792e840c770ac3
+checksum: 8d6588bd61672a4d6716cfccc0909a76380a2b27cdf0f04f84e29a1138d99e07
 ---
 
 # lotml roadmap
@@ -60,7 +60,7 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
 - [x] 1.2 (Unit) Review adr:0003 and adr:0005 against the corrected evidence and supersede their context or keep it, as the owner decides (docs/wiki/pages/source-verification.md, docs/wiki/pages/memory-model.md)
 - [x] 1.3 (Unit) Write the lotml language reference as idiom examples under 10,000 tokens, variant B, with the parameter conventions, the unit type, `todo()` and the places where semantics differ from Python marked (R12, R24, R28, R33; docs/wiki/pages/training-prior.md, research/pilot/spec-b.md)
   _Depends 1.1_
-- [ ] 1.4 (TDD) Build the harness task set: HumanEval, MBPP and LiveCodeBench v6 translated to lotml with signatures, docstrings and hidden tests, at least 168 paired tasks per comparison (docs/wiki/pages/evaluation-harness.md, research/experiments/sample_size/results.md)
+- [x] 1.4 (TDD) Build the harness task set: HumanEval, MBPP and LiveCodeBench v6 translated to lotml with signatures, docstrings and hidden tests, at least 168 paired tasks per comparison (docs/wiki/pages/evaluation-harness.md, research/experiments/sample_size/results.md)
   _Depends 1.3_
 - [ ] 1.5 (Unit) Grow the research transpiler into the harness executor: every construct of the reference, value semantics, the step budget and tracebacks at the lotml line (research/experiments/transpiler/, research/experiments/tracebacks/results.md)
   _Depends 1.3_

@@ -23,9 +23,16 @@ decision requires and the roadmap's gates.
 - **Sources** (`research/literature/`): every paper the decisions rest on, downloaded and converted,
   with each quoted number checked against it — see [[source-verification]].
 
+- **Task set** (`harness/`): HumanEval and MBPP from MultiPL-E's typed originals and LiveCodeBench
+  release v6, translated to lotml signatures and docstrings with hidden tests — 684 tasks and 5,522
+  test cases, every HumanEval and MBPP task kept only when its canonical solution passes the
+  translated tests (`harness/results/tasks.md`). A task is refused, never patched, when its types
+  have no lotml form (`Any`, unions) or Python's result does not fit the signature (`240.0` for an
+  `int`). MultiPL-E's license forbids training on it, so it feeds evaluation only.
+
 ## What is missing
 
-1. **External tasks.** Translate HumanEval and MBPP the way
+1. **External tasks** — built, see the task set above. Translate HumanEval and MBPP the way
    [MultiPL-E](https://arxiv.org/abs/2208.08227) does for 18 languages. The work is a translator
    for signatures, docstring terminology, types and tests — prompt contents matter: removing
    doctests hurt Codex significantly. Add less contaminated tasks (LiveCodeBench v6) and
