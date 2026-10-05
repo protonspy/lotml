@@ -1,0 +1,212 @@
+"""The three published dialects of lotml's grammar, each tested against the whole corpus."""
+
+from functools import cache
+
+import pytest
+import tiktoken
+from lark.exceptions import LarkError
+from llguidance import LLMatcher
+from llguidance.gbnf_to_lark import any_to_lark
+from llguidance.tiktoken import lltokenizer_from_encoding
+
+from lotml_harness import ROOT, reference
+from lotml_harness.lang import dialects
+from lotml_harness.lang.grammar import parser
+
+CORPUS = ROOT / "research" / "tokens" / "corpus"
+PILOT = ROOT / "research" / "pilot" / "runs"
+
+
+def parses(text: str) -> bool:
+    try:
+        parser("b").parse(text)
+    except LarkError:
+        return False
+    return True
+
+
+def corpus() -> dict[str, str]:
+    """Every variant B program the parser accepts: corpus, reference examples, pilot runs."""
+    programs = {f"corpus/{p.parent.name}": p.read_text("utf-8") for p in CORPUS.glob("*/b.x")}
+    for index, example in enumerate(reference.examples(reference.text())):
+        programs[f"reference/{index}"] = reference.program(example)
+    for path in PILOT.glob("b-*/*.x"):
+        programs[f"pilot/{path.parent.name}/{path.stem}"] = path.read_text("utf-8")
+    programs = {k: v if v.endswith("\n") else v + "\n" for k, v in programs.items()}
+    return {k: v for k, v in sorted(programs.items()) if parses(v)}
+
+
+PROGRAMS = corpus()
+
+REJECTED = {
+    "python def": "def f():\n    pass\n",
+    "missing colon": "fn f()\n    pass\n",
+    "body not indented": "fn f():\nreturn 1\n",
+    "indented one level too deep": "fn f():\n    x = 1\n        y = 2\n",
+    "indented by two spaces": "fn f():\n  return 1\n",
+    "dedent to no level": "fn f():\n    if x:\n        y = 1\n      z = 2\n",
+    "unclosed bracket": "fn f():\n    x = (1\n",
+    "braces block": "fn f() {\n    return 1\n}\n",
+    "keyword glued to a name": "fn f():\n    ifTrue:\n        pass\n",
+    "try": "fn f():\n    try:\n        pass\n",
+}
+
+
+def nested(depth: int) -> str:
+    lines = ["fn f():"]
+    for level in range(1, depth):
+        lines.append("    " * level + "if True:")
+    lines.append("    " * depth + "pass")
+    return "\n".join(lines) + "\n"
+
+
+def test_the_corpus_is_large_enough_to_mean_something():
+    assert len(PROGRAMS) >= 50
+    assert {k.split("/")[0] for k in PROGRAMS} == {"corpus", "reference", "pilot"}
+
+
+# EBNF -------------------------------------------------------------------------------
+
+
+@cache
+def from_ebnf():
+    return dialects.lark_from_ebnf(dialects.ebnf("b"))
+
+
+def ebnf_accepts(text: str) -> bool:
+    try:
+        from_ebnf().parse(text)
+    except LarkError:
+        return False
+    return True
+
+
+@pytest.mark.parametrize("name", PROGRAMS)
+def test_the_ebnf_read_back_accepts_every_program(name):
+    assert ebnf_accepts(PROGRAMS[name])
+
+
+@pytest.mark.parametrize("name", REJECTED)
+def test_the_ebnf_read_back_rejects_what_the_parser_rejects(name):
+    text = REJECTED[name]
+    assert not parses(text)
+    assert not ebnf_accepts(text)
+
+
+def test_the_ebnf_names_its_lexer_tokens_and_has_no_lark_notation():
+    text = dialects.ebnf("b")
+    assert "INDENT" in text and "DEDENT" in text and "NEWLINE ::=" in text
+    assert "start ::=" in text
+    assert "%" not in text.split("*/", 1)[1] and "->" not in text.replace('"->"', "")
+
+
+# llguidance and GBNF ------------------------------------------------------------------
+
+
+@cache
+def tokenizer():
+    encoding = tiktoken.get_encoding("o200k_base")
+    return lltokenizer_from_encoding(encoding, eos_token=encoding.eot_token)
+
+
+@cache
+def compiled(kind: str) -> str:
+    text = dialects.llguidance("b") if kind == "lark" else any_to_lark(dialects.gbnf("b"))
+    return LLMatcher.grammar_from_lark(text)
+
+
+def accepts(kind: str, text: str) -> bool:
+    matcher = LLMatcher(tokenizer(), compiled(kind), log_level=0)
+    if matcher.is_error():
+        raise AssertionError(matcher.get_error())
+    matcher.consume_tokens(tokenizer().tokenize_str(text))
+    return not matcher.is_error() and matcher.is_accepting()
+
+
+@pytest.mark.parametrize("kind", ["lark", "gbnf"])
+def test_the_constrained_dialects_compile_in_llguidance(kind):
+    assert LLMatcher.validate_grammar(compiled(kind), tokenizer()) == ""
+
+
+@pytest.mark.parametrize("kind", ["lark", "gbnf"])
+@pytest.mark.parametrize("name", PROGRAMS)
+def test_the_constrained_dialects_accept_every_program(kind, name):
+    assert accepts(kind, PROGRAMS[name])
+
+
+@pytest.mark.parametrize("kind", ["lark", "gbnf"])
+@pytest.mark.parametrize("name", REJECTED)
+def test_the_constrained_dialects_reject_broken_programs(kind, name):
+    assert not accepts(kind, REJECTED[name])
+
+
+@pytest.mark.parametrize("kind", ["lark", "gbnf"])
+def test_blocks_are_bounded_in_depth(kind):
+    assert accepts(kind, nested(dialects.DEPTH))
+    assert not accepts(kind, nested(dialects.DEPTH + 1))
+    assert parses(nested(dialects.DEPTH + 1))
+
+
+def test_the_llguidance_dialect_uses_no_feature_llguidance_refuses():
+    text = dialects.llguidance("b")
+    assert "%declare" not in text and "%ignore" not in text
+    assert ".2:" not in text and "*?" not in text and "*+" not in text
+
+
+def test_gbnf_rule_names_are_lowercase_and_dashed():
+    import re
+
+    names = re.findall(r"^([^\s#]\S*) ::=", dialects.gbnf("b"), re.MULTILINE)
+    assert "root" in names
+    assert all(re.fullmatch(r"[a-z][a-z0-9-]*", n) for n in names)
+
+
+# Regular expressions to grammar notation ----------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("pattern", "gbnf"),
+    [
+        ("abc", '"abc"'),
+        ("[A-Za-z_][A-Za-z0-9_]*", "[A-Za-z_] [A-Za-z0-9_]*"),
+        (r"#[^\n]*", '"#" [^\\n]*'),
+        ("a|bc", '("a" | "bc")'),
+        ("(ab)+c?", '("ab")+ "c"?'),
+        ("x{0,2}", '"x"{0,2}'),
+        (r"\d", "[0-9]"),
+        (r'"', '"\\""'),
+        (r"\\", '"\\\\"'),
+        (".", "[^\\n]"),
+    ],
+)
+def test_regex_becomes_gbnf(pattern, gbnf):
+    assert dialects.regex_to_gbnf(pattern) == gbnf
+
+
+@pytest.mark.parametrize(
+    ("pattern", "ebnf"),
+    [
+        ("abc", '"abc"'),
+        ("[A-Za-z_][A-Za-z0-9_]*", "[A-Za-z_] [A-Za-z0-9_]*"),
+        (r"#[^\n]*", '"#" [^#xA]*'),
+        ("a|bc", '( "a" | "bc" )'),
+        ("x{0,2}", '( "x" "x"? )?'),
+        ('"', "'\"'"),
+    ],
+)
+def test_regex_becomes_ebnf(pattern, ebnf):
+    assert dialects.regex_to_ebnf(pattern) == ebnf
+
+
+@pytest.mark.parametrize("pattern", ["(?=a)b", "a*?", "(a)\\1", "a*+"])
+def test_regex_features_other_engines_lack_are_refused(pattern):
+    with pytest.raises(dialects.Unportable):
+        dialects.regex_to_gbnf(pattern)
+
+
+# Publishing ---------------------------------------------------------------------------
+
+
+def test_the_published_grammars_are_generated_from_the_current_source():
+    for path, text in dialects.published().items():
+        assert path.read_text(encoding="utf-8") == text, f"{path}: run dialects.write()"
