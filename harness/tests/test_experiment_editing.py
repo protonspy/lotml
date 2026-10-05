@@ -60,7 +60,7 @@ def test_top_level_names_cover_types_and_functions():
 
 
 def test_assemble_avoids_clashing_names_and_reaches_the_length(monkeypatch):
-    monkeypatch.setattr(editing, "FILE_LINES", 8)
+    monkeypatch.setattr(editing, "FILE_LINES", 9)
     whole, index = editing.assemble(POSITIVE, [POSITIVE, DOUBLE, HALF, DOUBLE], "s")
     assert whole.count("fn count_positive") == 1 and whole.count("fn double") == 1
     assert "fn half" in whole
@@ -124,11 +124,12 @@ def blocks(search: str, replace: str) -> str:
     return f"{editing.SEARCH}\n{search}{editing.DIVIDER}\n{replace}{editing.REPLACE}\n"
 
 
-BROKEN = POSITIVE.replace("            n += 1\n", "        n += 1\n")
+BROKEN = POSITIVE.replace("    return n\n", "        return n\n")
+FIX = blocks("        return n\n", "    return n\n")
 
 
 def test_apply_replaces_an_exact_match_once():
-    answer = blocks("        n += 1\n", "            n += 1\n")
+    answer = FIX
     edited, reason = editing.apply(BROKEN, editing.parse_blocks(answer))
     assert reason is None and edited == POSITIVE
 
@@ -138,10 +139,7 @@ def test_apply_replaces_an_exact_match_once():
     [
         ("no blocks here", "no edit"),
         (blocks("\n", "x\n"), "empty search"),
-        (
-            blocks("    return n\n" * 1, "x\n").replace("    return n", "return n"),
-            "not found: whitespace",
-        ),
+        (blocks("return n\n", "x\n"), "not found: whitespace"),
         (blocks("missing line\n", "x\n"), "not found"),
     ],
 )
@@ -183,7 +181,7 @@ def edit_task() -> editing.EditTask:
         task(),
         POSITIVE,
         BROKEN,
-        (4, -1),
+        (5, 1),
         "`count_positive([1, -2, 3])` should return `2`, but it does not.",
     )
 
@@ -199,16 +197,16 @@ def test_a_correct_fix_passes_in_either_form(form):
 
 def test_judge_reports_syntax_and_failing_tests():
     attempt = editing.judge(
-        edit_task(), "indented", BROKEN, blocks("    return n\n", "    return (\n"), False
+        edit_task(), "indented", BROKEN, blocks("        return n\n", "        return (\n"), False
     )
     assert attempt.outcome == "syntax" and "does not parse" in attempt.feedback
     attempt = editing.judge(
-        edit_task(), "indented", BROKEN, blocks("    return n\n", "    return 7\n"), False
+        edit_task(), "indented", BROKEN, blocks("        return n\n", "    return 7\n"), False
     )
     assert attempt.outcome == "tests fail" and "should return" in attempt.feedback
     braced = editing.in_form(BROKEN, "braces")
     attempt = editing.judge(
-        edit_task(), "braces", braced, blocks("    return n\n", "    return n\n}\n"), False
+        edit_task(), "braces", braced, blocks("        return n\n", "        return n\n}\n"), False
     )
     assert attempt.outcome == "syntax"
 
@@ -226,8 +224,7 @@ class Scripted(models.Model):
 
 def test_solve_gives_feedback_until_the_fix_passes():
     wrong = blocks("missing\n", "x\n")
-    right = blocks("        n += 1\n", "            n += 1\n")
-    model = Scripted([wrong, right])
+    model = Scripted([wrong, FIX])
     record = editing.solve(model, edit_task(), "indented")
     assert [t["outcome"] for t in record["turns"]] == ["apply failed: not found", "pass"]
     assert record["fixed"] and not record["fixed_first"]
@@ -249,7 +246,7 @@ def test_solve_stops_after_the_last_turn_and_records_a_failed_completion():
 
 def test_run_resumes_and_the_report_pairs_the_forms(tmp_path):
     right = {
-        "indented": blocks("        n += 1\n", "            n += 1\n"),
+        "indented": FIX,
         "braces": blocks(editing.in_form(BROKEN, "braces"), editing.in_form(POSITIVE, "braces")),
     }
 

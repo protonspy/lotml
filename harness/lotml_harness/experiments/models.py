@@ -36,6 +36,17 @@ class Model:
     def complete(self, system: str, user: str) -> Completion:
         raise NotImplementedError
 
+    def chat(self, system: str, messages: list[dict[str, str]]) -> Completion:
+        """A conversation's next answer; a model without turns reads it as one transcript."""
+        if len(messages) == 1:
+            return self.complete(system, messages[0]["content"])
+        transcript = "\n\n".join(
+            f"<{m['role']}>\n{m['content']}\n</{m['role']}>" for m in messages[:-1]
+        )
+        return self.complete(
+            system, f"Our conversation so far:\n\n{transcript}\n\n{messages[-1]['content']}"
+        )
+
 
 class ClaudeCli(Model):
     """A Claude model through `claude -p`, isolated from this workspace."""
@@ -124,13 +135,13 @@ class Ollama(Model):
         self.timeout = timeout
 
     def complete(self, system: str, user: str) -> Completion:
+        return self.chat(system, [{"role": "user", "content": user}])
+
+    def chat(self, system: str, messages: list[dict[str, str]]) -> Completion:
         body = {
             "model": self.model,
             "stream": False,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
+            "messages": [{"role": "system", "content": system}, *messages],
             "options": {"temperature": 0, "num_ctx": self.context, "num_predict": 2048},
         }
         request = urllib.request.Request(  # noqa: S310
