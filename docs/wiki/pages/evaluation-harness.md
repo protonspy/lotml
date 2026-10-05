@@ -64,7 +64,7 @@ syntax is revisited ([[requirements-and-roadmap]]):
 
 | gate | criterion |
 | --- | --- |
-| 0 → 1 | parse ≥ 95% and no syntactic leakage for frontier models with the spec; data confirms variant B (adr:0004-python-syntax-where-semantics-match) and settles indentation versus braces (adr:0005-significant-indentation) |
+| 0 → 1 | parse ≥ 95% and no syntactic leakage for frontier models with the spec; data tests variant B against A (adr:0004-python-syntax-where-semantics-match) and settles indentation versus braces (adr:0005-significant-indentation) |
 | 1 → 2 | lotml pass@1 ≥ typed Python pass@1 on the same tasks; median rounds to green ≤ 2; tokens ≤ typed Python |
 | 2 → 3 | calling lotml from Python and Python from lotml works; synthetic corpus validated by tests |
 | 3 → 4 | the whole suite passes on the Python and C targets with the same result; ≤ 2× C on numeric benchmarks, with allocation-heavy ones reported separately |
