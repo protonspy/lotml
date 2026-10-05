@@ -345,14 +345,67 @@ class Attempt:
     details: dict = field(default_factory=dict)
 
 
+def function_span(lines: list[str], name: str, form: str) -> tuple[int, int] | None:
+    """The first and last line of the top-level function `name`, in either form."""
+    start = next(
+        (i for i, line in enumerate(lines) if re.match(rf"fn {re.escape(name)}\b", line)), None
+    )
+    if start is None:
+        return None
+    end = start
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
+        if form == "braces" and line.rstrip() == "}":
+            return start, index
+        if line.strip() and not line[0].isspace():
+            break
+        if line.strip():
+            end = index
+    return (start, end) if form == "indented" else None
+
+
+CODE_FENCE = re.compile(r"```[^\n`]*\n(.*?)```", re.DOTALL)
+
+
+def function_edits(
+    current: str, answer: str, form: str
+) -> tuple[str | None, list[tuple[str, str]]]:
+    """An answer that rewrites whole functions, applied by name: what weaker models write."""
+    fences = CODE_FENCE.findall(answer)
+    if not fences:
+        return None, []
+    code = fences[-1].split("\n")
+    lines = current.split("\n")
+    replaced = []
+    for name in re.findall(r"^fn (\w+)", fences[-1], re.MULTILINE):
+        new, old = function_span(code, name, form), function_span(lines, name, form)
+        if new is None or old is None:
+            continue
+        before = "\n".join(lines[old[0] : old[1] + 1]) + "\n"
+        after = "\n".join(code[new[0] : new[1] + 1]) + "\n"
+        lines[old[0] : old[1] + 1] = code[new[0] : new[1] + 1]
+        replaced.append((before, after))
+    return ("\n".join(lines) if replaced else None), replaced
+
+
 def judge(task: EditTask, form: str, current: str, answer: str, tolerant: bool) -> Attempt:
-    """Apply an answer to the current file and say what happened."""
+    """Apply an answer to the current file and say what happened.
+
+    SEARCH/REPLACE blocks are applied as written; an answer without them that rewrites whole
+    functions has each one replaced by name, as a symbol-addressed edit would.
+    """
     blocks = parse_blocks(answer)
     edited, reason = apply(current, blocks, tolerant)
+    applied = "blocks"
+    if not blocks:
+        rewritten, blocks = function_edits(current, answer, form)
+        if rewritten is not None:
+            edited, reason, applied = rewritten, None, "function"
     lines = sum(1 for line in current.split("\n") if line.strip())
     quoted = sum(1 for search, _ in blocks for line in search.split("\n") if line.strip())
     details = {
         "blocks": len(blocks),
+        "applied": applied if edited is not None else None,
         "searched": round(quoted / lines, 3) if lines else 0,
         "idioms": idioms(blocks, form),
     }
@@ -490,6 +543,7 @@ def summarize(rows: list[dict]) -> dict[str, dict]:
                 "fixed": sum(r["fixed"] for r in group),
                 "outcomes": Counter(t["outcome"] for t in every),
                 "rewrites": sum(t["searched"] > 0.5 for t in first),
+                "by_function": sum(t.get("applied") == "function" for t in every),
                 "idioms": Counter(name for t in every for name in t["idioms"]),
                 "turns": sum(len(r["turns"]) for r in group),
             }
@@ -539,8 +593,8 @@ def markdown(rows: list[dict], made: int) -> str:
         "answers that applying with a uniform indentation offset would have fixed.",
         "",
         "| model | form | turns | pass | apply failed | syntax | tests fail | first turn, tolerant "
-        "| rewrites | C-family idioms |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| rewrites | applied by function | C-family idioms |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
     for model, e in summary.items():
         for form in FORMS:
@@ -551,7 +605,7 @@ def markdown(rows: list[dict], made: int) -> str:
             lines.append(
                 f"| {model} | {form} | {f['turns']} | {outcomes['pass']} | {failed} "
                 f"| {outcomes['syntax']} | {outcomes['tests fail']} "
-                f"| {f['fixed_first_tolerant']} | {f['rewrites']} | {found} |"
+                f"| {f['fixed_first_tolerant']} | {f['rewrites']} | {f['by_function']} | {found} |"
             )
     lines += ["", "## Why edits did not apply", "", "| model | form | reason | turns |"]
     lines += ["| --- | --- | --- | ---: |"]
