@@ -14,12 +14,14 @@ from lark.indenter import Indenter
 
 STRING_RE = (
     r"[rRbBfF]{0,2}("
-    r'"""(.|\n)*?"""'
-    r"|'''(.|\n)*?'''"
-    r'|"(?:[^"\\\n]|\\.)*+"'
-    r"|'(?:[^'\\\n]|\\.)*+'"
+    r'"""(("|"")?([^"\\]|\\(.|\n)))*"""'
+    r"|'''(('|'')?([^'\\]|\\(.|\n)))*'''"
+    r'|"([^"\\\n]|\\(.|\n))*"'
+    r"|'([^'\\\n]|\\(.|\n))*'"
     r")"
 )
+"""Strings as Python writes them, in a regular expression every engine reads: no lazy or
+possessive repetition, so a triple-quoted string ends at its first unescaped `\"\"\"`."""
 
 GRAMMAR = r"""
 start: (_NEWLINE | item)*

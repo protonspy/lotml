@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-05 — the grammar published in three dialects: [[constrained-decoding]] describes how they are generated and tested
 - 2026-10-05 — the harness executor built: [[evaluation-harness]] lists it under what exists
 - 2026-10-05 — the harness task set built: [[evaluation-harness]] lists it under what exists
 - 2026-10-05 — integer division decided and ADRs 0003 and 0005 superseded with the corrected evidence: [[type-system]], [[lotml-syntax]], [[requirements-and-roadmap]], [[memory-model]], [[editing-robustness]], [[evaluation-harness]] and [[llm-oriented-language]] cite adr:0007, adr:0008 and adr:0009

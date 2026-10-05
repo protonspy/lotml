@@ -43,13 +43,27 @@ REJECTED = {
     "missing colon": "fn f()\n    pass\n",
     "body not indented": "fn f():\nreturn 1\n",
     "indented one level too deep": "fn f():\n    x = 1\n        y = 2\n",
-    "indented by two spaces": "fn f():\n  return 1\n",
     "dedent to no level": "fn f():\n    if x:\n        y = 1\n      z = 2\n",
     "unclosed bracket": "fn f():\n    x = (1\n",
     "braces block": "fn f() {\n    return 1\n}\n",
     "keyword glued to a name": "fn f():\n    ifTrue:\n        pass\n",
     "try": "fn f():\n    try:\n        pass\n",
 }
+
+COMPACT = {
+    "comparisons without spaces": "fn f():\n    y = x<y and a==b or c>=d\n",
+    "arithmetic without spaces": "fn f():\n    y = xs[i-1]*2+f(x)//3\n",
+    "assignment without spaces": "fn f():\n    var y=1\n    y+=2\n",
+    "word operators": "fn f():\n    y = x in xs and x not in ys and x is not None\n",
+    "spaces inside brackets": "fn f():\n    y = g( x , [ 1 ] , { 1: 2 } )\n",
+}
+"""Spacing models write that is not canonical but must never be forbidden."""
+
+NOT_CANONICAL = {
+    "indented by two spaces": "fn f():\n  return 1\n",
+    "indented with a tab": "fn f():\n\treturn 1\n",
+}
+"""Indentation the tolerant parser accepts and constrained decoding must not produce."""
 
 
 def nested(depth: int) -> str:
@@ -97,7 +111,15 @@ def test_the_ebnf_names_its_lexer_tokens_and_has_no_lark_notation():
     text = dialects.ebnf("b")
     assert "INDENT" in text and "DEDENT" in text and "NEWLINE ::=" in text
     assert "start ::=" in text
-    assert "%" not in text.split("*/", 1)[1] and "->" not in text.replace('"->"', "")
+    body = text.split("*/", 1)[1]
+    assert "%ignore" not in body and "%declare" not in body
+    assert "->" not in body.replace('"->"', "")
+
+
+@pytest.mark.parametrize("name", NOT_CANONICAL)
+def test_the_ebnf_accepts_the_indentation_the_parser_tolerates(name):
+    assert parses(NOT_CANONICAL[name])
+    assert ebnf_accepts(NOT_CANONICAL[name])
 
 
 # llguidance and GBNF ------------------------------------------------------------------
@@ -135,9 +157,16 @@ def test_the_constrained_dialects_accept_every_program(kind, name):
 
 
 @pytest.mark.parametrize("kind", ["lark", "gbnf"])
-@pytest.mark.parametrize("name", REJECTED)
-def test_the_constrained_dialects_reject_broken_programs(kind, name):
-    assert not accepts(kind, REJECTED[name])
+@pytest.mark.parametrize("name", COMPACT)
+def test_the_constrained_dialects_accept_compact_spacing(kind, name):
+    assert parses(COMPACT[name])
+    assert accepts(kind, COMPACT[name])
+
+
+@pytest.mark.parametrize("kind", ["lark", "gbnf"])
+@pytest.mark.parametrize("name", [*REJECTED, *NOT_CANONICAL])
+def test_the_constrained_dialects_reject_broken_and_non_canonical_programs(kind, name):
+    assert not accepts(kind, (REJECTED | NOT_CANONICAL)[name])
 
 
 @pytest.mark.parametrize("kind", ["lark", "gbnf"])

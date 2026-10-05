@@ -58,3 +58,4 @@ over this file answers with the example above as well as with the notes. -->
 - n-0018 2026-10-05 #ceiling @harness/lotml_harness/lang/transpile.py — the executor erases types: int + f64 and other static type errors run as Python would, so pass@1 counts programs the compiler would reject; lifts with the phase 1 type checker
 - n-0019 2026-10-05 #ceiling @harness/lotml_harness/lang/transpile.py — lambdas capture variables by reference in the executor, not by copy as lotml specifies; a lambda reading a var reassigned later sees the new value
 - n-0020 2026-10-05 #gotcha @harness/lotml_harness/lang/transpile.py — inout arguments are boxed and written back with a walrus after the call; an &x inside a lambda cannot write back to the enclosing x
+- n-0021 2026-10-05 #gotcha @harness/lotml_harness/lang/dialects.py — llguidance's lexer decides a lexeme one byte ahead: a lexeme that can run on into the next line (a multi-line end of line, a fused 'is not') rejects valid code

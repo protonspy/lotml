@@ -1,0 +1,122 @@
+/* lotml grammar, variant B, in W3C EBNF.
+   Generated from harness/lotml_harness/lang/grammar.py; do not edit by hand.
+
+   Tokens are separated by `ignored`. NEWLINE ends a logical line; inside
+   brackets, line breaks are ignored. After each NEWLINE the lexer compares the
+   next line's indentation (a tab counts as four spaces) with a stack of open
+   levels, as Python's tokenizer does: deeper emits INDENT, shallower emits one
+   DEDENT per level closed. A keyword is never a NAME. */
+
+start ::= ( NEWLINE | item )*
+item ::= fn_def | type_def | impl_def | trait_def | import_stmt | test_def
+fn_def ::= fn_head ":" suite
+fn_head ::= "fn" NAME type_params? "(" params? ")" ( "->" ret_type )?
+trait_def ::= "trait" NAME type_params? ":" NEWLINE INDENT trait_item+ DEDENT
+trait_item ::= fn_head NEWLINE | fn_def
+impl_def ::= "impl" type ( "for" type )? ":" NEWLINE INDENT fn_def+ DEDENT
+test_def ::= "test" STRING ":" suite
+import_stmt ::= "from" dotted "import" NAME ( "," NAME )* NEWLINE | "import" dotted NEWLINE
+dotted ::= NAME ( "." NAME )*
+type_params ::= "[" type_param ( "," type_param )* "]"
+type_param ::= NAME ( ":" NAME )?
+params ::= param ( "," param )* ","?
+param ::= ( INOUT | SINK | VAR )? NAME ( ":" type )? ( "=" test )?
+ret_type ::= type ( "!" type )?
+type ::= base_type QMARK*
+base_type ::= NAME type_args? | "[" type "]" | "{" type ":" type "}" | "{" type "}" | "(" type "," ( type ( "," type )* ","? )? ")" | "dyn" NAME | NONE
+type_args ::= "[" type ( "," type )* "]"
+type_def ::= "type" NAME type_params? "(" fields? ")" NEWLINE | "type" NAME type_params? "=" variant ( "|" variant )* NEWLINE
+fields ::= field ( "," field )* ","?
+field ::= NAME ":" type ( "=" test )?
+variant ::= NAME ( "(" variant_fields? ")" )?
+variant_fields ::= variant_field ( "," variant_field )* ","?
+variant_field ::= field | type
+suite ::= simple_stmt | NEWLINE INDENT stmt+ DEDENT
+stmt ::= simple_stmt | compound_stmt
+simple_stmt ::= small_stmt NEWLINE
+small_stmt ::= var_stmt | expr_stmt | return_stmt | assert_stmt | pass_stmt | break_stmt | continue_stmt
+var_stmt ::= VAR NAME ( ":" type )? "=" testlist
+expr_stmt ::= testlist ( annassign | augassign | assign )?
+annassign ::= ":" type "=" test
+assign ::= "=" testlist
+augassign ::= AUGOP test
+return_stmt ::= "return" testlist?
+assert_stmt ::= "assert" test ( "," test )?
+pass_stmt ::= "pass"
+break_stmt ::= "break"
+continue_stmt ::= "continue"
+compound_stmt ::= if_stmt | while_stmt | for_stmt | match_stmt
+if_stmt ::= "if" test ":" suite elif_clause* else_clause?
+elif_clause ::= "elif" test ":" suite
+else_clause ::= "else" ":" suite
+while_stmt ::= "while" test ":" suite
+for_stmt ::= "for" targets "in" testlist ":" suite
+targets ::= target ( "," target )*
+target ::= NAME | "(" targets ")"
+match_stmt ::= "match" test ":" NEWLINE INDENT arm+ DEDENT
+arm ::= "case" pattern ":" suite
+pattern ::= NAME "(" ( pattern ( "," pattern )* )? ")" | NAME | "(" pattern "," ( pattern ( "," pattern )* )? ")" | literal
+literal ::= ( PLUS | MINUS )? NUMBER | STRING | TRUE | FALSE | NONE
+testlist ::= test ( "," test )*
+test ::= coalesce ( "if" coalesce "else" test )? | lambdef
+lambdef ::= "lambda" ( NAME ( "," NAME )* )? ":" test
+coalesce ::= or_test ( "??" or_test )*
+or_test ::= and_test ( "or" and_test )*
+and_test ::= not_test ( "and" not_test )*
+not_test ::= "not" not_test | comparison
+comparison ::= bit_or ( comp_op bit_or )*
+comp_op ::= _comparison | "in" | "not" "in" | "is" | "is" "not"
+bit_or ::= bit_xor ( "|" bit_xor )*
+bit_xor ::= bit_and ( "^" bit_and )*
+bit_and ::= shift ( "&" shift )*
+shift ::= arith ( _shift arith )*
+arith ::= term ( _sign term )*
+term ::= factor ( _product factor )*
+factor ::= _sign factor | "~" factor | power
+power ::= atom_expr ( POW factor )?
+atom_expr ::= atom_expr "(" arguments? ")" | atom_expr "[" subscript "]" | atom_expr "." NAME | atom_expr "?" | atom
+arguments ::= argument ( "," argument )* ","?
+argument ::= NAME "=" test | "&" atom_expr | test comp_for?
+subscript ::= test | test? ":" test? ( ":" test? )?
+atom ::= NAME | NUMBER | STRING+ | TRUE | FALSE | NONE | "(" ")" | "(" test ")" | "(" test "," ( test ( "," test )* ","? )? ")" | "(" test comp_for ")" | "[" ( test ( "," test )* ","? )? "]" | "[" test comp_for "]" | "{" ( dict_item ( "," dict_item )* ","? )? "}" | "{" dict_item comp_for "}" | "{" test ( "," test )* ","? "}" | "{" test comp_for "}" | "fail" atom_expr
+dict_item ::= test ":" test
+comp_for ::= "for" targets "in" or_test ( "if" or_test )* comp_for?
+_comparison ::= LT | GT | EQ | NE | LE | GE
+_shift ::= LSHIFT | RSHIFT
+_sign ::= PLUS | MINUS
+_product ::= STAR | SLASH | DSLASH | PERCENT
+
+/* Tokens */
+
+INOUT ::= "inout"
+SINK ::= "sink"
+VAR ::= "var"
+NONE ::= "None"
+TRUE ::= "True"
+FALSE ::= "False"
+AUGOP ::= "+=" | "-=" | "*=" | "/=" | "//=" | "%=" | "**=" | "&=" | "|=" | "^=" | "<<=" | ">>="
+LT ::= "<"
+GT ::= ">"
+EQ ::= "=="
+NE ::= "!="
+LE ::= "<="
+GE ::= ">="
+LSHIFT ::= "<<"
+RSHIFT ::= ">>"
+PLUS ::= "+"
+MINUS ::= "-"
+STAR ::= "*"
+SLASH ::= "/"
+DSLASH ::= "//"
+PERCENT ::= "%"
+POW ::= "**"
+QMARK ::= "?"
+NAME ::= [A-Za-z_] [A-Za-z0-9_]*
+NUMBER ::= ( "0" [xX] [0-9a-fA-F_]+ | "0" [bB] [01_]+ | "0" [oO] [0-7_]+ | [0-9] [0-9_]* ( "." [0-9] [0-9_]* )? ( [eE] [+#x2D]? [0-9]+ )? )
+STRING ::= ( [rRbBfF] [rRbBfF]? )? ( '"""' ( ( '"' (  | '"' ) )? ( [^#x22#x5C] | "\" ( [^#xA] | #xA ) ) )* '"""' | "'''" ( ( "'" (  | "'" ) )? ( [^#x27#x5C] | "\" ( [^#xA] | #xA ) ) )* "'''" | '"' ( [^#x22#x5C#xA] | "\" ( [^#xA] | #xA ) )* '"' | "'" ( [^#x27#x5C#xA] | "\" ( [^#xA] | #xA ) )* "'" )
+COMMENT ::= "#" [^#xA]*
+NEWLINE ::= ( #xD? #xA [#x9#x20]* | "#" [^#xA]* )+
+
+/* Skipped between tokens */
+
+ignored ::= [#x9#x20#xC]+ | ( "\" [#x9#x20#xC]* #xD? #xA ) | COMMENT

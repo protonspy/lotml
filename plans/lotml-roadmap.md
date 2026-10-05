@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: auto
-checksum: 7528031daf953d81dbf1b3f7707395cb5ff94e0b380d0b19e315240a14428132
+checksum: 97f53a4a7ce091ae1bd8c94ec185eb98568cc5f0068fceb8f4229ad1106deca8
 ---
 
 # lotml roadmap
@@ -64,7 +64,7 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 1.3_
 - [x] 1.5 (Unit) Grow the research transpiler into the harness executor: every construct of the reference, value semantics, the step budget and tracebacks at the lotml line (research/experiments/transpiler/, research/experiments/tracebacks/results.md)
   _Depends 1.3_
-- [ ] 1.6 (TDD) Generate the grammar from the parser's single source in three dialects — llguidance Lark with line-oriented, depth-bounded blocks, GBNF and EBNF — and test each against the whole corpus on every change (R11; research/experiments/grammar/results.md, docs/wiki/pages/constrained-decoding.md)
+- [x] 1.6 (TDD) Generate the grammar from the parser's single source in three dialects — llguidance Lark with line-oriented, depth-bounded blocks, GBNF and EBNF — and test each against the whole corpus on every change (R11; research/experiments/grammar/results.md, docs/wiki/pages/constrained-decoding.md)
   _Depends 1.3_
 - [ ] 1.7 (TDD) Compare variant B against variant A on the task set with at least three model families, closed and open, and report the outcomes that depend on the semantics (adr:0004; research/experiments/transpiler/results.md)
   _Depends 1.4, 1.5_
