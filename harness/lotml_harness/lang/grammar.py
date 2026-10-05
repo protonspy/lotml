@@ -6,7 +6,7 @@ Python's own grammar is. Variant A and variant B differ in six constructs, fille
 lookarounds, regular-expression flags — so `dialects` can translate it rule by rule.
 """
 
-from functools import cache
+import threading
 from typing import ClassVar
 
 from lark import Lark
@@ -227,12 +227,19 @@ class LotmlIndenter(Indenter):
     tab_len = 4
 
 
-@cache
+PARSERS = threading.local()
+
+
 def parser(variant: str) -> Lark:
-    return Lark(
-        source(variant),
-        parser="lalr",
-        postlex=LotmlIndenter(),
-        propagate_positions=True,
-        maybe_placeholders=True,
-    )
+    """This thread's parser for `variant`: the indenter keeps state while it parses, so a
+    parser shared between threads interleaves their indentation and brackets."""
+    built = PARSERS.__dict__.setdefault("built", {})
+    if variant not in built:
+        built[variant] = Lark(
+            source(variant),
+            parser="lalr",
+            postlex=LotmlIndenter(),
+            propagate_positions=True,
+            maybe_placeholders=True,
+        )
+    return built[variant]

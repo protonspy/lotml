@@ -116,17 +116,10 @@ def extract(answer: str) -> str:
 
 def score(task: Task, variant: str, code: str) -> dict:
     """What one answer does: parse, leaks, mutability errors, hidden tests in both semantics."""
-    try:
-        parser(variant).parse(code)
-        parse_error = None
-    except LarkError as error:
-        parse_error = str(error).strip().splitlines()[0]
     lotml = isolated(code, variant, "lotml", task)
     python = isolated(code, variant, "python", task)
     return {
-        "parse_error": parse_error,
-        "leaks": leaks(variant, code),
-        "violations": violations(variant, code) if parse_error is None else [],
+        **static_checks(variant, code),
         "error": None,
         "run_error": lotml.error,
         "cases": lotml.cases,
@@ -135,6 +128,40 @@ def score(task: Task, variant: str, code: str) -> dict:
         "passed_python": python.passed,
         "semantics_dependent": lotml.passed != python.passed,
     }
+
+
+def static_checks(variant: str, code: str) -> dict:
+    """The checks made in this process: parse, leaks and mutability errors."""
+    try:
+        parser(variant).parse(code)
+        parse_error = None
+    except LarkError as error:
+        parse_error = str(error).strip().splitlines()[0]
+    return {
+        "parse_error": parse_error,
+        "leaks": leaks(variant, code),
+        "violations": violations(variant, code) if parse_error is None else [],
+    }
+
+
+def refresh(path: Path) -> int:
+    """Recompute the in-process checks of every stored answer; how many changed.
+
+    The hidden tests ran in child processes and stand; the parse and mutability checks ran
+    in worker threads that, before parsers became per-thread, shared one parser's state.
+    """
+    lines, changed = path.read_text(encoding="utf-8").splitlines(), 0
+    out = []
+    for line in lines:
+        row = json.loads(line)
+        if row.get("error") is None and "code" in row:
+            fresh = static_checks(row["variant"], row["code"])
+            if any(row.get(k) != v for k, v in fresh.items()):
+                changed += 1
+            row |= fresh
+        out.append(json.dumps(row, ensure_ascii=False))
+    path.write_text("".join(o + "\n" for o in out), encoding="utf-8")
+    return changed
 
 
 def mcnemar(b: int, c: int) -> float:
@@ -302,7 +329,10 @@ def main() -> None:
     options.add_argument("--model", action="append", default=[], help="claude:haiku, ...")
     options.add_argument("--workers", type=int, default=1)
     options.add_argument("--seed", type=int, default=0)
+    options.add_argument("--refresh", action="append", default=[], help="a stored model's name")
     arguments = options.parse_args()
+    for name in arguments.refresh:
+        print(f"{name}: {refresh(RUNS / f'{name}.jsonl')} answers changed")
     tasks = sample(build.load(), SAMPLE, arguments.seed)
     for spec in arguments.model:
         model = from_spec(spec)

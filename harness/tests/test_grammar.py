@@ -91,6 +91,25 @@ def test_the_variants_differ_where_variant_b_takes_python_syntax():
     assert not parses("fn f():\n    y = x ?? 0", "a")
 
 
+@pytest.mark.parametrize("variant", ["a", "b"])
+def test_a_closing_bracket_without_its_opening_one_is_a_parse_error(variant):
+    with pytest.raises(LarkError):
+        parser(variant).parse("fn f():\n    x = 1)\n")
+
+
+def test_threads_parse_independently():
+    """The indenter keeps state while it parses, so threads must not share one parser."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    programs = [p.read_text(encoding="utf-8") for p in sorted(CORPUS.glob("*/b.x"))] * 8
+
+    def outcome(text):
+        return parses(text)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        assert all(pool.map(outcome, programs))
+
+
 def test_source_fills_each_variant_without_leftover_placeholders():
     for variant in "ab":
         text = source(variant)

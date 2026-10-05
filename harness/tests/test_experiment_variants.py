@@ -235,3 +235,16 @@ def test_collected_keeps_each_answer_once_and_only_for_the_sample(tmp_path):
     (tmp_path / "m.jsonl").write_text("\n".join(json.dumps(x) for x in lines) + "\n")
     sampled = [Task("t1", "s", "f", [], Prim("int"), "", [])]
     assert variants.collected(tmp_path, sampled) == [lines[1]]
+
+
+def test_refresh_recomputes_the_in_process_checks(tmp_path):
+    stale = {"model": "m", "variant": "b", "task": "t", "code": GOOD_B, "error": None}
+    stale |= {"parse_error": "spurious", "leaks": [], "violations": [], "passed": True}
+    failed = {"model": "m", "variant": "b", "task": "u", "error": "quota"}
+    path = tmp_path / "m.jsonl"
+    path.write_text(json.dumps(stale) + "\n" + json.dumps(failed) + "\n")
+    assert variants.refresh(path) == 1
+    first, second = [json.loads(line) for line in path.read_text().splitlines()]
+    assert first["parse_error"] is None and first["passed"] is True
+    assert second == failed
+    assert variants.refresh(path) == 0
