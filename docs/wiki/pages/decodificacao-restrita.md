@@ -26,7 +26,7 @@ uma gramática que rejeita programas válidos é pior que nenhuma.
   - **Fireworks aceita GBNF** em todos os modelos que serve.
 
 Código-fonte precisa de gramática recursiva: hoje só dá para restringir geração de código da
-linguagem X em modelos abertos, na OpenAI e na Fireworks — não no Claude nem no Gemini.
+linguagem lotml em modelos abertos, na OpenAI e na Fireworks — não no Claude nem no Gemini.
 
 ## Restringir ajuda ou atrapalha?
 
@@ -65,7 +65,7 @@ O SynCode precisou de maquinário extra no lexer para Python, e as boas prática
 espaço em branco explícito na gramática. Uma linguagem com indentação significativa exige
 `INDENT`/`DEDENT` sintetizados, que o subconjunto Lark da OpenAI não oferece (`%declare` não é
 aceito). É um argumento concreto a favor de delimitadores explícitos — ver
-[[sintaxe-da-linguagem-x]].
+[[sintaxe-do-lotml]].
 
 ## Requisitos para a gramática publicada
 

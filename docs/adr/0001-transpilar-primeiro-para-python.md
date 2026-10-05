@@ -6,16 +6,16 @@ status: accepted
 
 ## Context
 
-A linguagem X ainda não existe, e o que precisa ser validado primeiro é se LLMs a escrevem bem —
+A linguagem lotml ainda não existe, e o que precisa ser validado primeiro é se LLMs a escrevem bem —
 não se ela é rápida. O piloto mediu parse e regras estáticas, mas sem executar programas não há
 pass@1, que é a métrica primária do projeto. Escrever um backend nativo antes de a sintaxe
 estabilizar é trabalho de anos jogado fora a cada mudança. O Python dá, de graça, um runtime, o
-ecossistema inteiro e a adoção incremental (chamar X a partir de Python), que é como o BAML
+ecossistema inteiro e a adoção incremental (chamar lotml a partir de Python), que é como o BAML
 contorna o ecossistema vazio. Ver [[estrategia-de-transpilacao]].
 
 ## Decision
 
-O primeiro destino da linguagem X é Python, por meio de AST do Python emitida com as posições do
+O primeiro destino da linguagem lotml é Python, por meio de AST do Python emitida com as posições do
 fonte original; uma versão mínima entra na fase 0 para o harness executar programas. O C é o
 segundo destino, na fase 3, e o backend nativo (Cranelift e LLVM) vem só com a sintaxe estável.
 Rejeitados: começar pelo C (atrasa a validação com LLMs e obriga a resolver memória antes da

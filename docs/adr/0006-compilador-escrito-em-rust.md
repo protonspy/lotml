@@ -19,7 +19,7 @@ de trocar: o Roc levou 487 dias para reescrever cerca de 300 mil linhas de Rust 
 Escrever o compilador em Rust, com parser escrito à mão, Salsa para a incrementalidade, Cranelift
 para builds de debug e LLVM para release quando o backend nativo chegar. Rejeitados por ora: Zig
 (compilação do próprio compilador mais rápida, mas ecossistema menor para LSP, Salsa e
-Cranelift) e escrever o compilador na própria linguagem X (não existe ainda).
+Cranelift) e escrever o compilador na própria linguagem lotml (não existe ainda).
 
 ## Consequences
 

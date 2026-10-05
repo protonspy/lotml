@@ -47,7 +47,7 @@ diagnósticos.
 ## O que a família tem em comum
 
 Erros tipados ou resultados no lugar de exceções, efeitos ou capacidades explícitos, testes
-embutidos e ferramentas legíveis por máquina. A proposta da linguagem X converge com todas.
+embutidos e ferramentas legíveis por máquina. A proposta da linguagem lotml converge com todas.
 
 **Nenhuma publicou evidência controlada de que o design melhora a acurácia dos modelos.** É o
 espaço que o [[harness-de-avaliacao]] deste projeto pode ocupar: o diferencial não é ter as

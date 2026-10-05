@@ -2,7 +2,7 @@
 
 Uma linguagem nova começa com corpus zero, e o modelo traz para ela o que aprendeu em outras.
 Esta página reúne a evidência sobre esse risco — o maior do estudo original — e as formas
-medidas de contorná-lo. A regra de design que sai dela está em [[sintaxe-da-linguagem-x]]:
+medidas de contorná-lo. A regra de design que sai dela está em [[sintaxe-do-lotml]]:
 mesma sintaxe só onde a semântica é a mesma.
 
 ## O tamanho do problema
@@ -67,7 +67,7 @@ o risco sai da sintaxe e vai para a semântica.
 
 ## Consequências para o projeto
 
-- O tradutor Python→X para gerar corpus deixa de ser opcional: é a principal alavanca para
+- O tradutor Python→lotml para gerar corpus deixa de ser opcional: é a principal alavanca para
   modelos abertos. Para modelos fechados, a alavanca é a spec curta mais o compilador semântico.
 - A spec curta (meta do estudo original: menos de 10 mil tokens) é viável: a do piloto, que
   cobre o núcleo, tem cerca de 1.830.

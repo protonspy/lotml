@@ -6,13 +6,13 @@ status: accepted
 
 ## Context
 
-A linguagem X herda a indentação do Python pelo prior de treino, e trocar indentação por chaves
+A linguagem lotml herda a indentação do Python pelo prior de treino, e trocar indentação por chaves
 custa só um token por bloco. O piloto não viu nenhum erro de indentação em 60 programas — mas
 programas escritos de uma vez. Agentes trabalham editando: o SWE-agent precisou de uma guarda
 que desfaz edições com erro de indentação, o aider criou patch com indentação relativa (sem o
 patch flexível, 9 vezes mais erros de edição), e o subconjunto Lark que a OpenAI aceita para
 geração restrita não consegue expressar `INDENT`/`DEDENT`. Depois da v1, trocar a forma dos
-blocos é migrar todo código existente. Ver [[sintaxe-da-linguagem-x]] e
+blocos é migrar todo código existente. Ver [[sintaxe-do-lotml]] e
 [[decodificacao-restrita]].
 
 ## Decision

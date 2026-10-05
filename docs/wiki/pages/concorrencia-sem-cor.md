@@ -24,7 +24,7 @@ cor vazam e o que ela exige do [[modelo-de-memoria]].
 
 Runtimes sem cor vazam na fronteira com código que bloqueia sem avisar: chamadas nativas e
 FFI (as threads virtuais do Java), extensões C que não cedem a vez (o gevent no Python), sinais
-(o `EINTR` do Go). A linguagem X vai chamar Python e C, então precisa de um mecanismo para
+(o `EINTR` do Go). A linguagem lotml vai chamar Python e C, então precisa de um mecanismo para
 entregar chamadas bloqueantes de FFI a threads dedicadas, como o Go faz com syscalls.
 
 ## O que exige da memória

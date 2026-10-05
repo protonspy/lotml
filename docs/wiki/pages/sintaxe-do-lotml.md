@@ -1,6 +1,6 @@
-# Sintaxe da linguagem X
+# Sintaxe do lotml
 
-A sintaxe da linguagem X parte do Python 3.12 e diverge só onde a divergência elimina uma
+A sintaxe da linguagem lotml parte do Python 3.12 e diverge só onde a divergência elimina uma
 classe de erro. Esta página registra a regra que decide cada construção, as duas variantes
 medidas, o que as medições disseram e as lacunas que a proposta original deixou abertas.
 
@@ -11,7 +11,7 @@ O estudo original fixa duas cláusulas, e a evidência acrescenta uma terceira:
 1. **Mesma sintaxe ⇒ mesma semântica.** O modelo traz o comportamento do Python junto com a
    palavra.
 2. **Semântica diferente ⇒ sintaxe visivelmente diferente.** Por isso `fn` e não `def`: a
-   função da linguagem X exige tipos e não lança exceções.
+   função da linguagem lotml exige tipos e não lança exceções.
 3. **Semântica igual ⇒ a sintaxe do Python.** Copiar o Python não custa tokens — `def` e
    `fn`, `list[int]` e `[int]`, `from … import` e `use` empatam nos oito tokenizadores
    medidos ([[custo-em-tokens]]) — e herda o [[prior-de-treino]].
@@ -63,7 +63,7 @@ Ficam iguais nas duas: `fn`, `type` para registros e tipos soma, `T?`, `T ! E`, 
   de somar. A regra certa é proibir a reatribuição de imutáveis e sugerir `var`.
 - **Como uma função altera um valor do chamador** — ver [[modelo-de-memoria]].
 - **`type` e o Python 3.12.** No Python, `type Shape = Circle | Rect` cria um apelido para tipos
-  existentes; na linguagem X, `type Shape = Circle(r: f64) | Rect(…)` cria construtores novos.
+  existentes; na linguagem lotml, `type Shape = Circle(r: f64) | Rect(…)` cria construtores novos.
   É parecido o bastante para ajudar e diferente o bastante para confundir, mas a instrução
   `type` é rara no corpus de treino: risco baixo, a documentar.
 - **`int` e `i64`.** O estudo lista `i8`…`i64` e usa `int` nos exemplos. O piloto fixou `int`

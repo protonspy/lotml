@@ -1,15 +1,16 @@
 # Piloto de vazamento de Python
 
 O estudo original aponta a falta de corpus como o risco número um: o modelo "escorrega" para
-Python. Este piloto mediu isso pela primeira vez, com modelos reais escrevendo na linguagem X
+Python. Este piloto mediu isso pela primeira vez, com modelos reais escrevendo na linguagem lotml
 a partir só da especificação. Resultado: com a spec no prompt, o vazamento de Python não
 apareceu na sintaxe — apareceu na semântica, e só no modelo menor.
 
 ## Método
 
+- **O nome nas specs é o provisório X**, com extensão `.x`: o nome lotml e a extensão `.lotml` vieram depois do piloto.
 - **Duas especificações compactas**, `research/pilot/spec-a.md` (variante A) e `spec-b.md`
   (variante B), com cerca de 1.830 tokens cada no `o200k`. Elas diferem só nas construções
-  que distinguem as variantes (ver [[sintaxe-da-linguagem-x]]).
+  que distinguem as variantes (ver [[sintaxe-do-lotml]]).
 - **Dez tarefas** em `research/pilot/tasks.md`, redigidas sem vocabulário de Python
   ("registro", "erro", "nada" em vez de `class`, exceção, `None`): registro, tipo soma,
   parse com três erros, opcional, fila genérica, contagem de palavras, razão contábil com
@@ -74,7 +75,7 @@ usada para restringir a geração ela derruba a qualidade em vez de protegê-la.
    [[compilador-semantico]] pega.
 2. **A variante A e a variante B empataram** neste tamanho de amostra (28 de 30 cada). O
    piloto não dá evidência a favor da B no vazamento sintático; a escolha entre elas se apoia
-   nos argumentos de semântica de [[sintaxe-da-linguagem-x]] e deve ser decidida pelo
+   nos argumentos de semântica de [[sintaxe-do-lotml]] e deve ser decidida pelo
    [[harness-de-avaliacao]].
 3. **Os erros que apareceram vêm de outros priors**, Swift e Rust. Aceitar campos posicionais
    em variantes custa pouco e remove uma classe inteira de erro.

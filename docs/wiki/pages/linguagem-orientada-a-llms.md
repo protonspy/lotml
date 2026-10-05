@@ -1,6 +1,6 @@
 # Linguagem orientada a LLMs
 
-A linguagem X é uma linguagem de programação desenhada para ser escrita por LLMs e revisada por
+O lotml é uma linguagem de programação desenhada para ser escrita por LLMs e revisada por
 pessoas: sintaxe próxima do Python, tipos estáticos, erros como valores, semântica de valor e um
 compilador pensado como ferramenta de agente. Esta é a página de entrada do estudo — o que foi
 verificado, o que mudou em relação à proposta original de 5 de outubro de 2026 e onde está cada
@@ -18,7 +18,7 @@ parte.
    mutar imutáveis, tratar argumentos como referência ([[piloto-de-vazamento-de-python]]).
 4. **Onde a semântica é a do Python, a sintaxe deve ser a do Python.** A variante B custa 0,8
    ponto percentual a mais de tokens e elimina duas armadilhas que o parser não pega
-   ([[sintaxe-da-linguagem-x]]).
+   ([[sintaxe-do-lotml]]).
 5. **A semântica de valor com contagem de referências é a escolha certa**, desde que a
    linguagem tenha convenções de parâmetro explícitas — a lacuna que o piloto expôs — e evite
    contagem atômica ([[modelo-de-memoria]]).
@@ -40,7 +40,7 @@ parte.
 | gramática publicada impede código inválido | **corrigida:** só cobre sintaxe, só OpenAI e modelos abertos aceitam, e gramática incompleta piora a geração | [[decodificacao-restrita]] |
 | o risco número um é a falta de corpus | **corrigida:** para modelos de fronteira com a spec, o vazamento é semântico, não sintático | [[prior-de-treino]] |
 | nenhuma linguagem foi desenhada para LLMs | **desatualizada:** BAML, MoonBit, Pel, NanoLang, Zero, Quasar — nenhuma com evidência medida | [[linguagens-para-agentes]] |
-| `use` evita import relativo implícito | **corrigida:** o Python 3 já não tem import relativo implícito | [[sintaxe-da-linguagem-x]] |
+| `use` evita import relativo implícito | **corrigida:** o Python 3 já não tem import relativo implícito | [[sintaxe-do-lotml]] |
 | LLMs erram muito lifetimes no Rust | **corrigida:** ownership é 16,7% dos erros; nomes e traits dominam | [[modelo-de-memoria]] |
 | valor mutável com ARC e elisão | confirmada, com contagem não atômica e convenções `inout` | [[modelo-de-memoria]] |
 | overflow configurável em release | **corrigida:** uma só semântica em todo build e destino | [[sistema-de-tipos]] |
@@ -58,7 +58,7 @@ parte.
 - [[linguagens-para-agentes]] — o que já existe e o que nenhuma delas mediu.
 
 **O design**
-- [[sintaxe-da-linguagem-x]] — a regra, as variantes A e B, as lacunas, indentação.
+- [[sintaxe-do-lotml]] — a regra, as variantes A e B, as lacunas, indentação.
 - [[sistema-de-tipos]] — tipos verificáveis sobre prefixos, opcionais, overflow, efeitos.
 - [[modelo-de-memoria]] — semântica de valor, contagem de referências, convenções de parâmetro.
 - [[concorrencia-sem-cor]] — green threads e onde runtimes sem cor vazam.
@@ -68,9 +68,9 @@ parte.
 - [[decodificacao-restrita]] — gramáticas, APIs que as aceitam, restrição por tipos.
 
 **O plano**
-- [[estrategia-de-transpilacao]] — destinos Python e C, corpus Python→X.
+- [[estrategia-de-transpilacao]] — destinos Python e C, corpus Python→lotml.
 - [[harness-de-avaliacao]] — métricas, tamanho de amostra, portões.
-- [[riscos-da-linguagem-x]] — a tabela de riscos revista.
+- [[riscos-do-lotml]] — a tabela de riscos revista.
 - [[requisitos-e-roadmap]] — requisitos revistos e novos, fases e portões.
 
 ## Decisões

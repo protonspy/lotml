@@ -1,6 +1,7 @@
 # research
 
-Medições do estudo da linguagem X. A interpretação está no wiki: `docs/wiki/pages/custo-em-tokens.md`
+Medições do estudo do lotml. O piloto e o corpus usam o nome provisório X e a extensão
+`.x`, como os modelos os viram. A interpretação está no wiki: `docs/wiki/pages/custo-em-tokens.md`
 e `docs/wiki/pages/piloto-de-vazamento-de-python.md`.
 
 - `tokens/` — contador multi-tokenizador (`counter.py`), corpus pareado (`corpus/`, medido byte a

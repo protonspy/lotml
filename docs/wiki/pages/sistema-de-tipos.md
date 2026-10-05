@@ -51,7 +51,7 @@ contexto. O custo é exigir anotação em casos raros, como uma lista vazia sem 
   `is_empty()` na biblioteca padrão reduz o custo sem reabrir a armadilha.
 - **Opcional sem a semântica do `or` do Python.** Na variante A, `x or padrão` e `if x:` usam a
   sintaxe do Python com semântica diferente; a variante B usa `??` e `is not None` — ver
-  [[sintaxe-da-linguagem-x]].
+  [[sintaxe-do-lotml]].
 - **Campos posicionais em variantes**, como `Neg(Expr)`, além dos nomeados — o piloto mostrou
   que é o que modelos escrevem.
 - **`int` é apelido de `i64`**, e literais inteiros são `int`.

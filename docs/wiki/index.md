@@ -13,7 +13,7 @@ fixed documents, not pages, and neither is ever an orphan.
 
 ## Pages
 
-### Linguagem X — estudo
+### lotml — estudo
 
 - [[linguagem-orientada-a-llms]] — entrada do estudo: conclusões, veredito sobre a proposta original, decisões aceitas
 
@@ -29,7 +29,7 @@ fixed documents, not pages, and neither is ever an orphan.
 
 ### Design
 
-- [[sintaxe-da-linguagem-x]] — a regra de sintaxe, variantes A e B, lacunas, indentação
+- [[sintaxe-do-lotml]] — a regra de sintaxe, variantes A e B, lacunas, indentação
 - [[sistema-de-tipos]] — tipos verificáveis sobre prefixos, opcionais, overflow, efeitos
 - [[modelo-de-memoria]] — semântica de valor, contagem de referências, convenções de parâmetro
 - [[concorrencia-sem-cor]] — green threads e onde runtimes sem cor vazam
@@ -41,7 +41,7 @@ fixed documents, not pages, and neither is ever an orphan.
 
 ### Plano
 
-- [[estrategia-de-transpilacao]] — destinos Python e C, corpus Python→X
+- [[estrategia-de-transpilacao]] — destinos Python e C, corpus Python→lotml
 - [[harness-de-avaliacao]] — métricas, tamanho de amostra e portões
-- [[riscos-da-linguagem-x]] — tabela de riscos revista
+- [[riscos-do-lotml]] — tabela de riscos revista
 - [[requisitos-e-roadmap]] — requisitos revistos e novos, fases e portões

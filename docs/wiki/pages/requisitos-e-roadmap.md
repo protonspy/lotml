@@ -60,7 +60,7 @@ ajustes desta pesquisa. Os critérios de cada portão estão em [[harness-de-ava
 | --- | --- | --- |
 | 0 | harness com tarefas externas e de edição, spec, gramática, verificadores, transpilador mínimo para Python | parse e vazamento; variante e blocos decididos por dado |
 | 1 | v1 no destino Python: tipos, `match`, erros, `var` e `inout`, testes, `fmt`, `check --json`/`--fix`, digest | pass@1 ≥ Python tipado; rodadas ≤ 2; tokens ≤ Python tipado |
-| 2 | compilador semântico completo (LSP, MCP, refatorações), bindings por stubs, corpus Python→X, concorrência | adoção incremental funcionando; corpus validado |
+| 2 | compilador semântico completo (LSP, MCP, refatorações), bindings por stubs, corpus Python→lotml, concorrência | adoção incremental funcionando; corpus validado |
 | 3 | destino C com contagem de referências e reuso, testes de paridade entre destinos | mesma suíte nos dois destinos; ≤ 2× o C |
 | 4 | backend nativo (Cranelift em debug, LLVM em release), efeitos, contratos | — |
 

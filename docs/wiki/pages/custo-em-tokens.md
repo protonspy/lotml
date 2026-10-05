@@ -1,7 +1,7 @@
 # Custo em tokens
 
 Um LLM lê e escreve tokens, não caracteres. Esta página reúne o que foi medido sobre o custo
-em tokens da [[sintaxe-da-linguagem-x]] e o que a literatura diz sobre comprimir linguagens.
+em tokens da [[sintaxe-do-lotml]] e o que a literatura diz sobre comprimir linguagens.
 Conclusão: a economia que a sintaxe consegue é de cerca de 10% contra Python tipado — metade
 da meta do estudo original — e em uso agêntico ela pesa menos que uma única rodada de correção.
 
@@ -98,7 +98,7 @@ Entre 7% e 8% dos tokens do corpus são espaço no início da linha, tanto no Py
 variante A. O StarCoder2 dá um valor negativo porque seu tokenizador funde o espaço ao token
 seguinte, então remover a indentação não encurta a contagem. Trocar indentação por chaves
 custa um token por bloco: a escolha entre as duas não é uma questão de tokens, e o argumento
-que decide está em [[sintaxe-da-linguagem-x]].
+que decide está em [[sintaxe-do-lotml]].
 
 ## O que a literatura diz
 
