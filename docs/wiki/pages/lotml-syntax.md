@@ -55,6 +55,16 @@ Both keep: `fn`, `type` for records and sum types, `T?`, `T ! E`, `?`, `fail`, `
 **Decision:** variant B (adr:0004-python-syntax-where-semantics-match); the
 [[evaluation-harness]] repeats the comparison with more models and families before v1 freezes.
 
+**Repeated at scale.** Four models of three families — Claude Sonnet 5.5 and Haiku 4.5, Qwen2.5
+Coder 7B, Llama 3.1 8B — wrote the same 200 HumanEval and MBPP tasks from each variant's reference
+(`harness/results/variants.md`). Variant B passed at least as often for three of them and
+significantly more for two: Sonnet 98.0% against 88.0% (21 tasks only B solved, 1 only A, exact
+McNemar p < 0.001) and Qwen 49.0% against 42.0% (19 against 5, p = 0.007); Haiku 82.0% against 80.5%
+and Llama 21.0% against 22.5% were within noise. Twenty of Sonnet's 21 losses in A were `true` and
+`false` in lowercase: a lowercase `none` taught it a convention the rest of the language does not
+follow — the cost of a construct that differs from Python's for no semantic reason, which is the
+rule's own argument. Variant B's answers cost 0.3–7.5% more tokens ([[token-cost]]).
+
 ## Where lotml's semantics already differ
 
 The same finding marks the places lotml reuses Python's syntax with a different meaning, and

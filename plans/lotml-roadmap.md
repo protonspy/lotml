@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: auto
-checksum: 95065f5904c714e19700c2ab7ee7e8b8b32fad89fea2df0a65595f4cbe69e491
+checksum: 57c151ed9362ae0769078b526eb918ec70dd30ba6d521f9deff14d5daec26bac
 ---
 
 # lotml roadmap
@@ -66,7 +66,7 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 1.3_
 - [x] 1.6 (TDD) Generate the grammar from the parser's single source in three dialects — llguidance Lark with line-oriented, depth-bounded blocks, GBNF and EBNF — and test each against the whole corpus on every change (R11; research/experiments/grammar/results.md, docs/wiki/pages/constrained-decoding.md)
   _Depends 1.3_
-- [ ] 1.7 (TDD) Compare variant B against variant A on the task set with at least three model families, closed and open, and report the outcomes that depend on the semantics (adr:0004; research/experiments/transpiler/results.md)
+- [x] 1.7 (TDD) Compare variant B against variant A on the task set with at least three model families, closed and open, and report the outcomes that depend on the semantics (adr:0004; research/experiments/transpiler/results.md)
   _Depends 1.4, 1.5_
 - [ ] 1.8 (TDD) Compare the indented form against a braces form on editing tasks at scale — long files, multi-turn agents, open models, strict and tolerant application — and report slips, rewrites and C-family idioms (adr:0005; research/experiments/editing/results.md, research/experiments/indentation/results.md)
   _Depends 1.4, 1.5_

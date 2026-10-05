@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-05 — variant B against variant A repeated at scale with four models: [[lotml-syntax]] reports it
 - 2026-10-05 — the Claude tokenizer measured on the paired corpus and on model-written code: [[token-cost]] closes the gap it listed
 - 2026-10-05 — the grammar published in three dialects: [[constrained-decoding]] describes how they are generated and tested
 - 2026-10-05 — the harness executor built: [[evaluation-harness]] lists it under what exists
