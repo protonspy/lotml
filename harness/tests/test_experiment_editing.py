@@ -237,6 +237,27 @@ def test_judge_reports_syntax_and_failing_tests():
     assert attempt.outcome == "syntax"
 
 
+@pytest.mark.parametrize("form", editing.FORMS)
+def test_an_answer_rewriting_the_function_is_applied_by_name(form):
+    current = editing.in_form(DOUBLE + "\n\n" + BROKEN, form)
+    answer = f"Here is the fix:\n```lotml\n{editing.in_form(POSITIVE, form)}```\n"
+    attempt = editing.judge(edit_task(), form, current, answer, tolerant=False)
+    assert attempt.outcome == "pass"
+    assert attempt.details["applied"] == "function"
+    assert "fn double" in attempt.edited
+
+
+def test_a_rewrite_of_an_unknown_function_is_no_edit():
+    answer = "```lotml\nfn other(x: int) -> int:\n    return x\n```\n"
+    attempt = editing.judge(edit_task(), "indented", BROKEN, answer, tolerant=False)
+    assert attempt.outcome == "apply failed: no edit"
+
+
+def test_blocks_take_precedence_over_code_fences():
+    attempt = editing.judge(edit_task(), "indented", BROKEN, FIX, tolerant=False)
+    assert attempt.details["applied"] == "blocks"
+
+
 class Scripted(models.Model):
     def __init__(self, answers):
         super().__init__(name="scripted", family="test")
