@@ -35,6 +35,14 @@ def test_whitespace_in_the_braces_form_means_nothing():
     assert from_braces(braced) == "fn f():\n    if x:\n        y = 1\n    z = 2\n"
 
 
+def test_lines_inside_a_multiline_string_keep_their_text():
+    source = (
+        'fn f() -> int:\n    """Sum.\n\n      Indented on purpose.\n    """\n'
+        "    if True:\n        return 1\n    return 2\n"
+    )
+    assert from_braces(to_braces(source)) == source
+
+
 def test_unbalanced_braces_are_refused():
     assert from_braces("fn f() {\n    pass\n") is None
     assert from_braces("}\n") is None

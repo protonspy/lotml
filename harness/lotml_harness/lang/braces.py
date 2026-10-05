@@ -142,8 +142,10 @@ def from_braces(text: str) -> str | None:
             header = line[start:end].strip() + ":" + line[end + 1 :]
             out.append(" " * STEP * depth + header)
             depth += 1
+        elif body and not starts and code.strip() == "":
+            out.append(line)  # inside a multi-line string, or a comment: whitespace is content
         elif body:
-            continuation = not starts and code.strip() != ""
+            continuation = not starts
             out.append(" " * STEP * (depth + continuation) + body)
         else:
             out.append("")
