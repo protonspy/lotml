@@ -1,0 +1,30 @@
+<<<<<<< SEARCH
+fn depth(j: Json) -> int:
+    match j:
+        case Arr(items):
+            return 1 + max((depth(i) for i in items), default=0)
+        case Obj(fields):
+            return 1 + max((depth(v) for v in fields.values()), default=0)
+        case _:
+            return 0
+=======
+fn depth(j: Json) -> int:
+    match j:
+        case Arr(items):
+            return 1 + max((depth(i) for i in items), default=0)
+        case Obj(fields):
+            return 1 + max((depth(v) for v in fields.values()), default=0)
+        case _:
+            return 0
+
+fn count_numbers(j: Json) -> int:
+    match j:
+        case Num(value):
+            return 1
+        case Arr(items):
+            return sum(count_numbers(i) for i in items)
+        case Obj(fields):
+            return sum(count_numbers(v) for v in fields.values())
+        case _:
+            return 0
+>>>>>>> REPLACE

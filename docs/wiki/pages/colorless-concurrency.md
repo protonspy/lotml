@@ -29,10 +29,15 @@ dedicated threads, as Go does with syscalls.
 
 ## What it demands of memory
 
-Green threads that migrate between OS threads force reference counting to be atomic or biased,
-and atomic counting cost up to 59% in Perceus ([[memory-model]]). The original study's rule
-solves it: data sent between tasks is copied or moved, so counting within a task can be
-non-atomic. Structured concurrency (scoped task groups) keeps that boundary explicit.
+Green threads that migrate between OS threads would force reference counting to be atomic, and
+atomic counting cost 5–59% in Perceus and 1.13–2.31× in Lean ([[memory-model]]). Biased counting
+does not rescue migrating tasks: it biases each object to the OS thread that allocated it and has
+no ownership transfer, so a task that migrates hits the atomic path for everything it allocated
+before moving. What works is what Koka and Lean do, and what the original study's rule implies:
+values start thread-local, and a value handed to another task is marked shared once — or copied
+or moved — at the spawn, so counting inside a task stays non-atomic. Structured concurrency
+(scoped task groups) keeps that boundary explicit; the price is a marking pass proportional to
+what the spawned closure reaches.
 
 ## On the Python target
 

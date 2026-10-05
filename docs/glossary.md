@@ -17,3 +17,8 @@ Every avoided synonym is reported wherever it appears as a whole word under `doc
 - **colorless concurrency** — concurrency in which no function is marked `async` or requires `await`; tasks run on green threads.
 - **evaluation harness** — the set of tasks, models and metrics that settles syntax questions by measurement; the roadmap's first deliverable.
 - **gate** — a criterion measured by the evaluation harness that must pass before the next roadmap phase starts.
+- **slip** — an editing error that puts lines at the wrong block depth: wrong whitespace in the indented form, a misplaced `}` in the braces form; silent when the program still parses. Avoid: indentation bug
+- **editing pilot** — models applying search-and-replace edits to the indented and the braces form of the paired corpus's programs, scored by applying, parsing and running hidden tests.
+- **source verification** — checking every number the study quotes against the downloaded paper, by a verbatim quote that `research/literature/verify.py` finds in the converted text.
+- **prefix check** — the semantic compiler judging a partial file while a model writes it: completable, an error here, or not yet decidable; it never rejects a prefix that can still be completed.
+- **symbol-addressed edit** — an edit that names a syntax entity (a function body, a `match` arm, a method) and gives only its new content; the tool re-indents it and rejects it if it breaks the syntax. Avoid: AST edit

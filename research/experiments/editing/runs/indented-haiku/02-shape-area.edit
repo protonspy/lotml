@@ -1,0 +1,29 @@
+<<<<<<< SEARCH
+type Shape = Circle(r: f64) | Rect(w: f64, h: f64) | Triangle(a: f64, b: f64, c: f64)
+=======
+type Shape = Circle(r: f64) | Rect(w: f64, h: f64) | Triangle(a: f64, b: f64, c: f64) | Square(side: f64)
+>>>>>>> REPLACE
+
+<<<<<<< SEARCH
+fn area(s: Shape) -> f64:
+    match s:
+        case Circle(r):
+            return pi * r * r
+        case Rect(w, h):
+            return w * h
+        case Triangle(a, b, c):
+            p = (a + b + c) / 2.0
+            return sqrt(p * (p - a) * (p - b) * (p - c))
+=======
+fn area(s: Shape) -> f64:
+    match s:
+        case Circle(r):
+            return pi * r * r
+        case Rect(w, h):
+            return w * h
+        case Triangle(a, b, c):
+            p = (a + b + c) / 2.0
+            return sqrt(p * (p - a) * (p - b) * (p - c))
+        case Square(side):
+            return side * side
+>>>>>>> REPLACE

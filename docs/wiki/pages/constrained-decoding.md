@@ -1,80 +1,120 @@
 # Constrained decoding
 
 The original study asks for a published formal grammar (EBNF and GBNF) so that "the model never
-generates syntactically invalid code". The evidence confirms the grammar's value but corrects its
-reach: syntax is the smallest share of errors, only one hosted API accepts an arbitrary grammar,
-and a grammar that rejects valid programs is worse than none.
+generates syntactically invalid code". The evidence keeps the grammar but shrinks its promise:
+syntax is the smallest share of errors, a syntax-only mask can lower accuracy, constraining by
+types raised compile rates but lowered functional correctness in an independent replication, and
+the strongest gains come from constraining narrowly and letting the model reason freely. On
+indentation, this project's own test settles the cost question. Every number taken from a paper in `research/literature/sources.json` is quoted in
+`claims.json` there and checked against the paper ([[source-verification]]).
 
 ## What exists
 
 - **Open engines:** llama.cpp's GBNF, [Outlines](https://arxiv.org/abs/2307.09702),
-  [XGrammar](https://arxiv.org/abs/2411.15100) (MLSys 2025, "near-zero overhead"),
-  [SynCode](https://arxiv.org/abs/2403.01632) (removes 96.07% of syntax errors in Python and Go),
-  llguidance (about 50 µs per token with a 128k vocabulary; used in OpenAI's Structured Outputs,
-  llama.cpp, vLLM and SGLang). vLLM accepts EBNF grammars with several of these backends.
+  [XGrammar](https://arxiv.org/abs/2411.15100), [SynCode](https://arxiv.org/abs/2403.01632),
+  llguidance (about 50 µs per mask with a 128k vocabulary; used by OpenAI's grammar tools,
+  llama.cpp, vLLM and SGLang).
+  - XGrammar's "near-zero overhead" was measured end to end only on JSON; its one programming-
+    language grammar, a Python DSL, ignores indentation and was measured only per mask, where it
+    is several times slower than JSON.
+  - SynCode reduced syntax errors by about 96% on average over three small 2023 models, with
+    hand-trimmed grammars that leave out features such as Python's lambdas. It handles Python's
+    indentation with a decoding-time tracker outside the grammar — and brace-delimited Go also
+    needed handling outside the grammar, for its automatic semicolons.
 - **Hosted APIs, as of October 2026:**
-  - **OpenAI accepts a context-free grammar** in *custom tools*, in `lark` and `regex` syntax
-    (regex in the dialect of Rust's `regex` crate), via llguidance, on the GPT-5 models. The Lark
-    subset does not accept lookarounds, lazy quantifiers, terminal priorities, `%declare` or
-    imports beyond `%import common`, and the API may reject a grammar as "too complex" with no
-    published numeric limit ([guide](https://developers.openai.com/api/docs/guides/function-calling)).
+  - **OpenAI accepts a context-free grammar** in *custom tools*, in `lark` and `regex` syntax, via
+    llguidance, on the GPT-5 models; the Lark subset rejects lookarounds, lazy quantifiers,
+    terminal priorities, `%declare` and imports beyond `%import common`
+    ([guide](https://developers.openai.com/api/docs/guides/function-calling)).
   - **Anthropic accepts JSON Schema only**, with no recursive schemas
     ([doc](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)).
   - **Google Gemini accepts a subset of JSON Schema**, with no grammar.
   - **Fireworks accepts GBNF** on every model it serves.
-
-Source code needs a recursive grammar: today, generation of lotml code can only be constrained on
-open models, on OpenAI and on Fireworks — not on Claude or Gemini.
+- **Without masks:** checking each streamed prefix with the compiler and restarting at the first
+  unrecoverable error needs no grammar support from the API, and was evaluated on Claude Opus and
+  Gemini Flash among others ([Generative Compilation](https://arxiv.org/abs/2607.13921),
+  [[semantic-compiler]]). Masking is for open models and OpenAI; prefix checking is for everyone.
 
 ## Does constraining help or hurt?
 
-- **Distortion:** grammar constraints "can distort the LLM's distribution";
-  [Grammar-Aligned Decoding](https://arxiv.org/abs/2405.21047) (NeurIPS 2024) corrects it.
-- **Formats that hurt reasoning:** in [*Let Me Speak Freely?*](https://arxiv.org/abs/2408.02442)
-  (EMNLP 2024 Industry), GSM8K fell from 86.51 to 23.44 for Claude 3 Haiku in JSON mode; the cause
-  given is that answers put the answer key before the reasoning key. The
-  [rebuttal from .txt](https://blog.dottxt.ai/say-what-you-mean.html), with equivalent prompts,
-  found the opposite (0.77 unconstrained, 0.78 constrained).
-- **Constraining done well wins:** in [JSONSchemaBench](https://arxiv.org/abs/2501.10868), every
-  engine beat free generation (GSM8K with Llama 3.1 8B: 80.1 free, 83.8 with Guidance), and
-  [CRANE](https://arxiv.org/abs/2502.09061) (ICML 2025) added up to 10 points by including
-  reasoning rules in the grammar.
-- **An incomplete grammar is a disaster:** when the constrainer rejects valid programs,
-  functional correctness drops "by up to 97%" and free generation wins
-  ([*The Alignment Problem in Constrained Code Generation*](https://arxiv.org/abs/2606.21619),
-  2026).
+- **Format instructions, not constraints, caused the famous drop.** In
+  [*Let Me Speak Freely?*](https://arxiv.org/abs/2408.02442), Claude 3 Haiku's GSM8K fell from 86.51
+  to 23.44 with a JSON schema written into the prompt — not JSON mode, which the paper ran only for
+  other models; Claude's JSON answers failed to parse 60.07% of the time. The one true grammar-
+  constrained run (gpt-4o-mini Structured Outputs) lost 2.86 points on GSM8K and won on Last Letter.
+- **Enforcement of a reasoning-friendly format helps a little.** In
+  [JSONSchemaBench](https://arxiv.org/abs/2501.10868), the four open engines gained at most 3.7 points
+  over the same JSON prompt unenforced (Llama 3.1 8B: 80.1 to 83.8 with Guidance); llama.cpp tied on
+  one task.
+- **Constrain narrowly, reason freely.** [CRANE](https://arxiv.org/abs/2502.09061) leaves reasoning
+  unconstrained and applies the grammar only between delimiters: up to 10 points over the best
+  baseline. A semantic prefix oracle used the same mixed mode to track full chain-of-thought within a
+  few points while emitting 28–36 tokens instead of 1,100–2,000
+  ([arXiv 2609.35425](https://arxiv.org/abs/2609.35425)).
+- **A syntax-only mask can hurt even when it rejects nothing valid:** 38.4% against 44.4% free on a
+  typed lambda calculus, 25.4% against 30.2% on an ML; only the typed mask recovered the loss, and
+  only where the type system constrains the surface. Constraints helped weak and base models (a 2B
+  base model from 0% to 50%) and taxed fluent ones (9B and 27B lost ground).
+- **Distortion is real and not cheaply fixed.** [Grammar-Aligned Decoding](https://arxiv.org/abs/2405.21047)
+  names the problem; its algorithm removes the bias only asymptotically, over thousands of samples of
+  the same prompt, with no strong effect on downstream tasks.
+- **An incomplete grammar can be a disaster — when the model wants what it forbids.** In
+  [*The Alignment Problem in Constrained Code Generation*](https://arxiv.org/abs/2606.21619), a GBNF
+  grammar for TOML that forbade only the optional space before `=` cut one model's exact match from
+  62.5% to 1.9% (the "up to 97%"); grammars that forbade comments or dotted keys lost nothing. The
+  [[python-leakage-pilot]]'s grammar rejected two valid programs until it was fixed.
 
-The [[python-leakage-pilot]] saw this at small scale: the pilot's grammar rejected two valid
-programs (`**` and a negative literal in a pattern) until it was fixed.
+## Types are worth more than syntax — for compiling, not for passing
 
-## Types are worth more than syntax
+[Mündler et al.](https://arxiv.org/abs/2504.09246) (PLDI 2025) constrained TypeScript by types: on
+synthesis plus translation it cut 75.3% (HumanEval) and 52.1% (MBPP) of compilation errors, where a
+perfect syntax constraint could cut at most 9.0% and 4.9%; repair rose by 37% relative pass@1. To make
+it work they made TypeScript stricter — annotated parameters and returns, initialized or annotated
+variables — and excluded features that block left-to-right typing.
 
-Constraining by types cut 75.3% (HumanEval) and 52.1% (MBPP) of compilation errors in TypeScript;
-constraining syntax alone would, in the ideal case, cut 9.0% and 4.8%
-([Mündler et al.](https://arxiv.org/abs/2504.09246), PLDI 2025). Repair improved by 37%, at a cost
-of 39–52% more decoding time in an unoptimized Python implementation.
-[Monitor-Guided Decoding](https://arxiv.org/abs/2306.10763) (NeurIPS 2023) used a language server
-during generation and raised the compilation rate by 19–25%. MoonBit does the same in its sampler.
-This calls for a type system checkable on prefixes — see [[type-system]].
+The alignment paper replicated that decoder at scale (about 104,000 programs): type constraints
+raised compile rates for weaker models but **lowered functional correctness in every configuration**
+(Qwen-2.5-32B on HumanEval at temperature 0.1: 72.3% constrained against 82.3% free).
+[Monitor-Guided Decoding](https://arxiv.org/abs/2306.10763) raised Java compilation by 13.18–24.69%,
+relative. The lesson for lotml: a type system checkable on prefixes is worth having for the
+[[semantic-compiler]]'s prefix checks and repair, and masking by types is a tool for weak open
+models, not a default — see [[type-system]].
 
-## Significant indentation makes the constrainer more expensive
+## Indentation needs a line-oriented, bounded grammar — not more decode time
 
-SynCode needed extra lexer machinery for Python, and OpenAI's best practices ask for explicit
-whitespace in the grammar. A language with significant indentation needs synthesized
-`INDENT`/`DEDENT` tokens, which OpenAI's Lark subset does not offer (`%declare` is not accepted).
-It is a concrete argument for explicit delimiters — see [[lotml-syntax]].
+`research/experiments/grammar/` tested lotml's block structure with llguidance 1.9.1 and the `o200k`
+tokenizer, on the paired corpus reduced to its blocks:
+
+- **The pilot's Lark grammar is refused**, for two features: the terminal priority on `**` and
+  `%declare _INDENT _DEDENT`. With both replaced it compiles, but `INDENT` and `DEDENT` become
+  literal tokens no real program contains.
+- **A token-level grammar cannot enforce indentation** when it ignores spaces between tokens, as a
+  full language grammar does: a newline terminal carrying exactly four spaces still accepted a line
+  indented eight, because the extra spaces were ignored.
+- **A line-oriented grammar bounded in depth works**: one copy of the block rules per nesting level,
+  each level's lines matched whole with exactly that many spaces. It accepts all 12 programs,
+  rejects a header without a body and a block deeper than its bound, and grows by 4 rules per level
+  (20 rules at depth 4, 132 at depth 32).
+- **It costs no decode time**: median mask computation was 19–23 µs per token for the bounded
+  indentation grammars and 19 µs for the braces grammar — one timing run of about 2,400 tokens per
+  grammar, which moves by a few microseconds between runs; read it as the same order of magnitude.
+
+So significant indentation does not make the constrainer slower; it makes the grammar a generated
+artifact — depth-bounded and line-oriented — rather than a hand-written one. That fits requirement
+1 below anyway.
 
 ## Requirements for the published grammar
 
 1. **The grammar accepts exactly the compiler's language**, never less: it is generated from the
-   same source as the parser, or tested against the same corpus on every change.
-2. **Three dialects:** an llguidance-compatible Lark subset (OpenAI), GBNF (llama.cpp, Fireworks)
-   and EBNF (vLLM, XGrammar).
-3. **Bounded repetition** and no chains of optionals — the GBNF README warns that `x? x? x?` can
-   make sampling "extremely slow".
-4. **Free comments** allowed anywhere, so the model can reason inside the constrained output.
-5. **A "valid continuations and expected type at the cursor" API** in the compiler, for type
-   constraints — the step that actually reduces errors.
-
-The prototype in `research/pilot/check.py` is a Lark grammar of both variants, with indentation
-through `Indenter`; it serves as the pilot's checker, not as the published grammar.
+   same source as the parser and tested against the same corpus on every change. What it may never
+   forbid is what models prefer to write.
+2. **Three dialects:** an llguidance-compatible Lark grammar (no priorities, no `%declare`;
+   line-oriented blocks generated to a depth bound such as 16), GBNF (llama.cpp, Fireworks) and EBNF
+   (vLLM, XGrammar).
+3. **Bounded repetition** and no chains of optionals — the GBNF README warns that `x? x? x?` can make
+   sampling "extremely slow".
+4. **Constrain the code, not the reasoning:** the grammar applies between delimiters, CRANE-style,
+   and comments are allowed anywhere inside.
+5. **Prefix checks before masks:** the compiler's `check --prefix` serves every model; type masks
+   are offered for open models and measured in the [[evaluation-harness]] before anyone relies on
+   them.

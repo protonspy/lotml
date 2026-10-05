@@ -1,0 +1,7 @@
+<<<<<<< SEARCH
+        config[key] = value
+=======
+        if key in config:
+            fail ParseError(number, "duplicate key")
+        config[key] = value
+>>>>>>> REPLACE

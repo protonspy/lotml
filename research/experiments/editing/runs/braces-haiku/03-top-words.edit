@@ -1,0 +1,17 @@
+<<<<<<< SEARCH
+    var counts: {str: int} = {}
+    for w in text.split() {
+        if w.isalpha() {
+            key = w.lower()
+            counts[key] = counts.get(key, 0) + 1
+        }
+    }
+=======
+    var counts: {str: int} = {}
+    for w in text.split() {
+        if w.isalpha() and len(w) >= 3 {
+            key = w.lower()
+            counts[key] = counts.get(key, 0) + 1
+        }
+    }
+>>>>>>> REPLACE

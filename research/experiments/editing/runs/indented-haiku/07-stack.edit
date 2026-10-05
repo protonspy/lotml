@@ -1,0 +1,16 @@
+<<<<<<< SEARCH
+    fn size(self) -> int:
+        return len(self.items)
+=======
+    fn size(self) -> int:
+        return len(self.items)
+
+    fn pop_n(var self, n: int) -> [T]:
+        var result: [T] = []
+        for _ in range(n):
+            item = self.pop()
+            if item is None:
+                break
+            result.append(item)
+        return result
+>>>>>>> REPLACE

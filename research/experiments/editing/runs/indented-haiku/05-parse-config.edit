@@ -1,0 +1,23 @@
+<<<<<<< SEARCH
+fn parse_config(text: str) -> {str: str} ! ParseError:
+    var config: {str: str} = {}
+    for number, line in enumerate(text.splitlines(), start=1):
+        trimmed = line.strip()
+        if trimmed == "" or trimmed.startswith("#"):
+            continue
+        key, value = parse_line(trimmed, number)?
+        config[key] = value
+    return config
+=======
+fn parse_config(text: str) -> {str: str} ! ParseError:
+    var config: {str: str} = {}
+    for number, line in enumerate(text.splitlines(), start=1):
+        trimmed = line.strip()
+        if trimmed == "" or trimmed.startswith("#"):
+            continue
+        key, value = parse_line(trimmed, number)?
+        if key in config:
+            fail ParseError(number, "duplicate key")
+        config[key] = value
+    return config
+>>>>>>> REPLACE

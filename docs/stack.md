@@ -7,8 +7,10 @@ exist yet; it is decided in `docs/adr/` and enters this list when code depends o
 ## Research (`research/`)
 
 - **uv** — runs the research scripts with ephemeral dependencies (`uv run --with …`), with no project manifest to maintain.
-- **tiktoken** — OpenAI's `o200k` and `cl100k` tokenizers, for the token measurements.
+- **tiktoken** — OpenAI's `o200k` and `cl100k` tokenizers, for the token measurements and as llguidance's tokenizer.
 - **tokenizers** and **huggingface_hub** — load the open tokenizers measured (Llama 3, Qwen3, DeepSeek-V3, Gemma 3, Mistral Nemo, StarCoder2).
 - **lark** — the LALR grammar of variants A and B in the pilot, with indentation through `Indenter`.
+- **docling** — converts the downloaded papers to Markdown page by page, tables included, so quotes can be checked against them (`research/literature/`).
+- **llguidance** — the constrained-decoding engine behind OpenAI's grammar tools, llama.cpp, vLLM and SGLang; checks which grammars of lotml it accepts and what each costs per token (`research/experiments/grammar/`).
 - **pytest** — tests for the research counters and checkers.
 - **ruff** — lint and formatting for the research code; `research/ruff.toml` excludes the corpus, which is measured byte for byte.

@@ -1,0 +1,12 @@
+<<<<<<< SEARCH
+type BankErr = UnknownAccount(account: str) | InsufficientFunds(account: str)
+=======
+type BankErr = UnknownAccount(account: str) | InsufficientFunds(account: str) | SameAccount(account: str)
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+        if target not in self.balances:
+=======
+        if source == target:
+            fail SameAccount(source)
+        if target not in self.balances:
+>>>>>>> REPLACE

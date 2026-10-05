@@ -1,0 +1,26 @@
+<<<<<<< SEARCH
+type LookupErr = NotFound(name: str) | Minor(age: int)
+=======
+type LookupErr = NotFound(name: str) | Minor(age: int) | NoEmail(name: str)
+>>>>>>> REPLACE
+
+<<<<<<< SEARCH
+fn find_adult(users: [User], name: str) -> User ! LookupErr {
+    u = users.find(lambda u: u.name == name) ?? fail NotFound(name)
+    if u.age < 18 {
+        fail Minor(u.age)
+    }
+    return u
+}
+=======
+fn find_adult(users: [User], name: str) -> User ! LookupErr {
+    u = users.find(lambda u: u.name == name) ?? fail NotFound(name)
+    if u.age < 18 {
+        fail Minor(u.age)
+    }
+    if u.email is None {
+        fail NoEmail(u.name)
+    }
+    return u
+}
+>>>>>>> REPLACE

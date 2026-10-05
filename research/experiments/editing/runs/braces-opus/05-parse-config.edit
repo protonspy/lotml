@@ -1,0 +1,8 @@
+<<<<<<< SEARCH
+        key, value = parse_line(trimmed, number)?
+=======
+        key, value = parse_line(trimmed, number)?
+        if key in config {
+            fail ParseError(number, "duplicate key")
+        }
+>>>>>>> REPLACE

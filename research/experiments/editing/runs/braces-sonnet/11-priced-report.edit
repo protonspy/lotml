@@ -1,0 +1,8 @@
+<<<<<<< SEARCH
+        return self.cost
+=======
+        if self.title.startswith("Free") {
+            return 0.0
+        }
+        return self.cost
+>>>>>>> REPLACE

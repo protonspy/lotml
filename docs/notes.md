@@ -45,3 +45,11 @@ over this file answers with the example above as well as with the notes. -->
 - n-0005 2026-10-05 #ceiling @research/pilot/semantics.py — semantics.py infers types only from annotations and literals; a real lotml type checker replaces it
 - n-0006 2026-10-05 #decision @research — build and test gates skipped: the repository only holds research code; record them with scc check set once the compiler exists
 - n-0007 2026-10-05 #decision @docs — every artifact is written in English: docs, wiki slugs, ADR filenames, plans, code, commit messages and PR bodies
+- n-0008 2026-10-05 #gotcha @research/experiments/indentation/slips.py — Lark's Indenter never sees the first code line's indentation, which Python rejects; classify() treats an indented first line as a syntax error
+- n-0009 2026-10-05 #gotcha @research/experiments/grammar/grammars.py — llguidance's Lark dialect refuses terminal priorities and %declare, and with %ignore for spaces an exact-indentation newline terminal still accepts deeper lines: indentation grammars must match whole lines
+- n-0010 2026-10-05 #gotcha @research/experiments/transpiler/lotml_rt.py — dict views cannot be deep-copied, so under value semantics keys(), values() and items() return lists, a snapshot
+- n-0011 2026-10-05 #gotcha @research/experiments/transpiler/transpile.py — the pilot grammar drops anonymous tokens, so True/False and the comparison operators vanish from the tree; transpile.parser() names them
+- n-0012 2026-10-05 #gotcha @research/literature/fetch.py — the first fetch downloads docling's layout models and converts at about 1.5 s per page on CPU; arXiv asks for 3 s between downloads
+- n-0013 2026-10-05 #gotcha @research/experiments/editing/editing.py — a SEARCH block must match at a line start: a bare substring match lets a less-indented search apply inside a deeper line
+- n-0014 2026-10-05 #ceiling @research/experiments/transpiler/transpile.py — the research transpiler copies on every read-and-bind, not only into var/inout as lotml's compiler will; fine for tests, not for performance
+- n-0015 2026-10-05 #ceiling @research/experiments/transpiler/transpile.py — the step budget counts Python line events, so work done inside one line (sum(range(10**9)), a huge allocation) escapes it; a subprocess with a wall-clock limit is the real guard
