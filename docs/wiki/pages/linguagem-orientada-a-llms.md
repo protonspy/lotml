@@ -73,10 +73,10 @@ parte.
 - [[riscos-da-linguagem-x]] — a tabela de riscos revista.
 - [[requisitos-e-roadmap]] — requisitos revistos e novos, fases e portões.
 
-## Decisões em aberto
+## Decisões
 
-As decisões caras de reverter estão registradas como ADRs propostas, para o dono do projeto
-aceitar ou rejeitar:
+As decisões caras de reverter foram aceitas em 5 de outubro de 2026; a 0004 e a 0005 dizem que
+resultado do harness levaria a substituí-las:
 
 - adr:0001-transpilar-primeiro-para-python
 - adr:0002-erros-como-valores

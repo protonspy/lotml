@@ -2,7 +2,7 @@
 
 Every adopted technology, with one line on why it earned its place. Technology not listed here
 is an open decision, never something adopted silently. The language's own toolchain does not
-exist yet; its candidates are proposed in `docs/adr/`, not adopted.
+exist yet; it is decided in `docs/adr/` and enters this list when code depends on it.
 
 ## Pesquisa (`research/`)
 

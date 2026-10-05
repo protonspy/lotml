@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # 0005 · Indentação significativa
@@ -19,8 +19,8 @@ blocos é migrar todo código existente. Ver [[sintaxe-da-linguagem-x]] e
 
 Manter blocos por indentação, com formatador canônico e parser tolerante que reporta
 indentação errada com a correção, **condicionado** ao teste de edição do harness: se a variante
-indentada falhar mais em edições aplicadas por agentes que uma variante com chaves, esta ADR é
-rejeitada e a v1 sai com delimitadores explícitos. Rejeitado por ora: decidir sem medir em
+indentada falhar mais em edições aplicadas por agentes que uma variante com chaves, uma nova ADR
+substitui esta e a v1 sai com delimitadores explícitos. Rejeitado por ora: decidir sem medir em
 qualquer direção.
 
 ## Consequences

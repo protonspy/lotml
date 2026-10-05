@@ -15,7 +15,7 @@ fixed documents, not pages, and neither is ever an orphan.
 
 ### Linguagem X — estudo
 
-- [[linguagem-orientada-a-llms]] — entrada do estudo: conclusões, veredito sobre a proposta original, decisões em aberto
+- [[linguagem-orientada-a-llms]] — entrada do estudo: conclusões, veredito sobre a proposta original, decisões aceitas
 
 ### O que foi medido
 

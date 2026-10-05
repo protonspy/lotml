@@ -3,7 +3,7 @@
 Os requisitos consolidados do estudo original, revistos item a item, mais os que a pesquisa e
 as medições acrescentaram, e o roadmap com os portões medidos. Os requisitos marcados v1 formam
 o MVP. Esta página é a base para os specs de cada feature; a decisão sobre o que é caro de
-reverter está nas ADRs propostas em `docs/adr/`.
+reverter está nas ADRs aceitas em `docs/adr/`.
 
 ## Requisitos funcionais e de ferramenta
 
@@ -12,7 +12,7 @@ reverter está nas ADRs propostas em `docs/adr/`.
 | R01 | sintaxe por indentação com o vocabulário do Python | v1 | mantido, condicionado ao teste de edição do [[harness-de-avaliacao]] |
 | R02 | tipos obrigatórios em assinaturas, campos e exports; inferência local | v1 | **ajustado:** inferência local e bidirecional, verificável sobre prefixos ([[sistema-de-tipos]]) |
 | R03 | registros, tipos soma e `match` exaustivo | v1 | **ajustado:** variantes aceitam campos posicionais |
-| R04 | `T?` como única forma de ausência; `T ! E` com `?` e `fail` | v1 | **ajustado:** `??` e `is None` se a variante B for adotada ([[sintaxe-da-linguagem-x]]) |
+| R04 | `T?` como única forma de ausência; `T ! E` com `?` e `fail` | v1 | **ajustado:** `??` e `is None`, da variante B (adr:0004-sintaxe-alinhada-ao-python-onde-a-semantica-coincide) |
 | R05 | imutável por padrão; `var` para mutável | v1 | mantido |
 | R06 | generics monomorfizados e traits | v1 | mantido |
 | R07 | blocos `test` junto do código | v1 | mantido; igualdade com erro escrita `== Err(E)` |

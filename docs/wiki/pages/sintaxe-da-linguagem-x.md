@@ -45,8 +45,8 @@ Ficam iguais nas duas: `fn`, `type` para registros e tipos soma, `T?`, `T ! E`, 
   verificador de tipos e se comporta diferente do que o prior do modelo prevê. A variante B
   remove essas duas armadilhas pelo custo de alguns tokens.
 
-**Recomendação:** variante B, confirmada pelo [[harness-de-avaliacao]] com mais modelos e
-famílias antes de congelar a v1.
+**Decisão:** variante B (adr:0004-sintaxe-alinhada-ao-python-onde-a-semantica-coincide); o
+[[harness-de-avaliacao]] repete a comparação com mais modelos e famílias antes de congelar a v1.
 
 ## Lacunas da proposta original
 
@@ -80,10 +80,10 @@ famílias antes de congelar a v1.
 | nenhum erro de indentação em 60 programas do piloto, escritos inteiros | `INDENT`/`DEDENT` não cabem no subconjunto Lark da OpenAI ([[decodificacao-restrita]]) |
 
 O piloto só mediu programas escritos de uma vez; o risco está em **editar** código existente
-com busca-e-substituição ou diffs, que é como agentes trabalham. **Recomendação:** manter a
+com busca-e-substituição ou diffs, que é como agentes trabalham. **Decisão:** manter a
 indentação, com parser tolerante e formatador canônico, e incluir no harness um teste de
 edição que compare a variante indentada com uma variante com chaves. Trocar agora é barato;
-depois da v1, é migração — por isso a decisão é uma ADR.
+depois da v1, é migração — a decisão está em adr:0005-indentacao-significativa.
 
 ## Mantido do estudo original
 

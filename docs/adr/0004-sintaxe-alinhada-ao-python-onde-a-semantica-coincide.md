@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # 0004 · Sintaxe alinhada ao Python onde a semântica coincide
@@ -21,8 +21,8 @@ todo código, toda doc e todo corpus usarão — mudar depois da v1 é migraçã
 Adotar a variante B: `None`, `case` nos braços de `match`, `lambda`, `from … import`, `??` como
 padrão de opcional, `is None`/`is not None` como teste de opcional e `Err(e)` para comparar com
 erro em testes. A regra geral: semântica igual à do Python usa a sintaxe do Python; semântica
-diferente usa sintaxe visivelmente diferente. A decisão fica `proposed` até o harness repetir a
-comparação com mais modelos e famílias.
+diferente usa sintaxe visivelmente diferente. Aceita em 5 de outubro de 2026; o harness repete a
+comparação com mais modelos e famílias antes de congelar a v1.
 
 ## Consequences
 
@@ -30,5 +30,5 @@ comparação com mais modelos e famílias.
 - `??` é a única forma nova e vem de C#, Swift, Kotlin e JavaScript, não do Python.
 - O transpilador para Python fica mais direto: `None`, `lambda`, imports e `match` passam quase
   sem tradução.
-- Se o harness mostrar a variante A com menos erros semânticos, esta ADR é rejeitada e a regra
-  geral é revista.
+- Se o harness mostrar a variante A com menos erros semânticos, uma nova ADR substitui esta e a
+  regra geral é revista.
