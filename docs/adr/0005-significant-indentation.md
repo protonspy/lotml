@@ -1,5 +1,6 @@
 ---
-status: accepted
+status: superseded
+superseded-by: 0009-significant-indentation-with-symbol-addressed-edits
 ---
 
 # 0005 · Significant indentation

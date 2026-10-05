@@ -1,7 +1,7 @@
 # Editing robustness
 
 Agents change code by editing it — search-and-replace blocks, diffs, line edits — not by writing
-it whole. adr:0005-significant-indentation keeps indentation-based blocks on one condition: that
+it whole. adr:0009-significant-indentation-with-symbol-addressed-edits keeps indentation-based blocks on one condition: that
 an editing test does not find the indented form failing more often than a braces form. This page
 gathers what was measured about that question: what a misplaced line does to a program in each
 block style, how three models fared editing both styles, and what the literature on edit formats
@@ -126,7 +126,7 @@ hidden test that fails on the unedited program and passes on a reference edit.
 
 ## What follows for lotml
 
-1. **Keep significant indentation** (adr:0005-significant-indentation): nothing measured argues for
+1. **Keep significant indentation** (adr:0009-significant-indentation-with-symbol-addressed-edits): nothing measured argues for
    switching. The pilot did not trigger its condition, though twelve tasks per cell cannot separate
    the designs; a misplaced brace is silent more often than a misplaced line; and which slips agents
    make is unmeasured. The decision stays conditional on the editing test at scale.

@@ -94,10 +94,11 @@ What the prefix-checking literature adds, as language requirements:
   ([[transpilation-strategy]]). Recommendation: trap in every build and on every target, with
   explicit `wrapping_add` and friends for those who want modular arithmetic.
 - **Equality with an error in tests** written as `== Err(E)`, not `== fail E`.
-- **Integer division is unspecified.** The pilot spec lists `/` and `//` without saying what `/`
-  does on two `int`s: Python 3 returns a float, C truncates. By the rule in [[lotml-syntax]], `/` on
-  integers either returns `f64` as in Python or is a compile error pointing at `//`; it must not
-  truncate silently. Decide before the spec freezes.
+- **Integer division returns `f64`, as in Python.** The pilot spec listed `/` and `//` without
+  saying what `/` does on two `int`s: Python 3 returns a float, C truncates. By the rule in
+  [[lotml-syntax]], the choice was `f64` as in Python or a compile error pointing at `//`, never a
+  silent truncation; adr:0007-integer-division-returns-f64 takes Python's semantics, so `/` is the
+  one operator that converts `int` to `f64`, and `//` and `%` floor as in Python.
 
 ## Effects
 

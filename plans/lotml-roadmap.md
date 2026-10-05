@@ -1,8 +1,10 @@
 ---
-autonomy: gated
+autonomy: auto
 ci: wait
 status: approved
-checksum: 9a06d4d9629c1689f09942f739b5507edbca27ba8662b91216c08a8eef032242
+pr: per-group
+merge: auto
+checksum: 0594a7d9cf71fe4b8bfdeb8a50cfe536bb419fca7b105fd04809ac18bcf858fe
 ---
 
 # lotml roadmap
@@ -54,8 +56,8 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
 
 ## Tasks
 
-- [ ] 1.1 (Unit) Decide what `/` does on two `int`s — `f64` as in Python, or an error pointing at `//` — and record it as an ADR before the spec freezes (R34; docs/wiki/pages/type-system.md, docs/wiki/pages/lotml-syntax.md)
-- [ ] 1.2 (Unit) Review adr:0003 and adr:0005 against the corrected evidence and supersede their context or keep it, as the owner decides (docs/wiki/pages/source-verification.md, docs/wiki/pages/memory-model.md)
+- [x] 1.1 (Unit) Decide what `/` does on two `int`s — `f64` as in Python, or an error pointing at `//` — and record it as an ADR before the spec freezes (R34; docs/wiki/pages/type-system.md, docs/wiki/pages/lotml-syntax.md)
+- [x] 1.2 (Unit) Review adr:0003 and adr:0005 against the corrected evidence and supersede their context or keep it, as the owner decides (docs/wiki/pages/source-verification.md, docs/wiki/pages/memory-model.md)
 - [ ] 1.3 (Unit) Write the lotml language reference as idiom examples under 10,000 tokens, variant B, with the parameter conventions, the unit type, `todo()` and the places where semantics differ from Python marked (R12, R24, R28, R33; docs/wiki/pages/training-prior.md, research/pilot/spec-b.md)
   _Depends 1.1_
 - [ ] 1.4 (TDD) Build the harness task set: HumanEval, MBPP and LiveCodeBench v6 translated to lotml with signatures, docstrings and hidden tests, at least 168 paired tasks per comparison (docs/wiki/pages/evaluation-harness.md, research/experiments/sample_size/results.md)

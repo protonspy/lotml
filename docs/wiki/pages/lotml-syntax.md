@@ -66,10 +66,10 @@ where the design already makes the difference visible:
 | passing an argument | reference | copy | a function changes its caller's value only through `inout`, with `&` at the call |
 | `x = …` again | rebinding | an error for an immutable | `var` at the declaration |
 | `if x:` on a non-`bool` | truthiness | an error | — the compiler rejects it |
-| `a / b` and `//` on integers | float and floor division | to be specified | open — see [[type-system]] |
+| `a / b` and `//` on integers | float and floor division | the same | — adr:0007-integer-division-returns-f64 |
 
-Each row is a diagnostic with a fix ([[semantic-compiler]]); the open row needs a decision before
-the spec freezes.
+Each row that differs is a diagnostic with a fix ([[semantic-compiler]]); integer division kept
+Python's semantics, so it needs none.
 
 ## Gaps in the original proposal
 
@@ -109,7 +109,7 @@ SWE-agent's edit guard, once read as an indentation guard, is a general lint gat
 were never broken down by code. The evidence is in [[editing-robustness]]: the editing risk lives
 in the edit interface more than in the block style, and edits addressed to syntax entities cut
 edit errors by three quarters in Python. **Decision:** keep indentation
-(adr:0005-significant-indentation), with a tolerant parser, a canonical formatter and
+(adr:0009-significant-indentation-with-symbol-addressed-edits), with a tolerant parser, a canonical formatter and
 symbol-addressed edits in the compiler; its condition was not triggered by the editing pilot,
 whose twelve tasks per cell cannot separate the designs, and the harness repeats the test at scale. Switching now is cheap; after v1 it is a migration.
 

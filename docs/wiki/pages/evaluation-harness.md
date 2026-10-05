@@ -33,7 +33,7 @@ decision requires and the roadmap's gates.
 2. **Hidden tests for generation.** The pilot's programs pass their own tests; a task-level
    oracle written independently of the model is what pass@1 needs.
 3. **Editing at scale.** The editing pilot used twelve short programs and three Claude models; the
-   decision in adr:0005-significant-indentation needs long files, multi-turn agents and open
+   decision in adr:0009-significant-indentation-with-symbol-addressed-edits needs long files, multi-turn agents and open
    models.
 4. **More model families.** Closed ones (Claude, GPT, Gemini) with the spec in the prompt; open
    ones (Qwen, Llama, DeepSeek), which should leak more and which are, with OpenAI, the only ones
@@ -90,7 +90,7 @@ syntax is revisited ([[requirements-and-roadmap]]):
 
 | gate | criterion |
 | --- | --- |
-| 0 → 1 | parse ≥ 95% and no syntactic leakage for frontier models with the spec; data tests variant B against A (adr:0004-python-syntax-where-semantics-match) and settles indentation versus braces (adr:0005-significant-indentation) on at least 168 paired tasks |
+| 0 → 1 | parse ≥ 95% and no syntactic leakage for frontier models with the spec; data tests variant B against A (adr:0004-python-syntax-where-semantics-match) and settles indentation versus braces (adr:0009-significant-indentation-with-symbol-addressed-edits) on at least 168 paired tasks |
 | 1 → 2 | lotml pass@1 ≥ typed Python pass@1 on the same tasks; median rounds to green ≤ 2; tokens ≤ typed Python |
 | 2 → 3 | calling lotml from Python and Python from lotml works; synthetic corpus validated by tests |
 | 3 → 4 | the whole suite passes on the Python and C targets with the same result; ≤ 2× C on numeric benchmarks, with allocation-heavy ones reported separately |
