@@ -14,3 +14,12 @@ exist yet; it is decided in `docs/adr/` and enters this list when code depends o
 - **llguidance** — the constrained-decoding engine behind OpenAI's grammar tools, llama.cpp, vLLM and SGLang; checks which grammars of lotml it accepts and what each costs per token (`research/experiments/grammar/`).
 - **pytest** — tests for the research counters and checkers.
 - **ruff** — lint and formatting for the research code; `research/ruff.toml` excludes the corpus, which is measured byte for byte.
+
+## Evaluation harness (`harness/`)
+
+A uv project with a lock file, because the harness is a deliverable rather than a one-off
+measurement; it reuses the research stack above (lark, tiktoken, llguidance, pytest, ruff) at the
+same pinned versions.
+
+- **pytest-cov** — line coverage for the test gate `scc check` reads; chosen over running
+  `coverage` by hand because it attaches to the pytest run the suite already is.
