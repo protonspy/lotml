@@ -1,0 +1,17 @@
+fn binary_search(xs: [int], target: int) -> int?:
+    var lo = 0
+    var hi = len(xs) - 1
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if xs[mid] == target:
+            return mid
+        if xs[mid] < target:
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    return none
+
+test "binary search":
+    xs = [1, 3, 5, 7, 9]
+    assert binary_search(xs, 7) == 3
+    assert binary_search(xs, 4) == none
