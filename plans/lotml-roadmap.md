@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: auto
-checksum: 8d6588bd61672a4d6716cfccc0909a76380a2b27cdf0f04f84e29a1138d99e07
+checksum: 7528031daf953d81dbf1b3f7707395cb5ff94e0b380d0b19e315240a14428132
 ---
 
 # lotml roadmap
@@ -62,7 +62,7 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 1.1_
 - [x] 1.4 (TDD) Build the harness task set: HumanEval, MBPP and LiveCodeBench v6 translated to lotml with signatures, docstrings and hidden tests, at least 168 paired tasks per comparison (docs/wiki/pages/evaluation-harness.md, research/experiments/sample_size/results.md)
   _Depends 1.3_
-- [ ] 1.5 (Unit) Grow the research transpiler into the harness executor: every construct of the reference, value semantics, the step budget and tracebacks at the lotml line (research/experiments/transpiler/, research/experiments/tracebacks/results.md)
+- [x] 1.5 (Unit) Grow the research transpiler into the harness executor: every construct of the reference, value semantics, the step budget and tracebacks at the lotml line (research/experiments/transpiler/, research/experiments/tracebacks/results.md)
   _Depends 1.3_
 - [ ] 1.6 (TDD) Generate the grammar from the parser's single source in three dialects — llguidance Lark with line-oriented, depth-bounded blocks, GBNF and EBNF — and test each against the whole corpus on every change (R11; research/experiments/grammar/results.md, docs/wiki/pages/constrained-decoding.md)
   _Depends 1.3_

@@ -1,5 +1,6 @@
 from lotml_harness.tasks import Case, Task
 from lotml_harness.tasks.build import Report, translate, validate
+from lotml_harness.tasks.canonical import verdicts
 from lotml_harness.tasks.types import List, Prim
 
 GOOD = '''from typing import List
@@ -59,3 +60,10 @@ def test_validate_keeps_tasks_with_no_canonical_solution_unchecked():
     kept = validate([task("")], report)
     assert len(kept) == 1
     assert report.unchecked == {"mbpp": 1}
+
+
+def test_canonical_verdicts_mark_each_case():
+    source = "def total(xs):\n    return sum(xs) if xs != [9] else 1 // 0\n"
+    checked = task(source)
+    checked.tests += [Case([[9]], 9), Case([[1]], 2)]
+    assert verdicts(checked) == [True, False, False]

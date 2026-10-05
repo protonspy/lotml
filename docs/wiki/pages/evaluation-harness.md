@@ -15,6 +15,12 @@ decision requires and the roadmap's gates.
 - **Execution** (`research/experiments/transpiler/`): a research transpiler from variants A and B
   to a Python AST that runs `test` blocks under lotml's semantics or Python's, with a step budget
   for runaway loops and tracebacks that point at the `.x` line ([[transpilation-strategy]]).
+- **Executor** (`harness/lotml_harness/`): the research transpiler grown to every construct of
+  the language reference (`reference/lotml.md`) — `inout` arguments written back to the caller,
+  sets, bit operators, trait defaults, positional variant fields — with `int` trapping outside
+  i64, a step budget counted with `sys.monitoring`, tracebacks at the `.lotml` line, the
+  mutability checker that rejects what a Python habit gets wrong, and a child process per
+  program. It reproduces the research transpiler's outcomes on all of the pilot's programs.
 - **Editing** (`research/experiments/editing/` and `indentation/`): twelve editing tasks with hidden
   tests in an indented and a braces form, a search-and-replace applier in strict and tolerant
   modes, and a mutation experiment on indentation and brace slips — see [[editing-robustness]].
