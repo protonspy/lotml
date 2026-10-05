@@ -1,0 +1,26 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.13"
+      - name: Build
+        run: uv --directory harness sync --locked
+      - name: Format
+        run: uv --directory harness run ruff format --check . && uvx ruff format --check research
+      - name: Lint
+        run: uv --directory harness run ruff check . && uvx ruff check research
+      - name: Test
+        run: uv --directory harness run python scripts/test_gate.py

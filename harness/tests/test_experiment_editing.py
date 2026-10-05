@@ -49,10 +49,36 @@ def test_solutions_take_passing_variant_b_answers_by_writer_preference(tmp_path)
             {"task": "t/4", "variant": "b", "passed": False, "violations": [], "code": "no"},
         ],
     }
+    rows["qwen"] = [{"task": "t/5", "variant": "b", "passed": True, "code": "not a writer"}]
     for writer, lines in rows.items():
-        (tmp_path / f"{writer}.jsonl").write_text("\n".join(json.dumps(r) for r in lines))
-    tasks = {f"t/{i}": task() for i in range(1, 5)}
+        stored = [r | {"model": writer} for r in lines]
+        (tmp_path / f"{writer}.jsonl").write_text("\n".join(json.dumps(r) for r in stored))
+    tasks = {f"t/{i}": task() for i in range(1, 6)}
     assert editing.solutions(tasks, tmp_path) == {"t/1": "sonnet", "t/2": "h2"}
+
+
+def test_more_solutions_answer_unsampled_tasks_in_variant_b(monkeypatch, tmp_path):
+    seen = {}
+
+    def answer(model, tasks, path, workers, variants):
+        seen.update(model=model.name, count=len(tasks), path=path.name, variants=variants)
+
+    monkeypatch.setattr(editing, "answer", answer)
+    monkeypatch.setattr(editing, "ANSWERS", tmp_path)
+    editing.more_solutions("claude:sonnet", 5)
+    assert seen == {
+        "model": "claude-sonnet",
+        "count": 5,
+        "path": "extra-claude-sonnet.jsonl",
+        "variants": ("b",),
+    }
+
+
+def test_same_program_ignores_layout_but_not_meaning():
+    assert editing.same_program("fn f():\n    return 1", "fn f():\n        return 1")
+    assert not editing.same_program("fn f():\n    return 2", "fn f():\n    return 1")
+    assert not editing.same_program(None, "fn f():\n    return 1")
+    assert not editing.same_program("fn f(", "fn f(")
 
 
 def test_top_level_names_cover_types_and_functions():

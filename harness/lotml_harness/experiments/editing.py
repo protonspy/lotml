@@ -32,7 +32,8 @@ from lotml_harness import ROOT, reference
 from lotml_harness.execute import Result, isolated
 from lotml_harness.experiments.models import Model, ModelError, from_spec
 from lotml_harness.experiments.variants import RUNS as ANSWERS
-from lotml_harness.experiments.variants import mcnemar, percent
+from lotml_harness.experiments.variants import SAMPLE, mcnemar, percent, sample
+from lotml_harness.experiments.variants import run as answer
 from lotml_harness.lang.braces import from_braces, indent, line_slips, to_braces
 from lotml_harness.lang.grammar import parser
 from lotml_harness.tasks import Task, build, values
@@ -63,24 +64,32 @@ class EditTask:
 
 
 def solutions(tasks: dict[str, Task], answers: Path = ANSWERS) -> dict[str, str]:
-    """A passing variant B program per task, from the variant experiment's answers."""
+    """A passing variant B program per task, from every stored answer of a preferred writer."""
     found: dict[str, dict[str, str]] = {}
-    for writer in WRITERS:
-        path = answers / f"{writer}.jsonl"
-        if not path.exists():
-            continue
+    for path in sorted(answers.glob("*.jsonl")):
         for line in path.read_text(encoding="utf-8").splitlines():
             row = json.loads(line)
             if (
-                row.get("variant") == "b"
+                row.get("model") in WRITERS
+                and row.get("variant") == "b"
                 and row.get("passed")
                 and not row.get("violations")
                 and row["task"] in tasks
             ):
-                found.setdefault(row["task"], {}).setdefault(writer, row["code"])
+                found.setdefault(row["task"], {}).setdefault(row["model"], row["code"])
     return {
         task: next(codes[w] for w in WRITERS if w in codes) for task, codes in sorted(found.items())
     }
+
+
+def more_solutions(spec: str, count: int, seed: int = 0, workers: int = 6) -> None:
+    """Variant B answers to tasks outside the variant sample, so editing has enough files."""
+    pool = build.load(only=("humaneval", "mbpp"))
+    sampled = {t.id for t in sample(pool, SAMPLE, seed)}
+    rest = sorted((t for t in pool if t.id not in sampled), key=lambda t: t.id)
+    extra = random.Random(f"{seed}/extra").sample(rest, min(count, len(rest)))  # noqa: S311
+    model = from_spec(spec)
+    answer(model, extra, ANSWERS / f"extra-{model.name}.jsonl", workers, variants=("b",))
 
 
 def top_level_names(source: str) -> set[str]:
@@ -178,10 +187,20 @@ def make_tasks(tasks: dict[str, Task], programs: dict[str, str], seed: int = 0) 
             slip = slipped(task, whole, f"{seed}/{task_id}/slip")
         except (LarkError, StopIteration):
             continue
-        if slip is not None and from_braces(to_braces(slip[0])) == slip[0]:
+        if slip is not None and same_program(from_braces(to_braces(slip[0])), slip[0]):
             broken, where, failure = slip
             made.append(EditTask(task, whole, broken, where, failure))
     return made
+
+
+def same_program(first: str | None, second: str) -> bool:
+    """Whether two texts parse to the same program: the braces form must mean the indented."""
+    if first is None:
+        return False
+    try:
+        return parser("b").parse(first + "\n") == parser("b").parse(second + "\n")
+    except LarkError:
+        return False
 
 
 # The forms ---------------------------------------------------------------------------
@@ -579,7 +598,12 @@ def main() -> None:
     options.add_argument("--model", action="append", default=[], help="claude:haiku, ...")
     options.add_argument("--workers", type=int, default=1)
     options.add_argument("--make", action="store_true", help="build the tasks from the answers")
+    options.add_argument(
+        "--more-solutions", type=int, default=0, help="first ask Claude Sonnet for this many more"
+    )
     arguments = options.parse_args()
+    if arguments.more_solutions:
+        more_solutions("claude:sonnet", arguments.more_solutions)
     tasks = {t.id: t for t in build.load()}
     if arguments.make or not TASKS_FILE.exists():
         save_tasks(make_tasks(tasks, solutions(tasks)))
