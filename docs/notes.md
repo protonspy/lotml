@@ -38,9 +38,10 @@ over this file answers with the example above as well as with the notes. -->
 ## Log
 
 <!-- Notes go below, oldest first. `scc notes add` appends here. -->
-- n-0001 2026-10-05 #gotcha @research/tokens/corpus — ruff format reescreve o corpus pareado, que é medido byte a byte; research/ruff.toml o exclui
-- n-0002 2026-10-05 #gotcha @research/tokens/counter.py — tokenizadores de Llama, Gemma e Mistral somam BOS por padrão; contar com add_special_tokens=False, travado em test_counter.py
-- n-0003 2026-10-05 #gotcha @research/tokens/counter.py — a primeira execução de research/tokens baixa os tokenizadores do Hugging Face e precisa de rede
-- n-0004 2026-10-05 #gotcha @research/pilot/check.py — o ? de T? é o terminal nomeado QMARK para a árvore distinguir int de int?; anônimo, o Lark o descarta
-- n-0005 2026-10-05 #ceiling @research/pilot/semantics.py — semantics.py infere tipos só de anotações e literais; um verificador de tipos real do lotml o substitui
-- n-0006 2026-10-05 #decision @research — gates build e test pulados: o repositório só tem código de pesquisa; registrar com scc check set quando o compilador existir
+- n-0001 2026-10-05 #gotcha @research/tokens/corpus — ruff format rewrites the paired corpus, which is measured byte for byte; research/ruff.toml excludes it
+- n-0002 2026-10-05 #gotcha @research/tokens/counter.py — the Llama, Gemma and Mistral tokenizers add a BOS token by default; count with add_special_tokens=False, pinned by test_counter.py
+- n-0003 2026-10-05 #gotcha @research/tokens/counter.py — the first run of research/tokens downloads the tokenizers from Hugging Face and needs network access
+- n-0004 2026-10-05 #gotcha @research/pilot/check.py — the ? in T? is the named terminal QMARK so the tree can tell int from int?; as an anonymous token, Lark drops it
+- n-0005 2026-10-05 #ceiling @research/pilot/semantics.py — semantics.py infers types only from annotations and literals; a real lotml type checker replaces it
+- n-0006 2026-10-05 #decision @research — build and test gates skipped: the repository only holds research code; record them with scc check set once the compiler exists
+- n-0007 2026-10-05 #decision @docs — every artifact is written in English: docs, wiki slugs, ADR filenames, plans, code, commit messages and PR bodies

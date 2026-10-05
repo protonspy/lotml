@@ -13,35 +13,35 @@ fixed documents, not pages, and neither is ever an orphan.
 
 ## Pages
 
-### lotml — estudo
+### lotml — study
 
-- [[linguagem-orientada-a-llms]] — entrada do estudo: conclusões, veredito sobre a proposta original, decisões aceitas
+- [[llm-oriented-language]] — the study's entry page: conclusions, verdict on the original proposal, accepted decisions
 
-### O que foi medido
+### What was measured
 
-- [[custo-em-tokens]] — custo em tokens da sintaxe em oito tokenizadores, corpus pareado e construções isoladas
-- [[piloto-de-vazamento-de-python]] — três modelos escrevendo nas variantes A e B a partir da spec
+- [[token-cost]] — token cost of the syntax on eight tokenizers, paired corpus and isolated constructs
+- [[python-leakage-pilot]] — three models writing variants A and B from the spec
 
-### Contexto
+### Context
 
-- [[prior-de-treino]] — linguagens sem corpus, confusão com Python e como contornar
-- [[linguagens-para-agentes]] — linguagens já desenhadas para LLMs e o que nenhuma mediu
+- [[training-prior]] — languages without a corpus, confusion with Python and how to get around it
+- [[languages-for-agents]] — languages already designed for LLMs and what none of them measured
 
 ### Design
 
-- [[sintaxe-do-lotml]] — a regra de sintaxe, variantes A e B, lacunas, indentação
-- [[sistema-de-tipos]] — tipos verificáveis sobre prefixos, opcionais, overflow, efeitos
-- [[modelo-de-memoria]] — semântica de valor, contagem de referências, convenções de parâmetro
-- [[concorrencia-sem-cor]] — green threads e onde runtimes sem cor vazam
+- [[lotml-syntax]] — the syntax rule, variants A and B, gaps, indentation
+- [[type-system]] — types checkable on prefixes, optionals, overflow, effects
+- [[memory-model]] — value semantics, reference counting, parameter conventions
+- [[colorless-concurrency]] — green threads and where colorless runtimes leak
 
-### Ferramentas
+### Tools
 
-- [[compilador-semantico]] — diagnósticos, loop de correção, digest, LSP e MCP
-- [[decodificacao-restrita]] — gramáticas para geração restrita e restrição por tipos
+- [[semantic-compiler]] — diagnostics, the repair loop, digest, LSP and MCP
+- [[constrained-decoding]] — grammars for constrained generation and type constraints
 
-### Plano
+### Plan
 
-- [[estrategia-de-transpilacao]] — destinos Python e C, corpus Python→lotml
-- [[harness-de-avaliacao]] — métricas, tamanho de amostra e portões
-- [[riscos-do-lotml]] — tabela de riscos revista
-- [[requisitos-e-roadmap]] — requisitos revistos e novos, fases e portões
+- [[transpilation-strategy]] — Python and C targets, the Python→lotml corpus
+- [[evaluation-harness]] — metrics, sample size and gates
+- [[lotml-risks]] — the revised risk table
+- [[requirements-and-roadmap]] — revised and new requirements, phases and gates
