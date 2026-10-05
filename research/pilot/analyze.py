@@ -9,22 +9,36 @@ from semantics import findings
 
 HERE = Path(__file__).parent
 RUNS = HERE / "runs"
+MAX_BYTES = 256 * 1024
+
+
+def check_file(variant: str, path: Path) -> dict:
+    """Parse error, leaks and semantic findings for one generated program."""
+    if path.is_symlink() or path.stat().st_size > MAX_BYTES:
+        return {
+            "parse_error": "skipped: symlink or larger than 256 KiB",
+            "leaks": [],
+            "semantics": [],
+        }
+    source = path.read_text(encoding="utf-8")
+    error = parse_error(variant, source)
+    result = {"parse_error": error, "leaks": leaks(variant, source), "semantics": []}
+    if error is None:
+        try:
+            result["semantics"] = findings(variant, source)
+        except (RecursionError, LookupError, AttributeError, StopIteration) as err:
+            result["semantics"] = [("checker error", type(err).__name__)]
+    return result
 
 
 def analyze() -> dict:
     runs = {}
     for run in sorted(p for p in RUNS.iterdir() if p.is_dir()):
         variant = run.name.split("-")[0]
-        files = {}
-        for path in sorted(run.glob("task-*.x")):
-            source = path.read_text(encoding="utf-8")
-            error = parse_error(variant, source)
-            files[path.stem] = {
-                "parse_error": error,
-                "leaks": leaks(variant, source),
-                "semantics": [] if error else findings(variant, source),
-            }
-        runs[run.name] = files
+        runs[run.name] = {
+            path.stem: check_file(variant, path)
+            for path in sorted(run.glob("task-*.x"))
+        }
     return runs
 
 

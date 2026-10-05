@@ -12,8 +12,8 @@ STRING_RE = (
     r"[rRbBfF]{0,2}("
     r'"""(.|\n)*?"""'
     r"|'''(.|\n)*?'''"
-    r'|"([^"\\\n]|\\.)*"'
-    r"|'([^'\\\n]|\\.)*'"
+    r'|"(?:[^"\\\n]|\\.)*+"'
+    r"|'(?:[^'\\\n]|\\.)*+'"
     r")"
 )
 
@@ -167,14 +167,14 @@ VARIANTS = {
 
 # Python constructs that are not part of either variant.
 COMMON_LEAKS = {
-    "def": r"^\s*def\s",
-    "class": r"^\s*class\s",
+    "def": r"^[ \t]*def\s",
+    "class": r"^[ \t]*class\s",
     "raise": r"\braise\b",
-    "try": r"^\s*try\s*:",
-    "except": r"^\s*except\b",
-    "finally": r"^\s*finally\s*:",
-    "with": r"^\s*with\s",
-    "decorator": r"^\s*@\w",
+    "try": r"^[ \t]*try[ \t]*:",
+    "except": r"^[ \t]*except\b",
+    "finally": r"^[ \t]*finally[ \t]*:",
+    "with": r"^[ \t]*with\s",
+    "decorator": r"^[ \t]*@\w",
     "Optional[": r"\bOptional\[",
     "Union[": r"\bUnion\[",
     "typing generic": r"\b(List|Dict|Tuple|Set)\[",
@@ -192,8 +192,8 @@ COMMON_LEAKS = {
 A_ONLY_LEAKS = {
     "None": r"\bNone\b",
     "lambda": r"\blambda\b",
-    "import": r"^\s*(import|from)\s",
-    "case": r"^\s*case\s",
+    "import": r"^[ \t]*(import|from)\s",
+    "case": r"^[ \t]*case\s",
     "is": r"\bis\b",
 }
 

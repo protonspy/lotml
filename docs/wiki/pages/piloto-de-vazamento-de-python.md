@@ -26,8 +26,8 @@ apareceu na sintaxe — apareceu na semântica, e só no modelo menor.
   - *vazamento semântico* — percorrendo a árvore (`semantics.py`): reatribuir ou mutar um
     local imutável, mutar `self` sem `var self`, truthiness em valor que não é `bool`, e
     parâmetros `var`.
-- **Reprodução:** `uv run --with lark python analyze.py` em `research/pilot/`, que regenera
-  `results.md` e `results.json`.
+- **Reprodução:** `analyze.py` em `research/pilot/` regenera `results.md` e `results.json`;
+  os comandos estão em `research/README.md`.
 
 ## Resultados
 
@@ -48,7 +48,8 @@ apareceu na sintaxe — apareceu na semântica, e só no modelo menor.
     Swift; a spec só mostra campos nomeados.
 - **As violações semânticas são hábitos de Python que passam pelo parser**, todas no Haiku:
   - `line = line.strip()` reatribuindo a variável do laço (duas vezes, uma por variante);
-  - `items = []` seguido de `items.append(…)` sem `var` (duas vezes, na variante B).
+  - uma lista local criada sem `var` e depois mutada com `append` — `items` e `descriptions`,
+    na variante B.
 - **O Haiku assumiu semântica de referência nos argumentos.** Na tarefa da razão contábil,
   nas duas variantes, escreveu `fn withdraw(var ledger: {str: int}, …)` e um teste que espera
   ver o `ledger` do chamador alterado. Com semântica de valor ([[modelo-de-memoria]]) o

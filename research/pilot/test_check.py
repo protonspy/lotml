@@ -57,3 +57,14 @@ def test_power_operator_parses(variant):
 def test_negative_literal_pattern_parses():
     src = "fn f(r: Res) -> int:\n    match r:\n        case Err(Neg(-5)):\n            return 1\n"
     assert parse_error("b", src) is None
+
+
+def test_hostile_input_is_checked_in_linear_time():
+    import time
+
+    hostile = ['"\\' * 4000, "\n" * 40000]
+    start = time.perf_counter()
+    for text in hostile:
+        leaks("a", text)
+        parse_error("a", text)
+    assert time.perf_counter() - start < 2.0

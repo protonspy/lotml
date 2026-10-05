@@ -9,6 +9,8 @@ da meta do estudo original — e em uso agêntico ela pesa menos que uma única 
 
 - **Oito tokenizadores, seis famílias:** `o200k` e `cl100k` (OpenAI, via tiktoken), Llama 3,
   Qwen3, DeepSeek-V3, Gemma 3, Mistral Nemo e StarCoder2 (Hugging Face).
+  Llama 3 e Gemma 3 vêm dos espelhos `unsloth/*`, porque os repositórios oficiais exigem
+  aceite de licença; os nomes exatos estão em `research/tokens/counter.py`.
 - **Tokens especiais ficam fora.** Os tokenizadores de Llama, Gemma e Mistral somam um BOS por
   padrão; o teste `research/tokens/test_counter.py` exige contagem zero para texto vazio.
 - **O tokenizador do Claude não foi medido.** A Anthropic não o publica e a contagem exige a
@@ -17,8 +19,8 @@ da meta do estudo original — e em uso agêntico ela pesa menos que uma única 
   genéricos, traits, algoritmos), cada uma em Python tipado moderno (3.12, `X | None`,
   `type`, dataclasses), na variante A e na variante B, sempre com testes. O lado Python passa
   no pytest e no `mypy --strict`.
-- **Reprodução:** `uv run --with tiktoken --with tokenizers --with huggingface_hub python
-  measure.py` em `research/tokens/`, que regenera `results.md` e `results.json`.
+- **Reprodução:** `measure.py` em `research/tokens/` regenera `results.md` e `results.json`;
+  os comandos, com versões e revisões fixadas, estão em `research/README.md`.
 
 ## Resultado: cerca de 10% a menos que Python tipado
 

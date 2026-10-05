@@ -68,3 +68,24 @@ def test_handwritten_corpus_breaks_no_rule():
     for path in sorted(corpus.glob("*/[ab].x")):
         found = kinds(path.stem, path.read_text(encoding="utf-8"))
         assert set(found) <= {"var parameter"}, path
+
+
+def test_truthiness_of_a_record_is_flagged():
+    src = "fn f(u: User) -> bool:\n    if u:\n        return True\n    return False\n"
+    assert kinds("a", src) == ["truthiness"]
+
+
+def test_elif_and_else_branches_have_their_own_scope():
+    src = (
+        "fn f(n: int) -> int:\n    if n > 0:\n        x = 1\n    elif n < 0:\n"
+        "        x = 2\n    else:\n        x = 3\n    return 0\n"
+    )
+    assert kinds("a", src) == []
+
+
+def test_match_arm_bindings_are_immutable():
+    src = (
+        "fn f(s: Shape) -> f64:\n    match s:\n        case Circle(r):\n"
+        "            r = r * 2.0\n            return r\n"
+    )
+    assert kinds("b", src) == ["reassign immutable"]
