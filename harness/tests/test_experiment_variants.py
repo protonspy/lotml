@@ -13,8 +13,9 @@ from lotml_harness.tasks.types import List, Optional, Prim
 
 
 def test_variant_a_reference_drops_every_construct_variant_b_took_from_python():
-    text = variants.reference_text("a")
-    for construct in ("None", "lambda", "??", "is not", "case ", "from math", "import math"):
+    text, _, excluded = variants.reference_text("a").partition("## Not in the language")
+    assert "`None`, `lambda`" in excluded
+    for construct in ("None", "lambda", "??", "is not none", "case ", "from math", "import math"):
         assert construct not in text, construct
     assert "none" in text and "=>" in text and "use math.{sqrt, pi}" in text
     assert "== fail Empty" in text
@@ -223,3 +224,14 @@ def test_summary_counts_parse_leaks_passes_and_discordant_pairs():
     text = variants.markdown(rows, {"m": "Claude"})
     assert "| m | Claude | 3 |" in text
     assert "McNemar" in text
+
+
+def test_collected_keeps_each_answer_once_and_only_for_the_sample(tmp_path):
+    lines = [
+        {"model": "m", "task": "t1", "variant": "a", "error": "quota"},
+        {"model": "m", "task": "t1", "variant": "a", "error": None, "passed": True},
+        {"model": "m", "task": "t9", "variant": "a", "error": None},
+    ]
+    (tmp_path / "m.jsonl").write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    sampled = [Task("t1", "s", "f", [], Prim("int"), "", [])]
+    assert variants.collected(tmp_path, sampled) == [lines[1]]

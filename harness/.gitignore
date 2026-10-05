@@ -4,3 +4,5 @@ __pycache__/
 .ruff_cache/
 .coverage
 cache/
+
+# model answers are committed; scratch caches are not

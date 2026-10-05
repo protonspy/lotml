@@ -1,5 +1,6 @@
 import json
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -30,8 +31,16 @@ def test_claude_cli_runs_isolated_headless_and_reads_the_json(monkeypatch, tmp_p
     assert completion.text.startswith("```lotml")
     assert (completion.input_tokens, completion.output_tokens) == (123, 7)
     command = seen["command"]
-    for flag in ("-p", "--tools", "--system-prompt", "--setting-sources", "--strict-mcp-config"):
+    for flag in (
+        "-p",
+        "--tools",
+        "--system-prompt-file",
+        "--setting-sources",
+        "--strict-mcp-config",
+    ):
         assert flag in command
+    system_file = command[command.index("--system-prompt-file") + 1]
+    assert Path(system_file).read_text(encoding="utf-8") == "system text"
     assert command[command.index("--model") + 1] == "haiku"
     assert seen["options"]["input"] == "user text"
     assert seen["options"]["cwd"] == tmp_path
