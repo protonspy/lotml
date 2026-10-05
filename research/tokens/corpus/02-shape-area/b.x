@@ -1,0 +1,20 @@
+from math import pi, sqrt
+
+type Shape = Circle(r: f64) | Rect(w: f64, h: f64) | Triangle(a: f64, b: f64, c: f64)
+
+fn area(s: Shape) -> f64:
+    match s:
+        case Circle(r):
+            return pi * r * r
+        case Rect(w, h):
+            return w * h
+        case Triangle(a, b, c):
+            p = (a + b + c) / 2.0
+            return sqrt(p * (p - a) * (p - b) * (p - c))
+
+fn total_area(shapes: [Shape]) -> f64:
+    return sum(area(s) for s in shapes)
+
+test "total area":
+    shapes = [Rect(2.0, 3.0), Triangle(3.0, 4.0, 5.0)]
+    assert total_area(shapes) == 12.0

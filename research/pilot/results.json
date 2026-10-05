@@ -1,0 +1,360 @@
+{
+ "a-haiku": {
+  "task-01": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-02": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-03": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-04": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-05": {
+   "parse_error": "Unexpected token Token('NAME', 'items') at line 1, column 19.",
+   "leaks": [],
+   "semantics": []
+  },
+  "task-06": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-07": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": [
+    [
+     "var parameter",
+     "ledger"
+    ],
+    [
+     "var parameter",
+     "ledger"
+    ],
+    [
+     "var parameter",
+     "ledger"
+    ]
+   ]
+  },
+  "task-08": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-09": {
+   "parse_error": "Unexpected token Token('RPAR', ')') at line 1, column 107.",
+   "leaks": [],
+   "semantics": []
+  },
+  "task-10": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": [
+    [
+     "reassign immutable",
+     "line"
+    ]
+   ]
+  }
+ },
+ "a-opus": {
+  "task-01": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-02": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-03": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-04": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-05": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-06": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-07": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-08": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-09": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-10": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  }
+ },
+ "a-sonnet": {
+  "task-01": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-02": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-03": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-04": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-05": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-06": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-07": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-08": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-09": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-10": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  }
+ },
+ "b-haiku": {
+  "task-01": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-02": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-03": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-04": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-05": {
+   "parse_error": "Unexpected token Token('NAME', 'items') at line 1, column 19.",
+   "leaks": [],
+   "semantics": []
+  },
+  "task-06": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": [
+    [
+     "mutate immutable",
+     "items"
+    ]
+   ]
+  },
+  "task-07": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": [
+    [
+     "var parameter",
+     "ledger"
+    ],
+    [
+     "var parameter",
+     "ledger"
+    ],
+    [
+     "var parameter",
+     "ledger"
+    ]
+   ]
+  },
+  "task-08": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": [
+    [
+     "mutate immutable",
+     "descriptions"
+    ]
+   ]
+  },
+  "task-09": {
+   "parse_error": "Unexpected token Token('RPAR', ')') at line 1, column 20.",
+   "leaks": [],
+   "semantics": []
+  },
+  "task-10": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": [
+    [
+     "reassign immutable",
+     "line"
+    ]
+   ]
+  }
+ },
+ "b-opus": {
+  "task-01": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-02": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-03": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-04": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-05": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-06": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-07": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-08": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-09": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-10": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  }
+ },
+ "b-sonnet": {
+  "task-01": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-02": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-03": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-04": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-05": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-06": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-07": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-08": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-09": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  },
+  "task-10": {
+   "parse_error": null,
+   "leaks": [],
+   "semantics": []
+  }
+ }
+}
