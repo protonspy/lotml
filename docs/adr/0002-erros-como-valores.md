@@ -15,7 +15,7 @@ binding: trocá-la depois é reescrever o ecossistema. Ver [[sistema-de-tipos]].
 
 ## Decision
 
-A linguagem X não tem exceções. Uma função que pode falhar declara `T ! E` (açúcar para
+A linguagem lotml não tem exceções. Uma função que pode falhar declara `T ! E` (açúcar para
 `Result[T, E]`), falha com `fail e` e propaga com `expr?`; `x ?? fail e` (ou `x or fail e`,
 conforme adr:0004-sintaxe-alinhada-ao-python-onde-a-semantica-coincide) converte ausência em
 erro. Pânico existe só para invariantes violados (índice fora do limite, `assert`). Rejeitados:

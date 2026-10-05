@@ -42,5 +42,5 @@ over this file answers with the example above as well as with the notes. -->
 - n-0002 2026-10-05 #gotcha @research/tokens/counter.py — tokenizadores de Llama, Gemma e Mistral somam BOS por padrão; contar com add_special_tokens=False, travado em test_counter.py
 - n-0003 2026-10-05 #gotcha @research/tokens/counter.py — a primeira execução de research/tokens baixa os tokenizadores do Hugging Face e precisa de rede
 - n-0004 2026-10-05 #gotcha @research/pilot/check.py — o ? de T? é o terminal nomeado QMARK para a árvore distinguir int de int?; anônimo, o Lark o descarta
-- n-0005 2026-10-05 #ceiling @research/pilot/semantics.py — semantics.py infere tipos só de anotações e literais; um verificador de tipos real da linguagem X o substitui
+- n-0005 2026-10-05 #ceiling @research/pilot/semantics.py — semantics.py infere tipos só de anotações e literais; um verificador de tipos real do lotml o substitui
 - n-0006 2026-10-05 #decision @research — gates build e test pulados: o repositório só tem código de pesquisa; registrar com scc check set quando o compilador existir

@@ -14,7 +14,7 @@ semântica que justifique. A variante B troca as seis construções pelas do Pyt
 sem ambiguidade (`??`, `is not None`). Medido: B custa 0,8 ponto percentual a mais de tokens; no
 piloto, A e B empataram em parse (28 de 30) e em vazamento sintático (zero). A sintaxe é o que
 todo código, toda doc e todo corpus usarão — mudar depois da v1 é migração. Ver
-[[sintaxe-da-linguagem-x]].
+[[sintaxe-do-lotml]].
 
 ## Decision
 

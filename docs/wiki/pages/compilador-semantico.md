@@ -18,7 +18,7 @@ estão e o que o digest consegue — além de acrescentar o que o piloto revelou
 - **Ownership é minoria.** Em 86.726 erros de sete modelos sobre o CodeNet, ownership e
   lifetimes foram 16,7% ([Nogueira, Vieira e Campos](https://arxiv.org/abs/2608.00661), ISSRE
   2026).
-- **Na linguagem X, o piloto achou erros semânticos que o parser aceita** — locais imutáveis
+- **Na linguagem lotml, o piloto achou erros semânticos que o parser aceita** — locais imutáveis
   reatribuídos, listas mutadas sem `var`, argumentos tratados como referência
   ([[piloto-de-vazamento-de-python]]).
 

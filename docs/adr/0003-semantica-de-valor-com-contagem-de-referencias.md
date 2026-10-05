@@ -6,7 +6,7 @@ status: accepted
 
 ## Context
 
-A linguagem X precisa de desempenho previsível sem a dificuldade de um borrow checker visível e
+A linguagem lotml precisa de desempenho previsível sem a dificuldade de um borrow checker visível e
 sem as pausas de um coletor. O modelo de memória define o runtime, o FFI, a concorrência e o
 que o programador (e o modelo) precisa raciocinar — trocá-lo depois é refazer o compilador. A
 evidência: Perceus deixou o Koka a menos de 10% do C++ numa árvore rubro-negra; o Lean 4 com

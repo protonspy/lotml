@@ -1,4 +1,4 @@
-# Riscos da linguagem X
+# Riscos do lotml
 
 A tabela de riscos do estudo original, revista com o que foi medido e pesquisado. Três riscos mudaram de peso e cinco são novos. Cada linha aponta para a página que sustenta a avaliação.
 
@@ -23,6 +23,6 @@ A tabela de riscos do estudo original, revista com o que foi medido e pesquisado
 | --- | --- | --- | --- |
 | vazamento semântico de Python | alto | o parser aceita mutação de imutável, truthiness e argumento tratado como referência; o piloto achou os três | diagnósticos dedicados com correção aplicável; variante B; convenção `inout` explícita |
 | gramática incompleta | alto, se usada para restringir a geração | restritor incompleto derrubou a corretude em até 97%; a gramática do piloto rejeitou dois programas válidos | gramática gerada da mesma fonte que o parser e testada contra o corpus ([[decodificacao-restrita]]) |
-| indentação em edições de agente | médio, não medido | SWE-agent e aider precisaram de proteções para erros de indentação ao editar | teste de edição no harness antes de congelar a v1 ([[sintaxe-da-linguagem-x]]) |
+| indentação em edições de agente | médio, não medido | SWE-agent e aider precisaram de proteções para erros de indentação ao editar | teste de edição no harness antes de congelar a v1 ([[sintaxe-do-lotml]]) |
 | meta de tokens inalcançável | médio | a variante A dá cerca de 10% a menos que Python tipado; a meta era 20% | trocar a meta por "não pior que Python tipado" ([[requisitos-e-roadmap]]) |
 | avaliação enviesada | médio | o corpus pareado tem um único autor; o piloto usou uma família de modelos | tarefas externas, várias famílias, amostras múltiplas |

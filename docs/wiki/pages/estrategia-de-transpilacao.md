@@ -2,14 +2,14 @@
 
 O estudo original recomenda transpilar primeiro para Python (validar o design em semanas),
 depois para C (atingir a meta de desempenho) e só então escrever backend nativo; e,
-separadamente, transpilar Python para a linguagem X para gerar corpus. A ordem se sustenta. A
-evidência acrescenta o preço de cada lacuna semântica entre a linguagem X e o Python, e uma
+separadamente, transpilar Python para a linguagem lotml para gerar corpus. A ordem se sustenta. A
+evidência acrescenta o preço de cada lacuna semântica entre a linguagem lotml e o Python, e uma
 consequência que o estudo não tirou: o transpilador para Python é o que permite ao harness
 executar programas.
 
 ## Python como primeiro destino
 
-**Inteiros.** O Python tem inteiros de precisão arbitrária; a linguagem X tem `i64` com overflow
+**Inteiros.** O Python tem inteiros de precisão arbitrária; a linguagem lotml tem `i64` com overflow
 definido. Todo compilador de Python diverge aqui: o Cython mantém o `int` como objeto Python
 porque o C "can be quite different with respect to overflow and division", o Codon usa 64 bits,
 e o mypyc deixa o overflow de `i64` indefinido. Emular trap custa uma verificação por operação
@@ -33,7 +33,7 @@ tracebacks apontarem para o arquivo `.x` — inferência a partir da documentaç
 harness. O Hy compila para AST do Python, e o Coconut preserva números de linha com
 `--line-numbers`. Haxe e Coconut também têm o Python como destino.
 
-## O ecossistema Python visto da linguagem X
+## O ecossistema Python visto da linguagem lotml
 
 - **Nenhuma linguagem gera bindings tipados a partir dos stubs `.pyi`.** O Erg ignora as dicas
   de tipo do Python e exige declarações à mão, o Codon pede assinaturas manuais, o Mojo trata
@@ -64,11 +64,11 @@ harness. O Hy compila para AST do Python, e o Coconut preserva números de linha
   inside a function's body never invalidates global derived data" — a propriedade que a meta de
   checagem em menos de 100 ms exige.
 
-## Python para a linguagem X: o corpus
+## Python para a linguagem lotml: o corpus
 
 O caminho medido é o do [MultiPL-T](https://arxiv.org/abs/2308.09895): traduzir com um LLM e
 manter só o que passa nos testes ([[prior-de-treino]]). O corpus pareado mostra que, de Python
-tipado para a linguagem X, boa parte do mapeamento é mecânica (dataclass vira registro, classes
+tipado para a linguagem lotml, boa parte do mapeamento é mecânica (dataclass vira registro, classes
 de exceção viram tipo soma, `Optional` vira `T?`). O que não é mecânico é decidir quais funções
 falham: exige seguir os `raise` transitivamente. O desenho viável é híbrido — regras para o
 mecânico, LLM para o resto, testes para validar.
