@@ -7,7 +7,7 @@ apareceu na sintaxe — apareceu na semântica, e só no modelo menor.
 
 ## Método
 
-- **O nome nas specs é o provisório X**, com extensão `.x`: o nome lotml veio depois do piloto.
+- **O nome nas specs é o provisório X**, com extensão `.x`: o nome lotml e a extensão `.lotml` vieram depois do piloto.
 - **Duas especificações compactas**, `research/pilot/spec-a.md` (variante A) e `spec-b.md`
   (variante B), com cerca de 1.830 tokens cada no `o200k`. Elas diferem só nas construções
   que distinguem as variantes (ver [[sintaxe-do-lotml]]).

@@ -29,7 +29,7 @@ ver [[concorrencia-sem-cor]].
 
 **Erros apontando para o fonte.** Nós do módulo `ast` do Python carregam `lineno` e
 `col_offset`, e `compile()` aceita uma AST. Emitir AST com as posições originais deve fazer os
-tracebacks apontarem para o arquivo `.x` — inferência a partir da documentação, a verificar no
+tracebacks apontarem para o arquivo `.lotml` — inferência a partir da documentação, a verificar no
 harness. O Hy compila para AST do Python, e o Coconut preserva números de linha com
 `--line-numbers`. Haxe e Coconut também têm o Python como destino.
 

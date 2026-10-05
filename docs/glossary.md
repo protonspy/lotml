@@ -4,7 +4,7 @@ One canonical term per concept, and the synonyms nobody should use for it. One e
 line: the term in bold, the definition after an em dash, and an optional `Avoid:` list.
 Every avoided synonym is reported wherever it appears as a whole word under `docs/`.
 
-- **lotml** — a linguagem de programação orientada a LLMs que este repositório estuda; o piloto e o corpus de `research/` a chamam pelo nome provisório X, com extensão `.x`. Avoid: linguagem X
+- **lotml** — a linguagem de programação orientada a LLMs que este repositório estuda, com arquivos de extensão `.lotml`; o piloto e o corpus de `research/` a chamam pelo nome provisório X, com extensão `.x`. Avoid: linguagem X
 - **variante A** — a sintaxe do lotml exatamente como o estudo original a propõe: `none`, braços de `match` sem `case`, `=>`, `use`, `or` para opcionais.
 - **variante B** — a variante A com as construções trocadas pelas do Python onde a semântica coincide: `None`, `case`, `lambda`, `from … import`, `??`, `is None`.
 - **prior de treino** — o que um modelo já sabe de uma construção por tê-la visto no pré-treino; é o que faz uma construção idêntica à do Python sair certa sem instrução.

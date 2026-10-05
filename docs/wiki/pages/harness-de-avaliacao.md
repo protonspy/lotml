@@ -26,8 +26,8 @@ uma decisão exige e os portões do roadmap.
    (Qwen, Llama, DeepSeek), que devem vazar mais e são os únicos, com a OpenAI, que aceitam
    [[decodificacao-restrita]] por gramática.
 
-5. **O nome real.** O piloto usou o nome provisório X; o harness usa lotml e uma extensão
-   própria, porque nomear a linguagem explicitamente levou a adesão a mais de 99% em
+5. **O nome real.** O piloto usou o nome provisório X; o harness usa lotml e a extensão
+   `.lotml`, porque nomear a linguagem explicitamente levou a adesão a mais de 99% em
    [Moumoula et al.](https://arxiv.org/abs/2503.13620) ([[prior-de-treino]]).
 
 ## Métricas
