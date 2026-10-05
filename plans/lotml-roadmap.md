@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: auto
-checksum: 97f53a4a7ce091ae1bd8c94ec185eb98568cc5f0068fceb8f4229ad1106deca8
+checksum: 95065f5904c714e19700c2ab7ee7e8b8b32fad89fea2df0a65595f4cbe69e491
 ---
 
 # lotml roadmap
@@ -70,7 +70,7 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 1.4, 1.5_
 - [ ] 1.8 (TDD) Compare the indented form against a braces form on editing tasks at scale — long files, multi-turn agents, open models, strict and tolerant application — and report slips, rewrites and C-family idioms (adr:0005; research/experiments/editing/results.md, research/experiments/indentation/results.md)
   _Depends 1.4, 1.5_
-- [ ] 1.9 (Unit) Measure the Claude tokenizer with `count_tokens` on the paired corpus and the generated code, closing the gap in the token measurements (docs/wiki/pages/token-cost.md)
+- [x] 1.9 (Unit) Measure the Claude tokenizer with `count_tokens` on the paired corpus and the generated code, closing the gap in the token measurements (docs/wiki/pages/token-cost.md)
 - [ ] 1.10 (Unit) Review the phase 0 gate — parse ≥ 95% and no syntactic leakage with the spec, variant and block style confirmed — and record the decisions it settles
   _Depends 1.6, 1.7, 1.8, 1.9_
 - [ ] 2.1 (Unit) Write the compiler's hand-written, tolerant, recursive-descent parser in Rust on Salsa, reporting positions as UTF-8 offsets and recovering from errors (R10; adr:0006; docs/wiki/pages/transpilation-strategy.md)
