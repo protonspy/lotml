@@ -12,7 +12,8 @@ evidence that the design helps the model.
 | [BAML](https://github.com/BoundaryML/baml) | "the programming language for agents"; looks like TypeScript; types persist at runtime, no `any`; typed, statically analyzed errors; built-in tests and evals; colorless concurrency with green threads; callable from TS, Python, Go, C#, Java | pre-1.0, nightly builds |
 | MoonBit | "flattened design": mandatory signatures at module level and separate local definitions, for linear generation; a sampler that resamples on syntax and on types with backtracking (compile-rate gain announced without absolute numbers); expect tests | v0.10.x in 2026, 1.0 not yet released |
 | [Pel](https://arxiv.org/abs/2505.13453) | minimal, homoiconic grammar meant for constrained generation; capability control in the syntax; natural-language conditions evaluated by an LLM | paper with no empirical evaluation |
-| [Quasar](https://arxiv.org/abs/2506.12202) | separates internal logic from tool calls with effect annotations, for access control and parallelization | COLM 2026 |
+| [Quasar](https://arxiv.org/abs/2506.12202) | separates internal logic from tool calls with effect annotations, for access control and parallelization; the model writes a restricted Python subset that a transpiler compiles to Quasar, because models struggle to write Quasar directly | COLM 2026; measured: the subset kept accuracy close to unrestricted Python (71.4 against 71.8), and the annotations cut approvals by 26% and running time by 18–27% |
+| [Anka](https://arxiv.org/abs/2512.23214) | a data-pipeline DSL: one canonical form per operation and a mandatory, uniquely named result for every step | arXiv 2025; learned from the prompt alone (99.9% parse, 95.8% tasks with Claude 3.5 Haiku); +40 points over Python on pipelines of five or more steps, none on short tasks |
 | [NanoLang](https://github.com/jordanhubbard/nanolang) | "designed for machines to write and humans to read"; mandatory test blocks; a JSON spec for the model | no measured results |
 | Zero (Vercel Labs) | started with JSON diagnostics with stable codes and `zero fix --plan --json`; the current README turned "graph-native", with the program as a semantic database edited through `zero query` and `zero patch` | experimental, "expect breaking changes" |
 
@@ -47,6 +48,15 @@ diagnostics.
 Typed errors or results instead of exceptions, explicit effects or capabilities, built-in tests
 and machine-readable tooling. The lotml proposal converges with all of them.
 
-**None has published controlled evidence that its design improves model accuracy.** That is the
-space this project's [[evaluation-harness]] can occupy: the differentiator is not having the same
-features, it is measuring which of them matter.
+**Almost none has published evidence that its design improves model accuracy.** Quasar measured
+tooling benefits but has the model write Python, not Quasar. Anka is the exception, and a weak one:
+same tasks and prompt structure, Anka above Python (95.8% against 91.2% overall), with the gain
+entirely on long pipelines where Python's failures were mostly variable shadowing (42%) — reused
+names like `df` or `result` — which Anka's unique step names forbid. Its prompt carried a 100-line
+syntax guide the Python prompt did not, its principles were never ablated one by one, and it covers
+only data pipelines. The lesson that transfers to lotml is narrow and consistent with the rest of
+the evidence: one canonical form per operation, and no silent reuse of a name — which lotml's
+immutable-by-default locals already enforce.
+
+That leaves the space this project's [[evaluation-harness]] can occupy: the differentiator is not
+having the same features, it is measuring which of them matter.

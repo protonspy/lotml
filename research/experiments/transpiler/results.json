@@ -1,0 +1,1153 @@
+[
+  {
+    "run": "a-haiku",
+    "task": "task-01",
+    "error": null,
+    "tests": {
+      "distance between points": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-haiku",
+    "task": "task-02",
+    "error": null,
+    "tests": {
+      "area and perimeter": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-haiku",
+    "task": "task-03",
+    "error": null,
+    "tests": {
+      "parse positive integer": {
+        "lotml": "pass",
+        "python": "propagated error",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-haiku",
+    "task": "task-04",
+    "error": null,
+    "tests": {
+      "find email": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-haiku",
+    "task": "task-05",
+    "error": "transpile: Unexpected token Token('NAME', 'items') at line 1, column 19.",
+    "tests": {}
+  },
+  {
+    "run": "a-haiku",
+    "task": "task-06",
+    "error": null,
+    "tests": {
+      "most frequent words": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-haiku",
+    "task": "task-07",
+    "error": null,
+    "tests": {
+      "transfer": {
+        "lotml": "assertion",
+        "python": "pass",
+        "detail": "AssertionError"
+      }
+    }
+  },
+  {
+    "run": "a-haiku",
+    "task": "task-08",
+    "error": null,
+    "tests": {
+      "describe": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-haiku",
+    "task": "task-09",
+    "error": "transpile: Unexpected token Token('RPAR', ')') at line 1, column 107.",
+    "tests": {}
+  },
+  {
+    "run": "a-haiku",
+    "task": "task-10",
+    "error": null,
+    "tests": {
+      "parse users": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-opus",
+    "task": "task-01",
+    "error": null,
+    "tests": {
+      "distance of a 3-4-5 triangle": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "distance is symmetric": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "distance to self is zero": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-opus",
+    "task": "task-02",
+    "error": null,
+    "tests": {
+      "area of each shape": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "perimeter of each shape": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-opus",
+    "task": "task-03",
+    "error": null,
+    "tests": {
+      "parses a positive integer": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "rejects an empty string": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "rejects text that is not a number and keeps the text": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "rejects a negative number and keeps the value": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-opus",
+    "task": "task-04",
+    "error": null,
+    "tests": {
+      "returns the email of the first matching user": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "returns none when no user has the name": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "returns none when the first matching user has no email": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "returns none for an empty list": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-opus",
+    "task": "task-05",
+    "error": null,
+    "tests": {
+      "dequeues in first-in-first-out order": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "dequeue on an empty queue returns none": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-opus",
+    "task": "task-06",
+    "error": null,
+    "tests": {
+      "returns the k most frequent words, most frequent first": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "k larger than the number of distinct words": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "empty text": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-opus",
+    "task": "task-07",
+    "error": null,
+    "tests": {
+      "deposit and withdraw": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "withdraw fails on missing account and insufficient balance": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "successful transfer": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "failed transfer for insufficient balance leaves balances unchanged": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "failed transfer to a missing account leaves balances unchanged": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "failed transfer from a missing account": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-opus",
+    "task": "task-08",
+    "error": null,
+    "tests": {
+      "describes each kind": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "joins descriptions of a mixed list with newlines": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "empty list gives an empty string": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-opus",
+    "task": "task-09",
+    "error": null,
+    "tests": {
+      "evaluates a nested expression": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "evaluates a single number": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "renders with parentheses": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-opus",
+    "task": "task-10",
+    "error": null,
+    "tests": {
+      "parses records and skips blank lines": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "fails with the line number on a wrong field count": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "fails with the line number on a non-integer age": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-sonnet",
+    "task": "task-01",
+    "error": null,
+    "tests": {
+      "distance of a 3-4-5 triangle": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "distance is symmetric": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "distance to itself is zero": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-sonnet",
+    "task": "task-02",
+    "error": null,
+    "tests": {
+      "area": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "perimeter": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-sonnet",
+    "task": "task-03",
+    "error": null,
+    "tests": {
+      "parses a valid number": {
+        "lotml": "pass",
+        "python": "propagated error",
+        "detail": ""
+      },
+      "empty string fails": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "non numeric text fails and keeps the text": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "negative number fails and keeps the value": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-sonnet",
+    "task": "task-04",
+    "error": null,
+    "tests": {
+      "returns the email of the first user with the name": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "returns none when the user has no email": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "returns none when there is no such user": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-sonnet",
+    "task": "task-05",
+    "error": null,
+    "tests": {
+      "dequeue returns items in insertion order": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "dequeue on an empty queue returns none": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-sonnet",
+    "task": "task-06",
+    "error": null,
+    "tests": {
+      "most frequent words come first": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "ties are broken alphabetically and k may exceed the word count": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "punctuation is ignored": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "empty text has no words": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-sonnet",
+    "task": "task-07",
+    "error": null,
+    "tests": {
+      "withdraw and deposit": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "successful transfer": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "failed transfer leaves the balances unchanged": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-sonnet",
+    "task": "task-08",
+    "error": null,
+    "tests": {
+      "describes a mixed list on separate lines": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "a single item has no separator": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "an empty list gives an empty string": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-sonnet",
+    "task": "task-09",
+    "error": null,
+    "tests": {
+      "evaluate": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "render": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "a-sonnet",
+    "task": "task-10",
+    "error": null,
+    "tests": {
+      "parses pairs and skips blank lines": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "empty text gives an empty list": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "a line with the wrong number of fields fails with its number": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "a non integer age fails with the line number": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-haiku",
+    "task": "task-01",
+    "error": null,
+    "tests": {
+      "distance between points": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-haiku",
+    "task": "task-02",
+    "error": null,
+    "tests": {
+      "area and perimeter": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-haiku",
+    "task": "task-03",
+    "error": null,
+    "tests": {
+      "parse positive integer success": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "parse positive integer empty": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "parse positive integer not number": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "parse positive integer negative": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-haiku",
+    "task": "task-04",
+    "error": null,
+    "tests": {
+      "find email": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-haiku",
+    "task": "task-05",
+    "error": "transpile: Unexpected token Token('NAME', 'items') at line 1, column 19.",
+    "tests": {}
+  },
+  {
+    "run": "b-haiku",
+    "task": "task-06",
+    "error": null,
+    "tests": {
+      "top k words": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-haiku",
+    "task": "task-07",
+    "error": null,
+    "tests": {
+      "failed transfer": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-haiku",
+    "task": "task-08",
+    "error": null,
+    "tests": {
+      "describe animals and cars": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-haiku",
+    "task": "task-09",
+    "error": "transpile: Unexpected token Token('RPAR', ')') at line 1, column 20.",
+    "tests": {}
+  },
+  {
+    "run": "b-haiku",
+    "task": "task-10",
+    "error": null,
+    "tests": {
+      "parse people": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-opus",
+    "task": "task-01",
+    "error": null,
+    "tests": {
+      "distance of a 3-4-5 triangle": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "distance is symmetric": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "distance to itself is zero": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-opus",
+    "task": "task-02",
+    "error": null,
+    "tests": {
+      "area of each shape": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "perimeter of each shape": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-opus",
+    "task": "task-03",
+    "error": null,
+    "tests": {
+      "parses a positive integer": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "rejects the empty string": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "rejects text that is not a number": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "rejects a negative number": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-opus",
+    "task": "task-04",
+    "error": null,
+    "tests": {
+      "returns the email of the first matching user": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "returns nothing when the user has no email": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "returns nothing when there is no such user": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-opus",
+    "task": "task-05",
+    "error": null,
+    "tests": {
+      "dequeues in insertion order": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "dequeue on an empty queue returns nothing": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-opus",
+    "task": "task-06",
+    "error": null,
+    "tests": {
+      "returns the k most frequent words with counts": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "ties are ordered alphabetically": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "k larger than the number of words": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-opus",
+    "task": "task-07",
+    "error": null,
+    "tests": {
+      "transfer with insufficient balance fails and changes nothing": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "transfer to a missing account fails and changes nothing": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "transfer from a missing account fails": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "successful transfer moves the amount": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "withdraw and deposit": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-opus",
+    "task": "task-08",
+    "error": null,
+    "tests": {
+      "joins the descriptions of a mixed list": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "empty list gives empty text": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-opus",
+    "task": "task-09",
+    "error": null,
+    "tests": {
+      "evaluates an expression": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "renders an expression with parentheses": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "a bare number": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-opus",
+    "task": "task-10",
+    "error": null,
+    "tests": {
+      "parses lines and skips blank ones": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "fails with the line number on a wrong field count": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "fails with the line number on a non-integer age": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-sonnet",
+    "task": "task-01",
+    "error": null,
+    "tests": {
+      "distance of a 3-4-5 triangle": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "distance is symmetric": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "distance to itself is zero": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-sonnet",
+    "task": "task-02",
+    "error": null,
+    "tests": {
+      "area of each shape": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "perimeter of each shape": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-sonnet",
+    "task": "task-03",
+    "error": null,
+    "tests": {
+      "parses a valid number": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "rejects the empty string": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "rejects text that is not a number and keeps it": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "rejects a negative number and keeps the value": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-sonnet",
+    "task": "task-04",
+    "error": null,
+    "tests": {
+      "returns the email of the first matching user": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "returns nothing when the user has no email": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "returns nothing when there is no such user": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "returns nothing for an empty list": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-sonnet",
+    "task": "task-05",
+    "error": null,
+    "tests": {
+      "new queue is empty": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "dequeue returns items in insertion order": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "queue works with strings": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-sonnet",
+    "task": "task-06",
+    "error": null,
+    "tests": {
+      "returns the most frequent words first": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "words are lowercased before counting": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "ties are broken alphabetically": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "k larger than the number of distinct words": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "empty text has no words": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-sonnet",
+    "task": "task-07",
+    "error": null,
+    "tests": {
+      "withdraw reduces the balance": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "withdraw fails for a missing account or insufficient funds": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "deposit increases the balance": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "transfer moves money between accounts": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "failed transfer leaves the ledger unchanged": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-sonnet",
+    "task": "task-08",
+    "error": null,
+    "tests": {
+      "describes a mixed list": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "a single item has no separator": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "an empty list gives an empty string": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-sonnet",
+    "task": "task-09",
+    "error": null,
+    "tests": {
+      "evaluates expressions": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "renders expressions with parentheses": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  },
+  {
+    "run": "b-sonnet",
+    "task": "task-10",
+    "error": null,
+    "tests": {
+      "parses pairs and skips blank lines": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "empty text gives an empty list": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "fails with the line number when the field count is wrong": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      },
+      "fails with the line number when the age is not an integer": {
+        "lotml": "pass",
+        "python": "pass",
+        "detail": ""
+      }
+    }
+  }
+]

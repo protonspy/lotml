@@ -1,0 +1,17 @@
+<<<<<<< SEARCH
+type LookupErr = NotFound(name: str) | Minor(age: int)
+=======
+type LookupErr = NotFound(name: str) | Minor(age: int) | NoEmail(name: str)
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+        fail Minor(u.age)
+    }
+    return u
+=======
+        fail Minor(u.age)
+    }
+    if u.email is None {
+        fail NoEmail(name)
+    }
+    return u
+>>>>>>> REPLACE

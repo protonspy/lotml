@@ -1,0 +1,7 @@
+<<<<<<< SEARCH
+    for iv in sorted(intervals, key=lambda iv: iv.start):
+=======
+    for iv in sorted(intervals, key=lambda iv: iv.start):
+        if iv.start > iv.end:
+            continue
+>>>>>>> REPLACE

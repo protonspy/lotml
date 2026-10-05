@@ -18,25 +18,32 @@ the accepted ADRs under `docs/adr/`.
 | R07 | `test` blocks next to the code | v1 | kept; equality with an error written `== Err(E)` |
 | R08 | canonical formatter with no options | v1 | kept |
 | R09 | JSON diagnostics with stable codes and applicable fixes | v1 | **adjusted:** applicability levels (`MachineApplicable`…) instead of numeric confidence; an explanation page per code ([[semantic-compiler]]) |
-| R10 | tolerant parser, every error at once | v1 | kept; root cause first, cascades suppressed |
-| R11 | published formal grammar | v1 | **adjusted:** generated from the same source as the parser, tested against the corpus, in three dialects — llguidance-compatible Lark, GBNF and EBNF ([[constrained-decoding]]) |
-| R12 | complete specification under 10,000 tokens | v1 | feasible: the pilot's core spec is about 1,830 |
-| R13 | transpilation to Python with errors pointing at the source | v1 | **adjusted:** Python AST with the original positions; a minimal version already in phase 0 ([[transpilation-strategy]]) |
+| R10 | tolerant parser, every error at once | v1 | **adjusted:** tolerant parser; root cause first, cascades suppressed, a bounded report by default and every error on request — long reports hurt repair ([[semantic-compiler]]) |
+| R11 | published formal grammar | v1 | **adjusted:** generated from the same source as the parser, tested against the corpus, in three dialects — llguidance-compatible Lark (no priorities or `%declare`; line-oriented blocks bounded in depth), GBNF and EBNF; applied between delimiters so the model reasons freely ([[constrained-decoding]]) |
+| R12 | complete specification under 10,000 tokens | v1 | feasible: the pilot's core spec is about 1,830; **adjusted:** made of idiom examples rather than rules, since snippets beat stated rules ([[training-prior]]) |
+| R13 | transpilation to Python with errors pointing at the source | v1 | **adjusted and verified:** Python AST with the original positions makes tracebacks name the `.lotml` line and underline the expression; a minimal version already in phase 0 ([[transpilation-strategy]]) |
 | R14 | language functions callable from Python | v1 | kept |
 | R15 | `digest` command | v2 | **recommended for v1**, with `show <symbol>` for the bodies: cheap once the type checker exists |
 | R16 | LSP and MCP server | v2 | kept; atomic refactorings and textual queries alongside semantic ones |
 | R17 | FFI with C | v2 | kept; blocking calls handed to dedicated threads |
 | R18 | transpilation to C with the same semantics as the Python target | v2 | kept; checked arithmetic instead of undefined overflow, `#line` |
-| R19 | value semantics with reference counting and elision | v2 | **adjusted:** Perceus-style reuse, borrow inference, non-atomic counting per task ([[memory-model]]) |
+| R19 | value semantics with reference counting and elision | v2 | **adjusted:** Perceus-style reuse, borrow inference only where measured to pay, non-atomic counting, values marked shared when handed to a task, closures capturing by copy ([[memory-model]]) |
 | R20 | colorless concurrency | v2 | kept ([[colorless-concurrency]]) |
 | R21 | native LLVM and Cranelift backend | v3 | kept |
 | R22 | effect system (`io`) | v3 | **adjusted:** start with a capability passed as a parameter; no evidence of benefit for LLMs |
 | R23 | `where` contracts checked in debug | v3 | kept |
 | R24 | parameter conventions (default, `inout`, `sink`) with a visible marker at the call | v1 | **new** — the pilot showed the model inventing reference semantics |
-| R25 | diagnostics aimed at Python habits (mutating an immutable, truthiness, `raise`, argument by reference) with applicable fixes | v1 | **new** |
+| R25 | diagnostics aimed at the neighbours' habits — Python's (mutating an immutable, truthiness, `raise`, argument by reference) and the C family's (`else if`, braces) — with applicable fixes | v1 | **new** |
 | R26 | a single overflow semantics (trap) in every build and on every target, with explicit modular arithmetic | v1 | **new** |
 | R27 | typed bindings generated from `.pyi` stubs; every call into Python returns `T ! PyError` | v2 | **new** |
 | R28 | a defined unit type for functions that fail without returning a value | v1 | **new** |
+| R29 | `check --prefix`: a partial file answers completable, error here, or not yet, never rejecting a completable prefix | v1 | **new** — checking streamed prefixes cut Rust compile errors from 20.7% to 13.1% on closed models ([[semantic-compiler]]) |
+| R30 | diagnostics carry admissible alternatives: the candidate names, methods, variants or types in scope | v1 | **new** — the alternatives carried a 42–44-point repair gain ([[semantic-compiler]]) |
+| R31 | `check --since <rev>`: only the diagnostics an edit introduced, with an explicit "no errors" | v1 | **new** — check-on-edit without blocking files that already had errors ([[semantic-compiler]]) |
+| R32 | edits addressed to symbols — replace a function body, a `match` arm, a method — re-indented by the tool and rejected if they break the syntax | v2 | **new** — entity-addressed edits cut edit errors by 76–88% ([[editing-robustness]]) |
+| R33 | a never-typed placeholder (`todo()`) that fills any hole | v1 | **new** — keeps prefixes free of dead ends and gives the model a legal way to leave a hole ([[type-system]]) |
+| R34 | integer division specified: `/` on `int` returns `f64` or is an error pointing at `//`, never a silent truncation | v1 | **new** ([[type-system]]) |
+| R35 | a prelude covering the common names, so they need no import | v1 | **new** — missing imports were 56.6% of C++ compile errors and 8.1% in Java, whose common names need no import ([[semantic-compiler]]) |
 
 ## Non-functional requirements
 
@@ -44,11 +51,12 @@ the accepted ADRs under `docs/adr/`.
 | --- | --- |
 | incremental check of one file in under 100 ms | kept; it is what makes checking every edit possible |
 | debug build of 10,000 lines in under 2 s | kept |
-| programs ≥ 20% smaller in tokens than the equivalent Python, on 3+ tokenizers | **replaced** by "no larger than the equivalent typed Python, on 3+ tokenizers": variant A measures 9–11% fewer and SimPy 9–14% ([[token-cost]]) |
+| programs ≥ 20% smaller in tokens than the equivalent Python, on 3+ tokenizers | **replaced** by "no larger than the equivalent typed Python, on 3+ tokenizers": variant A measures 9–11% fewer, and compressed syntaxes save 8–11% in generated code ([[token-cost]]) |
 | pass@1 equal to or above typed Python's on the same benchmark | kept; it becomes the primary metric |
 | release performance within 2× C on numeric benchmarks | kept; allocation-heavy benchmarks reported separately |
 | parse ≥ 95% and no syntactic leakage for frontier models with the spec | **new** (pilot: 93%, 97% with R03 adjusted) |
-| median rounds to green ≤ 2 with structured diagnostics | **new** |
+| median rounds to green ≤ 2 with structured diagnostics | **new** — two rounds capture 76–95% of the achievable repair ([[semantic-compiler]]) |
+| syntax decisions settled on at least 168 paired tasks, two-sided at 5% with 80% power | **new** — the normal approximation's 155 has 76% power with the exact test ([[evaluation-harness]]) |
 
 ## Roadmap
 
@@ -58,9 +66,9 @@ research's adjustments. Each gate's criteria are in [[evaluation-harness]].
 
 | phase | deliverable | gate to leave |
 | --- | --- | --- |
-| 0 | harness with external and editing tasks, spec, grammar, checkers, minimal transpiler to Python | parse and leakage; variant and block style confirmed by data |
-| 1 | v1 on the Python target: types, `match`, errors, `var` and `inout`, tests, `fmt`, `check --json`/`--fix`, digest | pass@1 ≥ typed Python; rounds ≤ 2; tokens ≤ typed Python |
-| 2 | full semantic compiler (LSP, MCP, refactorings), stub-based bindings, Python→lotml corpus, concurrency | incremental adoption working; corpus validated |
+| 0 | harness with external and editing tasks, spec, grammar, checkers, minimal transpiler to Python — research prototypes of the transpiler, the editing pilot and the grammars exist in `research/` | parse and leakage; variant and block style confirmed by data on ≥ 168 paired tasks |
+| 1 | v1 on the Python target: types, `match`, errors, `var` and `inout`, tests, `fmt`, `check --json`/`--fix`/`--since`/`--prefix`, alternatives in diagnostics, prelude, `todo()`, digest | pass@1 ≥ typed Python; rounds ≤ 2; tokens ≤ typed Python |
+| 2 | full semantic compiler (LSP, MCP, refactorings, symbol-addressed edits), stub-based bindings, Python→lotml corpus, concurrency | incremental adoption working; corpus validated |
 | 3 | C target with reference counting and reuse, parity tests across targets | same suite on both targets; ≤ 2× C |
 | 4 | native backend (Cranelift in debug, LLVM in release), effects, contracts | — |
 

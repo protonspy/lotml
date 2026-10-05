@@ -1,0 +1,23 @@
+<<<<<<< SEARCH
+fn merge(intervals: [Interval]) -> [Interval]:
+    var result: [Interval] = []
+    for iv in sorted(intervals, key=lambda iv: iv.start):
+        if len(result) > 0 and iv.start <= result[-1].end:
+            last = result[-1]
+            result[-1] = Interval(last.start, max(last.end, iv.end))
+        else:
+            result.append(iv)
+    return result
+=======
+fn merge(intervals: [Interval]) -> [Interval]:
+    var result: [Interval] = []
+    for iv in sorted(intervals, key=lambda iv: iv.start):
+        if iv.start > iv.end:
+            continue
+        if len(result) > 0 and iv.start <= result[-1].end:
+            last = result[-1]
+            result[-1] = Interval(last.start, max(last.end, iv.end))
+        else:
+            result.append(iv)
+    return result
+>>>>>>> REPLACE

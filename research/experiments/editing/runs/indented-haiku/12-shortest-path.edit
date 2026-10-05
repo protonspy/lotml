@@ -1,0 +1,19 @@
+<<<<<<< SEARCH
+        if d > dist.get(node, d):
+            continue
+        for neighbor, weight in graph.get(node, []):
+            nd = d + weight
+            if nd < dist.get(neighbor, nd + 1):
+                dist[neighbor] = nd
+                queue.push((nd, neighbor))
+=======
+        if d > dist.get(node, d):
+            continue
+        for neighbor, weight in graph.get(node, []):
+            if weight < 0:
+                continue
+            nd = d + weight
+            if nd < dist.get(neighbor, nd + 1):
+                dist[neighbor] = nd
+                queue.push((nd, neighbor))
+>>>>>>> REPLACE

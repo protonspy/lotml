@@ -1,0 +1,466 @@
+[
+  {
+    "id": "1908.05647",
+    "title": "Counting Immutable Beans: Reference Counting Optimized for Purely Functional Programming",
+    "authors": "Sebastian Ullrich and Leonardo de Moura",
+    "year": 2019,
+    "url": "https://arxiv.org/pdf/1908.05647v3",
+    "sha256": "070f0078a22998afa837b59159933c028004b44bbb9d9725c8c1bd48c8903093"
+  },
+  {
+    "id": "2208.08227",
+    "title": "MultiPL-E: A Scalable and Extensible Approach to Benchmarking Neural Code Generation",
+    "authors": "Federico Cassano et al.",
+    "year": 2022,
+    "url": "https://arxiv.org/pdf/2208.08227v4",
+    "sha256": "b905b9874ffcb4cee63f74cdc30524eae97013691e79313049ad72c6d6197580"
+  },
+  {
+    "id": "2304.05128",
+    "title": "Teaching Large Language Models to Self-Debug",
+    "authors": "Xinyun Chen et al.",
+    "year": 2023,
+    "url": "https://arxiv.org/pdf/2304.05128v2",
+    "sha256": "020e06b1fb9e1d4b6c33016a9471e8bd31f8ecfd7a22335d85956c14efa39f75"
+  },
+  {
+    "id": "2306.09896",
+    "title": "Is Self-Repair a Silver Bullet for Code Generation?",
+    "authors": "Theo X. Olausson et al.",
+    "year": 2023,
+    "url": "https://arxiv.org/pdf/2306.09896v5",
+    "sha256": "bbf89da95d94dd6ad9f1de2e05a48e0579d1b9f60042083c1949561485b71c7f"
+  },
+  {
+    "id": "2306.10763",
+    "title": "Guiding Language Models of Code with Global Context using Monitors",
+    "authors": "Lakshya A Agrawal et al.",
+    "year": 2023,
+    "url": "https://arxiv.org/pdf/2306.10763v2",
+    "sha256": "f505403e235dd167b8e166fb387bc246bc7ca7847b0f38991859329ba31d84a8"
+  },
+  {
+    "id": "2307.09702",
+    "title": "Efficient Guided Generation for Large Language Models",
+    "authors": "Brandon T. Willard and Rémi Louf",
+    "year": 2023,
+    "url": "https://arxiv.org/pdf/2307.09702v4",
+    "sha256": "8888aa2043588e41d0f222b59ca6896e5211816eeca8896db215234ba209aa4f"
+  },
+  {
+    "id": "2308.05177",
+    "title": "Fixing Rust Compilation Errors using LLMs",
+    "authors": "Pantazis Deligiannis et al.",
+    "year": 2023,
+    "url": "https://arxiv.org/pdf/2308.05177v1",
+    "sha256": "ba5aac7d69f2b2c1a9f04d5917a3325574ecdddcd8f06b2e6ead8293fddd5ba2"
+  },
+  {
+    "id": "2308.09895",
+    "title": "Knowledge Transfer from High-Resource to Low-Resource Programming Languages for Code LLMs",
+    "authors": "Federico Cassano et al.",
+    "year": 2023,
+    "url": "https://arxiv.org/pdf/2308.09895v6",
+    "sha256": "03948a9fa60d3bf0fcab5af5a61d3c6fc5918b1b45c2ebc2dc26c7a89a2d3f98"
+  },
+  {
+    "id": "2403.01632",
+    "title": "SynCode: LLM Generation with Grammar Augmentation",
+    "authors": "Shubham Ugare et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2403.01632v4",
+    "sha256": "8f6df134543b1ff7ca841b4bf266dfe16884ba000d1ee24800b3aae96dad9431"
+  },
+  {
+    "id": "2404.16333",
+    "title": "AI Coders Are Among Us: Rethinking Programming Language Grammar Towards Efficient Code Generation",
+    "authors": "Zhensu Sun et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2404.16333v2",
+    "sha256": "1ca6d533e6f7df4b74c0da3412463fafeec959e68bd04b6a4b84f4caa9c8e4da"
+  },
+  {
+    "id": "2405.15793",
+    "title": "SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering",
+    "authors": "John Yang et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2405.15793v3",
+    "sha256": "d171e0693060b910ceb2cddd0fd4bc7cae302005d42d0d8059bfdbe056c3adba"
+  },
+  {
+    "id": "2405.21047",
+    "title": "Grammar-Aligned Decoding",
+    "authors": "Kanghee Park et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2405.21047v4",
+    "sha256": "a5cb8a149be6e006c2e24307e419bbabd15be3b96e267fd7397c3cdf27bf32b4"
+  },
+  {
+    "id": "2406.03636",
+    "title": "Synthetic Programming Elicitation for Text-to-Code in Very Low-Resource Programming and Formal Languages",
+    "authors": "Federico Mora et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2406.03636v4",
+    "sha256": "1c3931679b0c39dbc2ec1e7b85cd43f22446ba9b7fb6e5bd8e474cf4853cb76d"
+  },
+  {
+    "id": "2406.11927",
+    "title": "On the Impacts of Contexts on Repository-Level Code Generation",
+    "authors": "Nam Le Hai et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2406.11927v4",
+    "sha256": "4932bb75e0b142894827fd43081bb4c072b016d963bb5279c5fd1d328198edf0"
+  },
+  {
+    "id": "2407.01489",
+    "title": "Agentless: Demystifying LLM-based Software Engineering Agents",
+    "authors": "Chunqiu Steven Xia et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2407.01489v2",
+    "sha256": "1675c2dcd5ecaef47e8a4356062f60be642cee82e1bbacb044c9d047dce4c856"
+  },
+  {
+    "id": "2408.02442",
+    "title": "Let Me Speak Freely? A Study on the Impact of Format Restrictions on Performance of Large Language Models",
+    "authors": "Zhi Rui Tam et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2408.02442v3",
+    "sha256": "172930a8e9166ded9df95bb9ec41aafb7f43907969d14ea2dd05240d2c902f75"
+  },
+  {
+    "id": "2409.00921",
+    "title": "Statically Contextualizing Large Language Models with Typed Holes",
+    "authors": "Andrew Blinn et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2409.00921v1",
+    "sha256": "4e5602e399f70350ccfabaf06706552504b905a869ee27b4f02232cc33d9cb0d"
+  },
+  {
+    "id": "2410.08105",
+    "title": "What Makes Large Language Models Reason in (Multi-Turn) Code Generation?",
+    "authors": "Kunhao Zheng et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2410.08105v3",
+    "sha256": "7c47f61fdc2df672cfb5b46ac8f91e250f6998918701e5f8de3de3a822cd098f"
+  },
+  {
+    "id": "2411.13990",
+    "title": "RustRepoTrans: Repository-level Code Translation Benchmark Targeting Rust",
+    "authors": "Guangsheng Ou et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2411.13990v6",
+    "sha256": "96c82ad4186eb0f6f748773bbc4ee6ee76c12085c78009402ef99aa98aeb0ab6"
+  },
+  {
+    "id": "2411.15100",
+    "title": "XGrammar: Flexible and Efficient Structured Generation Engine for Large Language Models",
+    "authors": "Yixin Dong et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2411.15100v3",
+    "sha256": "61e94a1a28bb6307250c4f82a9ff0dcd07273fed80011d6ba7535f388a8fa5f0"
+  },
+  {
+    "id": "2501.10868",
+    "title": "JSONSchemaBench: A Rigorous Benchmark of Structured Outputs for Language Models",
+    "authors": "Saibo Geng et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2501.10868v3",
+    "sha256": "0c540f59b5a143f2f18de79ede30ae16b109d13698a824316bda4190ca3aa50e"
+  },
+  {
+    "id": "2502.09061",
+    "title": "CRANE: Reasoning with constrained LLM generation",
+    "authors": "Debangshu Banerjee et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2502.09061v4",
+    "sha256": "050488c06c18a3b5794fec214e9b16a5484de1153dad682172920a853f06063f"
+  },
+  {
+    "id": "2503.13620",
+    "title": "Programming Language Confusion: When Code LLMs Can't Keep their Languages Straight",
+    "authors": "Micheline Bénédicte Moumoula et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2503.13620v2",
+    "sha256": "82780cd96e38ab4f8f8c35c6d24a0004b523e062807110c2c3e6d8509adeeb76"
+  },
+  {
+    "id": "2504.09246",
+    "title": "Type-Constrained Code Generation with Language Models",
+    "authors": "Niels Mündler et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2504.09246v2",
+    "sha256": "95199969e4bee37868d5ed8258b546ff1087f798591d0ab7290f264c6fa27cdc"
+  },
+  {
+    "id": "2505.13453",
+    "title": "Pel, A Programming Language for Orchestrating AI Agents",
+    "authors": "Behnam Mohammadi",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2505.13453v2",
+    "sha256": "8060369dde44dace725eadf856bbfa43db96e79c61bfe406c0d2598d10c6f178"
+  },
+  {
+    "id": "2506.12202",
+    "title": "Quasar: A Programming Language Specialized for LLM Code Actions",
+    "authors": "Stephen Mell et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2506.12202v2",
+    "sha256": "9891310158484316dc0d91a848ad06c0a391a0913eb54af2816791b815de3d86"
+  },
+  {
+    "id": "2506.18403",
+    "title": "The Debugging Decay Index: Rethinking Debugging Strategies for Code LLMs",
+    "authors": "Muntasir Adnan and Carlos C. N. Kuhn",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2506.18403v2",
+    "sha256": "a2d66c3f224c4340156610fb95fa117ccf5cf09002f3d4ed856b85e7c4fa9ab7"
+  },
+  {
+    "id": "2508.04865",
+    "title": "Agnostics: Learning to Code in Any Programming Language via Reinforcement with a Universal Learning Environment",
+    "authors": "Aleksander Boruch-Gruszecki et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2508.04865v4",
+    "sha256": "1e65dbf9c2268b44385204ab35d03f13808505baf50593c711c1bb4b925ea5c5"
+  },
+  {
+    "id": "2512.08266",
+    "title": "Token Sugar: Making Source Code Sweeter for LLMs through Token-Efficient Shorthand",
+    "authors": "Zhensu Sun et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2512.08266v1",
+    "sha256": "05b48f6441777bbadcb52e86cb22f287c31ab1aca573edeb877e18d49c248305"
+  },
+  {
+    "id": "2602.06976",
+    "title": "Bridging the Knowledge Void: Inference-time Acquisition of Unfamiliar Programming Languages for Coding Tasks",
+    "authors": "Chen Shen et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2602.06976v1",
+    "sha256": "fc2d7c91fcda30d60a32357149123f6bcaad50ef08be8fde6f2d3e450bbaa1bc"
+  },
+  {
+    "id": "2603.09678",
+    "title": "EsoLang-Bench: Evaluating Genuine Reasoning in Large Language Models via Esoteric Programming Languages",
+    "authors": "Aman Sharma and Paras Chopra",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2603.09678v2",
+    "sha256": "9fe73ff334b621f0c9b5862f6e28297f5114ff97a4a7c9aacabc845d92a7d66d"
+  },
+  {
+    "id": "2604.07502",
+    "title": "Beyond Human-Readable: Rethinking Software Engineering Conventions for the Agentic Development Era",
+    "authors": "Dmytro Ustynov",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2604.07502v1",
+    "sha256": "ee328edf57d9e94665b8320e8dcd873dc2f4b5f831fce2dfab709e981dfdceda"
+  },
+  {
+    "id": "2606.01522",
+    "title": "Type-Error Ablation and AI Coding Agents",
+    "authors": "Shriram Krishnamurthi and Matthew Flatt",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2606.01522v2",
+    "sha256": "50a0cacd987b67bb27034664502ad2db6b237eaff8556fe4a64ead28b3737d55"
+  },
+  {
+    "id": "2606.10933",
+    "title": "Frontier Coding Agents Use Metaprogramming to Adapt to Unfamiliar Programming Languages",
+    "authors": "Aman Sharma et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2606.10933v1",
+    "sha256": "d62656fa659f9a3dfc8b9eb575e1bdcd70971789559263b3d4ac05e4d32ea335"
+  },
+  {
+    "id": "2606.16827",
+    "title": "No Resource, No Benchmarks, No Problem? Evaluating and Improving LLMs for Code Generation in No-Resource Languages",
+    "authors": "Alessandro Giagnorio et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2606.16827v1",
+    "sha256": "1ff74dd4e5b375fd3c46bc0337e462e77fb0e05799d3bbc3f4b8cf12bd01d1cb"
+  },
+  {
+    "id": "2606.21619",
+    "title": "The Alignment Problem in Constrained Code Generation",
+    "authors": "Matteo Biagiola et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2606.21619v1",
+    "sha256": "f9c2d674d834c5a265862968ed77ed3028c5051aa6010cfba4338816ab64fd4f"
+  },
+  {
+    "id": "2607.22807",
+    "title": "The Best Programming Language for Tokenmaxxing: An Investigation of Coding Agent Behavior Across Programming Languages",
+    "authors": "Zixuan Wu et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2607.22807v1",
+    "sha256": "59f4c6f1d9569f6ca223b978a5dbfcb251ca53a8c2c5ed07dbdd023159335b6e"
+  },
+  {
+    "id": "2608.00661",
+    "title": "Unreliable in Practice? A Comprehensive Study of Errors in LLM-Generated Code",
+    "authors": "Rodrigo Pato Nogueira et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2608.00661v1",
+    "sha256": "f7b364fa4c29415e22f14a814ad0242ea58ef84d632a767e2e1ad83ccc38ae2e"
+  },
+  {
+    "id": "2608.13568",
+    "title": "Does a Language Server Save Tokens for Coding Agents? A Measurement Methodology and Preliminary Study",
+    "authors": "Pengcheng Xu",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2608.13568v1",
+    "sha256": "1b1a54b5e9bb158e4059b4ca1c2fbce26fdbf0e252edaf62ca1b6f50cf6de57f"
+  },
+  {
+    "id": "2609.00362",
+    "title": "Revisiting Feedback-Driven LLM Code Repair: A Replication and Exploratory Java Extension",
+    "authors": "Louis Lalonde et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2609.00362v1",
+    "sha256": "e03e2ac0833d7e555eb5eef0f389a468bb41e45727807675545cfb8d40f09232"
+  },
+  {
+    "id": "perceus",
+    "title": "Perceus: Garbage Free Reference Counting with Reuse",
+    "authors": "Alex Reinking et al.",
+    "year": 2021,
+    "url": "https://xnning.github.io/papers/perceus.pdf",
+    "sha256": "714189db3df1efbb22562ae55f301da4ef7610cdb9cfd3c051009c84a3d87a76"
+  },
+  {
+    "id": "biased-rc",
+    "title": "Biased Reference Counting: Minimizing Atomic Operations in Garbage Collection",
+    "authors": "Jiho Choi et al.",
+    "year": 2018,
+    "url": "https://iacoma.cs.uiuc.edu/iacoma-papers/pact18.pdf",
+    "sha256": "3c302b9db2651c8293a18538c172a975e3546674b5ba531e4ec453fdaf86bb57"
+  },
+  {
+    "id": "mutable-value-semantics",
+    "title": "Implementation Strategies for Mutable Value Semantics",
+    "authors": "Dimitri Racordon et al.",
+    "year": 2022,
+    "url": "https://www.jot.fm/issues/issue_2022_02/article2.pdf",
+    "sha256": "d461d0f2d5eaf9753b25233ead1f1963052b1d53ac8be1e828c9dce046899261"
+  },
+  {
+    "id": "2607.13921",
+    "title": "Generative Compilation: On-the-Fly Compiler Feedback as AI Generates Code",
+    "authors": "Niels Mündler-Sasahara et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2607.13921v2",
+    "sha256": "eab67e83e5ae0d78354b1ffb285dde62ad1f6db24639a8fb45fc22de6d5aa02c"
+  },
+  {
+    "id": "2603.14501",
+    "title": "CangjieBench: Benchmarking LLMs on a Low-Resource General-Purpose Programming Language",
+    "authors": "Junhang Cheng et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2603.14501v2",
+    "sha256": "00785230bd61eeaabafeb50dc8b6b033c42b1731e6d26a0028af4d1913027093"
+  },
+  {
+    "id": "2604.27296",
+    "title": "To Diff or Not to Diff? Structure-Aware and Adaptive Output Formats for Efficient LLM-based Code Editing",
+    "authors": "Wei Cheng et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2604.27296v1",
+    "sha256": "7c3adbb0da5bb97df5e6fb5b2dd6a392e084c21a8d5ab0c80a9adc6d1dc2014c"
+  },
+  {
+    "id": "2607.14167",
+    "title": "Structured Feedback Improves Repair in an LLM Agent Loop",
+    "authors": "Jaideep Ray et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2607.14167v1",
+    "sha256": "8b9e390bea8bf6f733d8e8f56be844fba208bfc1ccee00aa48bc18b4bb8b7b45"
+  },
+  {
+    "id": "2512.23214",
+    "title": "Anka: A Domain-Specific Language for Reliable LLM Code Generation",
+    "authors": "Saif Khalfan Saif Al Mazrouei",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2512.23214v1",
+    "sha256": "98b1e75e385abca3608c53c0def5ac5660116e7298988608bc9cd45c0ece4ea3"
+  },
+  {
+    "id": "2510.12487",
+    "title": "Diff-XYZ: A Benchmark for Evaluating Diff Understanding",
+    "authors": "Evgeniy Glukhov et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2510.12487v2",
+    "sha256": "2f3e499cc05b31cef9ef01598620997d96173500ced851ef145d52c8eaddb38b"
+  },
+  {
+    "id": "2605.15607",
+    "title": "Syntax Without Semantics: Teaching Large Language Models to Code in an Unseen Language",
+    "authors": "Vinayshekhar Bannihatti Kumar et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2605.15607v2",
+    "sha256": "2d4a2169785763adb47f66f1169f597f4afce061ef96583ae370047a542214c9"
+  },
+  {
+    "id": "2604.05407",
+    "title": "CODESTRUCT: Code Agents over Structured Action Spaces",
+    "authors": "Myeongsoo Kim et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2604.05407v3",
+    "sha256": "fb3a372e25e1ac15d1b35918c12cb6299b13d0b363b63fa54752087322f08b47"
+  },
+  {
+    "id": "2609.35425",
+    "title": "Semantic Prefix Oracles for LLM Decoding: Contracts and Differential Validation",
+    "authors": "Paul Kronlund-Drouault",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2609.35425v1",
+    "sha256": "abbefd68970a946844d1be418bc9f59108a21d60a2e604370bca1d7f5c433608"
+  },
+  {
+    "id": "2510.03415",
+    "title": "LLMs Lean on Priors, Not Programming Language Semantics",
+    "authors": "Aditya Thimmaiah et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2510.03415v3",
+    "sha256": "08a027f81145cd917b2239424133389ac3f10f0399f52e7ac158f4554813d263"
+  },
+  {
+    "id": "2407.06153",
+    "title": "What's Wrong with Your Code Generated by Large Language Models? An Extensive Study",
+    "authors": "Shihan Dou et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2407.06153v2",
+    "sha256": "98c764b01707a5bbd89147ec95f9815f13d4bec476c4c107ceeb111c7e0842f6"
+  },
+  {
+    "id": "2508.13666",
+    "title": "The Hidden Cost of Readability: How Code Formatting Silently Consumes Your LLM Budget",
+    "authors": "Dangfeng Pan et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2508.13666v1",
+    "sha256": "9ff0c6098be5954f5c51d045a071d9954361f51a8c64a167f2ffcd5720b4d5dc"
+  },
+  {
+    "id": "2604.10508",
+    "title": "How Many Tries Does It Take? Iterative Self-Repair in LLM Code Generation Across Model Scales and Benchmarks",
+    "authors": "Johin Johny Arimbur",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2604.10508v1",
+    "sha256": "dca04a702462019a8519408e0af3da4ebb822e325cf300cfa3339224c4f751da"
+  },
+  {
+    "id": "2503.20197",
+    "title": "A Preliminary Study on the Robustness of Code Generation by Large Language Models",
+    "authors": "Zike Li et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2503.20197v4",
+    "sha256": "771c41a7cae97f8892c51c7b0a902417b678877eaa70cd92f48d5c6fde926d4f"
+  },
+  {
+    "id": "2601.02060",
+    "title": "Perish or Flourish? A Holistic Evaluation of Large Language Models for Code Generation in Functional Programming",
+    "authors": "Nguyet-Anh H. Lang et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2601.02060v1",
+    "sha256": "e0e619215b655503472b7ed8298f3f6d22762ec101531ef0745e3736ba42bc77"
+  }
+]

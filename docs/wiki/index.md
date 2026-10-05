@@ -20,7 +20,9 @@ fixed documents, not pages, and neither is ever an orphan.
 ### What was measured
 
 - [[token-cost]] — token cost of the syntax on eight tokenizers, paired corpus and isolated constructs
-- [[python-leakage-pilot]] — three models writing variants A and B from the spec
+- [[python-leakage-pilot]] — three models writing variants A and B from the spec, parsed and executed
+- [[editing-robustness]] — slips in both block styles, the editing pilot and the edit-format literature
+- [[source-verification]] — the downloaded papers, the quotes checked against them and the corrections
 
 ### Context
 

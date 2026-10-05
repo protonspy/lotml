@@ -1,0 +1,13 @@
+<<<<<<< SEARCH
+type Flaky(failures: int)
+=======
+type Flaky(failures: int, calls: int = 0)
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+    fn fetch(var self, url: str) -> str ! FetchErr:
+        if self.failures > 0:
+=======
+    fn fetch(var self, url: str) -> str ! FetchErr:
+        self.calls += 1
+        if self.failures > 0:
+>>>>>>> REPLACE

@@ -42,9 +42,34 @@ Both keep: `fn`, `type` for records and sum types, `T?`, `T ! E`, `?`, `fail`, `
   show up in the parser: a program using `x or 0` with `x = 0` parses, passes the type checker and
   behaves differently from what the model's prior predicts. Variant B removes both traps for a
   few tokens.
+- **Execution found the trap in model-written code.** Running the pilot's programs under both
+  semantics, two of 18 variant A programs — Sonnet's `s.to_int() or fail NotNumber(s)` and Haiku's
+  `if maybe_n:` — return 0 for `"0"` as lotml's A semantics says, and fail under Python's; their
+  authors even tested `"0"`. No variant B test changes outcome ([[python-leakage-pilot]]).
+- **Familiar syntax with a new meaning is the costliest kind.** Asked to predict what programs do
+  under supplied semantics, models lost 40–70 points when familiar operators carried new meanings,
+  far more than when the same rules used new symbols, and chain-of-thought did not recover it
+  ([arXiv 2510.03415](https://arxiv.org/abs/2510.03415); reading code, not writing it). That is the
+  rule's second clause measured: different semantics needs visibly different syntax.
 
 **Decision:** variant B (adr:0004-python-syntax-where-semantics-match); the
 [[evaluation-harness]] repeats the comparison with more models and families before v1 freezes.
+
+## Where lotml's semantics already differ
+
+The same finding marks the places lotml reuses Python's syntax with a different meaning, and
+where the design already makes the difference visible:
+
+| construct | Python | lotml | the visible marker |
+| --- | --- | --- | --- |
+| `y = x` of a list or record | alias | copy | observable only through mutation, which needs `var` |
+| passing an argument | reference | copy | a function changes its caller's value only through `inout`, with `&` at the call |
+| `x = …` again | rebinding | an error for an immutable | `var` at the declaration |
+| `if x:` on a non-`bool` | truthiness | an error | — the compiler rejects it |
+| `a / b` and `//` on integers | float and floor division | to be specified | open — see [[type-system]] |
+
+Each row is a diagnostic with a fix ([[semantic-compiler]]); the open row needs a decision before
+the spec freezes.
 
 ## Gaps in the original proposal
 
@@ -74,15 +99,19 @@ Both keep: `fn`, `type` for records and sum types, `T?`, `T ! E`, `?`, `fail`, `
 
 | for indentation | for delimiters |
 | --- | --- |
-| Python's prior, and the transpiler to Python stays direct | SWE-agent needed a guard against indentation errors (flake8 E111–E113) in edits |
-| braces cost 1 token per block — irrelevant ([[token-cost]]) | aider built relative-indentation patching and flexible patching; without it, 9× more editing errors |
-| no indentation error in the pilot's 60 programs, written whole | `INDENT`/`DEDENT` do not fit OpenAI's Lark subset ([[constrained-decoding]]) |
+| Python's prior, and the transpiler to Python stays direct | layout can be stripped from context: 13–15% of input tokens in brace languages, 4% in Python |
+| 88% of indentation slips are rejected by the parser and 2.9% are silent; a misplaced `}` is silent 7.1% | a whitespace slip cannot change a braces program, and braces plus an indentation check reject any single slip — both by construction |
+| no indentation error in the pilot's 60 programs; 0–2.9% of failures in published Python studies | aider applies hunks with relative whitespace and reports 9× more editing errors without flexible patching ([docs](https://aider.chat/docs/unified-diffs.html)) |
+| 36 of 36 edits passed in the editing pilot, against 35 of 36 in a braces form | a braces form invites the C family's idioms: Haiku wrote `} else if` |
+| a line-oriented, depth-bounded grammar constrains it at the same per-token cost as braces | `INDENT`/`DEDENT` cannot be declared in llguidance's Lark ([[constrained-decoding]]) |
 
-The pilot only measured programs written in one go; the risk is in **editing** existing code with
-search-and-replace or diffs, which is how agents work. **Decision:** keep indentation, with a
-tolerant parser and a canonical formatter, and add to the harness an editing test comparing the
-indented variant with a braces variant. Switching now is cheap; after v1 it is a migration — the
-decision is in adr:0005-significant-indentation.
+SWE-agent's edit guard, once read as an indentation guard, is a general lint gate whose failures
+were never broken down by code. The evidence is in [[editing-robustness]]: the editing risk lives
+in the edit interface more than in the block style, and edits addressed to syntax entities cut
+edit errors by three quarters in Python. **Decision:** keep indentation
+(adr:0005-significant-indentation), with a tolerant parser, a canonical formatter and
+symbol-addressed edits in the compiler; its condition was not triggered by the editing pilot,
+whose twelve tasks per cell cannot separate the designs, and the harness repeats the test at scale. Switching now is cheap; after v1 it is a migration.
 
 ## Kept from the original study
 

@@ -1,0 +1,15 @@
+<<<<<<< SEARCH
+type Shape = Circle(r: f64) | Rect(w: f64, h: f64) | Triangle(a: f64, b: f64, c: f64)
+=======
+type Shape = Circle(r: f64) | Rect(w: f64, h: f64) | Triangle(a: f64, b: f64, c: f64) | Square(side: f64)
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+            return sqrt(p * (p - a) * (p - b) * (p - c))
+        }
+=======
+            return sqrt(p * (p - a) * (p - b) * (p - c))
+        }
+        case Square(side) {
+            return side * side
+        }
+>>>>>>> REPLACE

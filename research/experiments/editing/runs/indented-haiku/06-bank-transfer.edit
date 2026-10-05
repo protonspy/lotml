@@ -1,0 +1,21 @@
+<<<<<<< SEARCH
+type BankErr = UnknownAccount(account: str) | InsufficientFunds(account: str)
+=======
+type BankErr = UnknownAccount(account: str) | InsufficientFunds(account: str) | SameAccount(account: str)
+>>>>>>> REPLACE
+
+<<<<<<< SEARCH
+    fn transfer(var self, source: str, target: str, amount: int) -> None ! BankErr:
+        if target not in self.balances:
+            fail UnknownAccount(target)
+        self.withdraw(source, amount)?
+        self.deposit(target, amount)?
+=======
+    fn transfer(var self, source: str, target: str, amount: int) -> None ! BankErr:
+        if source == target:
+            fail SameAccount(source)
+        if target not in self.balances:
+            fail UnknownAccount(target)
+        self.withdraw(source, amount)?
+        self.deposit(target, amount)?
+>>>>>>> REPLACE

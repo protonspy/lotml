@@ -1,0 +1,12 @@
+<<<<<<< SEARCH
+type BankErr = UnknownAccount(account: str) | InsufficientFunds(account: str)
+=======
+type BankErr = UnknownAccount(account: str) | InsufficientFunds(account: str) | SameAccount(account: str)
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+    fn transfer(var self, source: str, target: str, amount: int) -> None ! BankErr:
+=======
+    fn transfer(var self, source: str, target: str, amount: int) -> None ! BankErr:
+        if source == target:
+            fail SameAccount(source)
+>>>>>>> REPLACE

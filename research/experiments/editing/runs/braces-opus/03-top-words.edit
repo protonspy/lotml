@@ -1,0 +1,5 @@
+<<<<<<< SEARCH
+        if w.isalpha() {
+=======
+        if w.isalpha() and len(w) >= 3 {
+>>>>>>> REPLACE

@@ -1,0 +1,24 @@
+<<<<<<< SEARCH
+impl Priced for Book {
+    fn price(self) -> f64 {
+        return self.cost
+    }
+
+    fn label(self) -> str {
+        return f"Book: {self.title}"
+    }
+}
+=======
+impl Priced for Book {
+    fn price(self) -> f64 {
+        if self.title.startswith("Free") {
+            return 0.0
+        }
+        return self.cost
+    }
+
+    fn label(self) -> str {
+        return f"Book: {self.title}"
+    }
+}
+>>>>>>> REPLACE

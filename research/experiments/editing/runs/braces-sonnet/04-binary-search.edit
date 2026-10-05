@@ -1,0 +1,22 @@
+<<<<<<< SEARCH
+    var hi = len(xs) - 1
+=======
+    var hi = len(xs) - 1
+    var result: int? = None
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+        if xs[mid] == target {
+            return mid
+        }
+=======
+        if xs[mid] == target {
+            result = mid
+            hi = mid - 1
+            continue
+        }
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+    return None
+=======
+    return result
+>>>>>>> REPLACE

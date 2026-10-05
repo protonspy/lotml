@@ -1,0 +1,8 @@
+<<<<<<< SEARCH
+        for neighbor, weight in graph.get(node, []) {
+=======
+        for neighbor, weight in graph.get(node, []) {
+            if weight < 0 {
+                continue
+            }
+>>>>>>> REPLACE
