@@ -4,11 +4,11 @@ Every adopted technology, with one line on why it earned its place. Technology n
 is an open decision, never something adopted silently. The language's own toolchain does not
 exist yet; it is decided in `docs/adr/` and enters this list when code depends on it.
 
-## Pesquisa (`research/`)
+## Research (`research/`)
 
-- **uv** — roda os scripts de pesquisa com dependências efêmeras (`uv run --with …`), sem manifesto de projeto para manter.
-- **tiktoken** — tokenizadores `o200k` e `cl100k` da OpenAI, para as medições de tokens.
-- **tokenizers** e **huggingface_hub** — carregam os tokenizadores abertos medidos (Llama 3, Qwen3, DeepSeek-V3, Gemma 3, Mistral Nemo, StarCoder2).
-- **lark** — gramática LALR das variantes A e B no piloto, com indentação pelo `Indenter`.
-- **pytest** — testes dos contadores e verificadores de pesquisa.
-- **ruff** — lint e formatação do código de pesquisa; `research/ruff.toml` exclui o corpus, que é medido byte a byte.
+- **uv** — runs the research scripts with ephemeral dependencies (`uv run --with …`), with no project manifest to maintain.
+- **tiktoken** — OpenAI's `o200k` and `cl100k` tokenizers, for the token measurements.
+- **tokenizers** and **huggingface_hub** — load the open tokenizers measured (Llama 3, Qwen3, DeepSeek-V3, Gemma 3, Mistral Nemo, StarCoder2).
+- **lark** — the LALR grammar of variants A and B in the pilot, with indentation through `Indenter`.
+- **pytest** — tests for the research counters and checkers.
+- **ruff** — lint and formatting for the research code; `research/ruff.toml` excludes the corpus, which is measured byte for byte.
