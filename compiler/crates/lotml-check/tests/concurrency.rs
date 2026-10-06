@@ -40,6 +40,22 @@ fn calls_given_where_tasks_are_wanted_are_reported_with_the_fix() {
     assert_eq!(fix.edits[0].replacement, "[lambda: work(1), lambda: work(2)]");
     assert_eq!(fix.applicability, lotml_diag::Applicability::MaybeIncorrect);
     assert_eq!(codes(&format!("{WORK}fn f() -> [int]:\n    return parallel([lambda n: work(n)])\n")), vec!["E0204"]);
+    // The habit an open model showed most in the harness: the loop's variable as a parameter.
+    let source = format!("{WORK}fn f(xs: [int]) -> [int]:\n    return parallel([lambda x: work(x) for x in xs])\n");
+    let found = check_source(&source);
+    let (fixed, _) = lotml_diag::apply_fixes(
+        &source,
+        &[lotml_diag::Diagnostic {
+            fixes: found[0]
+                .fixes
+                .iter()
+                .map(|f| lotml_diag::Fix { applicability: lotml_diag::Applicability::MachineApplicable, ..f.clone() })
+                .collect(),
+            ..found[0].clone()
+        }],
+    );
+    assert!(fixed.contains("parallel([lambda: work(x) for x in xs])"), "{fixed}");
+    clean(&fixed);
     assert_eq!(codes(&format!("{WORK}fn f() -> [int]:\n    return parallel(3)\n")), vec!["E0204"]);
 }
 

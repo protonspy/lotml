@@ -2192,6 +2192,20 @@ impl<'p> Body<'p> {
                         vec![(whole, format!("[{}]", tasks.join(", ")))],
                     );
                 }
+                // `map`'s habit, `[lambda k: f(k) for k in keys]`: a task given the loop's
+                // variable as a parameter, where it should capture it.
+                if let (true, [Arg::Positional(list)]) = (name == "parallel", args)
+                    && let ExprKind::ListComp { element, loops } = &list.kind
+                    && let ExprKind::Lambda { params, body } = &element.kind
+                    && !params.is_empty()
+                    && params.iter().all(|p| loops.iter().any(|l| l.target.names().iter().any(|n| n.name == p.name)))
+                {
+                    d = d.fix(
+                        "capture the loop's variable instead: a task takes no parameter",
+                        Applicability::MaybeIncorrect,
+                        vec![(Span { start: element.span.start, end: body.span.start }, "lambda: ".into())],
+                    );
+                }
                 self.report(d);
                 Ty::Error
             }
