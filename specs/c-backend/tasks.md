@@ -5,7 +5,7 @@
 - [x] 1.1 (Unit) Find a C compiler and build a C file with the runtime, naming what was looked for when none is found — R5.1, R5.2
 - [x] 1.2 (TDD) Lower and emit functions, numbers, `bool`, control flow and `print`, with checked integer arithmetic, `#line` and panics naming the `.lotml` line — R1.1, R1.2, R2.1, R2.2, R2.3
   _Depends 1.1_
-- [ ] 1.3 (TDD) Compile strings: literals, operators, indexing and slices, methods, f-strings with the format mini-language, `str()` and CPython's float and string `repr` — R1.2, R1.3
+- [x] 1.3 (TDD) Compile strings: literals, operators, indexing and slices, methods, f-strings with the format mini-language, `str()` and CPython's float and string `repr` — R1.2, R1.3
   _Depends 1.2_
 
 ## 2 · Values and their counts
