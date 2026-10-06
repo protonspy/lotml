@@ -17,8 +17,8 @@
 
 ## 3 · The report
 
-- [ ] 3.1 (TDD) Compute pass@k by the unbiased estimator and the Wilson interval — R4.2
-- [ ] 3.2 (Unit) Run the benchmark from the command line, skipping runs already recorded, and write the report — R4.2, R4.3
+- [x] 3.1 (TDD) Compute pass@k by the unbiased estimator and the Wilson interval — R4.2
+- [x] 3.2 (Unit) Run the benchmark from the command line, skipping runs already recorded, and write the report — R4.2, R4.3
   _Depends 2.3, 3.1_
 - [ ] 3.3 (Unit) Run the benchmark on `z-ai/glm-5.3-flash` in both arms and commit the rows and the report — R4.1, R4.2
   _Depends 3.2_
