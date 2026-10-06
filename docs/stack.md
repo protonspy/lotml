@@ -39,7 +39,8 @@ same pinned versions.
 A Cargo workspace, Rust 1.97 and edition 2024 (adr:0006-compiler-written-in-rust), with a lock
 file. Each crate is a stage: `lotml-syntax` (lexer, tolerant parser), `lotml-diag` (diagnostics
 and their codes), `lotml-check` (types, mutability, errors as values), `lotml-db` (the queries),
-`lotml-fmt` (the formatter), `lotml-py` (the Python backend and its runtime), `lotml-ide` (what
+`lotml-fmt` (the formatter), `lotml-py` (the Python backend and its runtime), `lotml-c` (the C
+backend and its runtime, adr:0014-c-target-as-monomorphic-c-over-a-counting-runtime), `lotml-ide` (what
 each name refers to, and the workspace an editor or agent queries), `lotml` (the command, with
 its language and MCP servers — JSON-RPC written over `serde_json`, with no protocol library).
 
@@ -57,3 +58,9 @@ its language and MCP servers — JSON-RPC written over `serde_json`, with no pro
   mypy or jedi when no `--stub` is given, never installed by lotml.
 - **CPython** 3.11 or later — runs what the Python backend writes (`lotml run`, `lotml test`);
   found as `LOTML_PYTHON`, `python3`, `python` or `py -3`. Not a library the compiler links.
+- **A C11 compiler** — builds what the C backend writes (`--target c`): the first of `LOTML_CC`,
+  `CC`, `cc`, `gcc` and `clang`, then Visual Studio's `cl` on Windows. Not a library the compiler
+  links; gcc is what CI runs.
+- **find-msvc-tools** 0.1 (Windows only) — locates Visual Studio's `cl` and the environment it
+  needs (`INCLUDE`, `LIB`, `PATH`), from the rust-lang project that maintains `cc`; chosen over
+  running `vcvars64.bat` through `cmd`, which depends on the shell and on one install layout.
