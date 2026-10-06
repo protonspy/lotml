@@ -426,7 +426,9 @@ def ebnf(variant: str = "b") -> str:
         "   brackets, line breaks are ignored. After each NEWLINE the lexer compares the",
         "   next line's indentation (a tab counts as four spaces) with a stack of open",
         "   levels, as Python's tokenizer does: deeper emits INDENT, shallower emits one",
-        "   DEDENT per level closed. A keyword is never a NAME. */",
+        "   DEDENT per level closed. Keywords are soft: where the grammar expects no",
+        "   keyword, the word is a NAME — `fn histogram(test: str)` is a function whose",
+        "   parameter is named `test`. */",
         "",
     ]
     lines += [f"{name} ::= {ebnf_expression(node)}" for name, node in grammar.rules.items()]
