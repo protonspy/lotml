@@ -17,7 +17,7 @@ export (specs/trace-dataset/, plans/agent-data.md).
 
 ## R1 · HumanEval's tasks
 
-- **R1.1** The agent harness shall read HumanEval from the original release's `HumanEval.jsonl.gz` at a pinned commit, downloaded into the git-ignored cache and checked against its recorded SHA-256.
+- **R1.1** The agent harness shall read HumanEval from the original release's `HumanEval.jsonl.gz` at a pinned 40-character commit, downloaded into the git-ignored cache, checking its recorded SHA-256 before the file is moved into place and again on every read.
 - **R1.2** The agent harness shall translate each problem into a lotml signature, docstring and test cases with the task set's translator, refusing what it refuses for the reasons it gives.
 - **R1.3** When an agent run names a HumanEval task, the agent harness shall build its workspace as one file, `solution.lotml`, holding the signature and docstring with `todo()` as the body.
 - **R1.4** The agent harness shall turn each test case into a hidden `test` block comparing as the case's comparison says: exactly, within 1e-6, or as sets.
@@ -29,7 +29,7 @@ export (specs/trace-dataset/, plans/agent-data.md).
 
 - **R2.1** Where `--sample N` is given, the agent harness shall run N HumanEval tasks chosen by a seeded draw, the same N for every arm and every model.
 - **R2.2** If the HumanEval file cannot be downloaded or its digest differs, then the agent harness shall say so and run nothing.
-- **R2.3** The agent harness shall record each run's source, `bench` or `humaneval`, and report pass@1 per source.
+- **R2.3** The agent harness shall record each run's source, `bench` or `humaneval-original`, and report pass@1 per source.
 - **R2.4** Where both arms have run a task, the agent harness shall report the paired comparison of the arms with McNemar's test over the tasks.
 
 ## Out of scope
