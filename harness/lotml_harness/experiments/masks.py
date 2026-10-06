@@ -48,7 +48,7 @@ HOST = "http://localhost:11434"
 OPENROUTER = "https://openrouter.ai/api/v1/completions"
 PROVIDERS = {
     "meta-llama/llama-3.1-8b-instruct": "DeepInfra",
-    "z-ai/glm-5.3-flash": "AtlasCloud",
+    "z-ai/glm-5.3-flash": "Parasail",
 }
 """The one provider OpenRouter may send each hosted model's calls to, so every line of a run comes
 from the same weights and quantization. Each was checked to take the prompt as written: several
