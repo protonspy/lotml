@@ -319,6 +319,14 @@ pub enum Expr {
     },
     /// The module's function `name`, its C name, as a value.
     FnRef(String),
+    /// A call of the C library function `symbol` declared with `params` and `ret`: the arguments
+    /// read, a `str` passed as its bytes.
+    CallC {
+        symbol: String,
+        args: Vec<Operand>,
+        params: Vec<Ty>,
+        ret: Ty,
+    },
     /// `parallel(tasks)`: each closure of `tasks` run on a thread, its result of type `result`.
     Parallel {
         tasks: Operand,
@@ -397,6 +405,7 @@ impl Expr {
             Expr::Closure { captures, .. } => captures.iter().for_each(f),
             Expr::FnRef(_) => {}
             Expr::Parallel { tasks, .. } => f(tasks),
+            Expr::CallC { args, .. } => args.iter().for_each(f),
             Expr::ToDyn { value, .. } => f(value),
             Expr::CallDyn { receiver, args, .. } => {
                 f(receiver);
@@ -599,6 +608,10 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
             f(ret);
         }
         Expr::Parallel { result, .. } => f(&Ty::List(Box::new(result.clone()))),
+        Expr::CallC { params, ret, .. } => {
+            params.iter().for_each(&mut *f);
+            f(ret);
+        }
         Expr::Rt { args, .. } | Expr::CallSlots(_, args) => arg_types(args, f),
         Expr::RtValue { args, ty, .. } => {
             arg_types(args, f);

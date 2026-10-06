@@ -40,6 +40,16 @@
 #include <intrin.h>
 #endif
 
+/* The assembler's name of the C symbol `name`, a string: with the platform's prefix, `_` on
+ * macOS, for a C library function declared under a name of the program's own. */
+#define LT_QUOTE2(x) #x
+#define LT_QUOTE(x) LT_QUOTE2(x)
+#ifdef __USER_LABEL_PREFIX__
+#define LT_C_SYMBOL(name) LT_QUOTE(__USER_LABEL_PREFIX__) name
+#else
+#define LT_C_SYMBOL(name) name
+#endif
+
 /* Where a panic happened: the `.lotml` file, the line and the function. */
 typedef struct lt_at {
     const char *file;

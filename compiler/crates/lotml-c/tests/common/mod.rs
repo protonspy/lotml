@@ -76,10 +76,16 @@ pub fn run_c(name: &str, source: &str) -> Run {
 
 /// `source` compiled by the Python backend and run as `lotml run` runs it.
 pub fn run_python(name: &str, source: &str) -> Run {
+    run_python_with(name, source, &lotml_check::Interfaces::new())
+}
+
+/// [`run_python`] for a program importing through `interfaces`.
+pub fn run_python_with(name: &str, source: &str, interfaces: &lotml_check::Interfaces) -> Run {
     let dir = scratch("py-target", name);
     let path = dir.join("prog.lotml");
     std::fs::write(&path, source).unwrap();
-    let module = lotml_py::compile(source, &path).unwrap_or_else(|d| panic!("{source}\n{d:#?}"));
+    let module =
+        lotml_py::compile_with(source, &path, interfaces).unwrap_or_else(|d| panic!("{source}\n{d:#?}")).module;
     std::fs::write(dir.join("prog.py"), module).unwrap();
     std::fs::write(dir.join("lotml_rt.py"), lotml_py::RUNTIME).unwrap();
     let python = lotml_py::python().expect("a Python interpreter");

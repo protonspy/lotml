@@ -241,9 +241,15 @@ pub fn test(paths: &[PathBuf], as_json: bool, target: Target) -> Result<u8, Fail
 fn c_executable(path: &Path, dir: &Path, tests: bool) -> Result<Option<PathBuf>, Failure> {
     let text = files::read(path)?;
     let absolute = std::path::absolute(path).map_err(|e| Failure(format!("{}: {e}", path.display())))?;
-    let compiled = if tests { lotml_c::compile_tests(&text, &absolute) } else { lotml_c::compile(&text, &absolute) };
-    let c = match compiled {
-        Ok(c) => c,
+    let interfaces: Interfaces = files::interfaces_for(path)
+        .into_iter()
+        .map(|b| {
+            let read = lotml_check::interface_of(&b.module, &b.text).0;
+            (b.module, read)
+        })
+        .collect();
+    let program = match lotml_c::compile_program(&text, &absolute, &interfaces, tests) {
+        Ok(program) => program,
         Err(diagnostics) => {
             let shown = path.display().to_string();
             let report = Report { file: &shown, text: &text, diagnostics };
@@ -255,11 +261,11 @@ fn c_executable(path: &Path, dir: &Path, tests: bool) -> Result<Option<PathBuf>,
         path.file_stem().map_or("program".into(), |s| s.to_string_lossy().replace(|c: char| !c.is_alphanumeric(), "_"));
     std::fs::create_dir_all(dir).map_err(|e| Failure(format!("cannot create {}: {e}", dir.display())))?;
     let source = dir.join(format!("{stem}.c"));
-    write(&source, &c)?;
+    write(&source, &program.c)?;
     lotml_c::write_runtime(dir).map_err(|e| Failure(format!("cannot write the runtime in {}: {e}", dir.display())))?;
     let exe = dir.join(if cfg!(windows) { format!("{stem}.exe") } else { stem });
     let compiler = lotml_c::driver::find().map_err(Failure)?;
-    compiler.build(&source, &exe, &[]).map_err(Failure)?;
+    compiler.build(&source, &exe, &program.libraries).map_err(Failure)?;
     Ok(Some(exe))
 }
 

@@ -34,6 +34,10 @@ pub struct Lowered {
     pub vtables: Vec<VTable>,
     /// Each `test` block, when they were asked for: its name and its C function.
     pub tests: Vec<(String, String)>,
+    /// Each C library function the program calls, by its symbol: its parameters and result.
+    pub c_functions: BTreeMap<String, (Vec<Ty>, Ty)>,
+    /// The C libraries the program imports, by the name the linker knows: `m` for `c.m`.
+    pub libraries: BTreeSet<String>,
 }
 
 /// The table of one type's methods for one trait, a slot per method of the trait in name order:
@@ -221,6 +225,9 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
         vtables: Vec::new(),
         vtable_ids: HashMap::new(),
         math_names: HashSet::new(),
+        c_imports: HashMap::new(),
+        c_functions: BTreeMap::new(),
+        libraries: BTreeSet::new(),
         diagnostics: Vec::new(),
     };
     for item in &module.items {
@@ -243,6 +250,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
             Item::Import(import) if is_math(import) => {
                 cx.math_names.extend(import.names.iter().map(|n| n.name.clone()));
             }
+            Item::Import(import) => cx.import(import),
             Item::Record(r) => {
                 let defaults = r.fields.iter().map(|f| f.default.as_ref()).collect();
                 cx.defaults.insert((r.name.name.clone(), None), defaults);
@@ -314,9 +322,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
                     cx.unsupported(t.name.span, "a generic trait");
                 }
             }
-            Item::Import(import) if is_math(import) => {}
-            Item::Test(_) | Item::Error(_) | Item::Record(_) | Item::Sum(_) => {}
-            other => cx.unsupported(other.span(), "this declaration"),
+            Item::Import(_) | Item::Test(_) | Item::Error(_) | Item::Record(_) | Item::Sum(_) => {}
         }
     }
     while let Some(p) = cx.pending.pop() {
@@ -341,6 +347,8 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
         traits: checked.traits.iter().map(|(name, methods)| (name.clone(), methods.len())).collect(),
         vtables: std::mem::take(&mut cx.vtables),
         tests: test_names,
+        c_functions: std::mem::take(&mut cx.c_functions),
+        libraries: std::mem::take(&mut cx.libraries),
     })
 }
 
@@ -370,6 +378,11 @@ struct Context<'a> {
     vtable_ids: HashMap<(String, Ty), usize>,
     /// The names `from math import …` brought into scope.
     math_names: HashSet<String>,
+    /// The names `from c.<library> import …` brought into scope, with their signatures.
+    c_imports: HashMap<String, FnSig>,
+    /// The C functions called so far, by symbol.
+    c_functions: BTreeMap<String, (Vec<Ty>, Ty)>,
+    libraries: BTreeSet<String>,
     fn_refs: BTreeSet<String>,
     diagnostics: Vec<Diagnostic>,
 }
@@ -454,6 +467,27 @@ impl<'a> Context<'a> {
         self.vtables.push(VTable { trait_name: trait_name.to_string(), ty: ty.clone(), slots });
         self.vtable_ids.insert(key, index);
         Some(index)
+    }
+
+    /// `from c.<library> import f, g`: the functions called directly and the library linked
+    /// (R5.4). Any other module is Python's, which the C target has none of (R5.3).
+    fn import(&mut self, import: &'a ast::Import) {
+        let path = import.module.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(".");
+        if !lotml_check::is_c_library(&path) {
+            self.diagnostics.push(Diagnostic::error(
+                "E0401",
+                import.span,
+                format!("`{path}` is a Python module, and a program built for the C target runs without Python"),
+            ));
+            return;
+        }
+        let Some(functions) = self.checked.foreign.get(&path) else { return };
+        self.libraries.insert(path["c.".len()..].to_string());
+        for name in &import.names {
+            if let Some(sig) = functions.get(&name.name) {
+                self.c_imports.insert(name.name.clone(), sig.clone());
+            }
+        }
     }
 
     /// The `test` block `t`, the `k`th, as a function of no parameters: named in a report's trace
@@ -2040,6 +2074,16 @@ impl<'c, 'a> Builder<'c, 'a> {
         }
         if self.cx.math_names.contains(name.as_str()) {
             return self.math_call(whole, name, args);
+        }
+        if let Some(sig) = self.cx.c_imports.get(name.as_str()).cloned() {
+            let mut operands = Vec::new();
+            for (a, p) in args.iter().zip(&sig.params) {
+                let v = self.value(a.expr());
+                operands.push(self.coerce(v, &p.ty));
+            }
+            let params: Vec<Ty> = sig.params.iter().map(|p| p.ty.clone()).collect();
+            self.cx.c_functions.insert(name.clone(), (params.clone(), sig.ret.clone()));
+            return Value::Expr(Expr::CallC { symbol: name.clone(), args: operands, params, ret: sig.ret });
         }
         if matches!(self.cx.checked.declared.get(name), Some(TypeDef::Record { .. })) {
             let ty = self.ty(whole);

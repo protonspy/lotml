@@ -121,6 +121,14 @@ impl CCompiler {
     }
 }
 
+/// Whether every program is linked with the C library `name` already: the C runtime and, on
+/// Windows, the system's own; linking its import library a second time would mix runtimes.
+pub fn linked_always(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    matches!(name.as_str(), "c" | "m")
+        || (cfg!(windows) && matches!(name.as_str(), "msvcrt" | "ucrt" | "ucrtbase" | "vcruntime" | "kernel32"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

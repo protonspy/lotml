@@ -53,6 +53,7 @@ pub fn program(lowered: &Lowered, file: &str, tests: bool) -> String {
     }
     out.push('\n');
     out.push_str(&types.definitions());
+    c_functions(&mut out, lowered);
     for f in &lowered.functions {
         let _ = writeln!(out, "{};", signature(f, &types));
     }
@@ -146,6 +147,41 @@ fn vtables(out: &mut String, lowered: &Lowered, types: &Types) {
             types.desc(&vtable.ty),
             slots.join(", ")
         );
+    }
+}
+
+/// The C library functions the program calls, each declared as its interface declares it, under
+/// a name of its own bound to the library's symbol: a header's declaration of the same name, with
+/// C's own types, then cannot conflict with it (adr:0013).
+fn c_functions(out: &mut String, lowered: &Lowered) {
+    for (symbol, (params, ret)) in &lowered.c_functions {
+        let params: Vec<&str> = params.iter().filter(|t| !is_unit(t)).map(ffi_type).collect();
+        let params = if params.is_empty() { "void".to_string() } else { params.join(", ") };
+        let declaration = format!("{} lt_ffi_{symbol}({params})", ffi_type(ret));
+        let _ = writeln!(
+            out,
+            "#if defined(_MSC_VER) && !defined(__clang__)\n#pragma comment(linker, \"/alternatename:lt_ffi_{symbol}={symbol}\")\n\
+             extern {declaration};\n#else\nextern {declaration} __asm__(LT_C_SYMBOL(\"{symbol}\"));\n#endif"
+        );
+    }
+}
+
+/// The C type a value of `ty` crosses into a C library as.
+fn ffi_type(ty: &Ty) -> &'static str {
+    match ty {
+        Ty::Int(IntKind::I8) => "int8_t",
+        Ty::Int(IntKind::I16) => "int16_t",
+        Ty::Int(IntKind::I32) => "int32_t",
+        Ty::Int(IntKind::I64) => "int64_t",
+        Ty::Int(IntKind::U8) => "uint8_t",
+        Ty::Int(IntKind::U16) => "uint16_t",
+        Ty::Int(IntKind::U32) => "uint32_t",
+        Ty::Int(IntKind::U64) => "uint64_t",
+        Ty::Float(FloatKind::F32) => "float",
+        Ty::Float(_) => "double",
+        Ty::Bool => "bool",
+        Ty::Str => "const char *",
+        _ => "void",
     }
 }
 
@@ -744,6 +780,17 @@ impl Writer<'_> {
             Expr::ReadPlace(place) => format!("(*{})", self.place(place).1),
             Expr::Closure { .. } => "0 /* written by its Let */".to_string(),
             Expr::FnRef(name) => format!("((lt_closure *)&lt_fnref_{name})"),
+            Expr::CallC { symbol, args, params, .. } => {
+                let mut passed = Vec::new();
+                for (a, t) in args.iter().zip(params) {
+                    match t {
+                        Ty::Unit => {}
+                        Ty::Str => passed.push(format!("(const char *)({})->bytes", self.operand(a))),
+                        _ => passed.push(self.operand(a)),
+                    }
+                }
+                format!("lt_ffi_{symbol}({})", passed.join(", "))
+            }
             Expr::Parallel { tasks, result } => {
                 let k = self.tasks.iter().position(|t| t == result).expect("a runner per result type");
                 format!("lt_parallel({}, {}, lt_task{k}, LT_HERE)", self.operand(tasks), self.types.desc(result))
