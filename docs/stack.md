@@ -1,8 +1,8 @@
 # Stack
 
 Every adopted technology, with one line on why it earned its place. Technology not listed here
-is an open decision, never something adopted silently. The language's own toolchain does not
-exist yet; it is decided in `docs/adr/` and enters this list when code depends on it.
+is an open decision, never something adopted silently. Decisions that are hard to reverse are in
+`docs/adr/`; this list is what the code depends on.
 
 ## Research (`research/`)
 
@@ -23,3 +23,23 @@ same pinned versions.
 
 - **pytest-cov** — line coverage for the test gate `scc check` reads; chosen over running
   `coverage` by hand because it attaches to the pytest run the suite already is.
+
+## Compiler (`compiler/`)
+
+A Cargo workspace, Rust 1.97 and edition 2024 (adr:0006-compiler-written-in-rust), with a lock
+file. Each crate is a stage: `lotml-syntax` (lexer, tolerant parser), `lotml-diag` (diagnostics
+and their codes), `lotml-check` (types, mutability, errors as values), `lotml-db` (the queries),
+`lotml-fmt` (the formatter), `lotml-py` (the Python backend and its runtime), `lotml` (the
+command).
+
+- **salsa** 0.28 — incremental queries over source files, the property the under-100 ms check
+  rests on ([[transpilation-strategy]]); chosen over a hand-rolled cache because rust-analyzer
+  runs on it. Costs: it labels itself experimental, so its API may move under us.
+- **serde** and **serde_json** — the versioned JSON of diagnostics and test reports, and the
+  syntax tree the Python backend hands its runtime; no other format is read or written.
+- **clap** 4 — the command line, derived from the `Command` enum so help text and arguments
+  cannot drift apart; chosen over hand parsing for its error messages.
+- **cargo-llvm-cov** (development only) — line coverage of the Rust tests for the test gate,
+  next to the harness's pytest-cov; it needs the `llvm-tools-preview` component.
+- **CPython** 3.11 or later — runs what the Python backend writes (`lotml run`, `lotml test`);
+  found as `LOTML_PYTHON`, `python3`, `python` or `py -3`. Not a library the compiler links.

@@ -115,3 +115,31 @@ in B against 26 only in A) nor in the indented form than with braces (pooled, 23
 on 192 to 200 paired tasks. "Not worse" is read as no model significantly worse (exact McNemar,
 5%) and the pooled discordant pairs not favouring the alternative. The decisions it settles are
 adr:0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate.
+
+The phase 1 gate did not pass (`harness/results/phase1.md`, from `python -m
+lotml_harness.experiments.phase1`), so phase 2 has not started. Each of four models wrote the
+same 200 tasks in lotml, with `lotml check` and the hidden tests' feedback for up to three
+answers, and in typed Python. Rounds to green (median 1 for every model) and tokens (lotml/Python
+0.99, median of models) pass; pass@1 does not:
+
+| model | lotml pass@1 | Python pass@1 | only lotml / only Python | McNemar p | solved after feedback, lotml / Python |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Sonnet | 97.0% | 97.5% | 4 / 5 | 1.000 | 100% / 100% |
+| Haiku | 84.0% | 92.0% | 3 / 19 | 0.001 | 98.5% / 99.0% |
+| Qwen 2.5 Coder 7B | 45.5% | 83.5% | 3 / 79 | < 0.001 | 62.0% / 87.5% |
+| Llama 3.1 8B | 19.0% | 65.5% | 5 / 98 | < 0.001 | 31.5% / 73.5% |
+
+The gap is not in the programs' logic: every model's first lotml answer failed the hidden tests
+*less* often than its Python one (Haiku 12 against 14, Sonnet 2 against 4, Qwen 18 against 31,
+Llama 18 against 63). It is the answers the compiler refused — Haiku 20, Sonnet 4, Qwen 91,
+Llama 143 of 200 — which Python has no equivalent of. The frontier models were refused mostly
+by mutability (E0301, E0302) and unknown names (E0201), and fixed nearly all of it from the
+diagnostics; the 7–8B models also wrote syntax lotml does not have (E0003; Llama 73 times)
+and mostly did not recover. That is the "no training
+corpus" risk of [[lotml-risks]] measured: a language absent from pretraining, read only from the
+spec in the prompt, costs little where the model can follow the spec and the diagnostics, and
+most of the score where it cannot.
+
+The runs used the compiler before its security review's boundary fixes; checked again with the
+fixed compiler, none of the 584 passing lotml programs is refused, so the result stands. One
+Llama answer lost to a local server error was asked again with the fixed compiler.

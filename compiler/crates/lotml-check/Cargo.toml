@@ -1,0 +1,15 @@
+[package]
+name = "lotml-check"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lotml-syntax = { path = "../lotml-syntax" }
+lotml-diag = { path = "../lotml-diag" }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+serde_json = { workspace = true }

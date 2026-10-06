@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: auto
-checksum: a271ff1f30c2a265cad9062fea7e59d8846195f642fca6b163e8eb4c7ef17b67
+checksum: a82113222ba3f74737424d9993a9f4a1720b209b0399b308932bedded9a37499
 ---
 
 # lotml roadmap
@@ -73,29 +73,29 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
 - [x] 1.9 (Unit) Measure the Claude tokenizer with `count_tokens` on the paired corpus and the generated code, closing the gap in the token measurements (docs/wiki/pages/token-cost.md)
 - [x] 1.10 (Unit) Review the phase 0 gate — parse ≥ 95% and no syntactic leakage with the spec, variant and block style confirmed — and record the decisions it settles
   _Depends 1.6, 1.7, 1.8, 1.9_
-- [ ] 2.1 (Unit) Write the compiler's hand-written, tolerant, recursive-descent parser in Rust on Salsa, reporting positions as UTF-8 offsets and recovering from errors (R10; adr:0006; docs/wiki/pages/transpilation-strategy.md)
+- [x] 2.1 (Unit) Write the compiler's hand-written, tolerant, recursive-descent parser in Rust on Salsa, reporting positions as UTF-8 offsets and recovering from errors (R10; adr:0006; docs/wiki/pages/transpilation-strategy.md)
   _Depends 1.10_
-- [ ] 2.2 (TDD) Write the type checker: local bidirectional inference checkable on prefixes, signatures before bodies, records and sum types with exhaustive `match`, `T?` checked before use, monomorphized generics and traits, `todo()` as a value of every type (R02–R04, R06, R33; docs/wiki/pages/type-system.md)
+- [x] 2.2 (TDD) Write the type checker: local bidirectional inference checkable on prefixes, signatures before bodies, records and sum types with exhaustive `match`, `T?` checked before use, monomorphized generics and traits, `todo()` as a value of every type (R02–R04, R06, R33; docs/wiki/pages/type-system.md)
   _Depends 2.1_
-- [ ] 2.3 (TDD) Implement immutability by default and the parameter conventions — default, `inout` with `&` at the call, `sink` — with closures capturing by copy (R05, R24; docs/wiki/pages/memory-model.md, docs/wiki/pages/python-leakage-pilot.md)
+- [x] 2.3 (TDD) Implement immutability by default and the parameter conventions — default, `inout` with `&` at the call, `sink` — with closures capturing by copy (R05, R24; docs/wiki/pages/memory-model.md, docs/wiki/pages/python-leakage-pilot.md)
   _Depends 2.2_
-- [ ] 2.4 (Unit) Implement errors as values: `T ! E`, `?`, `fail`, `??`, and the unit type (R04, R28; adr:0002)
+- [x] 2.4 (Unit) Implement errors as values: `T ! E`, `?`, `fail`, `??`, and the unit type (R04, R28; adr:0002)
   _Depends 2.2_
-- [ ] 2.5 (Unit) Emit diagnostics as stable JSON: codes with explanation pages, applicability levels, admissible alternatives, secondary spans, root cause first and bounded by default, SARIF export (R09, R10, R30; docs/wiki/pages/semantic-compiler.md)
+- [x] 2.5 (Unit) Emit diagnostics as stable JSON: codes with explanation pages, applicability levels, admissible alternatives, secondary spans, root cause first and bounded by default, SARIF export (R09, R10, R30; docs/wiki/pages/semantic-compiler.md)
   _Depends 2.2_
-- [ ] 2.6 (Unit) Add the diagnostics for the neighbours' habits — mutating an immutable, truthiness, `raise`, an argument used as a reference, `else if` — each with its fix (R25; docs/wiki/pages/lotml-syntax.md, docs/wiki/pages/editing-robustness.md)
+- [x] 2.6 (Unit) Add the diagnostics for the neighbours' habits — mutating an immutable, truthiness, `raise`, an argument used as a reference, `else if` — each with its fix (R25; docs/wiki/pages/lotml-syntax.md, docs/wiki/pages/editing-robustness.md)
   _Depends 2.3, 2.5_
-- [ ] 2.7 (Unit) Add `check --fix`, `check --since <rev>` and `check --prefix`, the last never rejecting a completable prefix (R29, R31; docs/wiki/pages/semantic-compiler.md)
+- [x] 2.7 (Unit) Add `check --fix`, `check --since <rev>` and `check --prefix`, the last never rejecting a completable prefix (R29, R31; docs/wiki/pages/semantic-compiler.md)
   _Depends 2.5_
-- [ ] 2.8 (TDD) Write the Python backend: an AST carrying lotml positions, inline overflow traps, copies only into `var` and `inout`, `T ! PyError` at the boundary (R13, R26; research/experiments/tracebacks/results.md, research/experiments/overflow/results.md)
+- [x] 2.8 (TDD) Write the Python backend: an AST carrying lotml positions, inline overflow traps, copies only into `var` and `inout`, `T ! PyError` at the boundary (R13, R26; research/experiments/tracebacks/results.md, research/experiments/overflow/results.md)
   _Depends 2.3, 2.4_
-- [ ] 2.9 (Unit) Write the canonical formatter, with no options (R08; docs/wiki/pages/editing-robustness.md)
+- [x] 2.9 (Unit) Write the canonical formatter, with no options (R08; docs/wiki/pages/editing-robustness.md)
   _Depends 2.1_
-- [ ] 2.10 (Unit) Run `test` blocks and report them as JSON with observed values (R07; docs/wiki/pages/semantic-compiler.md)
+- [x] 2.10 (Unit) Run `test` blocks and report them as JSON with observed values (R07; docs/wiki/pages/semantic-compiler.md)
   _Depends 2.8_
-- [ ] 2.11 (Unit) Add `digest` and `show`: public signatures with no stub bodies, and bodies on demand by symbol (R15; docs/wiki/pages/semantic-compiler.md)
+- [x] 2.11 (Unit) Add `digest` and `show`: public signatures with no stub bodies, and bodies on demand by symbol (R15; docs/wiki/pages/semantic-compiler.md)
   _Depends 2.2_
-- [ ] 2.12 (Unit) Ship a prelude that covers the common names without imports (R35; docs/wiki/pages/semantic-compiler.md)
+- [x] 2.12 (Unit) Ship a prelude that covers the common names without imports (R35; docs/wiki/pages/semantic-compiler.md)
   _Depends 2.2_
 - [ ] 2.13 (Unit) Review the phase 1 gate on the harness — lotml pass@1 ≥ typed Python, median rounds to green ≤ 2, tokens ≤ typed Python
   _Depends 2.6, 2.7, 2.9, 2.10, 2.11, 2.12_

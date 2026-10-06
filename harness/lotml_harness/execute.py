@@ -1,4 +1,8 @@
-"""Run a lotml program: its `test` blocks, or a task's hidden tests, under a step budget.
+"""Run a program: its `test` blocks, or a task's hidden tests, under a step budget.
+
+The program is lotml run by the phase 0 transpiler (`mode` "lotml", or "python" for the same
+program read with Python's semantics), lotml compiled by `lotml build` ("compiled": the module
+stub the compiler wrote), or a model's typed Python ("solution").
 
 `run` executes in this process and is what the child process calls; `isolated` starts that
 child, so a program that hangs past the step budget's reach, exhausts memory or kills its
@@ -32,6 +36,37 @@ BUDGET = 10_000_000
 """Lines one test may run: a deterministic stand-in for a time limit."""
 TOOL = 4
 """The `sys.monitoring` tool id the step budget uses (0 to 2 and 5 are reserved)."""
+COMPILER_RUNTIME = ROOT / "compiler" / "crates" / "lotml-py" / "runtime"
+"""Where the compiler's Python runtime, `lotml_rt`, lives."""
+SOLUTION_MODULES = frozenset(
+    {
+        "typing",
+        "math",
+        "collections",
+        "itertools",
+        "functools",
+        "heapq",
+        "bisect",
+        "re",
+        "string",
+        "dataclasses",
+        "enum",
+        "fractions",
+        "decimal",
+        "statistics",
+        "operator",
+        "copy",
+        "abc",
+        "__future__",
+    }
+)
+"""The modules a Python solution may import. A denylist and an import list are a convenience that
+keeps an honest answer to the common modules, not a boundary: Python introspection
+(`().__class__`, a traceback's frames, `typing.sys`) walks around both. The boundary is the
+machine — see the module docstring."""
+BLOCKED_BUILTINS = frozenset(
+    {"open", "eval", "exec", "compile", "input", "breakpoint", "help", "exit", "quit"}
+)
 
 
 class StepBudgetExceeded(Exception):
@@ -68,6 +103,8 @@ class Result:
     cases: list[str] = field(default_factory=list)
     tracebacks: dict[str, str] = field(default_factory=dict)
     violations: list[str] = field(default_factory=list)
+    observed: dict[str, str] = field(default_factory=dict)
+    """What the function returned on each hidden test it got wrong, as a literal."""
 
     @property
     def passed(self) -> bool:
@@ -132,8 +169,62 @@ def report(error: BaseException, path: str) -> str:
     return "".join(traceback.format_list(frames)) + "".join(failure.format_exception_only())
 
 
+def compiler_runtime():
+    """`lotml_rt`, the runtime modules compiled by `lotml build` import."""
+    if str(COMPILER_RUNTIME) not in sys.path:
+        sys.path.insert(0, str(COMPILER_RUNTIME))
+    import lotml_rt
+
+    return lotml_rt
+
+
+def solution_import(name, globals_=None, locals_=None, fromlist=(), level=0):
+    if name.split(".")[0] not in SOLUTION_MODULES or level != 0:
+        raise ImportError(f"import of {name} is outside the modules a solution may use")
+    return builtins.__import__(name, globals_, locals_, fromlist, level)
+
+
+def load_compiled(stub: str):
+    """A module compiled by `lotml build`, run from the stub the compiler wrote."""
+    lotml_rt = compiler_runtime()
+    try:
+        path, payload = lotml_rt.stub_arguments(stub)
+    except (SyntaxError, ValueError) as error:
+        return Result(error=f"load: {error}")
+    namespace = types.ModuleType("lotml_program").__dict__
+    prelude = {**lotml_rt.PRELUDE, "print": runtime.capped_print()}
+    try:
+        code = lotml_rt.load(namespace, path, payload, prelude)
+    except BaseException as error:  # noqa: BLE001
+        return Result(error=f"load: {type(error).__name__}: {error}")
+    return namespace, code
+
+
+def load_solution(source: str, path: str):
+    """A model's typed Python, with the common builtins and modules of computation. This narrows
+    an honest answer, not a hostile one: a model's Python is native code, and like every mode it
+    runs on a machine you can throw away (see the module docstring), not inside a sandbox."""
+    try:
+        code = compile(source, path, "exec")
+    except SyntaxError as error:
+        return Result(error=f"parse: {error.msg} (line {error.lineno})")
+    linecache.cache[path] = (len(source), None, source.splitlines(True), path)
+    allowed = {n: getattr(builtins, n) for n in dir(builtins) if n not in BLOCKED_BUILTINS}
+    prelude = {**allowed, "print": runtime.capped_print(), "__import__": solution_import}
+    namespace = {"__builtins__": prelude, "__name__": "solution"}
+    try:
+        exec(code, namespace)  # noqa: S102
+    except BaseException as error:  # noqa: BLE001
+        return Result(error=f"load: {type(error).__name__}: {error}")
+    return namespace, code
+
+
 def load(source: str, variant: str, mode: str, path: str):
     """The program's namespace and code, or a `Result` saying why it never ran."""
+    if mode == "compiled":
+        return load_compiled(source)
+    if mode == "solution":
+        return load_solution(source, path)
     try:
         tree = transpile(source, variant, mode)
     except LarkError as error:
@@ -214,10 +305,23 @@ def run(
             outcome, value, error = attempt(counter, budget, function, *args)
             if outcome is None:
                 outcome = "pass" if matches(value, case, task.returns) else "wrong answer"
+                if outcome == "wrong answer":
+                    result.observed[str(index)] = literal(value, task, mode, variant)
             result.cases.append(outcome)
             if error is not None and str(index) not in result.tracebacks:
                 result.tracebacks[str(index)] = report(error, path)
     return result
+
+
+def literal(value: Any, task: Task, mode: str, variant: str) -> str:
+    """A returned value as the program's language writes it."""
+    try:
+        conformed = values.conform(value, task.returns)
+    except values.Mismatch:
+        return repr(value)
+    if mode == "solution":
+        return repr(conformed)
+    return values.render(conformed, task.returns, variant)
 
 
 MEMORY = 2 * 2**30

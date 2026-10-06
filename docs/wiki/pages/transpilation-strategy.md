@@ -100,6 +100,16 @@ classes become a sum type, `Optional` becomes `T?`). What is not mechanical is d
 functions fail: it requires following `raise` statements transitively. The workable design is
 hybrid — rules for the mechanical part, an LLM for the rest, tests to validate.
 
+## The phase 1 backend
+
+`compiler/crates/lotml-py` writes Python's syntax tree as JSON, every node at its lotml position,
+and a stub module that hands it to the runtime, which compiles it under the `.lotml` file's name.
+With the checker's types it copies only where a `var` or an `inout` is involved — on entering one,
+or leaving one into a binding, a container, a capture or a call that may keep the value, shallowly
+when the elements cannot change — and traps integer arithmetic inline, after the statement when the
+result is assigned. On the 694 stored variant B answers the checker accepts, it gives the same
+verdict on the hidden tests as the phase 0 transpiler.
+
 ## Recommended order
 
 The original study's order holds, with one thing moved earlier: a minimal transpiler to Python
