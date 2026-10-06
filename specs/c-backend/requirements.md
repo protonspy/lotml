@@ -2,7 +2,8 @@
 autonomy: auto
 ci: wait
 branch: feat/phase-3-c-backend
-delivery: in-progress
+delivery: in-review
+pr: 16
 ---
 
 # C backend — requirements
