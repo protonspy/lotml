@@ -1,6 +1,9 @@
 ---
 autonomy: auto
 ci: wait
+branch: feat/guide-training
+delivery: in-review
+pr: 18
 ---
 
 # Trace dataset — requirements

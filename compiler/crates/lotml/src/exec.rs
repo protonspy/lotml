@@ -109,10 +109,10 @@ fn search_path(scratch: &Path) -> String {
 /// A directory of its own for one run, removed when dropped. It is created anew — never one
 /// that was already there, which another user could have put in place — and on Unix only its
 /// owner may enter it.
-struct Scratch(PathBuf);
+pub struct Scratch(pub PathBuf);
 
 impl Scratch {
-    fn new() -> Result<Scratch, Failure> {
+    pub fn new() -> Result<Scratch, Failure> {
         let base = std::env::temp_dir();
         for attempt in 0..64 {
             let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());

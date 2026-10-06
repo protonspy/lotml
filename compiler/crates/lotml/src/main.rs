@@ -4,8 +4,10 @@
 //! the command could not run.
 
 mod check;
+mod dev;
 mod exec;
 mod files;
+mod guide;
 mod index;
 mod init;
 mod lsp;
@@ -141,6 +143,57 @@ enum Command {
         #[arg(long, default_value = ".")]
         root: PathBuf,
     },
+    /// Commands that build the harness guide's data.
+    #[command(subcommand, hide = true)]
+    Dev(Dev),
+    /// The harness guide: what it is asked, and its answer.
+    #[command(subcommand)]
+    Guide(Guide),
+}
+
+#[derive(Subcommand)]
+enum Guide {
+    /// Ask the guide where to change the code, as the MCP tool asks it, and print its answer.
+    Ask {
+        /// The project: every `.lotml` file under it.
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        /// What you are doing, in a sentence or two.
+        #[arg(long)]
+        task: Option<String>,
+        /// Files inside the project; all of them when absent.
+        files: Vec<String>,
+    },
+    /// Print the messages the guide is asked with, for a state given as JSON.
+    Render {
+        /// The state: `task`, `path`, `text`, and `diagnostics` or `failing`.
+        state: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum Dev {
+    /// Say where a change between two versions of a file falls, and which one edit makes it.
+    Diff {
+        /// The first version.
+        before: PathBuf,
+        /// The second version.
+        after: PathBuf,
+        /// The file's path in the project, written into the edit's arguments.
+        #[arg(long)]
+        path: String,
+        /// Print it as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// List a file's mutants: each a span replaced, with its operator and declaration.
+    Mutate {
+        /// The file.
+        path: PathBuf,
+        /// Print them as JSON, each with the mutated text.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 /// What a program is compiled to: Python modules run by Python, or C built by a C compiler
@@ -195,6 +248,10 @@ fn run() -> ExitCode {
         Command::Init { dir, harness, yes } => return status(init::run(&dir, harness.as_deref(), yes)),
         Command::Lsp => return status(lsp::serve()),
         Command::Mcp { root } => return status(mcp::serve(&root)),
+        Command::Dev(Dev::Mutate { path, json }) => dev::mutate(&path, json),
+        Command::Dev(Dev::Diff { before, after, path, json }) => dev::diff(&before, &after, &path, json),
+        Command::Guide(Guide::Render { state }) => guide::render_file(&state),
+        Command::Guide(Guide::Ask { root, task, files }) => return status(mcp::ask_guide(&root, task, &files)),
         Command::Show { symbol, paths } => sources(&paths).map(|s| match index::show(&symbol, &s) {
             Ok(text) => {
                 print!("{text}");

@@ -350,3 +350,40 @@ fn init_sets_up_the_harnesses_named_and_survives_a_broken_configuration() {
     assert!(codex.contains("[mcp_servers.lotml]\ncommand = \"lotml\""), "{codex}");
     assert!(dir.join("CLAUDE.md").exists() && dir.join("AGENTS.md").exists());
 }
+
+#[test]
+fn dev_mutate_lists_each_mutant_as_json_in_source_order_and_is_hidden_from_help() {
+    let program = "fn total(xs: [int]) -> int:\n    var sum = 0\n    for x in xs:\n        sum += x\n    return sum\n";
+    let dir = scratch("dev-mutate", &[("a.lotml", program)]);
+    let out = lotml(&["dev", "mutate", "a.lotml", "--json"], &dir);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let listed: Vec<serde_json::Value> = serde_json::from_str(&stdout(&out)).expect("a JSON array");
+    assert!(!listed.is_empty());
+    for mutant in &listed {
+        let (start, end) = (mutant["start"].as_u64().unwrap() as usize, mutant["end"].as_u64().unwrap() as usize);
+        let replacement = mutant["replacement"].as_str().unwrap();
+        let expected = format!("{}{replacement}{}", &program[..start], &program[end..]);
+        assert_eq!(mutant["text"].as_str().unwrap(), expected);
+        assert_eq!(mutant["declaration"], "total");
+        assert!(mutant["operator"].is_string() && mutant["family"].is_string() && mutant["line"].is_u64());
+    }
+    let starts: Vec<u64> = listed.iter().map(|m| m["start"].as_u64().unwrap()).collect();
+    assert!(starts.windows(2).all(|w| w[0] <= w[1]), "not in source order: {starts:?}");
+    assert_eq!(stdout(&lotml(&["dev", "mutate", "a.lotml", "--json"], &dir)), stdout(&out), "deterministic");
+    assert!(!stdout(&lotml(&["--help"], &dir)).contains("dev"), "the dev group is hidden");
+}
+
+#[test]
+fn dev_diff_says_where_a_change_falls_and_which_edit_makes_it() {
+    let before = "fn add(a: int, b: int) -> int:\n    return a - b\n";
+    let after = "fn add(a: int, b: int) -> int:\n    return a + b\n";
+    let dir = scratch("dev-diff", &[("before.lotml", before), ("after.lotml", after)]);
+    let out = lotml(&["dev", "diff", "before.lotml", "after.lotml", "--path", "src/add.lotml", "--json"], &dir);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let found: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(found["declarations"], serde_json::json!([{"symbol": "add", "kind": "function", "lines": [1, 2]}]));
+    assert_eq!(found["edit"]["tool"], "replace");
+    assert_eq!(found["edit"]["kind"], "body");
+    assert_eq!(found["edit"]["arguments"]["path"], "src/add.lotml");
+    assert_eq!(found["edit"]["arguments"]["symbol"], "add");
+}

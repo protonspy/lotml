@@ -38,19 +38,38 @@ pub struct Changed {
 
 /// Replace a part of the symbol named `symbol`: `area`, `Shape`, or `Counter.get`.
 pub fn replace(text: &str, symbol: &str, part: &Part, new: &str) -> Result<Changed, Refused> {
-    let module = parse(text).module;
-    let found = find(&module, text, symbol)?;
-    let span = match (part, &found) {
-        (Part::Definition, Found::Item(item)) => Span { start: item.span().start, end: item.end() },
-        (Part::Definition, Found::Function(f)) => Span { start: f.span.start, end: f.end() },
-        (Part::Body, Found::Function(f)) => body(f, text, symbol)?,
-        (Part::Arm(pattern), Found::Function(f)) => arm(f, text, symbol, pattern)?,
-        (_, Found::Item(_)) => {
-            return Err(Refused(format!("`{symbol}` is a type or trait: replace its whole definition")));
-        }
-    };
+    let span = region(text, symbol, part)?;
     let header = !matches!(part, Part::Body);
     splice(text, span, &reindent(new, &indentation(text, span.start), header, false))
+}
+
+/// The text [`replace`] would replace for `symbol`'s `part`.
+pub fn region(text: &str, symbol: &str, part: &Part) -> Result<Span, Refused> {
+    let module = parse(text).module;
+    let found = find(&module, text, symbol)?;
+    match (part, &found) {
+        (Part::Definition, Found::Item(item)) => {
+            // A type's span takes in the line break that ends it; its own text stops before.
+            let (start, end) = (item.span().start, item.end());
+            let own = text[start as usize..end as usize].trim_end().len();
+            Ok(Span { start, end: start + u32::try_from(own).unwrap_or(0) })
+        }
+        (Part::Definition, Found::Function(f)) => Ok(Span { start: f.span.start, end: f.end() }),
+        (Part::Body, Found::Function(f)) => body(f, text, symbol),
+        (Part::Arm(pattern), Found::Function(f)) => arm(f, text, symbol, pattern),
+        (_, Found::Item(_)) => Err(Refused(format!("`{symbol}` is a type or trait: replace its whole definition"))),
+    }
+}
+
+/// The patterns of the arms of every `match` in the function or method `symbol`, as written.
+pub fn arms(text: &str, symbol: &str) -> Vec<String> {
+    let module = parse(text).module;
+    let Ok(Found::Function(f)) = find(&module, text, symbol) else { return Vec::new() };
+    let mut found = Vec::new();
+    if let Some(body) = &f.body {
+        collect_arms(body, &mut found);
+    }
+    found.iter().map(|a| text[a.pattern.span.range()].to_string()).collect()
 }
 
 /// Add a declaration after the one named `after` — a method after a method, inside its
