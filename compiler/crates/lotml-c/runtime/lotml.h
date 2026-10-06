@@ -285,6 +285,79 @@ double lt_floordiv_f64(double a, double b, lt_at at);
 double lt_mod_f64(double a, double b, lt_at at);
 double lt_pow_f64(double a, double b, lt_at at);
 
+/* The prelude's arithmetic, as Python computes it ----------------------------------------- */
+
+int64_t lt_round_i64(double x, lt_at at);
+double lt_round_f64(double x, int64_t digits);
+int64_t lt_pow_mod(int64_t base, int64_t exponent, int64_t modulus, lt_at at);
+int64_t lt_isqrt(int64_t n, lt_at at);
+int64_t lt_gcd(int64_t a, int64_t b, lt_at at);
+static inline int64_t lt_wrapping_add(int64_t a, int64_t b) {
+    return (int64_t)((uint64_t)a + (uint64_t)b);
+}
+static inline int64_t lt_wrapping_sub(int64_t a, int64_t b) {
+    return (int64_t)((uint64_t)a - (uint64_t)b);
+}
+static inline int64_t lt_wrapping_mul(int64_t a, int64_t b) {
+    return (int64_t)((uint64_t)a * (uint64_t)b);
+}
+
+/* `math`: a result that is not a number, or infinite, from finite arguments stops the program as
+ * CPython's module does. */
+double lt_math_1(double (*f)(double), double x, bool can_overflow, lt_at at);
+double lt_math_2(double (*f)(double, double), double x, double y, lt_at at);
+double lt_math_log(double (*f)(double), double x, lt_at at);
+double lt_math_pow(double x, double y, lt_at at);
+int64_t lt_factorial(int64_t n, lt_at at);
+int64_t lt_comb(int64_t n, int64_t k, lt_at at);
+int64_t lt_perm(int64_t n, int64_t k, lt_at at);
+static inline double lt_math_sqrt(double x, lt_at at) {
+    return lt_math_1(sqrt, x, false, at);
+}
+static inline double lt_math_exp(double x, lt_at at) {
+    return lt_math_1(exp, x, true, at);
+}
+static inline double lt_math_sin(double x, lt_at at) {
+    return lt_math_1(sin, x, false, at);
+}
+static inline double lt_math_cos(double x, lt_at at) {
+    return lt_math_1(cos, x, false, at);
+}
+static inline double lt_math_tan(double x, lt_at at) {
+    return lt_math_1(tan, x, false, at);
+}
+static inline double lt_math_atan(double x, lt_at at) {
+    return lt_math_1(atan, x, false, at);
+}
+static inline double lt_math_fabs(double x, lt_at at) {
+    (void)at;
+    return fabs(x);
+}
+static inline double lt_math_ln(double x, lt_at at) {
+    return lt_math_log(log, x, at);
+}
+static inline double lt_math_log2(double x, lt_at at) {
+    return lt_math_log(log2, x, at);
+}
+static inline double lt_math_log10(double x, lt_at at) {
+    return lt_math_log(log10, x, at);
+}
+static inline double lt_math_atan2(double y, double x, lt_at at) {
+    return lt_math_2(atan2, y, x, at);
+}
+static inline double lt_math_hypot(double x, double y, lt_at at) {
+    return lt_math_2(hypot, x, y, at);
+}
+static inline int64_t lt_math_floor(double x, lt_at at) {
+    return lt_f64_to_i64(floor(x), at);
+}
+static inline int64_t lt_math_ceil(double x, lt_at at) {
+    return lt_f64_to_i64(ceil(x), at);
+}
+static inline int64_t lt_math_trunc(double x, lt_at at) {
+    return lt_f64_to_i64(trunc(x), at);
+}
+
 static inline double lt_min_f64(double a, double b) {
     return b < a ? b : a;
 }
@@ -478,6 +551,14 @@ bool lt_str_split_once(const lt_str *s, const lt_str *sep, lt_str **head, lt_str
 bool lt_list_index(const lt_list *l, const void *value, int64_t *out);
 bool lt_list_pop(lt_list **slot, bool has_index, int64_t index, void *out, lt_at at);
 bool lt_list_last(const lt_list *l, void *out);
+
+/* `Heap[T]`: a list kept in the order Python's `heapq` keeps it, so ties pop as they do there. */
+extern const lt_type lt_type_heap;
+void lt_heapify(lt_list **slot, lt_at at);
+void lt_heap_push(lt_list **slot, const void *value, lt_at at);
+bool lt_heap_pop(lt_list **slot, void *out, lt_at at);
+bool lt_heap_peek(const lt_list *l, void *out);
+int64_t lt_hash_value(const lt_type *type, const void *value, lt_at at);
 void lt_slice_indices(int64_t length, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step,
                       int64_t *start, int64_t *count, int64_t *by, lt_at at);
 

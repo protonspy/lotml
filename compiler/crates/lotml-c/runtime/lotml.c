@@ -386,6 +386,195 @@ double lt_pow_f64(double a, double b, lt_at at) {
     return r;
 }
 
+/* The prelude's arithmetic ---------------------------------------------------------------- */
+
+/* `round(x)`: the nearest integer, a tie to the even one. */
+int64_t lt_round_i64(double x, lt_at at) {
+    if (isnan(x)) lt_value_error(at, "cannot convert float NaN to integer");
+    if (isinf(x)) lt_panic(at, "OverflowError", "cannot convert float infinity to integer");
+    return lt_f64_to_i64(nearbyint(x), at);
+}
+
+/* `round(x, digits)`: the double nearest to x rounded to `digits` decimal places, a tie to the
+ * even digit, decided on the exact decimal value of x as CPython's dtoa does. */
+double lt_round_f64(double x, int64_t digits) {
+    if (!isfinite(x) || x == 0.0 || digits > 323) return x;
+    if (digits < -308) return 0.0 * x;
+    char text[1500];
+    int n = snprintf(text, sizeof text, "%.1080f", fabs(x));
+    char *point = strchr(text, '.');
+    if (n <= 0 || point == NULL) return x;
+    int64_t whole = (int64_t)(point - text);
+    /* the digits without the point: the integer part, then the fraction */
+    memmove(point, point + 1, strlen(point + 1) + 1);
+    int64_t total = (int64_t)strlen(text);
+    int64_t keep = whole + digits;
+    if (keep < 0) return copysign(0.0, x);
+    bool up = false;
+    if (keep < total) {
+        char d = text[keep];
+        bool rest = false;
+        for (int64_t i = keep + 1; i < total; i++) {
+            if (text[i] != '0') {
+                rest = true;
+                break;
+            }
+        }
+        bool odd = keep > 0 && (text[keep - 1] - '0') % 2 == 1;
+        up = d > '5' || (d == '5' && (rest || odd));
+    }
+    char kept[1500];
+    kept[0] = '0';
+    memcpy(kept + 1, text, (size_t)(keep < total ? keep : total));
+    int64_t len = 1 + (keep < total ? keep : total);
+    if (up) {
+        int64_t i = len - 1;
+        while (kept[i] == '9') kept[i--] = '0';
+        kept[i]++;
+    }
+    snprintf(kept + len, sizeof kept - (size_t)len, "e%lld", (long long)(keep < total ? -digits : whole - total));
+    return copysign(strtod(kept, NULL), x);
+}
+
+/* a * b modulo m, for a and b below m: doubling, so no step leaves 64 bits. */
+static uint64_t lt_mulmod(uint64_t a, uint64_t b, uint64_t m) {
+    uint64_t r = 0;
+    while (b > 0) {
+        if (b & 1) r = r >= m - a ? r - (m - a) : r + a;
+        b >>= 1;
+        a = a >= m - a ? a - (m - a) : a + a;
+    }
+    return r;
+}
+
+/* `pow(base, exponent, modulus)`: a negative exponent raises the inverse; the result has the
+ * modulus's sign, as Python's does. */
+int64_t lt_pow_mod(int64_t base, int64_t exponent, int64_t modulus, lt_at at) {
+    if (modulus == 0) lt_value_error(at, "pow() 3rd argument cannot be 0");
+    uint64_t m = modulus < 0 ? (uint64_t)0 - (uint64_t)modulus : (uint64_t)modulus;
+    uint64_t b = base >= 0 ? (uint64_t)base % m : (m - ((uint64_t)0 - (uint64_t)base) % m) % m;
+    uint64_t e = exponent >= 0 ? (uint64_t)exponent : (uint64_t)0 - (uint64_t)exponent;
+    if (exponent < 0) {
+        uint64_t r0 = m, r1 = b, t0 = 0, t1 = 1 % m;
+        while (r1 != 0) {
+            uint64_t q = r0 / r1, r2 = r0 % r1;
+            uint64_t qt = lt_mulmod(q % m, t1, m);
+            uint64_t t2 = t0 >= qt ? t0 - qt : t0 + (m - qt);
+            r0 = r1;
+            r1 = r2;
+            t0 = t1;
+            t1 = t2;
+        }
+        if (r0 != 1) lt_value_error(at, "base is not invertible for the given modulus");
+        b = t0;
+    }
+    uint64_t r = 1 % m;
+    while (e > 0) {
+        if (e & 1) r = lt_mulmod(r, b, m);
+        e >>= 1;
+        if (e > 0) b = lt_mulmod(b, b, m);
+    }
+    return modulus < 0 && r != 0 ? (int64_t)(r - m) : (int64_t)r;
+}
+
+int64_t lt_isqrt(int64_t n, lt_at at) {
+    if (n < 0) lt_value_error(at, "isqrt() argument must be nonnegative");
+    uint64_t r = (uint64_t)sqrt((double)n);
+    while (r * r > (uint64_t)n) r--;
+    while ((r + 1) * (r + 1) <= (uint64_t)n) r++;
+    return (int64_t)r;
+}
+
+int64_t lt_gcd(int64_t a, int64_t b, lt_at at) {
+    uint64_t x = a < 0 ? (uint64_t)0 - (uint64_t)a : (uint64_t)a;
+    uint64_t y = b < 0 ? (uint64_t)0 - (uint64_t)b : (uint64_t)b;
+    while (y != 0) {
+        uint64_t t = x % y;
+        x = y;
+        y = t;
+    }
+    if (x > (uint64_t)INT64_MAX) lt_overflow(at, "int");
+    return (int64_t)x;
+}
+
+/* math_1 of CPython's module: NaN from a number is a domain error, infinity from a finite
+ * number a range error when the function can overflow. */
+double lt_math_1(double (*f)(double), double x, bool can_overflow, lt_at at) {
+    double r = f(x);
+    if (isnan(r) && !isnan(x)) lt_value_error(at, "math domain error");
+    if (isinf(r) && isfinite(x)) {
+        if (can_overflow) lt_panic(at, "OverflowError", "math range error");
+        lt_value_error(at, "math domain error");
+    }
+    return r;
+}
+
+double lt_math_2(double (*f)(double, double), double x, double y, lt_at at) {
+    double r = f(x, y);
+    if (isnan(r) && !isnan(x) && !isnan(y)) lt_value_error(at, "math domain error");
+    if (isinf(r) && isfinite(x) && isfinite(y)) lt_panic(at, "OverflowError", "math range error");
+    return r;
+}
+
+double lt_math_log(double (*f)(double), double x, lt_at at) {
+    if (isnan(x) || x == INFINITY) return x;
+    if (x <= 0.0) lt_value_error(at, "math domain error");
+    return f(x);
+}
+
+double lt_math_pow(double x, double y, lt_at at) {
+    if (isfinite(x) && isfinite(y)) {
+        if (x == 0.0 && y < 0.0) lt_value_error(at, "math domain error");
+        if (x < 0.0 && y != floor(y)) lt_value_error(at, "math domain error");
+        double r = pow(x, y);
+        if (isinf(r)) lt_panic(at, "OverflowError", "math range error");
+        return r;
+    }
+    return pow(x, y);
+}
+
+int64_t lt_factorial(int64_t n, lt_at at) {
+    if (n < 0) lt_value_error(at, "factorial() not defined for negative values");
+    int64_t r = 1;
+    for (int64_t i = 2; i <= n; i++) r = lt_mul_i64(r, i, at);
+    return r;
+}
+
+static uint64_t lt_gcd_u64(uint64_t x, uint64_t y) {
+    while (y != 0) {
+        uint64_t t = x % y;
+        x = y;
+        y = t;
+    }
+    return x;
+}
+
+/* `math.comb(n, k)`: C(n, i + 1) from C(n, i) exactly, dividing before multiplying, so a step
+ * leaves i64 only when the result does. */
+int64_t lt_comb(int64_t n, int64_t k, lt_at at) {
+    if (n < 0) lt_value_error(at, "n must be a non-negative integer");
+    if (k < 0) lt_value_error(at, "k must be a non-negative integer");
+    if (k > n) return 0;
+    if (k > n - k) k = n - k;
+    int64_t r = 1;
+    for (int64_t i = 0; i < k; i++) {
+        uint64_t d = (uint64_t)(i + 1);
+        uint64_t g = lt_gcd_u64((uint64_t)r, d);
+        int64_t factor = (int64_t)((uint64_t)(n - i) / (d / g));
+        r = lt_mul_i64(r / (int64_t)g, factor, at);
+    }
+    return r;
+}
+
+int64_t lt_perm(int64_t n, int64_t k, lt_at at) {
+    if (n < 0) lt_value_error(at, "n must be a non-negative integer");
+    if (k < 0) lt_value_error(at, "k must be a non-negative integer");
+    if (k > n) return 0;
+    int64_t r = 1;
+    for (int64_t i = 0; i < k; i++) r = lt_mul_i64(r, n - i, at);
+    return r;
+}
+
 #include "lotml_text.c"
 #include "lotml_list.c"
 #include "lotml_dict.c"

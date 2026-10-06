@@ -330,7 +330,8 @@ impl Pass {
                 self.simple(line, uses, live_out, None, StmtKind::Store(place, v), out);
             }
             StmtKind::Mutate { name, place, args, at: here, result } => {
-                let stores = matches!(name, "lt_list_push" | "lt_list_insert" | "lt_dict_set" | "lt_set_add");
+                let stores =
+                    matches!(name, "lt_list_push" | "lt_list_insert" | "lt_dict_set" | "lt_set_add" | "lt_heap_push");
                 let mut uses = Uses::default();
                 for a in &args {
                     match a {

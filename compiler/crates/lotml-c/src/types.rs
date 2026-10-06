@@ -137,7 +137,7 @@ impl<'d> Types<'d> {
             Ty::Float(_) => "double".into(),
             Ty::Bool => "bool".into(),
             Ty::Str => "lt_str *".into(),
-            Ty::List(_) => "lt_list *".into(),
+            Ty::List(_) | Ty::Heap(_) => "lt_list *".into(),
             Ty::Dict(..) => "lt_dict *".into(),
             Ty::Set(_) => "lt_set *".into(),
             Ty::Func(..) => "lt_closure *".into(),
@@ -167,6 +167,7 @@ impl<'d> Types<'d> {
             Ty::Bool => "&lt_type_bool".into(),
             Ty::Str => "&lt_type_str".into(),
             Ty::List(_) => "&lt_type_list".into(),
+            Ty::Heap(_) => "&lt_type_heap".into(),
             Ty::Dict(..) => "&lt_type_dict".into(),
             Ty::Set(_) => "&lt_type_set".into(),
             Ty::Func(..) => "&lt_type_closure".into(),
@@ -185,12 +186,12 @@ impl<'d> Types<'d> {
     /// for a type that holds none. A local not yet set is NULL or zero, which neither touches.
     pub fn count(&self, ty: &Ty, inc: bool, name: &str) -> String {
         match ty {
-            Ty::Str | Ty::List(_) | Ty::Dict(..) | Ty::Set(_) | Ty::Adt(..) | Ty::Func(..) if inc => {
+            Ty::Str | Ty::List(_) | Ty::Heap(_) | Ty::Dict(..) | Ty::Set(_) | Ty::Adt(..) | Ty::Func(..) if inc => {
                 format!("if ({name}) lt_inc({name});")
             }
             Ty::Func(..) => format!("lt_closure_drop({name});"),
             Ty::Str => format!("lt_str_drop({name});"),
-            Ty::List(_) => format!("lt_list_drop({name});"),
+            Ty::List(_) | Ty::Heap(_) => format!("lt_list_drop({name});"),
             Ty::Dict(..) => format!("lt_dict_drop({name});"),
             Ty::Set(_) => format!("lt_set_drop({name});"),
             _ if self.counted(ty) => {

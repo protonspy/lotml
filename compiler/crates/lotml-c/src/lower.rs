@@ -1,9 +1,9 @@
 //! Lowering: the checked syntax tree to the intermediate form, every call resolved and every
 //! intermediate value named (specs/c-backend/design.md).
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-use lotml_check::ty::{INT, IntKind, Ty};
+use lotml_check::ty::{F64, INT, IntKind, Ty};
 use lotml_check::{Checked, FieldSig, FnSig, Method, ParamSig, TypeDef};
 use lotml_diag::Diagnostic;
 use lotml_syntax::ast::{
@@ -175,6 +175,11 @@ fn dyn_callable(m: &Method) -> bool {
         && !mentions(&call_ret(&m.sig), "Self")
 }
 
+/// Whether `import` is of the `math` module, which the C target compiles to its own functions.
+fn is_math(import: &ast::Import) -> bool {
+    matches!(import.module.as_slice(), [m] if m.name == "math")
+}
+
 /// The C name of the instance `index` of the generic function or method `base`.
 fn instance_name(base: &str, index: usize) -> String {
     format!("li{index}_{base}")
@@ -212,6 +217,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, 
         pending: Vec::new(),
         vtables: Vec::new(),
         vtable_ids: HashMap::new(),
+        math_names: HashSet::new(),
         diagnostics: Vec::new(),
     };
     for item in &module.items {
@@ -230,6 +236,9 @@ pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, 
                 for m in &t.methods {
                     cx.trait_fns.insert((t.name.name.clone(), m.name.name.clone()), m);
                 }
+            }
+            Item::Import(import) if is_math(import) => {
+                cx.math_names.extend(import.names.iter().map(|n| n.name.clone()));
             }
             Item::Record(r) => {
                 let defaults = r.fields.iter().map(|f| f.default.as_ref()).collect();
@@ -295,6 +304,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, 
                     cx.unsupported(t.name.span, "a generic trait");
                 }
             }
+            Item::Import(import) if is_math(import) => {}
             Item::Test(_) | Item::Error(_) | Item::Record(_) | Item::Sum(_) => {}
             other => cx.unsupported(other.span(), "this declaration"),
         }
@@ -346,6 +356,8 @@ struct Context<'a> {
     pending: Vec<Pending<'a>>,
     vtables: Vec<VTable>,
     vtable_ids: HashMap<(String, Ty), usize>,
+    /// The names `from math import …` brought into scope.
+    math_names: HashSet<String>,
     fn_refs: BTreeSet<String>,
     diagnostics: Vec<Diagnostic>,
 }
@@ -1532,9 +1544,13 @@ impl<'c, 'a> Builder<'c, 'a> {
                 None => match self.cx.variant_of.get(name).cloned() {
                     Some((_, variant)) => Value::Expr(Expr::UnitVariant { ty: self.ty(e), variant }),
                     None if self.cx.fns.contains_key(name.as_str()) => self.fn_ref(e, name),
+                    None if self.cx.math_names.contains(name.as_str()) => self.math_constant(e, name),
                     None => Value::Done(self.unsupported(e.span, &format!("the value `{name}`"))),
                 },
             },
+            ExprKind::Attr { object, name } if matches!(self.ty(object), Ty::Module(_)) => {
+                self.math_constant(e, &name.name)
+            }
             ExprKind::Attr { object, name } => {
                 let ty = self.ty(object);
                 match self.record_field(&ty, &name.name) {
@@ -1922,6 +1938,9 @@ impl<'c, 'a> Builder<'c, 'a> {
         if let Some(f) = self.cx.fns.get(name.as_str()).copied() {
             return self.call_function(whole, name, f, args);
         }
+        if self.cx.math_names.contains(name.as_str()) {
+            return self.math_call(whole, name, args);
+        }
         if matches!(self.cx.checked.declared.get(name), Some(TypeDef::Record { .. })) {
             let ty = self.ty(whole);
             return self.construct(whole, ty, None, args);
@@ -2198,7 +2217,214 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let v = self.value(x);
                 Value::Expr(Expr::Convert(v, from, result_ty))
             }
+            ("round", [x]) => {
+                let ty = self.ty(x);
+                let v = self.value(x);
+                match ty {
+                    Ty::Float(_) => Value::Expr(rt("lt_round_i64", vec![v], true)),
+                    // An integer rounds to itself.
+                    _ => Value::Expr(Expr::Convert(v, ty, INT)),
+                }
+            }
+            ("round", [x, digits]) => {
+                let x = self.number(x, &F64);
+                let digits = self.number(digits, &INT);
+                Value::Expr(rt("lt_round_f64", vec![x, digits], false))
+            }
+            ("bool", [x]) => {
+                let ty = self.ty(x);
+                let v = self.value(x);
+                Value::Done(self.truthy(v, &ty))
+            }
+            ("hash", [x]) => {
+                let ty = self.ty(x);
+                let v = self.value(x);
+                Value::Expr(rt_args("lt_hash_value", vec![Arg::Desc(ty.clone()), Arg::Address(v, ty)], true))
+            }
+            ("pow", [a, b]) => {
+                let (left, right) = (self.ty(a), self.ty(b));
+                let (a, b) = (self.value(a), self.value(b));
+                Value::Expr(self.binary(ast::BinOp::Pow, a, b, &left, &right))
+            }
+            ("pow", [a, b, m]) if [a, b, m].iter().all(|e| matches!(self.ty(e), Ty::Int(_))) => {
+                let (a, b, m) = (self.number(a, &INT), self.number(b, &INT), self.number(m, &INT));
+                Value::Expr(rt("lt_pow_mod", vec![a, b, m], true))
+            }
+            ("divmod", [a, b]) => {
+                let (left, right) = (self.ty(a), self.ty(b));
+                let (a, b) = (self.value(a), self.value(b));
+                let quotient = self.binary(ast::BinOp::FloorDiv, a.clone(), b.clone(), &left, &right);
+                let quotient = self.hold(left.clone(), quotient);
+                let remainder = self.binary(ast::BinOp::Mod, a, b, &left, &right);
+                let remainder = self.hold(left, remainder);
+                Value::Expr(Expr::TupleNew { ty: result_ty, items: vec![quotient, remainder] })
+            }
+            ("wrapping_add" | "wrapping_sub" | "wrapping_mul" | "gcd", [a, b]) => {
+                let (a, b) = (self.number(a, &INT), self.number(b, &INT));
+                let (function, at) = match name.as_str() {
+                    "wrapping_add" => ("lt_wrapping_add", false),
+                    "wrapping_sub" => ("lt_wrapping_sub", false),
+                    "wrapping_mul" => ("lt_wrapping_mul", false),
+                    _ => ("lt_gcd", true),
+                };
+                Value::Expr(rt(function, vec![a, b], at))
+            }
+            ("isqrt", [x]) => {
+                let x = self.number(x, &INT);
+                Value::Expr(rt("lt_isqrt", vec![x], true))
+            }
+            ("Heap", []) => Value::Expr(Expr::ListNew { elem: element(&result_ty), items: Vec::new() }),
+            ("Heap", [x]) => {
+                let list = self.materialize(x);
+                let heap = self.temp(result_ty);
+                self.push(StmtKind::Let(heap, Expr::Use(list)));
+                self.push(StmtKind::Mutate {
+                    name: "lt_heapify",
+                    place: Place { local: heap, proj: Vec::new() },
+                    args: Vec::new(),
+                    at: true,
+                    result: None,
+                });
+                Value::Done(Operand::Local(heap))
+            }
             _ => Value::Done(self.unsupported(whole.span, &format!("`{name}` here"))),
+        }
+    }
+
+    /// The number `e` as a value of `to`: converted when it is another numeric type.
+    fn number(&mut self, e: &ast::Expr, to: &Ty) -> Operand {
+        let ty = self.ty(e);
+        let v = self.value(e);
+        if ty == *to { v } else { self.hold(to.clone(), Expr::Convert(v, ty, to.clone())) }
+    }
+
+    /// `bool(v)`: Python's truth of a value of `ty` — a number not zero, a collection not empty,
+    /// an optional holding a true value, and anything else true.
+    fn truthy(&mut self, v: Operand, ty: &Ty) -> Operand {
+        match ty {
+            Ty::Bool => v,
+            Ty::Int(kind) => {
+                let zero = Operand::Const(Const::Int(0, *kind));
+                self.hold(Ty::Bool, Expr::Compare(CmpOp::Ne, v, zero, ty.clone()))
+            }
+            Ty::Float(_) => {
+                let zero = Operand::Const(Const::Float(0.0));
+                self.hold(Ty::Bool, Expr::Compare(CmpOp::Ne, v, zero, ty.clone()))
+            }
+            Ty::Str | Ty::List(_) | Ty::Dict(..) | Ty::Set(_) | Ty::Heap(_) => {
+                let n = self.hold(INT, Expr::Len(v, ty.clone()));
+                self.hold(Ty::Bool, Expr::Compare(CmpOp::Ne, n, int(0), INT))
+            }
+            Ty::Unit => flag(false),
+            Ty::Tuple(items) => flag(!items.is_empty()),
+            Ty::Optional(inner) => {
+                let inner = (**inner).clone();
+                let result = self.temp(Ty::Bool);
+                let some = self.hold(Ty::Bool, Expr::OptIsSome(v.clone()));
+                let then = self.block(|b| {
+                    let x = b.hold(inner.clone(), Expr::OptValue(v));
+                    let t = b.truthy(x, &inner);
+                    b.push(StmtKind::Let(result, Expr::Use(t)));
+                });
+                let otherwise = self.block(|b| b.push(StmtKind::Let(result, Expr::Use(flag(false)))));
+                self.push(StmtKind::If(some, then, otherwise));
+                Operand::Local(result)
+            }
+            _ => flag(true),
+        }
+    }
+
+    /// A constant of `math`: `pi`, `e`, `inf`.
+    fn math_constant(&mut self, e: &ast::Expr, name: &str) -> Value {
+        let value = match name {
+            "pi" => std::f64::consts::PI,
+            "e" => std::f64::consts::E,
+            "inf" => f64::INFINITY,
+            _ => return Value::Done(self.unsupported(e.span, &format!("`math.{name}` as a value"))),
+        };
+        Value::Done(Operand::Const(Const::Float(value)))
+    }
+
+    /// `math.name(args)`, or `name(args)` imported from `math`: a function of the runtime that
+    /// stops where CPython's module raises.
+    fn math_call(&mut self, whole: &ast::Expr, name: &str, args: &[AstArg]) -> Value {
+        let mut exprs = Vec::new();
+        for a in args {
+            match a {
+                AstArg::Positional(e) => exprs.push(e),
+                _ => return Value::Done(self.unsupported(whole.span, "this argument of a `math` function")),
+            }
+        }
+        let floats = |b: &mut Self| exprs.iter().map(|e| b.number(e, &F64)).collect::<Vec<_>>();
+        let ints = |b: &mut Self| exprs.iter().map(|e| b.number(e, &INT)).collect::<Vec<_>>();
+        let function = match (name, exprs.len()) {
+            ("floor" | "ceil" | "trunc", 1) if !matches!(self.ty(exprs[0]), Ty::Float(_)) => {
+                return Value::Done(self.number(exprs[0], &INT));
+            }
+            ("sqrt", 1) => "lt_math_sqrt",
+            ("exp", 1) => "lt_math_exp",
+            ("sin", 1) => "lt_math_sin",
+            ("cos", 1) => "lt_math_cos",
+            ("tan", 1) => "lt_math_tan",
+            ("atan", 1) => "lt_math_atan",
+            ("fabs", 1) => "lt_math_fabs",
+            ("log", 1) => "lt_math_ln",
+            ("log2", 1) => "lt_math_log2",
+            ("log10", 1) => "lt_math_log10",
+            ("floor", 1) => "lt_math_floor",
+            ("ceil", 1) => "lt_math_ceil",
+            ("trunc", 1) => "lt_math_trunc",
+            ("pow", 2) => "lt_math_pow",
+            ("atan2", 2) => "lt_math_atan2",
+            ("hypot", 2) => "lt_math_hypot",
+            ("gcd", 2) => "lt_gcd",
+            ("isqrt", 1) => "lt_isqrt",
+            ("factorial", 1) => "lt_factorial",
+            ("comb", 2) => "lt_comb",
+            ("perm", 2) => "lt_perm",
+            _ => return Value::Done(self.unsupported(whole.span, &format!("`math.{name}` here"))),
+        };
+        let integral = matches!(name, "gcd" | "isqrt" | "factorial" | "comb" | "perm");
+        let values = if integral { ints(self) } else { floats(self) };
+        Value::Expr(rt(function, values, true))
+    }
+
+    /// `heap.name(args)`: `push`, `pop_min` and `peek` of a `Heap[T]`.
+    fn heap_method(&mut self, whole: &ast::Expr, object: &ast::Expr, elem: &Ty, name: &str, args: &[AstArg]) -> Value {
+        match (name, args) {
+            ("push", [AstArg::Positional(x)]) => {
+                let place = self.place_or_hold(object);
+                let v = self.value(x);
+                let v = self.coerce(v, elem);
+                self.push(StmtKind::Mutate {
+                    name: "lt_heap_push",
+                    place,
+                    args: vec![Arg::Address(v, elem.clone())],
+                    at: true,
+                    result: None,
+                });
+                Value::Done(Operand::Const(Const::Unit))
+            }
+            ("pop_min", []) => {
+                let ty = self.ty(whole);
+                let place = self.place_or_hold(object);
+                let found = self.temp(elem.clone());
+                let ok = self.temp(Ty::Bool);
+                self.push(StmtKind::Mutate {
+                    name: "lt_heap_pop",
+                    place,
+                    args: vec![Arg::Out(found, elem.clone())],
+                    at: true,
+                    result: Some(ok),
+                });
+                Value::Expr(Expr::OptIf { ty, cond: Operand::Local(ok), value: Operand::Local(found) })
+            }
+            ("peek", []) => {
+                let heap = self.value(object);
+                let ty = self.ty(whole);
+                self.optional_from(&ty, "lt_heap_peek", vec![Arg::Value(heap)], false)
+            }
+            _ => Value::Done(self.unsupported(whole.span, &format!("the method `{name}` of a heap"))),
         }
     }
 
@@ -2424,6 +2650,8 @@ impl<'c, 'a> Builder<'c, 'a> {
         let owner = match &ty {
             Ty::Adt(owner, _) | Ty::TypeName(owner) => Some(owner.clone()),
             Ty::Dyn(trait_name) => return self.dyn_method(whole, object, trait_name, name, args),
+            Ty::Module(_) => return self.math_call(whole, name, args),
+            Ty::Heap(elem) => return self.heap_method(whole, object, elem, name, args),
             _ => None,
         };
         if let Some(owner) = owner

@@ -761,3 +761,143 @@ const lt_type lt_type_closure = {sizeof(lt_closure *), lt_inc_closure, lt_dec_cl
                                  lt_repr_closure, lt_repr_closure, lt_share_cell};
 
 const lt_type lt_type_list = {sizeof(lt_list *), lt_list_inc, lt_list_dec, lt_eq_list, lt_cmp_list, NULL, lt_repr_list, lt_repr_list, lt_share_list};
+
+/* Heaps ----------------------------------------------------------------------------------- */
+
+static bool lt_heap_less(const lt_list *l, int64_t a, int64_t b, lt_at at) {
+    return l->type->cmp(LT_AT(l, a), LT_AT(l, b), at) < 0;
+}
+
+/* Room for one element too large for the stack's buffer. */
+static char *lt_heap_scratch(size_t size) {
+    char *p = malloc(size);
+    if (p == NULL) abort();
+    return p;
+}
+
+static void lt_heap_swap(lt_list *l, int64_t a, int64_t b) {
+    char tmp[256];
+    size_t size = l->type->size;
+    char *t = size <= sizeof tmp ? tmp : lt_heap_scratch(size);
+    memcpy(t, LT_AT(l, a), size);
+    memcpy(LT_AT(l, a), LT_AT(l, b), size);
+    memcpy(LT_AT(l, b), t, size);
+    if (t != tmp) free(t);
+}
+
+/* heapq's siftdown: the element at pos moved up past every parent greater than it. */
+static void lt_heap_down(lt_list *l, int64_t start, int64_t pos, lt_at at) {
+    while (pos > start) {
+        int64_t parent = (pos - 1) >> 1;
+        if (!lt_heap_less(l, pos, parent, at)) break;
+        lt_heap_swap(l, parent, pos);
+        pos = parent;
+    }
+}
+
+/* heapq's siftup: the smaller child moved up until a leaf, then the element sifted down. */
+static void lt_heap_up(lt_list *l, int64_t pos, lt_at at) {
+    int64_t end = l->len, start = pos, limit = end >> 1;
+    while (pos < limit) {
+        int64_t child = 2 * pos + 1;
+        if (child + 1 < end && !lt_heap_less(l, child, child + 1, at)) child++;
+        lt_heap_swap(l, child, pos);
+        pos = child;
+    }
+    lt_heap_down(l, start, pos, at);
+}
+
+static int64_t lt_keep_top_bit(int64_t n) {
+    int i = 0;
+    while (n > 1) {
+        n >>= 1;
+        i++;
+    }
+    return n << i;
+}
+
+void lt_heapify(lt_list **slot, lt_at at) {
+    lt_list_unique(slot);
+    lt_list *l = *slot;
+    int64_t n = l->len;
+    if (n <= 2500) {
+        for (int64_t i = (n >> 1) - 1; i >= 0; i--) lt_heap_up(l, i, at);
+        return;
+    }
+    /* CPython's cache-friendly order for a large list, which leaves the same arrangement */
+    int64_t m = n >> 1, leftmost = lt_keep_top_bit(m + 1) - 1, mhalf = m >> 1;
+    for (int64_t i = leftmost - 1; i >= mhalf; i--) {
+        for (int64_t j = i;; j >>= 1) {
+            lt_heap_up(l, j, at);
+            if (!(j & 1)) break;
+        }
+    }
+    for (int64_t i = m - 1; i >= leftmost; i--) {
+        for (int64_t j = i;; j >>= 1) {
+            lt_heap_up(l, j, at);
+            if (!(j & 1)) break;
+        }
+    }
+}
+
+void lt_heap_push(lt_list **slot, const void *value, lt_at at) {
+    lt_list_push(slot, value);
+    lt_heap_down(*slot, 0, (*slot)->len - 1, at);
+}
+
+bool lt_heap_pop(lt_list **slot, void *out, lt_at at) {
+    if (!lt_list_pop(slot, false, 0, out, at)) return false;
+    lt_list *l = *slot;
+    if (l->len == 0) return true;
+    size_t size = l->type->size;
+    char tmp[256];
+    char *t = size <= sizeof tmp ? tmp : lt_heap_scratch(size);
+    memcpy(t, LT_AT(l, 0), size);
+    memcpy(LT_AT(l, 0), out, size);
+    memcpy(out, t, size);
+    if (t != tmp) free(t);
+    lt_heap_up(l, 0, at);
+    return true;
+}
+
+/* `heap.peek()`: the smallest element, counted once more. */
+bool lt_heap_peek(const lt_list *l, void *out) {
+    memset(out, 0, l->type->size);
+    if (l->len == 0) return false;
+    memcpy(out, LT_AT(l, 0), l->type->size);
+    if (l->type->inc != NULL) l->type->inc(out);
+    return true;
+}
+
+/* Heaps are equal when they hold the same elements, in whatever order. */
+static bool lt_eq_heap(const void *a, const void *b) {
+    const lt_list *x = *(lt_list *const *)a;
+    const lt_list *y = *(lt_list *const *)b;
+    if (x == y) return true;
+    if (x->len != y->len) return false;
+    lt_at at = {NULL, 0, NULL};
+    lt_list *sx = lt_list_sorted(x, false, at), *sy = lt_list_sorted(y, false, at);
+    bool same = lt_type_list.eq(&sx, &sy);
+    lt_list_drop(sx);
+    lt_list_drop(sy);
+    return same;
+}
+
+static int lt_cmp_heap(const void *a, const void *b, lt_at at) {
+    (void)a;
+    (void)b;
+    lt_unorderable(at, "Heap");
+}
+
+static void lt_repr_heap(lt_buf *b, const void *a) {
+    (void)a;
+    lt_buf_puts(b, "<Heap>");
+}
+
+const lt_type lt_type_heap = {sizeof(lt_list *), lt_list_inc, lt_list_dec, lt_eq_heap, lt_cmp_heap, NULL, lt_repr_heap, lt_repr_heap, lt_share_list};
+
+/* `hash(x)`: what a set would file x under; a value that has none stops the program. */
+int64_t lt_hash_value(const lt_type *type, const void *value, lt_at at) {
+    if (type->hash == NULL) lt_panic(at, "TypeError", "unhashable type");
+    return type->hash(value);
+}

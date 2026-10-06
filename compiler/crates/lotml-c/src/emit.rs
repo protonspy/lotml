@@ -735,7 +735,7 @@ impl Writer<'_> {
                 let v = self.operand(value);
                 match ty {
                     Ty::Str => format!("{v}->length"),
-                    Ty::List(_) | Ty::Dict(..) => format!("{v}->len"),
+                    Ty::List(_) | Ty::Heap(_) | Ty::Dict(..) => format!("{v}->len"),
                     Ty::Set(_) => format!("{v}->used"),
                     _ => format!("0 /* len of {ty} */"),
                 }
