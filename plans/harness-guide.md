@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 8b270a8713dd1210ff97060367ed272af9c348ffbe947e55ac295eb76de2d01e
+checksum: 5f5ab85eefe1de02222ecfc95200c95b68fbd2ee9672065676c3d390f6d3cf88
 ---
 
 # Harness guide
@@ -108,7 +108,7 @@ deepagents and in a second harness — on held-out tasks, and the wiki records w
       built, commit the report, and record in the wiki whether the guide helps cheap
       agents, frontier ones, both or neither
   _Depends 1.5, 1.6, 3.1, 3.2_
-- [ ] 1.6 (Unit) Write the spec for MBPP's original as agent tasks, posed untyped the
+- [x] 1.6 (Unit) Write the spec for MBPP's original as agent tasks, posed untyped the
       way specs/agent-humaneval/ poses HumanEval and as a delta to it, held out whole
       from training for the guide arms
 

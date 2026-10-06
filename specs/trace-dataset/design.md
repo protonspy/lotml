@@ -69,7 +69,7 @@ cannot show who served it.
 
 **Identity** (R1.6). The exporter reads model, arm, task and providers from the `row` in each
 trace, rejects a trace whose directory names differ from the row's, derives the source from the
-task id (`humaneval-<n>` is `humaneval-original`, a benchmark directory name is `bench`) and
+task id (`humaneval-<n>` is `humaneval-original`, `mbpp-<n>` is `mbpp-original`, a benchmark directory name is `bench`) and
 rejects a row whose `source` says otherwise or is missing. Symbolic links among the traces are
 skipped. Output paths are built from constants and the date only.
 

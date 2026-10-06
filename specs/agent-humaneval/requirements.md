@@ -16,7 +16,9 @@ annotated, and the types MultiPL-E added are part of what its licence restricts.
 posed without types: the agent writes the lotml signature from the docstring, as a developer
 porting Python would (adr:0015-pose-humaneval-untyped). This makes all of HumanEval agent tasks the
 harness runs, grades and reports like its own, and that the trace dataset may export
-(specs/trace-dataset/, plans/agent-data.md).
+(specs/trace-dataset/, plans/agent-data.md). MBPP's original release (CC BY 4.0) is posed the same
+way, as the tasks the harness guide's arms run on: held out whole from training, and enough of them
+for the 168 paired tasks a 10-point difference needs (plans/harness-guide.md).
 
 ## R1 · HumanEval's tasks
 
@@ -37,8 +39,16 @@ harness runs, grades and reports like its own, and that the trace dataset may ex
 - **R2.4** Where both arms have run a task's first attempt, the agent harness shall report in `harness/results/agent.md` the paired comparison of the arms with McNemar's test over those first attempts.
 - **R2.5** The agent harness shall report, for HumanEval runs that failed, how many failed because the agent's signature did not accept the hidden tests' values, apart from those whose function was wrong.
 
+## R3 · MBPP's tasks
+
+- **R3.1** The agent harness shall read MBPP from the original release's `mbpp.jsonl` at a pinned 40-character commit, checking its recorded SHA-256 as R1.1 checks HumanEval's.
+- **R3.2** The agent harness shall pose an MBPP problem as R1.3 poses a HumanEval one: the function its `test_list` calls, with the parameter names its canonical `code` gives it, the problem's `text` as its docstring, and `todo()` as its body.
+- **R3.3** The agent harness shall take an MBPP problem's cases by running its `test_setup_code` and `test_list` against its canonical code, recording the arguments and result of every outermost call to the tested function, and turn them into hidden blocks as R1.5 and R1.6 do.
+- **R3.4** If an MBPP problem's tests call more than one function of its code, or none, then the agent harness shall refuse it and count it by reason.
+- **R3.5** Where `--source mbpp` is given, the agent harness shall run MBPP tasks as R2.1 runs HumanEval's, with task ids `mbpp-<n>` and the source `mbpp-original`.
+- **R3.6** The agent harness shall write `harness/results/agent-mbpp.md`: the problems read, kept and refused by reason, the cases recorded, the digest of the file read, and the CC BY 4.0 attribution.
+
 ## Out of scope
 
-- MBPP, LiveCodeBench and MultiPL-E's translations as agent tasks; MBPP's CC BY 4.0 original is
-  the next source if more tasks are needed, posed the same way.
+- LiveCodeBench and MultiPL-E's translations as agent tasks.
 - Tasks of more than one file: HumanEval's are single functions.

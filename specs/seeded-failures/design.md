@@ -24,7 +24,7 @@ alike (specs/guide-records/) — and `harness/results/seeded.md`, committed.
   here it types a program nobody is asked to write;
 - the final files of passing agent runs on train and validation problems whose source, model and
   providers the licence registry permits — the same gate the exporter applies
-  (specs/trace-dataset/ R1.2).
+  (specs/trace-dataset/).
 
 The corpus is not a source: it translates MultiPL-E's typed originals.
 

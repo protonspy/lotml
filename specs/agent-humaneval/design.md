@@ -2,7 +2,7 @@
 
 ## What changes
 
-Serves R1.1–R1.8, R2.1–R2.5.
+Serves R1.1–R1.8, R2.1–R2.5, R3.1–R3.6.
 
 A module `harness/lotml_harness/agent/humaneval.py` with a child-process recorder, three options on
 `python -m lotml_harness.agent` — `--source humaneval` (the benchmark's tasks stay the default), and
@@ -78,6 +78,20 @@ and gives the discordant pairs and McNemar's p with `variants.mcnemar`. A failed
 counted as `signature` when the graded file checks alone but not with the hidden blocks appended —
 the agent's types refused the values — and as `behaviour` otherwise; the grader records which.
 
+**MBPP** (R3.1–R3.6). The same module reads MBPP's original release,
+`https://raw.githubusercontent.com/google-research/google-research/<commit>/mbpp/mbpp.jsonl`, all
+974 problems, through the same digested download, into `harness/cache/mbpp/<commit>/`. An MBPP
+record has no signature or docstring: `text` is a sentence, `code` the canonical solution, and
+`test_list` three `assert` lines. The tested function is the one name every assert calls, found by
+parsing them with `ast`; a problem whose asserts call none, or two of its code's functions, is
+refused (R3.4). Its parameter names come from that function's `def` in `code`, and `text` becomes
+the docstring, so `solution.lotml` has the shape HumanEval's has and the prompt is the same fixed
+sentence. Cases are recorded as R1.2 records them, with the setup code run first and the asserts as
+the test; the recorder counts its own depth, so a recursive solution's inner calls are not cases.
+Task ids are `mbpp-<n>` and the source `mbpp-original`, which the problem split holds out whole for
+the harness guide's arms (specs/trace-dataset/). The report `harness/results/agent-mbpp.md`
+carries the CC BY 4.0 attribution the licence asks for.
+
 ## Alternatives considered
 
 - Inferring the types ourselves and posing typed signatures: measures less (the agent never types
@@ -98,5 +112,8 @@ the agent's types refused the values — and as `behaviour` otherwise; the grade
 - Literal typing: a test passing `5` where the docstring meant a number becomes an `int` argument,
   and an agent that typed `f64` fails it as `signature`. That is how lotml behaves, and R2.5 keeps
   it apart from wrong behaviour.
+- MBPP's asserts sometimes compare loosely — a `set(...)` of the result, a rounded float — where
+  the recorded case compares exactly; the stricter-than-`check` risk above applies to them too, and
+  the per-task table shows a task every run fails.
 - Contamination: HumanEval is in most models' training data in Python; a lotml pass rate here is
   partly recall translated, which matters more for comparing languages than the two arms.

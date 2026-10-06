@@ -33,7 +33,7 @@ remote URL would send code off the machine unasked — and a local server needs 
 is the standard library's `TcpStream`, one HTTP/1.1 POST with a length and a bounded read, and no
 new dependency. `renderer` guards train/serve skew: a guide trained on records rendered one way and
 shown a prompt rendered another fails silently, so a mismatch removes the tool and says so. The
-`records` path is for the evaluation's leakage guard (specs/guide-evaluation/ R1.3).
+`records` path is for the evaluation's leakage guard (specs/guide-evaluation/).
 
 **State** (R2.1, R2.2). The tool reuses `check`'s and `test`'s own paths: the selected files'
 diagnostics in the order `check` reports them, root cause first; if none, `exec::test_report` under
