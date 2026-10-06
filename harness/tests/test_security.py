@@ -61,6 +61,39 @@ def test_ordinary_format_still_works():
 
 
 @pytest.mark.parametrize(
+    "body",
+    [
+        'f = "{0.__class__}".format\n    s = f(1)',
+        's = str.format("{0.__class__}", 1)',
+        'f = "{a.__class__}".format_map\n    s = f({"a": 1})',
+    ],
+)
+def test_format_taken_as_a_value_cannot_walk_into_dunder_attributes(body):
+    result = run(f'test "t":\n    {body}\n')
+    assert result.tests == {"t": "type error"}
+
+
+def test_format_taken_as_a_value_still_formats():
+    source = 'test "t":\n    f = "{} {}".format\n    assert f(1, 2) == "1 2"\n'
+    assert run(source).tests == {"t": "pass"}
+
+
+@pytest.mark.parametrize(
+    "attribute", ["gi_frame", "gi_code", "f_back", "f_globals", "f_locals", "cr_frame", "tb_frame"]
+)
+def test_attributes_into_the_interpreter_are_refused(attribute):
+    source = f'test "t":\n    g = (y for y in [1])\n    x = g.{attribute}\n'
+    assert run(source).error.startswith("transpile:")
+    in_string = f'test "t":\n    g = (y for y in [1])\n    x = f"{{g.{attribute}}}"\n'
+    assert run(in_string).error.startswith("transpile:")
+
+
+def test_the_builtin_pow_traps_before_computing():
+    result = isolated('test "t":\n    x = pow(10, 10 ** 9)\n', timeout=10)
+    assert result.tests == {"t": "overflow"}
+
+
+@pytest.mark.parametrize(
     "source",
     [
         'fn f(x: int) -> int:\n    return x\n\ntest "t":\n    y = f(__x=1)\n',
