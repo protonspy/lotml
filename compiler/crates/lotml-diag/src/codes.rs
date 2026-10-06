@@ -231,6 +231,15 @@ pub const ALL: &[Code] = &[
         rather than editing it.",
     },
     Code {
+        code: "E0222",
+        title: "a type too large to check",
+        explanation: "The type of an expression has more than 1,024 parts, or the types of a function's or a \
+        module's expressions have too many in all. A type is built from its parts, so a tuple paired with \
+        itself doubles it at each step:\n\n    t1 = (t0, t0)\n    t2 = (t1, t1)\n\nand thirty such lines ask \
+        for a type of a billion parts. Name the shape with a record type, or keep the values in a list, whose \
+        type is one part however long it grows.",
+    },
+    Code {
         code: "E0301",
         title: "an immutable reassigned",
         explanation: "A local declared with `x = …` cannot be assigned again. Declare it `var x = …` if it changes:\n\n\

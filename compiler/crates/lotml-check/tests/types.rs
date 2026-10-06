@@ -306,6 +306,61 @@ fn errors_do_not_cascade_from_an_unknown_name() {
 }
 
 #[test]
+fn a_type_doubled_line_after_line_is_reported_once_it_is_too_large() {
+    // Eighteen lines are enough to pass the limit at the sixteenth and few enough that, were it
+    // gone, the checker would still finish in a few hundred megabytes rather than exhaust memory.
+    let mut doubled = String::from("fn main():\n    t0 = 1\n");
+    for i in 1..=18 {
+        doubled += &format!("    t{i} = (t{}, t{})\n", i - 1, i - 1);
+    }
+    doubled += "    print(t18)\n";
+    only(&doubled, "E0222");
+    let items: Vec<String> = (0..1000).map(|i| i.to_string()).collect();
+    clean(&format!("fn main():\n    t = ({})\n    print(t)\n", items.join(", ")));
+}
+
+/// `t0 = 1` to `t9 = (t8, t8)` in a function's body: `t9` has 1,023 nodes, just under the limit.
+fn under_the_limit() -> String {
+    let mut lines = String::from("    t0 = 1\n");
+    for i in 1..=9 {
+        lines += &format!("    t{i} = (t{}, t{})\n", i - 1, i - 1);
+    }
+    lines
+}
+
+#[test]
+fn variables_bound_to_each_other_cannot_expand_a_type_past_the_limit() {
+    // Each line binds a list's element to a pair of the next list's, before that one is known: no
+    // expression is large when it is checked, and the first list's type doubles with each line.
+    // Eighteen lines keep it, were the bound gone, to half a million nodes.
+    let mut source = String::from("fn main():\n");
+    for i in 0..18 {
+        source += &format!("    var a{i} = []\n");
+    }
+    source += "    var a18 = [1]\n";
+    for i in 0..18 {
+        source += &format!("    a{i}.append((a{}[0], a{}[0]))\n", i + 1, i + 1);
+    }
+    only(&source, "E0222");
+}
+
+#[test]
+fn the_types_a_function_or_a_module_stores_are_bounded_in_all() {
+    let mentions = |n: usize| format!("{}{}", under_the_limit(), "    print(t9)\n".repeat(n));
+    clean(&format!("fn main():\n{}", mentions(400)));
+    only(&format!("fn main():\n{}", mentions(520)), "E0222");
+    let module: String = (0..6).map(|k| format!("fn f{k}():\n{}\n", mentions(400))).collect();
+    only(&module, "E0222");
+}
+
+#[test]
+fn a_large_type_is_written_short_in_a_message() {
+    let found = check_source(&format!("fn main():\n{}    x: int = t9\n", under_the_limit()));
+    assert_eq!(found.iter().map(|d| d.code).collect::<Vec<_>>(), vec!["E0204"]);
+    assert!(found[0].message.len() < 400 && found[0].message.contains("..."), "{}", found[0].message);
+}
+
+#[test]
 fn the_corpus_programs_check_clean() {
     // The paired corpus is the language's reference material; it must type-check. It is
     // frozen as the pilot's models saw it, so warnings about semantics settled since are allowed.

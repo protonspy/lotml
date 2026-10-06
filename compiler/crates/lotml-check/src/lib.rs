@@ -78,6 +78,8 @@ pub fn check_typed(module: &Module, text: &str) -> (Vec<Diagnostic>, Types) {
 pub struct Checked {
     pub diagnostics: Vec<Diagnostic>,
     pub types: Types,
+    /// How many type nodes `types` holds, up to [`MODULE_TYPES`].
+    stored: usize,
     /// Each name that resolved to a local, parameter or binding, with the span of the name
     /// that declared it; a declaration refers to itself. One span may be listed more than once.
     pub locals: Vec<(Span, Span)>,
@@ -89,9 +91,31 @@ pub struct Checked {
     pub foreign: BTreeMap<String, BTreeMap<String, FnSig>>,
 }
 
+/// The most type nodes a module keeps for its expressions, in all: a long-lived editor or MCP
+/// server holds them for every file it has open.
+const MODULE_TYPES: usize = 1 << 21;
+
 impl Checked {
-    fn absorb(&mut self, body: Body) {
-        self.types.extend(body.types());
+    fn absorb(&mut self, mut body: Body) {
+        for (span, ty) in body.types() {
+            let before = self.stored;
+            self.stored = self.stored.saturating_add(ty.size());
+            if self.stored <= MODULE_TYPES {
+                self.types.insert(span, ty);
+                continue;
+            }
+            if before <= MODULE_TYPES {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E0222",
+                        span,
+                        format!("the types of this module have more than {MODULE_TYPES} parts in all"),
+                    )
+                    .note("name the shape with a record type, or keep the values in a list"),
+                );
+            }
+            self.types.insert(span, Ty::Error);
+        }
         self.locals.extend_from_slice(body.locals());
         self.diagnostics.extend(body.diagnostics);
     }
