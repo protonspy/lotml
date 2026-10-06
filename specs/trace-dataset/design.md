@@ -124,7 +124,8 @@ Break-It-Fix-It found decisive (90.5% against 62.7% for random corruption alone)
 this exporter, the seeded failures and the guide's evaluation (plans/harness-guide.md). It holds
 two functions. `problem(id)` maps an id to its original problem by pattern — `humaneval-<n>` and
 `HumanEval_<n>_<name>` to `humaneval/<n>`, `mbpp-<n>` and `mbpp_<n>_<name>` to `mbpp/<n>`, the
-name of a task `bench.load` lists to `bench/<name>` — and raises on anything else (R4.4), so a new source
+name of a task `bench.load` lists to `bench/<name>`; the task set's own `humaneval/<n>` and `mbpp/<n>`,
+which the phase 1 gate's rows carry, are problem ids already — and raises on anything else (R4.4), so a new source
 fails loudly instead of landing in train. `split(problem)` buckets HumanEval by the first eight
 bytes of `sha256(SALT + problem)` read as an integer over 2^64: below 0.60 train, below 0.75
 validation, otherwise held-out. The salt is a constant, `lotml-split-1`; changing it makes a new
