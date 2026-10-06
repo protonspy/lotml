@@ -318,7 +318,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, 
         return Err(cx.diagnostics);
     }
     let mut lambdas = Vec::new();
-    for (function, captures, ty) in std::mem::take(&mut cx.lambdas) {
+    for (function, captures, ty) in std::mem::take(&mut cx.lambdas).into_iter().flatten() {
         functions.push(function);
         lambdas.push((captures, ty));
     }
@@ -344,8 +344,9 @@ struct Context<'a> {
     variant_of: HashMap<String, (String, usize)>,
     /// The default of each field of a record (`None` variant) or of a variant.
     defaults: HashMap<(String, Option<usize>), Vec<Option<&'a ast::Expr>>>,
-    /// The lambdas lowered so far: each one's function, the types it captures and its type.
-    lambdas: Vec<(Function, Vec<Ty>, Ty)>,
+    /// The lambdas lowered so far: each one's function, the types it captures and its type; `None`
+    /// while its body, which may hold lambdas of its own, is being lowered.
+    lambdas: Vec<Option<(Function, Vec<Ty>, Ty)>>,
     /// Each method of a type, by the type and its name, and whether it is a trait's default.
     methods: HashMap<(String, String), (&'a FnDef, bool)>,
     /// Each method of a trait, by the trait and its name.
@@ -2273,6 +2274,10 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let x = self.number(x, &INT);
                 Value::Expr(rt("lt_isqrt", vec![x], true))
             }
+            ("parallel", [tasks]) => {
+                let tasks = self.value(tasks);
+                Value::Expr(Expr::Parallel { tasks, result: element(&result_ty) })
+            }
             ("Heap", []) => Value::Expr(Expr::ListNew { elem: element(&result_ty), items: Vec::new() }),
             ("Heap", [x]) => {
                 let list = self.materialize(x);
@@ -2449,6 +2454,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             }
         }
         let index = self.cx.lambdas.len();
+        self.cx.lambdas.push(None);
         let capture_types: Vec<Ty> = captures.iter().map(|(_, _, l)| self.function.locals[*l].ty.clone()).collect();
         let line = self.line;
         let mut b = Builder {
@@ -2483,7 +2489,7 @@ impl<'c, 'a> Builder<'c, 'a> {
         b.push(StmtKind::Return(returned));
         let mut function = b.function;
         function.body = b.blocks.pop().unwrap_or_default();
-        self.cx.lambdas.push((function, capture_types, ty.clone()));
+        self.cx.lambdas[index] = Some((function, capture_types, ty.clone()));
         let operands = captures.iter().map(|(_, _, l)| Operand::Local(*l)).collect();
         Value::Expr(Expr::Closure { lambda: index, ty, captures: operands })
     }

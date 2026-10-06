@@ -70,7 +70,7 @@ int64_t lt_hash_str(lt_str *s) {
     int64_t h = (int64_t)lt_siphash13(units, s->length * width);
     free(units);
     if (h == -1) h = -2;
-    if (s->cell.count != 0) s->hash = (uint64_t)h;
+    if (lt_count_of(&s->cell) > 0) s->hash = (uint64_t)h;
     return h;
 }
 
@@ -415,7 +415,7 @@ static void lt_dec_dict(void *value) {
 
 static void lt_share_dict(void *value) {
     lt_dict *d = *(lt_dict **)value;
-    if (d->cell.count <= 0) return;
+    if (lt_count_of(&d->cell) <= 0) return;
     d->cell.count = -d->cell.count;
     for (int64_t i = 0; i < d->used; i++) {
         char *e = lt_dict_entry(d, i);
@@ -805,7 +805,7 @@ static void lt_dec_set(void *value) {
 
 static void lt_share_set(void *value) {
     lt_set *s = *(lt_set **)value;
-    if (s->cell.count <= 0) return;
+    if (lt_count_of(&s->cell) <= 0) return;
     s->cell.count = -s->cell.count;
     if (s->type->share == NULL) return;
     for (int64_t i = 0; i <= s->mask; i++) {

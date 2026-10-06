@@ -172,7 +172,7 @@ static void lt_str_str(lt_buf *b, const void *a) {
 }
 static void lt_share_cell(void *a) {
     lt_cell *c = *(lt_cell **)a;
-    if (c->count > 0) c->count = -c->count;
+    if (lt_count_of(c) > 0) c->count = -c->count;
 }
 static int64_t lt_hash_str_value(const void *value);
 const lt_type lt_type_str = {sizeof(lt_str *), lt_inc_str, lt_dec_str, lt_eq_str, lt_cmp_str, lt_hash_str_value, lt_repr_str, lt_str_str, lt_share_cell};
@@ -721,7 +721,7 @@ static void lt_repr_list(lt_buf *b, const void *a) {
 
 static void lt_share_list(void *a) {
     lt_list *l = *(lt_list **)a;
-    if (l->cell.count <= 0) return;
+    if (lt_count_of(&l->cell) <= 0) return;
     l->cell.count = -l->cell.count;
     if (l->type->share != NULL) {
         for (int64_t i = 0; i < l->len; i++) l->type->share(LT_AT(l, i));
@@ -757,8 +757,16 @@ static void lt_repr_closure(lt_buf *b, const void *a) {
     lt_buf_puts(b, "<function>");
 }
 
+/* A closure marked shared marks what it captured too. */
+static void lt_share_closure(void *a) {
+    lt_closure *c = *(lt_closure **)a;
+    if (c == NULL || lt_count_of(&c->cell) <= 0) return;
+    c->cell.count = -c->cell.count;
+    if (c->share != NULL) c->share(c);
+}
+
 const lt_type lt_type_closure = {sizeof(lt_closure *), lt_inc_closure, lt_dec_closure, lt_eq_closure, lt_cmp_closure, NULL,
-                                 lt_repr_closure, lt_repr_closure, lt_share_cell};
+                                 lt_repr_closure, lt_repr_closure, lt_share_closure};
 
 const lt_type lt_type_list = {sizeof(lt_list *), lt_list_inc, lt_list_dec, lt_eq_list, lt_cmp_list, NULL, lt_repr_list, lt_repr_list, lt_share_list};
 

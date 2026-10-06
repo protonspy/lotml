@@ -10,7 +10,7 @@ use lotml_check::ty::{FloatKind, IntKind, Ty};
 use crate::lower::{Lowered, function_name, lambda_name};
 use crate::mir::{
     Arg, BinOp, Block, CmpOp, Const, Expr, FormatPart, Function, Local, Operand, Panic, Place, Proj, StmtKind, UnOp,
-    block_operands, block_types,
+    block_exprs, block_operands, block_types,
 };
 use crate::types::Types;
 
@@ -58,6 +58,7 @@ pub fn program(lowered: &Lowered, file: &str) -> String {
     out.push('\n');
     vtables(&mut out, lowered, &types);
     closures(&mut out, lowered, &types);
+    let tasks = task_runners(&mut out, lowered, &types);
     for f in &lowered.functions {
         Writer {
             out: &mut out,
@@ -68,6 +69,7 @@ pub fn program(lowered: &Lowered, file: &str) -> String {
             literals: &literals,
             types: &types,
             fresh: 0,
+            tasks: &tasks,
         }
         .function();
     }
@@ -139,6 +141,32 @@ fn vtables(out: &mut String, lowered: &Lowered, types: &Types) {
     }
 }
 
+/// For each result type of a task of `parallel`, the function the runtime runs a task with:
+/// it calls the closure and stores the result. The types, in the order the functions are numbered.
+fn task_runners(out: &mut String, lowered: &Lowered, types: &Types) -> Vec<Ty> {
+    let mut results: Vec<Ty> = Vec::new();
+    for f in &lowered.functions {
+        block_exprs(&f.body, &mut |e| {
+            if let Expr::Parallel { result, .. } = e
+                && !results.contains(result)
+            {
+                results.push(result.clone());
+            }
+        });
+    }
+    for (k, ty) in results.iter().enumerate() {
+        let ret = c_ret(ty, types);
+        let call = format!("(({ret} (*)(lt_closure *))task->fn)(task)");
+        let body = if ret == "void" {
+            format!("{call}; (void)out;")
+        } else {
+            format!("*({} *)out = {call};", types.c_type(ty))
+        };
+        let _ = writeln!(out, "static void lt_task{k}(lt_closure *task, void *out) {{ {body} }}");
+    }
+    results
+}
+
 /// The C result type of a function returning `ty`: `void` for a unit or one that never returns.
 fn c_ret(ty: &Ty, types: &Types) -> String {
     if is_unit(ty) || matches!(ty, Ty::Never) { "void".to_string() } else { types.c_type(ty) }
@@ -151,7 +179,8 @@ fn closures(out: &mut String, lowered: &Lowered, types: &Types) {
         let fields: String = captures.iter().enumerate().map(|(i, t)| format!(" {} c{i};", types.c_type(t))).collect();
         let _ = writeln!(
             out,
-            "typedef struct lt_c{k} {{ lt_cell cell; void *fn; void (*drop)(lt_closure *self);{fields} }} lt_c{k};"
+            "typedef struct lt_c{k} {{ lt_cell cell; void *fn; void (*drop)(lt_closure *self); \
+             void (*share)(lt_closure *self);{fields} }} lt_c{k};"
         );
         let drops: String = captures
             .iter()
@@ -162,6 +191,16 @@ fn closures(out: &mut String, lowered: &Lowered, types: &Types) {
         let _ = writeln!(
             out,
             "static void lt_drop_c{k}(lt_closure *self) {{ lt_c{k} *c = (lt_c{k} *)self; (void)c;{drops} }}"
+        );
+        let shares: String = captures
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| types.counted(t))
+            .map(|(i, t)| format!(" ({})->share(&c->c{i});", types.desc(t)))
+            .collect();
+        let _ = writeln!(
+            out,
+            "static void lt_share_c{k}(lt_closure *self) {{ lt_c{k} *c = (lt_c{k} *)self; (void)c;{shares} }}"
         );
     }
     for name in &lowered.fn_refs {
@@ -176,7 +215,7 @@ fn closures(out: &mut String, lowered: &Lowered, types: &Types) {
         let call = format!("{}({})", f.name, passed.join(", "));
         let body = if ret == "void" { format!("{call};") } else { format!("return {call};") };
         let _ = writeln!(out, "static {ret} lt_tramp_{name}({}) {{ (void)self; {body} }}", all.join(", "));
-        let _ = writeln!(out, "static lt_closure lt_fnref_{name} = {{{{0, 0}}, (void *)lt_tramp_{name}, NULL}};");
+        let _ = writeln!(out, "static lt_closure lt_fnref_{name} = {{{{0, 0}}, (void *)lt_tramp_{name}, NULL, NULL}};");
     }
     out.push('\n');
 }
@@ -250,6 +289,8 @@ struct Writer<'a> {
     types: &'a Types<'a>,
     /// The next number for a name the C needs: a buffer, a range.
     fresh: usize,
+    /// The result type of each task runner, by its number.
+    tasks: &'a [Ty],
 }
 
 impl Writer<'_> {
@@ -320,6 +361,7 @@ impl Writer<'_> {
                     self.line(&format!("    lt_c{lambda} *c = lt_alloc(sizeof(lt_c{lambda}));"));
                     self.line(&format!("    c->fn = (void *){};", lambda_name(*lambda)));
                     self.line(&format!("    c->drop = lt_drop_c{lambda};"));
+                    self.line(&format!("    c->share = lt_share_c{lambda};"));
                     for (i, v) in values.iter().enumerate() {
                         self.line(&format!("    c->c{i} = {v};"));
                     }
@@ -694,6 +736,10 @@ impl Writer<'_> {
             Expr::ReadPlace(place) => format!("(*{})", self.place(place).1),
             Expr::Closure { .. } => "0 /* written by its Let */".to_string(),
             Expr::FnRef(name) => format!("((lt_closure *)&lt_fnref_{name})"),
+            Expr::Parallel { tasks, result } => {
+                let k = self.tasks.iter().position(|t| t == result).expect("a runner per result type");
+                format!("lt_parallel({}, {}, lt_task{k}, LT_HERE)", self.operand(tasks), self.types.desc(result))
+            }
             Expr::ToDyn { value, ty, vtable } => {
                 format!("(({}){{(void *){}, &lt_vt{vtable}}})", self.c_type(ty), self.operand(value))
             }

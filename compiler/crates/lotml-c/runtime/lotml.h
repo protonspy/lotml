@@ -30,8 +30,10 @@
 
 #if LT_GNU
 #define LT_UNUSED __attribute__((unused))
+#define LT_THREAD __thread
 #else
 #define LT_UNUSED
+#define LT_THREAD __declspec(thread)
 #endif
 
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -69,11 +71,22 @@ void *lt_reuse_or_alloc(void *token, size_t token_size, size_t size);
 void lt_free(void *cell);
 int32_t lt_atomic_add(int32_t *count, int32_t delta);
 
+/* The count of `c`, read atomically: a shared cell's changes under other threads, and only its
+ * sign, which never turns back, decides how this thread touches it. */
+static inline int32_t lt_count_of(const lt_cell *c) {
+#if LT_GNU
+    return __atomic_load_n(&c->count, __ATOMIC_RELAXED);
+#else
+    return *(volatile const int32_t *)&c->count;
+#endif
+}
+
 static inline void lt_inc(void *p) {
     lt_cell *c = (lt_cell *)p;
-    if (LT_LIKELY(c->count > 0)) {
-        c->count++;
-    } else if (c->count < 0) {
+    int32_t n = lt_count_of(c);
+    if (LT_LIKELY(n > 0)) {
+        c->count = n + 1;
+    } else if (n < 0) {
         lt_atomic_add(&c->count, -1);
     }
 }
@@ -81,14 +94,15 @@ static inline void lt_inc(void *p) {
 /* Take one count off `p`; true when it was the last, and the caller frees the cell. */
 static inline bool lt_dec(void *p) {
     lt_cell *c = (lt_cell *)p;
-    if (LT_LIKELY(c->count > 1)) {
-        c->count--;
+    int32_t n = lt_count_of(c);
+    if (LT_LIKELY(n > 1)) {
+        c->count = n - 1;
         return false;
     }
-    if (c->count == 1) {
+    if (n == 1) {
         return true;
     }
-    if (c->count == 0) {
+    if (n == 0) {
         return false;
     }
     return lt_atomic_add(&c->count, 1) == 0;
@@ -96,7 +110,7 @@ static inline bool lt_dec(void *p) {
 
 /* Whether the caller holds the only count: a value it may change in place or reuse. */
 static inline bool lt_unique(const void *p) {
-    return ((const lt_cell *)p)->count == 1;
+    return lt_count_of((const lt_cell *)p) == 1;
 }
 
 /* Cells allocated and not yet freed: what a test build reports at exit (R3.6). */
@@ -564,16 +578,25 @@ void lt_slice_indices(int64_t length, bool has_lo, int64_t lo, bool has_hi, int6
 
 /* Functions as values --------------------------------------------------------------------- */
 
-/* A closure: the C function a call goes to, what drops the values it captured, then those
- * values. A named function used as a value is a static closure with no captures. */
+/* A closure: the C function a call goes to, what drops the values it captured and what marks
+ * them shared, then those values. A named function used as a value is a static closure with no
+ * captures. */
 typedef struct lt_closure {
     lt_cell cell;
     void *fn;
     void (*drop)(struct lt_closure *self);
+    void (*share)(struct lt_closure *self);
 } lt_closure;
 
 extern const lt_type lt_type_closure;
 void lt_closure_drop(lt_closure *c);
+
+/* `parallel(tasks)` (R4.1): each task run by `run`, which calls it and stores its result of
+ * `result` at `out`, on a thread of its own, at most 256 at once; the results in order. What the
+ * tasks capture is marked shared first (R3.3). A task that panics stops the program once the
+ * others have finished, with the first such task's panic. */
+typedef void (*lt_task_fn)(lt_closure *task, void *out);
+lt_list *lt_parallel(const lt_list *tasks, const lt_type *result, lt_task_fn run, lt_at at);
 
 /* `xs.sort(key=f)`: the elements ordered by `keys`, one per element, stably. */
 void lt_list_sort_by_keys(lt_list **slot, const lt_list *keys, bool reverse, lt_at at);

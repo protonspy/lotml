@@ -490,7 +490,7 @@ impl<'d> Types<'d> {
         );
         let _ = writeln!(
             out,
-            "static void lt_share_t{id}(void *p) {{ lt_t{id} *v = *(lt_t{id} **)p; if (v == NULL || v->cell.count <= 0) return; \
+            "static void lt_share_t{id}(void *p) {{ lt_t{id} *v = *(lt_t{id} **)p; if (v == NULL || lt_count_of(&v->cell) <= 0) return; \
              v->cell.count = -v->cell.count;{} }}",
             self.each_field(&types, "v", "share")
         );
@@ -558,7 +558,7 @@ impl<'d> Types<'d> {
         });
         let _ = writeln!(
             out,
-            "static void lt_share_t{id}(void *p) {{ lt_t{id} *v = *(lt_t{id} **)p; if (v == NULL || v->cell.count <= 0) return; \
+            "static void lt_share_t{id}(void *p) {{ lt_t{id} *v = *(lt_t{id} **)p; if (v == NULL || lt_count_of(&v->cell) <= 0) return; \
              v->cell.count = -v->cell.count; switch (v->cell.aux) {{{share} default: break; }} }}"
         );
         let eq = cases(&|k, types| {

@@ -7,6 +7,12 @@
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <process.h>
+#include <windows.h>
+#else
+#include <pthread.h>
 #endif
 
 /* Cells and output ------------------------------------------------------------------------- */
@@ -29,7 +35,29 @@ static void lt_count_cells(int64_t delta) {
 static char lt_out[1 << 16];
 static size_t lt_out_used = 0;
 
-void lt_flush(void) {
+/* How many `parallel` calls are running: while any is, the output buffer is written under a
+ * lock. Changed before the threads start and after they finish, so a reader never races it. */
+static int64_t lt_tasks_running = 0;
+
+#ifdef _WIN32
+static SRWLOCK lt_out_lock = SRWLOCK_INIT;
+static void lt_lock_out(void) {
+    if (lt_tasks_running > 0) AcquireSRWLockExclusive(&lt_out_lock);
+}
+static void lt_unlock_out(bool locked) {
+    if (locked) ReleaseSRWLockExclusive(&lt_out_lock);
+}
+#else
+static pthread_mutex_t lt_out_lock = PTHREAD_MUTEX_INITIALIZER;
+static void lt_lock_out(void) {
+    if (lt_tasks_running > 0) pthread_mutex_lock(&lt_out_lock);
+}
+static void lt_unlock_out(bool locked) {
+    if (locked) pthread_mutex_unlock(&lt_out_lock);
+}
+#endif
+
+static void lt_flush_unlocked(void) {
     if (lt_out_used > 0) {
         fwrite(lt_out, 1, lt_out_used, stdout);
         lt_out_used = 0;
@@ -37,17 +65,25 @@ void lt_flush(void) {
     fflush(stdout);
 }
 
+void lt_flush(void) {
+    bool locked = lt_tasks_running > 0;
+    lt_lock_out();
+    lt_flush_unlocked();
+    lt_unlock_out(locked);
+}
+
 void lt_write(const char *bytes, size_t length) {
+    bool locked = lt_tasks_running > 0;
+    lt_lock_out();
     if (length >= sizeof lt_out) {
-        lt_flush();
+        lt_flush_unlocked();
         fwrite(bytes, 1, length, stdout);
-        return;
+    } else {
+        if (lt_out_used + length > sizeof lt_out) lt_flush_unlocked();
+        memcpy(lt_out + lt_out_used, bytes, length);
+        lt_out_used += length;
     }
-    if (lt_out_used + length > sizeof lt_out) {
-        lt_flush();
-    }
-    memcpy(lt_out + lt_out_used, bytes, length);
-    lt_out_used += length;
+    lt_unlock_out(locked);
 }
 
 void lt_init(void) {
@@ -109,7 +145,26 @@ int32_t lt_atomic_add(int32_t *count, int32_t delta) {
 
 /* Panics ----------------------------------------------------------------------------------- */
 
+/* A panic in a task of `parallel`: kept for the caller, which stops the program with the first
+ * one once every task has finished. */
+typedef struct lt_failure {
+    bool failed;
+    const char *kind;
+    char message[512];
+    lt_at at;
+} lt_failure;
+
+static LT_THREAD jmp_buf *lt_task_jump = NULL;
+static LT_THREAD lt_failure *lt_task_failure = NULL;
+
 void lt_panic(lt_at at, const char *kind, const char *message) {
+    if (lt_task_jump != NULL) {
+        lt_task_failure->failed = true;
+        lt_task_failure->kind = kind;
+        snprintf(lt_task_failure->message, sizeof lt_task_failure->message, "%s", message != NULL ? message : "");
+        lt_task_failure->at = at;
+        longjmp(*lt_task_jump, 1);
+    }
     lt_flush();
     if (message != NULL && message[0] != '\0') {
         fprintf(stderr, "panic: %s: %s\n", kind, message);
@@ -384,6 +439,115 @@ double lt_pow_f64(double a, double b, lt_at at) {
         lt_panic(at, "OverflowError", "(34, 'Numerical result out of range')");
     }
     return r;
+}
+
+/* parallel --------------------------------------------------------------------------------- */
+
+#define LT_TASK_THREADS 256
+
+typedef struct lt_job {
+    const lt_list *tasks;
+    lt_task_fn run;
+    char *out;
+    size_t size;
+    int64_t next;
+    lt_failure *failures;
+} lt_job;
+
+static int64_t lt_next_task(lt_job *job) {
+#if LT_GNU
+    return __atomic_fetch_add(&job->next, 1, __ATOMIC_RELAXED);
+#else
+    return _InterlockedExchangeAdd64((volatile long long *)&job->next, 1);
+#endif
+}
+
+static void lt_add_running(int64_t delta) {
+#if LT_GNU
+    __atomic_add_fetch(&lt_tasks_running, delta, __ATOMIC_SEQ_CST);
+#else
+    _InterlockedExchangeAdd64((volatile long long *)&lt_tasks_running, delta);
+#endif
+}
+
+/* A worker: the next task not yet taken, until none is left; a panic caught and kept. */
+static void lt_work(lt_job *job) {
+    for (;;) {
+        int64_t i = lt_next_task(job);
+        if (i >= job->tasks->len) return;
+        jmp_buf here;
+        lt_task_jump = &here;
+        lt_task_failure = &job->failures[i];
+        if (setjmp(here) == 0) {
+            lt_closure *task = *(lt_closure **)(job->tasks->data + (size_t)i * job->tasks->type->size);
+            lt_inc(task);
+            job->run(task, job->out + (size_t)i * job->size);
+        }
+        lt_task_jump = NULL;
+        lt_task_failure = NULL;
+    }
+}
+
+#ifdef _WIN32
+static unsigned __stdcall lt_worker(void *job) {
+    lt_work((lt_job *)job);
+    return 0;
+}
+#else
+static void *lt_worker(void *job) {
+    lt_work((lt_job *)job);
+    return NULL;
+}
+#endif
+
+lt_list *lt_parallel(const lt_list *tasks, const lt_type *result, lt_task_fn run, lt_at at) {
+    int64_t n = tasks->len;
+    lt_list *results = lt_list_new(result, n);
+    if (n == 0) return results;
+    for (int64_t i = 0; i < n; i++) lt_type_closure.share(tasks->data + (size_t)i * tasks->type->size);
+    lt_failure *failures = calloc((size_t)n, sizeof(lt_failure));
+    if (failures == NULL) lt_panic(at, "MemoryError", "out of memory");
+    memset(results->data, 0, (size_t)n * result->size);
+    lt_job job = {tasks, run, results->data, result->size, 0, failures};
+    int64_t workers = n < LT_TASK_THREADS ? n : LT_TASK_THREADS;
+    /* jmp_buf and the failure the caller is itself a task of, if it is one */
+    jmp_buf *outer_jump = lt_task_jump;
+    lt_failure *outer_failure = lt_task_failure;
+    lt_add_running(1);
+#ifdef _WIN32
+    HANDLE threads[LT_TASK_THREADS];
+    int64_t started = 0;
+    for (; started < workers; started++) {
+        threads[started] = (HANDLE)_beginthreadex(NULL, 0, lt_worker, &job, 0, NULL);
+        if (threads[started] == 0) break;
+    }
+    if (started == 0) lt_work(&job);
+    for (int64_t i = 0; i < started; i++) {
+        WaitForSingleObject(threads[i], INFINITE);
+        CloseHandle(threads[i]);
+    }
+#else
+    pthread_t threads[LT_TASK_THREADS];
+    int64_t started = 0;
+    for (; started < workers; started++) {
+        if (pthread_create(&threads[started], NULL, lt_worker, &job) != 0) break;
+    }
+    if (started == 0) lt_work(&job);
+    for (int64_t i = 0; i < started; i++) pthread_join(threads[i], NULL);
+#endif
+    lt_add_running(-1);
+    lt_task_jump = outer_jump;
+    lt_task_failure = outer_failure;
+    results->len = n;
+    for (int64_t i = 0; i < n; i++) {
+        if (failures[i].failed) {
+            lt_failure first = failures[i];
+            free(failures);
+            lt_panic(first.at, first.kind, first.message);
+        }
+    }
+    free(failures);
+    return results;
 }
 
 /* The prelude's arithmetic ---------------------------------------------------------------- */

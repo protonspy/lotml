@@ -319,6 +319,11 @@ pub enum Expr {
     },
     /// The module's function `name`, its C name, as a value.
     FnRef(String),
+    /// `parallel(tasks)`: each closure of `tasks` run on a thread, its result of type `result`.
+    Parallel {
+        tasks: Operand,
+        result: Ty,
+    },
     /// The record or sum value `value` as the `dyn` type `ty`, calling through the table `vtable`.
     ToDyn {
         value: Operand,
@@ -391,6 +396,7 @@ impl Expr {
             Expr::OptNew { value, .. } => value.iter().for_each(f),
             Expr::Closure { captures, .. } => captures.iter().for_each(f),
             Expr::FnRef(_) => {}
+            Expr::Parallel { tasks, .. } => f(tasks),
             Expr::ToDyn { value, .. } => f(value),
             Expr::CallDyn { receiver, args, .. } => {
                 f(receiver);
@@ -523,6 +529,25 @@ pub fn block_operands(block: &Block, f: &mut impl FnMut(&Operand)) {
 
 /// Every type named by an expression of a block, nested blocks included: what the C needs a
 /// definition and a descriptor for.
+/// Every expression a block evaluates, nested blocks included.
+pub fn block_exprs(block: &Block, f: &mut impl FnMut(&Expr)) {
+    for stmt in block {
+        match &stmt.kind {
+            StmtKind::Let(_, e) | StmtKind::Do(e) => f(e),
+            StmtKind::If(_, then, otherwise) => {
+                block_exprs(then, f);
+                block_exprs(otherwise, f);
+            }
+            StmtKind::Loop(body) => block_exprs(body, f),
+            StmtKind::ForRange { body, exit, .. } | StmtKind::ForStr { body, exit, .. } => {
+                block_exprs(body, f);
+                block_exprs(exit, f);
+            }
+            _ => {}
+        }
+    }
+}
+
 pub fn block_types(block: &Block, f: &mut impl FnMut(&Ty)) {
     for stmt in block {
         match &stmt.kind {
@@ -573,6 +598,7 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
             params.iter().for_each(&mut *f);
             f(ret);
         }
+        Expr::Parallel { result, .. } => f(&Ty::List(Box::new(result.clone()))),
         Expr::Rt { args, .. } | Expr::CallSlots(_, args) => arg_types(args, f),
         Expr::RtValue { args, ty, .. } => {
             arg_types(args, f);
