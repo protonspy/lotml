@@ -67,6 +67,18 @@ def guarded(name: str) -> str:
     return name
 
 
+REFUSED_ATTRIBUTES = ("__", "gi_", "f_", "cr_", "ag_", "tb_", "co_", "func_")
+"""Attribute prefixes that reach the interpreter itself — frames, code objects, generator,
+coroutine and traceback internals — and from there the executor's own globals."""
+
+
+def attribute(name: str) -> str:
+    """An attribute name a program may read: none that leads into the interpreter."""
+    if name.startswith(REFUSED_ATTRIBUTES):
+        raise TranspileError(f"attribute `{name}` is not lotml")
+    return name
+
+
 def rt(name: str) -> ast.Attribute:
     return ast.Attribute(ast.Name("__rt", ast.Load()), name, ast.Load())
 
@@ -210,7 +222,10 @@ class Transpiler:
             if isinstance(inner, ast.Name):
                 guarded(inner.id)
             elif isinstance(inner, ast.Attribute):
-                guarded(inner.attr)
+                attribute(inner.attr)
+                # An f-string formats by itself; `format` inside one would skip the field check.
+                if inner.attr in runtime.CHECKED_METHODS:
+                    raise TranspileError(f"`{inner.attr}` inside a string literal is not lotml")
         return self.relocate(node, token)
 
     def x_atom(self, *strings: Token) -> ast.expr:
@@ -362,7 +377,10 @@ class Transpiler:
         return ast.Subscript(self.expr(obj), index, ast.Load())
 
     def x_getattr(self, obj, name: Token) -> ast.expr:
-        return ast.Attribute(self.expr(obj), guarded(name.value), ast.Load())
+        if name.value in runtime.CHECKED_METHODS:
+            # Taken as a value, `str.format` comes back with its field check attached.
+            return call(rt("bound"), self.expr(obj), ast.Constant(name.value))
+        return ast.Attribute(self.expr(obj), attribute(name.value), ast.Load())
 
     def x_try_op(self, operand) -> ast.expr:
         return call(rt("unwrap"), self.expr(operand))

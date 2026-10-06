@@ -27,13 +27,21 @@ DIRECTORIES = {
 FILENAME = re.compile(r"^(?:HumanEval|mbpp)_(\d+)_\w+\.py$")
 
 
-def download(url: str, target: Path) -> Path:
-    """`url` saved at `target`, unless an earlier run already saved it."""
+DOWNLOAD_LIMIT = 2 * 2**30
+"""Bytes one download may take; the largest source, LiveCodeBench's test file, is far below."""
+
+
+def download(url: str, target: Path, limit: int = DOWNLOAD_LIMIT) -> Path:
+    """`url` saved at `target`, unless an earlier run already saved it; a response larger
+    than `limit` is refused rather than filling the disk."""
     if not target.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
         with urllib.request.urlopen(url, timeout=120) as response:  # noqa: S310
-            partial = target.with_suffix(target.suffix + ".part")
-            partial.write_bytes(response.read())
+            body = response.read(limit + 1)
+        if len(body) > limit:
+            raise ValueError(f"{url} is larger than {limit} bytes")
+        partial = target.with_suffix(target.suffix + ".part")
+        partial.write_bytes(body)
         partial.replace(target)
     return target
 

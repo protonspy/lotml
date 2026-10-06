@@ -349,8 +349,28 @@ SPECIAL = {
 SPECIAL_NAMES = frozenset(name for methods in SPECIAL.values() for name in methods)
 
 
+CHECKED_METHODS = frozenset({"format", "format_map"})
+"""Methods that walk attribute names given as data, so every route to them is checked."""
+
+
+def bound(obj, name: str):
+    """`obj.name` taken as a value. `format` and `format_map` come back with the field check,
+    whether taken from a string or from `str` itself; anything else is the attribute."""
+    if isinstance(obj, str) or obj is str:
+        format_map = name == "format_map"
+
+        def checked(*args, **kwargs):
+            text, rest = (args[0], args[1:]) if obj is str else (obj, args)
+            return _safe_format(text, *rest, format_map=format_map, **kwargs)
+
+        return checked
+    return getattr(obj, name)
+
+
 def method(obj, name: str, *args, **kwargs):
     """Call a method whose lotml behavior differs from Python's built-in one."""
+    if name in CHECKED_METHODS:
+        return bound(obj, name)(*args, **kwargs)
     special = SPECIAL.get(type(obj), {}).get(name)
     if special is not None:
         return special(obj, *args, **kwargs)
@@ -375,6 +395,13 @@ def capped_print(limit: int = OUTPUT_LIMIT):
 
     print_.__name__ = "print"
     return print_
+
+
+def _pow(base, exponent, modulus=None):
+    """The prelude's `pow`: with a modulus, Python's; without, `**`, which traps first."""
+    if modulus is not None:
+        return builtins.pow(base, exponent, modulus)
+    return power(base, exponent)
 
 
 def _listed(function):
@@ -412,10 +439,10 @@ PRELUDE = {
             "dict",
             "tuple",
             "divmod",
-            "pow",
             "hash",
         )
     },
+    "pow": _pow,
     "reversed": _listed(reversed),
     "zip": _listed(zip),
     "map": _listed(map),

@@ -282,7 +282,9 @@ def limit_memory(limit: int) -> None:
     kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
     job = kernel32.CreateJobObjectW(None, None)
     limits = ExtendedLimits()
-    limits.BasicLimitInformation.LimitFlags = 0x100  # JOB_OBJECT_LIMIT_PROCESS_MEMORY
+    # JOB_OBJECT_LIMIT_PROCESS_MEMORY, and JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: a process the
+    # program starts dies with the child instead of outliving the wall clock.
+    limits.BasicLimitInformation.LimitFlags = 0x100 | 0x2000
     limits.ProcessMemoryLimit = limit
     extended = 9  # JobObjectExtendedLimitInformation
     if not (

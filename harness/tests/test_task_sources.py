@@ -28,8 +28,8 @@ def test_download_saves_once_and_reuses_the_file(tmp_path, monkeypatch):
         def __exit__(self, *_):
             return False
 
-        def read(self):
-            return b"data"
+        def read(self, size=-1):
+            return b"data"[:size] if size >= 0 else b"data"
 
     def urlopen(url, timeout):
         calls.append(url)
@@ -40,6 +40,9 @@ def test_download_saves_once_and_reuses_the_file(tmp_path, monkeypatch):
     assert sources.download("https://x/b.txt", target).read_bytes() == b"data"
     sources.download("https://x/b.txt", target)
     assert calls == ["https://x/b.txt"]
+    with pytest.raises(ValueError, match="larger than 3 bytes"):
+        sources.download("https://x/c.txt", tmp_path / "c.txt", limit=3)
+    assert not (tmp_path / "c.txt").exists()
 
 
 def test_multipl_e_reads_one_dataset_by_task_id(tmp_path, monkeypatch):

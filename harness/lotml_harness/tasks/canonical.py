@@ -9,6 +9,7 @@ import json
 import sys
 
 from lotml_harness.compare import matches
+from lotml_harness.execute import MEMORY, limit_memory
 from lotml_harness.tasks import Task
 
 
@@ -26,6 +27,7 @@ def verdicts(task: Task) -> list[bool]:
 
 
 def main() -> None:
+    limit_memory(MEMORY)
     task = Task.from_json(json.load(sys.stdin))
     print(json.dumps(verdicts(task)))
 
