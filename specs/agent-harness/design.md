@@ -41,15 +41,20 @@ start with `hidden:` so they never collide with the agent's own.
   `test` tool, never sees the key.
 - `memory=["/AGENTS.md"]` in the `agents` arm (R2.4), after `lotml init --harness none`; the
   `reference` arm puts `variants.reference_text("b")` in the system prompt instead (R2.5).
-- Limits — LangGraph's `recursion_limit` for steps, and the run on a worker thread joined with the
-  wall-clock limit (R2.6). Defaults: 60 steps, 600 s.
+- Limits (R2.6) — a callback counts model calls and raises before one past the step limit or the
+  deadline; the agent is streamed, so the state reached so far is kept and graded. A model call is
+  bounded by `request_timeout`, which bounds how far a run can overshoot the deadline; a thread
+  joined with a timeout was ruled out because the thread would go on calling the paid model.
+  Defaults: 60 model calls, 600 s, overridable per task in `task.toml`. MCP paths the agent
+  writes as `/stats.lotml`, as its file tools show them, are made relative before the server
+  sees them.
 
-**Metrics** are read from the messages the agent leaves (R4.1): each `AIMessage`'s
-`usage_metadata` (input, output, reasoning tokens) and its `tool_calls`; each `ToolMessage`'s
-status for tool errors; `check` results holding a diagnostic for check loops. Cost is the tokens
-times the model's prices, fetched once from OpenRouter's public `/models` listing, since a
-response's own cost field is not carried through every LangChain version. Lines changed is a
-`difflib` count against the starting workspace.
+**Metrics** come from LangChain callbacks (R4.1), so the calls deepagents' subagents make, which
+never reach the main agent's messages, are counted: each model call's `usage_metadata` (input,
+output, reasoning tokens) and the `cost` and `provider` OpenRouter returns in its
+`response_metadata`; each tool's start, error status and, for `check`, whether its JSON summary
+counts an error. Lines changed is a `difflib` count of the `.lotml` files against the workspace
+as the run started.
 
 **Files.** Rows go to `harness/results/agent/<model>__<arm>.jsonl` and the report to
 `harness/results/agent.md`, committed like every experiment's answers; traces to

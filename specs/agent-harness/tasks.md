@@ -9,10 +9,10 @@
 
 ## 2 · The agent
 
-- [ ] 2.1 (Unit) Speak to `lotml mcp` over stdio and turn its tools into LangChain tools, the server started without the key — R2.3
-- [ ] 2.2 (Unit) Run one task: workspace copy, the arm's context, the agent on a confined filesystem with no shell, step and time limits, model errors recorded, the key required — R2.1, R2.2, R2.4, R2.5, R2.6, R2.7, R2.8
+- [x] 2.1 (Unit) Speak to `lotml mcp` over stdio and turn its tools into LangChain tools, the server started without the key — R2.3
+- [x] 2.2 (Unit) Run one task: workspace copy, the arm's context, the agent on a confined filesystem with no shell, step and time limits, model errors recorded, the key required — R2.1, R2.2, R2.4, R2.5, R2.6, R2.7, R2.8
   _Depends 1.1, 2.1_
-- [ ] 2.3 (Unit) Read a run's metrics from its messages and keep its trace in the cache — R4.1, R4.4
+- [x] 2.3 (Unit) Read a run's metrics from its messages and keep its trace in the cache — R4.1, R4.4
   _Depends 2.2_
 
 ## 3 · The report
