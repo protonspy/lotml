@@ -33,6 +33,8 @@ only sources and models whose terms allow training, each with its evidence.
 - `specs/agent-humaneval/` — the original HumanEval's problems as agent tasks, sampled and graded like the benchmark's
 - `specs/trace-dataset/` — the licence registry, and trajectories and repairs exported from the traces
 - `specs/agent-harness/` — the harness both build on
+- `plans/compiler-embedded-model.md` — the study of small repair models these runs are data for
+- `docs/wiki/pages/compiler-embedded-model.md` — what that study concluded: the compiler as critic and source of data, repair over authoring
 - adr:0014-deepagents-over-openrouter-for-the-agent-harness
 - `harness/results/NOTICE.md` — why the task set's MultiPL-E HumanEval may not be trained on
 
@@ -44,6 +46,8 @@ only sources and models whose terms allow training, each with its evidence.
   LiveCodeBench was reported in conversation on 2026-10-06; until it is in writing from their
   holders, the registry keeps them out. MBPP's CC BY 4.0 original is the next source if more tasks
   are needed.
+- The phase 1 gate's refused answers, real errors the study rates highest: they answer MultiPL-E's
+  prompts, so `harness/results/NOTICE.md` keeps them out of training.
 
 ## Tasks
 

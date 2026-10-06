@@ -10,8 +10,11 @@ lotml_harness.agent` — `--source humaneval` (the benchmark's tasks stay the de
 
 **Reading** (R1.1, R2.2). `tasks.sources.download` fetches
 `https://raw.githubusercontent.com/openai/human-eval/<commit>/data/HumanEval.jsonl.gz` into
-`harness/cache/human-eval/<commit>/`, with the commit and the file's SHA-256 pinned as constants
-next to `MULTIPL_E` and `LIVECODEBENCH`. A digest that differs removes the file and stops.
+`harness/cache/human-eval/<commit>/`, with the full 40-character commit and the file's SHA-256
+pinned as constants next to `MULTIPL_E` and `LIVECODEBENCH`. `download` today returns a cached
+file unchecked and moves a fresh one into place before anything could check it, so it gains an
+optional digest: the `.part` file's bytes are checked before the rename, a cached file is checked
+on every read, and one that differs is removed and stops the run. Decompression is bounded in bytes.
 
 **Translating** (R1.2, R1.6). Each JSONL record (`task_id`, `prompt`, `canonical_solution`,
 `test`, `entry_point`) is joined into the text MultiPL-E's typed originals hold — the prompt, then
@@ -34,7 +37,8 @@ gain. So `AgentTask` gets its files as data — `workspace`, `hidden` and `solut
   `approx`, `set(got) == set(want)` for `set`;
 - kind `implement`, id `humaneval-<n>`.
 
-`lay` writes the dictionaries instead of copying a tree, for both kinds of task.
+`lay` writes the dictionaries instead of copying a tree, for both kinds of task, refusing a name
+that is absolute, holds `..`, or resolves outside the target.
 
 **Prompt** (R1.5): "Implement `<name>` in `solution.lotml` as its docstring says. Keep its
 signature." — fixed, so the arms differ only in their context.
