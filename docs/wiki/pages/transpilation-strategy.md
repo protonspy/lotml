@@ -119,6 +119,25 @@ when the elements cannot change — and traps integer arithmetic inline, after t
 result is assigned. On the 694 stored variant B answers the checker accepts, it gives the same
 verdict on the hidden tests as the phase 0 transpiler.
 
+## The phase 3 backend
+
+`compiler/crates/lotml-c` compiles a checked module to one C11 file over a reference-counting
+runtime (adr:0014-c-target-as-monomorphic-c-over-a-counting-runtime). Lowering gives a typed,
+monomorphic form, a generic function compiled once per instantiation and a `dyn` value calling
+through a table; counts follow liveness, a dying value is reused in place when it is unique, and
+`#line` directives make the C compiler, a debugger and a panic name the `.lotml` line. `lotml
+run`, `test` and `build` take `--target c`, and `lotml test` reports on it what it reports on the
+Python target, field for field. The suite is the corpus: all 509 programs report the same on both
+targets (`harness/results/parity.md`). A program importing a Python module is refused at the
+import; a C library is called directly and linked
+(adr:0013-c-libraries-through-interfaces-named-c).
+
+The benchmarks against C (`harness/results/benchmarks.md`) found the costs in the C the backend
+writes rather than in counting: the location a failing check reports, built at each use, cost a
+list store ten times its price under gcc until it became a static constant per line, and the
+copy-on-write check moved out of loops that only store into a list. What remains is the checks
+themselves, which the phase 3 gate measures ([[evaluation-harness]]).
+
 ## Python and lotml calling each other
 
 Phase 2 built both directions of R14 and R27 on one checked boundary
