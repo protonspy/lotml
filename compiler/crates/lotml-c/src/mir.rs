@@ -48,6 +48,8 @@ pub struct Place {
 pub enum Proj {
     /// An element of a list.
     Index(Operand),
+    /// A field of a record.
+    Field(usize),
 }
 
 #[derive(Clone, Debug)]
@@ -56,12 +58,14 @@ pub enum StmtKind {
     Let(Local, Expr),
     /// `place = value`, the value it held dropped.
     Store(Place, Operand),
-    /// A runtime function that changes the value at `place`, given a pointer to its slot.
+    /// A runtime function that changes the value at `place`, given a pointer to its slot; what
+    /// it returns is set in `result`, when there is one.
     Mutate {
         name: &'static str,
         place: Place,
         args: Vec<Arg>,
         at: bool,
+        result: Option<Local>,
     },
     /// Evaluate for its effect.
     Do(Expr),
@@ -128,6 +132,8 @@ pub enum Arg {
     Value(Operand),
     /// A pointer to the operand's value, of the given type: how the runtime takes an element.
     Address(Operand, Ty),
+    /// A pointer to a local the function sets, whatever it returns: an output.
+    Out(Local, Ty),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -229,6 +235,51 @@ pub enum Expr {
         tuple: Operand,
         index: usize,
     },
+    /// A new record (`variant` None) or variant of a sum type `ty`, holding `fields`.
+    Construct {
+        ty: Ty,
+        variant: Option<usize>,
+        fields: Vec<Operand>,
+    },
+    /// A variant of `ty` without fields: a static cell.
+    UnitVariant {
+        ty: Ty,
+        variant: usize,
+    },
+    /// A field of a record (`variant` None) or of a variant, read.
+    Field {
+        value: Operand,
+        ty: Ty,
+        variant: Option<usize>,
+        index: usize,
+    },
+    /// The variant a value of a sum type is.
+    Tag(Operand),
+    /// An optional `ty` holding `value`, or `None`.
+    OptNew {
+        ty: Ty,
+        value: Option<Operand>,
+    },
+    OptIsSome(Operand),
+    /// The value inside an optional known to hold one, read.
+    OptValue(Operand),
+    /// A result `ty`: `Ok(value)` when `ok`, else `Err(value)`.
+    ResultNew {
+        ty: Ty,
+        ok: bool,
+        value: Operand,
+    },
+    ResultIsOk(Operand),
+    /// An optional `ty` holding `value` when `cond` holds, else `None`.
+    OptIf {
+        ty: Ty,
+        cond: Operand,
+        value: Operand,
+    },
+    /// The value of an `Ok`, read.
+    ResultValue(Operand),
+    /// The error of an `Err`, read.
+    ResultError(Operand),
 }
 
 #[derive(Clone, Debug)]
@@ -241,6 +292,7 @@ impl Arg {
     pub fn operand(&self) -> Option<&Operand> {
         match self {
             Arg::Value(o) | Arg::Address(o, _) => Some(o),
+            Arg::Out(..) => None,
         }
     }
 }
@@ -250,7 +302,21 @@ impl Expr {
     pub fn operands(&self, f: &mut impl FnMut(&Operand)) {
         match self {
             Expr::Use(a) | Expr::Unary(_, a, _) | Expr::Convert(a, ..) | Expr::ToStr(a, _) | Expr::Len(a, _) => f(a),
-            Expr::TupleGet { tuple, .. } => f(tuple),
+            Expr::TupleGet { tuple, .. }
+            | Expr::Field { value: tuple, .. }
+            | Expr::Tag(tuple)
+            | Expr::OptIsSome(tuple)
+            | Expr::OptValue(tuple)
+            | Expr::ResultNew { value: tuple, .. }
+            | Expr::ResultIsOk(tuple)
+            | Expr::ResultValue(tuple)
+            | Expr::ResultError(tuple) => f(tuple),
+            Expr::OptNew { value, .. } => value.iter().for_each(f),
+            Expr::OptIf { cond, value, .. } => {
+                f(cond);
+                f(value);
+            }
+            Expr::UnitVariant { .. } => {}
             Expr::Binary(_, a, b, _) | Expr::Compare(_, a, b, _) | Expr::MinMax { a, b, .. } => {
                 f(a);
                 f(b);
@@ -259,7 +325,10 @@ impl Expr {
                 f(list);
                 f(index);
             }
-            Expr::Call(_, args) | Expr::ListNew { items: args, .. } | Expr::TupleNew { items: args, .. } => {
+            Expr::Call(_, args)
+            | Expr::ListNew { items: args, .. }
+            | Expr::TupleNew { items: args, .. }
+            | Expr::Construct { fields: args, .. } => {
                 args.iter().for_each(f);
             }
             Expr::Rt { args, .. } | Expr::RtValue { args, .. } => args.iter().filter_map(Arg::operand).for_each(f),
@@ -287,8 +356,9 @@ fn format_operands(parts: &[FormatPart], f: &mut impl FnMut(&Operand)) {
 
 fn place_operands(place: &Place, f: &mut impl FnMut(&Operand)) {
     for proj in &place.proj {
-        let Proj::Index(i) = proj;
-        f(i);
+        if let Proj::Index(i) = proj {
+            f(i);
+        }
     }
 }
 
@@ -356,7 +426,7 @@ pub fn block_types(block: &Block, f: &mut impl FnMut(&Ty)) {
 fn arg_types(args: &[Arg], f: &mut impl FnMut(&Ty)) {
     for a in args {
         match a {
-            Arg::Address(_, ty) => f(ty),
+            Arg::Address(_, ty) | Arg::Out(_, ty) => f(ty),
             Arg::Value(_) => {}
         }
     }
@@ -365,7 +435,16 @@ fn arg_types(args: &[Arg], f: &mut impl FnMut(&Ty)) {
 fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
     match e {
         Expr::ListNew { elem, .. } | Expr::ListGet { elem, .. } => f(&Ty::List(Box::new(elem.clone()))),
-        Expr::TupleNew { ty, .. } | Expr::ToStr(_, ty) | Expr::Contains { ty, .. } => f(ty),
+        Expr::TupleNew { ty, .. }
+        | Expr::ToStr(_, ty)
+        | Expr::Contains { ty, .. }
+        | Expr::Construct { ty, .. }
+        | Expr::UnitVariant { ty, .. }
+        | Expr::Field { ty, .. }
+        | Expr::OptNew { ty, .. }
+        | Expr::OptIf { ty, .. }
+        | Expr::ResultNew { ty, .. }
+        | Expr::Compare(_, _, _, ty) => f(ty),
         Expr::Rt { args, .. } => arg_types(args, f),
         Expr::RtValue { args, ty, .. } => {
             arg_types(args, f);
@@ -379,8 +458,25 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
 /// Whether a value of `ty` holds a count: a cell, or a struct holding one.
 pub fn counted(ty: &Ty) -> bool {
     match ty {
-        Ty::Str | Ty::List(_) | Ty::Set(_) | Ty::Dict(..) | Ty::Heap(_) => true,
+        Ty::Str | Ty::List(_) | Ty::Set(_) | Ty::Dict(..) | Ty::Heap(_) | Ty::Adt(..) => true,
         Ty::Tuple(items) => items.iter().any(counted),
+        Ty::Optional(t) => counted(t),
+        Ty::Result(t, e) => counted(t) || counted(e),
         _ => false,
+    }
+}
+
+/// The locals a runtime call of `args` sets through its outputs.
+pub fn outs(args: &[Arg]) -> impl Iterator<Item = Local> + '_ {
+    args.iter().filter_map(|a| if let Arg::Out(l, _) = a { Some(*l) } else { None })
+}
+
+impl Expr {
+    /// The locals the expression sets through outputs, besides the local it is stored in.
+    pub fn outs(&self) -> Vec<Local> {
+        match self {
+            Expr::Rt { args, .. } | Expr::RtValue { args, .. } => outs(args).collect(),
+            _ => Vec::new(),
+        }
     }
 }

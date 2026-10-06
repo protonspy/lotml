@@ -431,6 +431,37 @@ lt_list *lt_list_repeat(const lt_list *l, int64_t times, lt_at at) {
     return c;
 }
 
+bool lt_list_index(const lt_list *l, const void *value, int64_t *out) {
+    *out = lt_list_find(l, value);
+    if (*out < 0) {
+        *out = 0;
+        return false;
+    }
+    return true;
+}
+
+/* `xs.pop()` and `xs.pop(i)`: the element taken out, its count with it. */
+bool lt_list_pop(lt_list **slot, bool has_index, int64_t index, void *out, lt_at at) {
+    memset(out, 0, (*slot)->type->size);
+    if ((*slot)->len == 0) return false;
+    lt_list_unique(slot);
+    lt_list *l = *slot;
+    int64_t i = has_index ? lt_index(l->len, index, at) : l->len - 1;
+    memcpy(out, LT_AT(l, i), l->type->size);
+    memmove(LT_AT(l, i), LT_AT(l, i + 1), (size_t)(l->len - i - 1) * l->type->size);
+    l->len--;
+    return true;
+}
+
+/* `xs.last()`: the last element, counted once more. */
+bool lt_list_last(const lt_list *l, void *out) {
+    memset(out, 0, l->type->size);
+    if (l->len == 0) return false;
+    memcpy(out, LT_AT(l, l->len - 1), l->type->size);
+    if (l->type->inc != NULL) l->type->inc(out);
+    return true;
+}
+
 bool lt_list_contains(const lt_list *l, const void *value) {
     return lt_list_find(l, value) >= 0;
 }

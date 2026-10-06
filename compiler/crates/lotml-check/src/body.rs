@@ -324,6 +324,7 @@ impl<'p> Body<'p> {
                     self.coerce(&found, declared, value.span);
                 }
                 let ty = declared.unwrap_or(found);
+                self.seen.insert(name.span, ty.clone());
                 if let ExprKind::Name(param) = &value.kind {
                     let by_copy =
                         self.params.get(param).is_some_and(|c| matches!(c, Convention::Default | Convention::Sink));
@@ -342,6 +343,8 @@ impl<'p> Body<'p> {
                 let declared = self.lower(ty);
                 let found = self.expr(value, Some(&declared));
                 self.coerce(&found, &declared, value.span);
+                // The declared type, by the name's span: what a backend gives the local.
+                self.seen.insert(target.span, declared.clone());
                 self.assign_name(target, declared, Some(stmt.span.start));
                 false
             }

@@ -372,6 +372,162 @@ lt_str *lt_str_chr(int64_t code, lt_at at) {
     return lt_str_new(bytes, lt_encode((int32_t)code, bytes));
 }
 
+/* The value of a decimal digit of any script Python's int() reads, or -1. */
+static int lt_digit_value(int32_t c) {
+    static const int32_t zeros[] = {'0', 0x660, 0x6F0, 0x966, 0x9E6, 0xA66, 0xAE6, 0xB66, 0xBE6, 0xC66, 0xCE6, 0xD66, 0xE50, 0xED0, 0xFF10};
+    for (size_t i = 0; i < sizeof zeros / sizeof zeros[0]; i++) {
+        if (c >= zeros[i] && c <= zeros[i] + 9) return c - zeros[i];
+    }
+    return -1;
+}
+
+/* `s.to_int()`: Python's int(s.strip()) in base 10, or false where it raises ValueError; a value
+ * outside i64 stops the program, as the Python target's does. */
+bool lt_str_to_int(const lt_str *s, int64_t *out, lt_at at) {
+    *out = 0;
+    lt_str *t = lt_str_strip(s, NULL, true, true);
+    int64_t i = 0;
+    bool negative = false;
+    if (i < t->size && (t->bytes[i] == '+' || t->bytes[i] == '-')) {
+        negative = t->bytes[i] == '-';
+        i++;
+    }
+    uint64_t magnitude = 0;
+    bool digits = false;
+    bool after_underscore = false;
+    bool overflow = false;
+    while (i < t->size) {
+        int n;
+        int32_t c = lt_decode(t->bytes + i, &n);
+        i += n;
+        if (c == '_') {
+            if (!digits || after_underscore) {
+                lt_str_drop(t);
+                return false;
+            }
+            after_underscore = true;
+            continue;
+        }
+        int d = lt_digit_value(c);
+        if (d < 0) {
+            lt_str_drop(t);
+            return false;
+        }
+        if (magnitude > (UINT64_MAX - (uint64_t)d) / 10) overflow = true;
+        magnitude = magnitude * 10 + (uint64_t)d;
+        digits = true;
+        after_underscore = false;
+    }
+    lt_str_drop(t);
+    if (!digits || after_underscore) return false;
+    if (overflow || magnitude > (negative ? (uint64_t)INT64_MAX + 1 : (uint64_t)INT64_MAX)) lt_overflow(at, "int");
+    *out = negative ? (int64_t)(0 - magnitude) : (int64_t)magnitude;
+    return true;
+}
+
+static bool lt_ascii_equal_folded(const char *text, int64_t size, const char *word) {
+    size_t n = strlen(word);
+    if ((size_t)size != n) return false;
+    for (size_t i = 0; i < n; i++) {
+        char c = text[i];
+        if (c >= 'A' && c <= 'Z') c = (char)(c + 32);
+        if (c != word[i]) return false;
+    }
+    return true;
+}
+
+/* `s.to_float()`: Python's float(s.strip()) — digits with `_` between them, a point, an
+ * exponent, `inf`, `infinity` and `nan` in any case — or false where it raises ValueError. */
+bool lt_str_to_float(const lt_str *s, double *out) {
+    *out = 0.0;
+    lt_str *t = lt_str_strip(s, NULL, true, true);
+    const char *p = t->bytes;
+    int64_t size = t->size;
+    int64_t i = 0;
+    double sign = 1.0;
+    if (i < size && (p[i] == '+' || p[i] == '-')) {
+        if (p[i] == '-') sign = -1.0;
+        i++;
+    }
+    if (lt_ascii_equal_folded(p + i, size - i, "inf") || lt_ascii_equal_folded(p + i, size - i, "infinity")) {
+        *out = sign * INFINITY;
+        lt_str_drop(t);
+        return true;
+    }
+    if (lt_ascii_equal_folded(p + i, size - i, "nan")) {
+        *out = sign < 0 ? -NAN : NAN;
+        lt_str_drop(t);
+        return true;
+    }
+    char *clean = malloc((size_t)size + 1);
+    int64_t n = 0;
+    int64_t start = 0;
+    if (start < size && (p[start] == '+' || p[start] == '-')) clean[n++] = p[start++];
+    bool digits = false;
+    bool ok = true;
+    int part = 0;
+    for (int64_t k = start; k < size && ok; k++) {
+        char c = p[k];
+        if (c >= '0' && c <= '9') {
+            clean[n++] = c;
+            if (part < 2) digits = true;
+        } else if (c == '_') {
+            ok = k > start && k + 1 < size && p[k - 1] >= '0' && p[k - 1] <= '9' && p[k + 1] >= '0' && p[k + 1] <= '9';
+        } else if (c == '.' && part == 0) {
+            clean[n++] = c;
+            part = 1;
+        } else if ((c == 'e' || c == 'E') && part < 2 && digits) {
+            clean[n++] = c;
+            part = 2;
+            if (k + 1 < size && (p[k + 1] == '+' || p[k + 1] == '-')) clean[n++] = p[++k];
+            if (k + 1 >= size || p[k + 1] < '0' || p[k + 1] > '9') ok = false;
+        } else {
+            ok = false;
+        }
+    }
+    clean[n] = '\0';
+    lt_str_drop(t);
+    if (!ok || !digits) {
+        free(clean);
+        return false;
+    }
+    *out = strtod(clean, NULL);
+    free(clean);
+    return true;
+}
+
+/* `s.find(sub)` and `s.rfind(sub)`: the code point index of the first (or last) occurrence. */
+bool lt_str_find(const lt_str *s, const lt_str *sub, bool last, int64_t *out) {
+    *out = 0;
+    int64_t hit = -1;
+    if (last) {
+        for (int64_t from = 0;;) {
+            int64_t next = lt_find_bytes(s, sub, from);
+            if (next < 0) break;
+            hit = next;
+            from = next + 1;
+            if (sub->size == 0 && from > s->size) break;
+        }
+    } else {
+        hit = lt_find_bytes(s, sub, 0);
+    }
+    if (hit < 0) return false;
+    *out = s->size == s->length ? hit : lt_count_points(s->bytes, hit);
+    return true;
+}
+
+/* `s.split_once(sep)`: what comes before the first `sep` and what comes after it. */
+bool lt_str_split_once(const lt_str *s, const lt_str *sep, lt_str **head, lt_str **tail, lt_at at) {
+    *head = NULL;
+    *tail = NULL;
+    if (sep->size == 0) lt_value_error(at, "empty separator");
+    int64_t hit = lt_find_bytes(s, sep, 0);
+    if (hit < 0) return false;
+    *head = lt_str_new(s->bytes, hit);
+    *tail = lt_str_new(s->bytes + hit + sep->size, s->size - hit - sep->size);
+    return true;
+}
+
 /* Case ------------------------------------------------------------------------------------- */
 
 static void lt_put_upper(lt_buf *b, int32_t c) {

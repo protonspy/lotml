@@ -6,6 +6,7 @@ mod emit;
 mod lower;
 mod mir;
 mod own;
+mod types;
 
 use std::path::Path;
 

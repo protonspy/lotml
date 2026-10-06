@@ -4,7 +4,7 @@
 //! that only reads it lets it be decremented right after, when it was the last. A branch
 //! decrements on entry what it never uses; a spent loop, on exit, what is not used after it.
 
-use crate::mir::{Arg, Block, Expr, Function, Local, LocalInfo, Operand, Stmt, StmtKind, counted};
+use crate::mir::{Arg, Block, Expr, Function, Local, LocalInfo, Operand, Stmt, StmtKind, counted, outs};
 
 /// A set of locals, as bits.
 #[derive(Clone, PartialEq, Eq)]
@@ -124,11 +124,17 @@ impl Pass {
             StmtKind::Let(x, e) => {
                 let mut s = out.clone();
                 s.remove(*x);
+                for o in e.outs() {
+                    s.remove(o);
+                }
                 self.add_expr(&mut s, e);
                 s
             }
             StmtKind::Do(e) => {
                 let mut s = out.clone();
+                for o in e.outs() {
+                    s.remove(o);
+                }
                 self.add_expr(&mut s, e);
                 s
             }
@@ -138,8 +144,11 @@ impl Pass {
                 self.add(&mut s, v);
                 s
             }
-            StmtKind::Mutate { place, args, .. } => {
+            StmtKind::Mutate { place, args, result, .. } => {
                 let mut s = out.clone();
+                for o in outs(args).chain(*result) {
+                    s.remove(o);
+                }
                 self.add(&mut s, &Operand::Local(place.local));
                 self.add_args(&mut s, args);
                 s
@@ -207,7 +216,17 @@ impl Pass {
 
     fn uses_of(&self, e: &Expr) -> Uses {
         let mut uses = Uses::default();
-        let stores = matches!(e, Expr::Use(_) | Expr::Call(..) | Expr::TupleNew { .. } | Expr::ListNew { .. });
+        let stores = matches!(
+            e,
+            Expr::Use(_)
+                | Expr::Call(..)
+                | Expr::TupleNew { .. }
+                | Expr::ListNew { .. }
+                | Expr::Construct { .. }
+                | Expr::OptNew { .. }
+                | Expr::OptIf { .. }
+                | Expr::ResultNew { .. }
+        );
         e.operands(&mut |o| {
             if let Operand::Local(l) = o
                 && self.counted(*l)
@@ -233,6 +252,7 @@ impl Pass {
         let at = |kind| Stmt { line, kind };
         match stmt.kind {
             StmtKind::Let(x, e) => {
+                let set = e.outs();
                 let uses = self.uses_of(&e);
                 let borrowed = matches!(
                     e,
@@ -240,12 +260,19 @@ impl Pass {
                         | Expr::TupleGet { .. }
                         | Expr::RtValue { .. }
                         | Expr::ToStr(_, lotml_check::ty::Ty::Str)
+                        | Expr::Field { .. }
+                        | Expr::OptValue(_)
+                        | Expr::ResultValue(_)
+                        | Expr::ResultError(_)
                 );
                 self.simple(line, uses, live_out, Some((x, borrowed)), StmtKind::Let(x, e), out);
+                self.drop_unused(line, &set, live_out, out);
             }
             StmtKind::Do(e) => {
+                let set = e.outs();
                 let uses = self.uses_of(&e);
                 self.simple(line, uses, live_out, None, StmtKind::Do(e), out);
+                self.drop_unused(line, &set, live_out, out);
             }
             StmtKind::Store(place, v) => {
                 let mut uses = Uses::default();
@@ -253,17 +280,21 @@ impl Pass {
                 self.local_uses(&[&Operand::Local(place.local)], false, &mut uses);
                 self.simple(line, uses, live_out, None, StmtKind::Store(place, v), out);
             }
-            StmtKind::Mutate { name, place, args, at: here } => {
+            StmtKind::Mutate { name, place, args, at: here, result } => {
                 let stores = matches!(name, "lt_list_push" | "lt_list_insert");
                 let mut uses = Uses::default();
                 for a in &args {
                     match a {
                         Arg::Address(o, _) => self.local_uses(&[o], stores, &mut uses),
                         Arg::Value(o) => self.local_uses(&[o], false, &mut uses),
+                        Arg::Out(..) => {}
                     }
                 }
                 self.local_uses(&[&Operand::Local(place.local)], false, &mut uses);
-                self.simple(line, uses, live_out, None, StmtKind::Mutate { name, place, args, at: here }, out);
+                let set: Vec<Local> = outs(&args).collect();
+                let kind = StmtKind::Mutate { name, place, args, at: here, result };
+                self.simple(line, uses, live_out, None, kind, out);
+                self.drop_unused(line, &set, live_out, out);
             }
             StmtKind::Return(Some(v)) => {
                 let mut uses = Uses::default();
@@ -317,6 +348,15 @@ impl Pass {
         new_body.extend(self.block(body, head, live_out, head));
         let exit = self.decs(line, head.minus(live_out));
         (new_body, exit)
+    }
+
+    /// Drop the counted locals a statement set through its outputs that nothing uses after it.
+    fn drop_unused(&self, line: u32, set: &[Local], live_out: &Set, out: &mut Vec<Stmt>) {
+        for &l in set {
+            if self.counted(l) && !live_out.contains(l) {
+                out.push(Stmt { line, kind: StmtKind::Dec(l) });
+            }
+        }
     }
 
     fn decs(&self, line: u32, locals: Vec<Local>) -> Vec<Stmt> {

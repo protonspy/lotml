@@ -467,6 +467,16 @@ lt_list *lt_str_split(const lt_str *s, const lt_str *sep, int64_t maxsplit, lt_a
 lt_list *lt_str_splitlines(const lt_str *s);
 lt_str *lt_str_join(const lt_str *sep, const lt_list *parts);
 lt_str *lt_str_partition_part(const lt_str *s, const lt_str *sep, int which, lt_at at);
+
+/* Functions giving an optional value: true and the value written to `out`, or false and `out`
+ * zeroed — a NULL string or list — so that the local it names is always set. */
+bool lt_str_to_int(const lt_str *s, int64_t *out, lt_at at);
+bool lt_str_to_float(const lt_str *s, double *out);
+bool lt_str_find(const lt_str *s, const lt_str *sub, bool last, int64_t *out);
+bool lt_str_split_once(const lt_str *s, const lt_str *sep, lt_str **head, lt_str **tail, lt_at at);
+bool lt_list_index(const lt_list *l, const void *value, int64_t *out);
+bool lt_list_pop(lt_list **slot, bool has_index, int64_t index, void *out, lt_at at);
+bool lt_list_last(const lt_list *l, void *out);
 void lt_slice_indices(int64_t length, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step,
                       int64_t *start, int64_t *count, int64_t *by, lt_at at);
 

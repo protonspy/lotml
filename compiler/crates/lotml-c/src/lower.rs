@@ -1,12 +1,14 @@
 //! Lowering: the checked syntax tree to the intermediate form, every call resolved and every
 //! intermediate value named (specs/c-backend/design.md).
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
-use lotml_check::Checked;
 use lotml_check::ty::{INT, IntKind, Ty};
+use lotml_check::{Checked, FieldSig, TypeDef};
 use lotml_diag::Diagnostic;
-use lotml_syntax::ast::{self, Arg as AstArg, BoolOp, ExprKind, FnDef, Item, Module, StmtKind as Ast, StrPart};
+use lotml_syntax::ast::{
+    self, Arg as AstArg, BoolOp, ExprKind, FnDef, Item, Module, PatternKind, StmtKind as Ast, StrPart,
+};
 use lotml_syntax::span::Span;
 
 use crate::mir::{
@@ -19,6 +21,8 @@ pub struct Lowered {
     pub functions: Vec<Function>,
     /// Whether the module declares `fn main()`.
     pub main: bool,
+    /// The records and sum types the module declares.
+    pub declared: BTreeMap<String, TypeDef>,
 }
 
 /// The C name of the lotml function `name`.
@@ -33,11 +37,27 @@ pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, 
         line_starts: std::iter::once(0).chain(text.match_indices('\n').map(|(i, _)| i as u32 + 1)).collect(),
         resolved: checked.locals.iter().copied().collect(),
         fns: HashMap::new(),
+        variant_of: HashMap::new(),
+        defaults: HashMap::new(),
         diagnostics: Vec::new(),
     };
     for item in &module.items {
-        if let Item::Fn(f) = item {
-            cx.fns.insert(f.name.name.clone(), f);
+        match item {
+            Item::Fn(f) => {
+                cx.fns.insert(f.name.name.clone(), f);
+            }
+            Item::Record(r) => {
+                let defaults = r.fields.iter().map(|f| f.default.as_ref()).collect();
+                cx.defaults.insert((r.name.name.clone(), None), defaults);
+            }
+            Item::Sum(s) => {
+                for (k, v) in s.variants.iter().enumerate() {
+                    cx.variant_of.insert(v.name.name.clone(), (s.name.name.clone(), k));
+                    let defaults = v.fields.iter().flatten().map(|f| f.default.as_ref()).collect();
+                    cx.defaults.insert((s.name.name.clone(), Some(k)), defaults);
+                }
+            }
+            _ => {}
         }
     }
     let mut functions = Vec::new();
@@ -48,14 +68,14 @@ pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, 
                     functions.push(function);
                 }
             }
-            Item::Test(_) | Item::Error(_) => {}
+            Item::Test(_) | Item::Error(_) | Item::Record(_) | Item::Sum(_) => {}
             other => cx.unsupported(other.span(), "this declaration"),
         }
     }
     if !cx.diagnostics.is_empty() {
         return Err(cx.diagnostics);
     }
-    Ok(Lowered { main: cx.fns.contains_key("main"), functions })
+    Ok(Lowered { main: cx.fns.contains_key("main"), functions, declared: checked.declared.clone() })
 }
 
 struct Context<'a> {
@@ -65,6 +85,10 @@ struct Context<'a> {
     /// Each name that refers to a local, with the span of its declaration.
     resolved: HashMap<Span, Span>,
     fns: HashMap<String, &'a FnDef>,
+    /// Each variant of a declared sum type: its type and its index.
+    variant_of: HashMap<String, (String, usize)>,
+    /// The default of each field of a record (`None` variant) or of a variant.
+    defaults: HashMap<(String, Option<usize>), Vec<Option<&'a ast::Expr>>>,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -88,13 +112,17 @@ impl<'a> Context<'a> {
             return None;
         }
         let line = self.line(f.span.start);
+        let ret = match &sig.error {
+            Some(error) => Ty::Result(Box::new(sig.ret.clone()), Box::new(error.clone())),
+            None => sig.ret.clone(),
+        };
         let mut b = Builder {
             cx: self,
             function: Function {
                 name: function_name(&f.name.name),
                 source_name: f.name.name.clone(),
                 params: Vec::new(),
-                ret: sig.ret.clone(),
+                ret,
                 locals: Vec::new(),
                 body: Vec::new(),
                 line,
@@ -109,6 +137,13 @@ impl<'a> Context<'a> {
         }
         if let Some(body) = &f.body {
             b.statements(&body.stmts);
+            if let Ty::Result(ok, _) = &b.function.ret
+                && is_unit(ok)
+            {
+                b.line = b.cx.line(body.end());
+                let done = b.ok_result(Operand::Const(Const::Unit));
+                b.push(StmtKind::Return(Some(done)));
+            }
         }
         let mut function = b.function;
         function.body = b.blocks.pop().unwrap_or_default();
@@ -239,13 +274,15 @@ impl<'c, 'a> Builder<'c, 'a> {
             Ast::Var { name, value, .. } => {
                 let declared = self.var_type(name.span).unwrap_or_else(|| self.ty(value));
                 let value = self.value(value);
+                let value = self.coerce(value, &declared);
                 let local = self.declare(name.span, &name.name, declared);
                 self.push(StmtKind::Let(local, Expr::Use(value)));
             }
             Ast::Annotated { target, value, .. } => {
-                let ty = self.var_type(target.span).unwrap_or_else(|| self.ty(value));
+                let declared = self.var_type(target.span).unwrap_or_else(|| self.ty(value));
                 let value = self.value(value);
-                let local = self.declare(target.span, &target.name, ty);
+                let value = self.coerce(value, &declared);
+                let local = self.declare(target.span, &target.name, declared);
                 self.push(StmtKind::Let(local, Expr::Use(value)));
             }
             Ast::Assign { target, value } => {
@@ -255,7 +292,28 @@ impl<'c, 'a> Builder<'c, 'a> {
             }
             Ast::AugAssign { target, op, value } => self.aug_assign(target, *op, value),
             Ast::Return(value) => {
-                let value = value.as_ref().map(|v| self.value(v)).filter(|_| !is_unit(&self.function.ret));
+                let ret = self.function.ret.clone();
+                let value = match (&ret, value) {
+                    (Ty::Result(ok, _), _) => {
+                        let v = match value {
+                            Some(v) => {
+                                let v = self.value(v);
+                                self.coerce(v, ok)
+                            }
+                            None => Operand::Const(Const::Unit),
+                        };
+                        Some(self.ok_result(v))
+                    }
+                    (_, Some(v)) if !is_unit(&ret) => {
+                        let v = self.value(v);
+                        Some(self.coerce(v, &ret))
+                    }
+                    (_, Some(v)) => {
+                        self.effect(v);
+                        None
+                    }
+                    (_, None) => None,
+                };
                 self.push(StmtKind::Return(value));
             }
             Ast::Assert { test, .. } => {
@@ -288,9 +346,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                     b.line = line;
                 });
             }
-            Ast::Match { .. } => {
-                self.unsupported(stmt.span, "`match`");
-            }
+            Ast::Match { subject, arms } => self.match_stmt(subject, arms),
             Ast::Error => {}
         }
     }
@@ -311,6 +367,8 @@ impl<'c, 'a> Builder<'c, 'a> {
                         self.declare(decl, name, ty)
                     }
                 };
+                let to = self.function.locals[local].ty.clone();
+                let value = self.coerce(value, &to);
                 self.push(StmtKind::Let(local, Expr::Use(value)));
             }
             ExprKind::Tuple(items) => {
@@ -323,8 +381,12 @@ impl<'c, 'a> Builder<'c, 'a> {
                     self.assign_to(item, part, t);
                 }
             }
-            ExprKind::Index { .. } => match self.place(target) {
-                Some(place) => self.push(StmtKind::Store(place, value)),
+            ExprKind::Index { .. } | ExprKind::Attr { .. } => match self.place(target) {
+                Some(place) => {
+                    let to = self.place_ty(&place);
+                    let value = self.coerce(value, &to);
+                    self.push(StmtKind::Store(place, value));
+                }
                 None => {
                     self.unsupported(target.span, "this assignment target");
                 }
@@ -363,8 +425,27 @@ impl<'c, 'a> Builder<'c, 'a> {
                 place.proj.push(Proj::Index(i));
                 Some(place)
             }
+            ExprKind::Attr { object, name } => {
+                let ty = self.ty(object);
+                let (index, _) = self.record_field(&ty, &name.name)?;
+                let mut place = self.place(object)?;
+                place.proj.push(Proj::Field(index));
+                Some(place)
+            }
             _ => None,
         }
+    }
+
+    /// The type of what `place` holds.
+    fn place_ty(&self, place: &Place) -> Ty {
+        let mut ty = self.function.locals[place.local].ty.clone();
+        for proj in &place.proj {
+            ty = match proj {
+                Proj::Index(_) => element(&ty),
+                Proj::Field(i) => self.fields(&ty, None).get(*i).cloned().unwrap_or(Ty::Error),
+            };
+        }
+        ty
     }
 
     /// The value at `place`, read.
@@ -372,12 +453,284 @@ impl<'c, 'a> Builder<'c, 'a> {
         let mut value = Operand::Local(place.local);
         let mut ty = self.function.locals[place.local].ty.clone();
         for proj in &place.proj {
-            let Proj::Index(i) = proj;
-            let elem = element(&ty);
-            value = self.hold(elem.clone(), Expr::ListGet { list: value, index: i.clone(), elem: elem.clone() });
-            ty = elem;
+            match proj {
+                Proj::Index(i) => {
+                    let elem = element(&ty);
+                    value =
+                        self.hold(elem.clone(), Expr::ListGet { list: value, index: i.clone(), elem: elem.clone() });
+                    ty = elem;
+                }
+                Proj::Field(index) => {
+                    let field = self.fields(&ty, None)[*index].clone();
+                    value =
+                        self.hold(field.clone(), Expr::Field { value, ty: ty.clone(), variant: None, index: *index });
+                    ty = field;
+                }
+            }
         }
         value
+    }
+
+    // Values of declared types, optionals and results ------------------------------------
+
+    /// The types of the fields of a record (`variant` None) or of a variant of `ty`, with its
+    /// type arguments substituted.
+    fn fields(&self, ty: &Ty, variant: Option<usize>) -> Vec<Ty> {
+        let Ty::Adt(name, args) = ty else { return Vec::new() };
+        let substitute = |fields: &[FieldSig], params: &[String]| {
+            fields.iter().map(|f| f.ty.substitute(params, args)).collect::<Vec<Ty>>()
+        };
+        match (self.cx.checked.declared.get(name), variant) {
+            (Some(TypeDef::Record { params, fields }), None) => substitute(fields, params),
+            (Some(TypeDef::Sum { params, variants }), Some(k)) => {
+                variants.get(k).and_then(|v| v.fields.as_deref()).map(|f| substitute(f, params)).unwrap_or_default()
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// The names of the fields of a record or of a variant: `None` for a positional one.
+    fn field_names(&self, ty: &Ty, variant: Option<usize>) -> Vec<Option<String>> {
+        let Ty::Adt(name, _) = ty else { return Vec::new() };
+        match (self.cx.checked.declared.get(name), variant) {
+            (Some(TypeDef::Record { fields, .. }), None) => fields.iter().map(|f| f.name.clone()).collect(),
+            (Some(TypeDef::Sum { variants, .. }), Some(k)) => variants
+                .get(k)
+                .and_then(|v| v.fields.as_deref())
+                .map(|f| f.iter().map(|f| f.name.clone()).collect())
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// The index and type of the field `name` of the record type `ty`.
+    fn record_field(&self, ty: &Ty, name: &str) -> Option<(usize, Ty)> {
+        let index = self.field_names(ty, None).iter().position(|n| n.as_deref() == Some(name))?;
+        Some((index, self.fields(ty, None)[index].clone()))
+    }
+
+    /// `op` as a value of `to`: a value put into an optional where one is wanted, or taken out
+    /// of an optional the checker narrowed.
+    fn coerce(&mut self, op: Operand, to: &Ty) -> Operand {
+        let from = self.local_ty(&op);
+        match to {
+            Ty::Optional(inner) if !matches!(from, Ty::Optional(_) | Ty::Never | Ty::Error) => {
+                if matches!(op, Operand::Const(Const::Unit)) {
+                    return self.hold(to.clone(), Expr::OptNew { ty: to.clone(), value: None });
+                }
+                let v = self.coerce(op, inner);
+                self.hold(to.clone(), Expr::OptNew { ty: to.clone(), value: Some(v) })
+            }
+            _ if matches!(&from, Ty::Optional(inner) if **inner == *to) => self.hold(to.clone(), Expr::OptValue(op)),
+            _ => op,
+        }
+    }
+
+    /// `Ok(value)` of the current function's result type.
+    fn ok_result(&mut self, value: Operand) -> Operand {
+        let ty = self.function.ret.clone();
+        self.hold(ty.clone(), Expr::ResultNew { ty, ok: true, value })
+    }
+
+    /// Return the error `value` from the current function.
+    fn fail_with(&mut self, value: Operand) {
+        let ty = self.function.ret.clone();
+        let Ty::Result(_, error) = &ty else {
+            self.push(StmtKind::Panic(Panic::Assert("an error outside a function that can fail".into())));
+            return;
+        };
+        let value = self.coerce(value, error);
+        let failed = self.hold(ty.clone(), Expr::ResultNew { ty, ok: false, value });
+        self.push(StmtKind::Return(Some(failed)));
+    }
+
+    /// A new record or variant of `ty` from the arguments of its constructor, by position and by
+    /// name, the fields left out given their defaults.
+    fn construct(&mut self, whole: &ast::Expr, ty: Ty, variant: Option<usize>, args: &[AstArg]) -> Value {
+        let names = self.field_names(&ty, variant);
+        let types = self.fields(&ty, variant);
+        let mut slots: Vec<Option<&ast::Expr>> = vec![None; names.len()];
+        let mut next = 0;
+        for a in args {
+            match a {
+                AstArg::Positional(e) => {
+                    if next < slots.len() {
+                        slots[next] = Some(e);
+                    }
+                    next += 1;
+                }
+                AstArg::Keyword(key, e) => {
+                    if let Some(i) = names.iter().position(|n| n.as_deref() == Some(key.name.as_str())) {
+                        slots[i] = Some(e);
+                    }
+                }
+                AstArg::Inout(e, _) => return Value::Done(self.unsupported(e.span, "an `inout` argument")),
+            }
+        }
+        let Ty::Adt(owner, _) = &ty else { return Value::Done(self.unsupported(whole.span, "this constructor")) };
+        let defaults = self.cx.defaults.get(&(owner.clone(), variant)).cloned().unwrap_or_default();
+        let mut fields = Vec::new();
+        for (i, slot) in slots.iter().enumerate() {
+            let Some(e) = slot.or(defaults.get(i).copied().flatten()) else {
+                return Value::Done(self.unsupported(whole.span, "a constructor missing a field"));
+            };
+            let v = self.value(e);
+            fields.push(self.coerce(v, &types[i]));
+        }
+        Value::Expr(Expr::Construct { ty, variant, fields })
+    }
+
+    // match -----------------------------------------------------------------------------
+
+    /// `match`: each arm tried in order, its body run when its pattern matches the subject and
+    /// no arm before it did.
+    fn match_stmt(&mut self, subject: &ast::Expr, arms: &[ast::Arm]) {
+        let ty = self.ty(subject);
+        let value = self.value(subject);
+        let narrow =
+            arms.iter().any(|a| matches!(&a.pattern.kind, PatternKind::Literal(e) if matches!(e.kind, ExprKind::None)));
+        let done = self.temp(Ty::Bool);
+        self.push(StmtKind::Let(done, Expr::Use(flag(false))));
+        let line = self.line;
+        for arm in arms {
+            let body = self.block(|b| {
+                b.pattern(&arm.pattern, value.clone(), &ty, narrow, &mut |b| {
+                    b.push(StmtKind::Let(done, Expr::Use(flag(true))));
+                    b.statements(&arm.body.stmts);
+                });
+            });
+            self.line = line;
+            let open = self.hold(Ty::Bool, Expr::Unary(UnOp::Not, Operand::Local(done), Ty::Bool));
+            self.push(StmtKind::If(open, body, Vec::new()));
+        }
+    }
+
+    /// Run `inner` when `pattern` matches `value`, a value of `ty`, with its names bound.
+    fn pattern(
+        &mut self,
+        pattern: &ast::Pattern,
+        value: Operand,
+        ty: &Ty,
+        narrow: bool,
+        inner: &mut dyn FnMut(&mut Self),
+    ) {
+        match &pattern.kind {
+            PatternKind::Wildcard | PatternKind::Error => inner(self),
+            PatternKind::Name(name) if self.cx.variant_of.contains_key(&name.name) => {
+                self.variant_pattern(&name.name, &[], value, ty, inner);
+            }
+            PatternKind::Name(name) => {
+                let (bound, bound_ty) = match ty {
+                    Ty::Optional(t) if narrow => (self.hold((**t).clone(), Expr::OptValue(value)), (**t).clone()),
+                    _ => (value, ty.clone()),
+                };
+                let local = self.declare(name.span, &name.name, bound_ty);
+                self.push(StmtKind::Let(local, Expr::Use(bound)));
+                inner(self);
+            }
+            PatternKind::Variant { name, args } => self.variant_pattern(&name.name, args, value, ty, inner),
+            PatternKind::Tuple(items) => {
+                let Ty::Tuple(types) = ty else {
+                    self.unsupported(pattern.span, "this tuple pattern");
+                    return;
+                };
+                let mut parts = Vec::new();
+                for (i, (item, t)) in items.iter().zip(types).enumerate() {
+                    let part = self.hold(t.clone(), Expr::TupleGet { tuple: value.clone(), index: i });
+                    parts.push((item, part, t.clone()));
+                }
+                self.patterns(&parts, inner);
+            }
+            PatternKind::Literal(e) => {
+                let test = match (&e.kind, ty) {
+                    (ExprKind::None, _) => {
+                        let some = self.hold(Ty::Bool, Expr::OptIsSome(value));
+                        self.hold(Ty::Bool, Expr::Unary(UnOp::Not, some, Ty::Bool))
+                    }
+                    (_, Ty::Optional(t)) => {
+                        let test = self.temp(Ty::Bool);
+                        let some = self.hold(Ty::Bool, Expr::OptIsSome(value.clone()));
+                        self.push(StmtKind::Let(test, Expr::Use(some.clone())));
+                        let inner_ty = (**t).clone();
+                        let then = self.block(|b| {
+                            let v = b.hold(inner_ty.clone(), Expr::OptValue(value));
+                            let lit = b.value(e);
+                            b.push(StmtKind::Let(test, Expr::Compare(CmpOp::Eq, v, lit, inner_ty)));
+                        });
+                        self.push(StmtKind::If(some, then, Vec::new()));
+                        Operand::Local(test)
+                    }
+                    _ => {
+                        let lit = self.value(e);
+                        self.hold(Ty::Bool, Expr::Compare(CmpOp::Eq, value, lit, ty.clone()))
+                    }
+                };
+                let then = self.block(|b| inner(b));
+                self.push(StmtKind::If(test, then, Vec::new()));
+            }
+        }
+    }
+
+    fn patterns(&mut self, parts: &[(&ast::Pattern, Operand, Ty)], inner: &mut dyn FnMut(&mut Self)) {
+        let Some(((pattern, value, ty), rest)) = parts.split_first() else {
+            inner(self);
+            return;
+        };
+        self.pattern(pattern, value.clone(), ty, false, &mut |b| b.patterns(rest, inner));
+    }
+
+    /// A variant pattern: `Ok(p)`, `Err(p)`, or a variant of a sum type with its fields.
+    fn variant_pattern(
+        &mut self,
+        name: &str,
+        args: &[ast::Pattern],
+        value: Operand,
+        ty: &Ty,
+        inner: &mut dyn FnMut(&mut Self),
+    ) {
+        if let (Ty::Result(ok_ty, err_ty), "Ok" | "Err") = (ty, name) {
+            let ok = self.hold(Ty::Bool, Expr::ResultIsOk(value.clone()));
+            let test = if name == "Ok" { ok } else { self.hold(Ty::Bool, Expr::Unary(UnOp::Not, ok, Ty::Bool)) };
+            let (field_ty, read) = if name == "Ok" {
+                ((**ok_ty).clone(), Expr::ResultValue(value))
+            } else {
+                ((**err_ty).clone(), Expr::ResultError(value))
+            };
+            let then = self.block(|b| match args.first() {
+                Some(p) if !matches!(p.kind, PatternKind::Wildcard) => {
+                    let part = b.hold(field_ty.clone(), read);
+                    b.patterns(&[(p, part, field_ty)], inner);
+                }
+                _ => inner(b),
+            });
+            self.push(StmtKind::If(test, then, Vec::new()));
+            return;
+        }
+        let Some((_, k)) = self.cx.variant_of.get(name).cloned() else {
+            self.cx.unsupported(Span::new(0, 0), "this variant pattern");
+            return;
+        };
+        let tag = self.hold(Ty::Int(IntKind::U32), Expr::Tag(value.clone()));
+        let test = self.hold(
+            Ty::Bool,
+            Expr::Compare(CmpOp::Eq, tag, Operand::Const(Const::Int(k as i128, IntKind::U32)), Ty::Int(IntKind::U32)),
+        );
+        let types = self.fields(ty, Some(k));
+        let ty = ty.clone();
+        let then = self.block(|b| {
+            let mut parts = Vec::new();
+            for (i, p) in args.iter().enumerate() {
+                if matches!(p.kind, PatternKind::Wildcard) {
+                    continue;
+                }
+                let t = types.get(i).cloned().unwrap_or(Ty::Error);
+                let part =
+                    b.hold(t.clone(), Expr::Field { value: value.clone(), ty: ty.clone(), variant: Some(k), index: i });
+                parts.push((p, part, t));
+            }
+            b.patterns(&parts, inner);
+        });
+        self.push(StmtKind::If(test, then, Vec::new()));
     }
 
     fn if_chain(&mut self, branches: &[(ast::Expr, ast::Block)], orelse: Option<&ast::Block>) {
@@ -566,7 +919,21 @@ impl<'c, 'a> Builder<'c, 'a> {
             place: Place { local: list, proj: Vec::new() },
             args: vec![Arg::Address(value, elem.clone())],
             at: false,
+            result: None,
         });
+    }
+
+    /// An optional `ty` from a runtime call that returns whether it found a value and sets it in
+    /// an output: `args` and then the output.
+    fn optional_from(&mut self, ty: &Ty, name: &'static str, mut args: Vec<Arg>, at: bool) -> Value {
+        let inner = match ty {
+            Ty::Optional(t) => (**t).clone(),
+            other => other.clone(),
+        };
+        let found = self.temp(inner.clone());
+        args.push(Arg::Out(found, inner));
+        let ok = self.hold(Ty::Bool, Expr::Rt { name, args, at });
+        Value::Expr(Expr::OptIf { ty: ty.clone(), cond: ok, value: Operand::Local(found) })
     }
 
     /// Every element of `iter`, in a new list.
@@ -658,7 +1025,11 @@ impl<'c, 'a> Builder<'c, 'a> {
                 Value::Done(Operand::Const(Const::Float(value)))
             }
             ExprKind::Bool(v) => Value::Done(Operand::Const(Const::Bool(*v))),
-            ExprKind::None | ExprKind::Unit => Value::Done(Operand::Const(Const::Unit)),
+            ExprKind::None => match self.ty(e) {
+                ty @ Ty::Optional(_) => Value::Expr(Expr::OptNew { ty, value: None }),
+                _ => Value::Done(Operand::Const(Const::Unit)),
+            },
+            ExprKind::Unit => Value::Done(Operand::Const(Const::Unit)),
             ExprKind::Str(literals) => {
                 let parts: Vec<&StrPart> = literals.iter().flat_map(|l| &l.parts).collect();
                 if parts.iter().all(|p| matches!(p, StrPart::Text(_))) {
@@ -670,22 +1041,90 @@ impl<'c, 'a> Builder<'c, 'a> {
                 Value::Expr(Expr::Format(parts))
             }
             ExprKind::Name(name) => match self.local_of(e.span) {
-                Some(local) => Value::Done(Operand::Local(local)),
-                None => Value::Done(self.unsupported(e.span, &format!("the value `{name}`"))),
+                Some(local) => {
+                    let declared = self.function.locals[local].ty.clone();
+                    let seen = self.ty(e);
+                    match &declared {
+                        Ty::Optional(inner) if **inner == seen => Value::Expr(Expr::OptValue(Operand::Local(local))),
+                        _ => Value::Done(Operand::Local(local)),
+                    }
+                }
+                None => match self.cx.variant_of.get(name).cloned() {
+                    Some((_, variant)) => Value::Expr(Expr::UnitVariant { ty: self.ty(e), variant }),
+                    None => Value::Done(self.unsupported(e.span, &format!("the value `{name}`"))),
+                },
             },
+            ExprKind::Attr { object, name } => {
+                let ty = self.ty(object);
+                match self.record_field(&ty, &name.name) {
+                    Some((index, _)) => {
+                        let o = self.value(object);
+                        Value::Expr(Expr::Field { value: o, ty, variant: None, index })
+                    }
+                    None => Value::Done(self.unsupported(e.span, &format!("the field `{}` here", name.name))),
+                }
+            }
+            ExprKind::Coalesce { value, default } => {
+                let ty = self.ty(e);
+                let v = self.value(value);
+                let result = self.temp(ty.clone());
+                let some = self.hold(Ty::Bool, Expr::OptIsSome(v.clone()));
+                let inner_ty = ty.clone();
+                let then = self.block(|b| {
+                    let inner = b.hold(inner_ty.clone(), Expr::OptValue(v));
+                    b.push(StmtKind::Let(result, Expr::Use(inner)));
+                });
+                let never = matches!(self.ty(default), Ty::Never);
+                let otherwise = self.block(|b| {
+                    let d = b.value(default);
+                    if !never {
+                        let d = b.coerce(d, &ty);
+                        b.push(StmtKind::Let(result, Expr::Use(d)));
+                    }
+                });
+                self.push(StmtKind::If(some, then, otherwise));
+                Value::Done(Operand::Local(result))
+            }
+            ExprKind::Try(inner) => {
+                let rty = self.ty(inner);
+                let Ty::Result(_, error) = &rty else {
+                    return Value::Done(self.unsupported(e.span, "`?` on this value"));
+                };
+                let error = (**error).clone();
+                let r = self.value(inner);
+                let ok = self.hold(Ty::Bool, Expr::ResultIsOk(r.clone()));
+                let failed = self.block(|b| {
+                    let err = b.hold(error, Expr::ResultError(r.clone()));
+                    b.fail_with(err);
+                });
+                self.push(StmtKind::If(ok, Vec::new(), failed));
+                Value::Expr(Expr::ResultValue(r))
+            }
+            ExprKind::Fail(inner) => {
+                let v = self.value(inner);
+                self.fail_with(v);
+                Value::Done(Operand::Const(Const::Unit))
+            }
             ExprKind::List(items) => {
                 let elem = element(&self.ty(e));
                 let mut values = Vec::new();
                 for item in items {
-                    values.push(self.value(item));
+                    let v = self.value(item);
+                    values.push(self.coerce(v, &elem));
                 }
                 Value::Expr(Expr::ListNew { elem, items: values })
             }
             ExprKind::Tuple(items) => {
                 let ty = self.ty(e);
+                let types = if let Ty::Tuple(types) = &ty { types.clone() } else { Vec::new() };
                 let mut values = Vec::new();
-                for item in items {
-                    values.push(self.value(item));
+                for (i, item) in items.iter().enumerate() {
+                    let v = self.value(item);
+                    let v = match types.get(i) {
+                        Some(t) => self.coerce(v, t),
+                        None => v,
+                    };
+                    values.push(v);
                 }
                 Value::Expr(Expr::TupleNew { ty, items: values })
             }
@@ -812,7 +1251,18 @@ impl<'c, 'a> Builder<'c, 'a> {
         let Some(((op, right), more)) = rest.split_first() else { return };
         let right_ty = self.ty(right);
         let right_value = self.value(right);
+        let none_on_right = matches!(right.kind, ExprKind::None);
         let compared = match op {
+            ast::CmpOp::Is | ast::CmpOp::IsNot | ast::CmpOp::Eq | ast::CmpOp::NotEq
+                if none_on_right && matches!(left_ty, Ty::Optional(_)) =>
+            {
+                let some = self.hold(Ty::Bool, Expr::OptIsSome(left.clone()));
+                if matches!(op, ast::CmpOp::IsNot | ast::CmpOp::NotEq) {
+                    Expr::Use(some)
+                } else {
+                    Expr::Unary(UnOp::Not, some, Ty::Bool)
+                }
+            }
             ast::CmpOp::In | ast::CmpOp::NotIn => {
                 let contains =
                     Expr::Contains { container: right_value.clone(), item: left.clone(), ty: right_ty.clone() };
@@ -902,6 +1352,24 @@ impl<'c, 'a> Builder<'c, 'a> {
         }
         if let Some(f) = self.cx.fns.get(name.as_str()).copied() {
             return self.call_function(name, f, args);
+        }
+        if matches!(self.cx.checked.declared.get(name), Some(TypeDef::Record { .. })) {
+            let ty = self.ty(whole);
+            return self.construct(whole, ty, None, args);
+        }
+        if let Some((_, k)) = self.cx.variant_of.get(name).cloned() {
+            let ty = self.ty(whole);
+            return self.construct(whole, ty, Some(k), args);
+        }
+        if let ("Ok" | "Err", [AstArg::Positional(inner)]) = (name.as_str(), args) {
+            let ty = self.ty(whole);
+            let Ty::Result(ok_ty, err_ty) = &ty else {
+                return Value::Done(self.unsupported(whole.span, "this result"));
+            };
+            let to = if name == "Ok" { (**ok_ty).clone() } else { (**err_ty).clone() };
+            let v = self.value(inner);
+            let v = self.coerce(v, &to);
+            return Value::Expr(Expr::ResultNew { ty, ok: name == "Ok", value: v });
         }
         let positional: Vec<&ast::Expr> =
             args.iter().filter_map(|a| if let AstArg::Positional(e) = a { Some(e) } else { None }).collect();
@@ -1199,6 +1667,32 @@ impl<'c, 'a> Builder<'c, 'a> {
                 all.push(parts.clone());
                 rt("lt_str_join", all, false)
             }
+            ("to_int", []) => {
+                return self.optional_from(&self.ty(whole), "lt_str_to_int", vec![Arg::Value(receiver)], true);
+            }
+            ("to_float", []) => {
+                return self.optional_from(&self.ty(whole), "lt_str_to_float", vec![Arg::Value(receiver)], false);
+            }
+            ("find" | "rfind", [sub]) => {
+                let args = vec![Arg::Value(receiver), Arg::Value(sub.clone()), Arg::Value(flag(name == "rfind"))];
+                return self.optional_from(&self.ty(whole), "lt_str_find", args, false);
+            }
+            ("split_once", [sep]) => {
+                let (head, tail) = (self.temp(Ty::Str), self.temp(Ty::Str));
+                let args = vec![
+                    Arg::Value(receiver),
+                    Arg::Value(sep.clone()),
+                    Arg::Out(head, Ty::Str),
+                    Arg::Out(tail, Ty::Str),
+                ];
+                let ok = self.hold(Ty::Bool, Expr::Rt { name: "lt_str_split_once", args, at: true });
+                let pair_ty = Ty::Tuple(vec![Ty::Str, Ty::Str]);
+                let pair = self.hold(
+                    pair_ty.clone(),
+                    Expr::TupleNew { ty: pair_ty, items: vec![Operand::Local(head), Operand::Local(tail)] },
+                );
+                return Value::Expr(Expr::OptIf { ty: self.ty(whole), cond: ok, value: pair });
+            }
             ("partition", [sep]) => {
                 let mut parts = Vec::new();
                 for which in 0..3 {
@@ -1224,7 +1718,7 @@ impl<'c, 'a> Builder<'c, 'a> {
         positional: &[&ast::Expr],
         keywords: &[(&str, &ast::Expr)],
     ) -> Value {
-        let mutating = matches!(name, "append" | "extend" | "insert" | "remove" | "clear" | "sort" | "reverse");
+        let mutating = matches!(name, "append" | "extend" | "insert" | "remove" | "clear" | "sort" | "reverse" | "pop");
         if !mutating {
             let list = self.value(object);
             let mut values = Vec::new();
@@ -1238,6 +1732,11 @@ impl<'c, 'a> Builder<'c, 'a> {
                     false,
                 )),
                 ("copy", []) => Value::Expr(rt("lt_list_copy", vec![list], false)),
+                ("index", [x]) => {
+                    let args = vec![Arg::Value(list), Arg::Address(x.clone(), elem.clone())];
+                    self.optional_from(&self.ty(whole), "lt_list_index", args, false)
+                }
+                ("last", []) => self.optional_from(&self.ty(whole), "lt_list_last", vec![Arg::Value(list)], false),
                 _ => Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
             };
         }
@@ -1254,7 +1753,13 @@ impl<'c, 'a> Builder<'c, 'a> {
         for e in positional {
             values.push(self.value(e));
         }
-        let mutate = |name: &'static str, args: Vec<Arg>, at: bool| StmtKind::Mutate { name, place, args, at };
+        let mutate = |name: &'static str, args: Vec<Arg>, at: bool| StmtKind::Mutate {
+            name,
+            place: place.clone(),
+            args,
+            at,
+            result: None,
+        };
         let stmt = match (name, values.as_slice()) {
             ("append", [x]) => mutate("lt_list_push", vec![Arg::Address(x.clone(), elem.clone())], false),
             ("extend", [other]) => mutate("lt_list_extend", vec![Arg::Value(other.clone())], false),
@@ -1263,6 +1768,23 @@ impl<'c, 'a> Builder<'c, 'a> {
             }
             ("remove", [x]) => mutate("lt_list_remove", vec![Arg::Address(x.clone(), elem.clone())], true),
             ("clear", []) => mutate("lt_list_clear", Vec::new(), false),
+            ("pop", rest @ ([] | [_])) => {
+                let ty = self.ty(whole);
+                let found = self.temp(elem.clone());
+                let ok = self.temp(Ty::Bool);
+                let (has, index) = match rest.first() {
+                    Some(i) => (flag(true), i.clone()),
+                    None => (flag(false), int(0)),
+                };
+                self.push(StmtKind::Mutate {
+                    name: "lt_list_pop",
+                    place: place.clone(),
+                    args: vec![Arg::Value(has), Arg::Value(index), Arg::Out(found, elem.clone())],
+                    at: true,
+                    result: Some(ok),
+                });
+                return Value::Expr(Expr::OptIf { ty, cond: Operand::Local(ok), value: Operand::Local(found) });
+            }
             ("reverse", []) => mutate("lt_list_reverse", Vec::new(), false),
             ("sort", []) => {
                 if keywords.iter().any(|(k, _)| *k == "key") {
@@ -1299,11 +1821,22 @@ impl<'c, 'a> Builder<'c, 'a> {
                 AstArg::Inout(e, _) => return Value::Done(self.unsupported(e.span, "an `inout` argument")),
             }
         }
+        let types: Vec<Ty> = self
+            .cx
+            .checked
+            .functions
+            .get(name)
+            .map(|sig| sig.params.iter().map(|p| p.ty.clone()).collect())
+            .unwrap_or_default();
         let mut operands = Vec::new();
-        for (slot, param) in slots.iter().zip(&f.params) {
+        for (i, (slot, param)) in slots.iter().zip(&f.params).enumerate() {
             match slot.or(param.default.as_ref()) {
                 Some(e) => {
                     let v = self.value(e);
+                    let v = match types.get(i) {
+                        Some(t) => self.coerce(v, t),
+                        None => v,
+                    };
                     operands.push(v);
                 }
                 None => return Value::Done(Operand::Const(Const::Unit)),

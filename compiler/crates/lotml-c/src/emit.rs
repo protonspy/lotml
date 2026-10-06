@@ -2,7 +2,7 @@
 //! top, every statement after a `#line` naming its `.lotml` line (R2.3); one struct and one
 //! descriptor per tuple type the program uses.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fmt::Write;
 
 use lotml_check::ty::{FloatKind, IntKind, Ty};
@@ -12,11 +12,12 @@ use crate::mir::{
     Arg, BinOp, Block, CmpOp, Const, Expr, FormatPart, Function, Local, Operand, Panic, Place, Proj, StmtKind, UnOp,
     block_operands, block_types,
 };
+use crate::types::Types;
 
 pub fn program(lowered: &Lowered, file: &str) -> String {
     let file = c_string_text(file.as_bytes());
     let mut literals = BTreeMap::new();
-    let mut types = Types::default();
+    let mut types = Types::new(&lowered.declared);
     for f in &lowered.functions {
         block_operands(&f.body, &mut |o| {
             if let Operand::Const(Const::Str(text)) = o {
@@ -49,11 +50,34 @@ pub fn program(lowered: &Lowered, file: &str) -> String {
     }
     out.push('\n');
     for f in &lowered.functions {
-        Writer { out: &mut out, function: f, file: &file, depth: 1, literals: &literals, types: &types, fresh: 0 }
-            .function();
+        Writer {
+            out: &mut out,
+            declared: &lowered.declared,
+            function: f,
+            file: &file,
+            depth: 1,
+            literals: &literals,
+            types: &types,
+            fresh: 0,
+        }
+        .function();
     }
     out.push_str("int main(void) {\n    lt_init();\n");
-    if lowered.main {
+    let main = lowered.functions.iter().find(|f| f.name == function_name("main"));
+    if let Some(Ty::Result(_, error)) = main.map(|f| &f.ret) {
+        let result = types.c_type(&main.expect("main").ret);
+        let _ = writeln!(out, "    {result} r = {}();", function_name("main"));
+        let drop = types.count(&main.expect("main").ret, false, "r");
+        let _ = writeln!(
+            out,
+            "    if (!r.ok) {{\n        lt_buf b = LT_BUF;\n        lt_buf_puts(&b, \"error: \");\n        ({})->repr(&b, &r.error);\n        \
+             lt_flush();\n        fprintf(stderr, \"%.*s\\n\", (int)b.len, b.data);\n        lt_buf_free(&b);\n        {drop}\n        \
+             return lt_exit(1);\n    }}",
+            types.desc(error)
+        );
+        let _ = writeln!(out, "    {drop}");
+        out.push_str("    return lt_exit(0);\n");
+    } else if lowered.main {
         let _ = writeln!(out, "    {}();", function_name("main"));
         out.push_str("    return lt_exit(0);\n");
     } else {
@@ -77,174 +101,6 @@ fn signature(f: &Function, types: &Types) -> String {
 
 fn is_unit(ty: &Ty) -> bool {
     matches!(ty, Ty::Unit)
-}
-
-/// The types the C defines for this program: one struct and one descriptor per tuple type, in
-/// the order they were met, so a part is defined before what holds it.
-#[derive(Default)]
-struct Types {
-    order: Vec<Ty>,
-    ids: HashMap<Ty, usize>,
-}
-
-impl Types {
-    fn register(&mut self, ty: &Ty) {
-        match ty {
-            Ty::List(t) | Ty::Set(t) | Ty::Heap(t) | Ty::Optional(t) => self.register(t),
-            Ty::Dict(k, v) | Ty::Result(k, v) => {
-                self.register(k);
-                self.register(v);
-            }
-            Ty::Tuple(items) => {
-                for t in items {
-                    self.register(t);
-                }
-                if !self.ids.contains_key(ty) {
-                    self.ids.insert(ty.clone(), self.order.len());
-                    self.order.push(ty.clone());
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn c_type(&self, ty: &Ty) -> String {
-        match ty {
-            Ty::Int(IntKind::I8) => "int8_t".into(),
-            Ty::Int(IntKind::I16) => "int16_t".into(),
-            Ty::Int(IntKind::I32) => "int32_t".into(),
-            Ty::Int(IntKind::I64) => "int64_t".into(),
-            Ty::Int(IntKind::U8) => "uint8_t".into(),
-            Ty::Int(IntKind::U16) => "uint16_t".into(),
-            Ty::Int(IntKind::U32) => "uint32_t".into(),
-            Ty::Int(IntKind::U64) => "uint64_t".into(),
-            // An `f32` is a Python float on the Python target, so it is a double here too.
-            Ty::Float(_) => "double".into(),
-            Ty::Bool => "bool".into(),
-            Ty::Str => "lt_str *".into(),
-            Ty::List(_) => "lt_list *".into(),
-            Ty::Tuple(_) => format!("lt_t{}", self.ids[ty]),
-            Ty::Unit => "uint8_t".into(),
-            _ => "int64_t".into(),
-        }
-    }
-
-    /// The descriptor of `ty`, as a C pointer.
-    fn desc(&self, ty: &Ty) -> String {
-        match ty {
-            Ty::Int(IntKind::I8) => "&lt_type_i8".into(),
-            Ty::Int(IntKind::I16) => "&lt_type_i16".into(),
-            Ty::Int(IntKind::I32) => "&lt_type_i32".into(),
-            Ty::Int(IntKind::I64) => "&lt_type_i64".into(),
-            Ty::Int(IntKind::U8) => "&lt_type_u8".into(),
-            Ty::Int(IntKind::U16) => "&lt_type_u16".into(),
-            Ty::Int(IntKind::U32) => "&lt_type_u32".into(),
-            Ty::Int(IntKind::U64) => "&lt_type_u64".into(),
-            Ty::Float(_) => "&lt_type_f64".into(),
-            Ty::Bool => "&lt_type_bool".into(),
-            Ty::Str => "&lt_type_str".into(),
-            Ty::List(_) => "&lt_type_list".into(),
-            Ty::Tuple(_) => format!("&lt_type_t{}", self.ids[ty]),
-            _ => "&lt_type_none".into(),
-        }
-    }
-
-    /// Whether a value of `ty` holds a count.
-    fn counted(&self, ty: &Ty) -> bool {
-        match ty {
-            Ty::Str | Ty::List(_) => true,
-            Ty::Tuple(items) => items.iter().any(|t| self.counted(t)),
-            _ => false,
-        }
-    }
-
-    /// The structs, functions and descriptors of the tuple types.
-    fn definitions(&self) -> String {
-        let mut out = String::new();
-        for (id, ty) in self.order.iter().enumerate() {
-            let Ty::Tuple(items) = ty else { continue };
-            let fields: Vec<String> =
-                items.iter().enumerate().map(|(i, t)| format!("{} f{i};", self.c_type(t))).collect();
-            let _ = writeln!(out, "typedef struct lt_t{id} {{ {} }} lt_t{id};", fields.join(" "));
-        }
-        for id in 0..self.order.len() {
-            let _ = writeln!(
-                out,
-                "static void lt_inc_t{id}(void *p);\nstatic void lt_dec_t{id}(void *p);\n\
-                 static bool lt_eq_t{id}(const void *a, const void *b);\n\
-                 static int lt_cmp_t{id}(const void *a, const void *b, lt_at at);\n\
-                 static int64_t lt_hash_t{id}(const void *p);\nstatic void lt_repr_t{id}(lt_buf *b, const void *p);\n\
-                 static void lt_share_t{id}(void *p);"
-            );
-        }
-        for id in 0..self.order.len() {
-            let _ = writeln!(
-                out,
-                "static const lt_type lt_type_t{id} LT_UNUSED = {{sizeof(lt_t{id}), lt_inc_t{id}, lt_dec_t{id}, lt_eq_t{id}, \
-                 lt_cmp_t{id}, lt_hash_t{id}, lt_repr_t{id}, lt_repr_t{id}, lt_share_t{id}}};"
-            );
-        }
-        for (id, ty) in self.order.iter().enumerate() {
-            let Ty::Tuple(items) = ty else { continue };
-            let each = |call: &str| -> String {
-                items
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, t)| self.counted(t))
-                    .map(|(i, t)| format!(" ({})->{call}(&v->f{i});", self.desc(t)))
-                    .collect()
-            };
-            let _ = writeln!(out, "static void lt_inc_t{id}(void *p) {{ lt_t{id} *v = p; (void)v;{} }}", each("inc"));
-            let _ = writeln!(out, "static void lt_dec_t{id}(void *p) {{ lt_t{id} *v = p; (void)v;{} }}", each("dec"));
-            let _ =
-                writeln!(out, "static void lt_share_t{id}(void *p) {{ lt_t{id} *v = p; (void)v;{} }}", each("share"));
-            let eq: Vec<String> =
-                items.iter().enumerate().map(|(i, t)| format!("({})->eq(&x->f{i}, &y->f{i})", self.desc(t))).collect();
-            let eq = if eq.is_empty() { "true".to_string() } else { eq.join(" && ") };
-            let _ = writeln!(
-                out,
-                "static bool lt_eq_t{id}(const void *a, const void *b) {{ const lt_t{id} *x = a, *y = b; (void)x; (void)y; return {eq}; }}"
-            );
-            let cmp: String = items
-                .iter()
-                .enumerate()
-                .map(|(i, t)| {
-                    let d = self.desc(t);
-                    format!(" if (!({d})->eq(&x->f{i}, &y->f{i})) return ({d})->cmp(&x->f{i}, &y->f{i}, at);")
-                })
-                .collect();
-            let _ = writeln!(
-                out,
-                "static int lt_cmp_t{id}(const void *a, const void *b, lt_at at) {{ const lt_t{id} *x = a, *y = b; (void)x; (void)y; (void)at;{cmp} return 0; }}"
-            );
-            let lanes: String = items
-                .iter()
-                .enumerate()
-                .map(|(i, t)| format!(" lanes[{i}] = lt_hash_part({}, &v->f{i});", self.desc(t)))
-                .collect();
-            let n = items.len();
-            let _ = writeln!(
-                out,
-                "static int64_t lt_hash_t{id}(const void *p) {{ const lt_t{id} *v = p; int64_t lanes[{}]; (void)v;{lanes} return lt_hash_tuple(lanes, {n}); }}",
-                n.max(1)
-            );
-            let mut repr = String::from(" lt_buf_put(b, \"(\", 1);");
-            for (i, t) in items.iter().enumerate() {
-                if i > 0 {
-                    repr.push_str(" lt_buf_put(b, \", \", 2);");
-                }
-                let _ = write!(repr, " ({})->repr(b, &v->f{i});", self.desc(t));
-            }
-            if n == 1 {
-                repr.push_str(" lt_buf_put(b, \",\", 1);");
-            }
-            repr.push_str(" lt_buf_put(b, \")\", 1);");
-            let _ =
-                writeln!(out, "static void lt_repr_t{id}(lt_buf *b, const void *p) {{ const lt_t{id} *v = p;{repr} }}");
-        }
-        out.push('\n');
-        out
-    }
 }
 
 fn local_name(f: &Function, local: Local) -> String {
@@ -289,11 +145,12 @@ pub fn c_string_text(bytes: &[u8]) -> String {
 
 struct Writer<'a> {
     out: &'a mut String,
+    declared: &'a BTreeMap<String, lotml_check::TypeDef>,
     function: &'a Function,
     file: &'a str,
     depth: usize,
     literals: &'a BTreeMap<String, usize>,
-    types: &'a Types,
+    types: &'a Types<'a>,
     /// The next number for a name the C needs: a buffer, a range.
     fresh: usize,
 }
@@ -335,7 +192,7 @@ impl Writer<'_> {
             if f.params.contains(&i) || is_unit(&info.ty) || matches!(info.ty, Ty::Never) {
                 continue;
             }
-            let init = if matches!(info.ty, Ty::Tuple(_)) { "{0}" } else { "0" };
+            let init = if self.types.by_value(&info.ty) { "{0}" } else { "0" };
             let decl = format!("{} {} = {init};", self.c_type(&info.ty), self.name(i));
             self.line(&decl);
         }
@@ -366,6 +223,31 @@ impl Writer<'_> {
                         self.line(&format!("lt_list_push(&{target}, {address});"));
                     }
                 }
+                StmtKind::Let(local, Expr::Construct { ty, variant, fields }) => {
+                    let target = self.name(*local);
+                    let values: Vec<String> = fields.iter().map(|f| self.operand(f)).collect();
+                    match variant {
+                        None => {
+                            let c = self.types.c_type(ty);
+                            let c = c.trim_end_matches(" *");
+                            self.line(&format!("{target} = lt_alloc(sizeof({c}));"));
+                            for (i, v) in values.iter().enumerate() {
+                                self.line(&format!("{target}->f{i} = {v};"));
+                            }
+                        }
+                        Some(k) => {
+                            let v = self.types.variant(ty, *k);
+                            self.line("{");
+                            self.line(&format!("    {v} *c = lt_alloc(sizeof({v}));"));
+                            self.line(&format!("    c->cell.aux = {k};"));
+                            for (i, value) in values.iter().enumerate() {
+                                self.line(&format!("    c->f{i} = {value};"));
+                            }
+                            self.line(&format!("    {target} = (void *)c;"));
+                            self.line("}");
+                        }
+                    }
+                }
                 StmtKind::Let(local, expr) => {
                     let value = self.expr(expr);
                     if is_unit(&self.function.locals[*local].ty) {
@@ -380,7 +262,7 @@ impl Writer<'_> {
                     let value = self.operand(value);
                     if self.types.counted(&ty) {
                         let c = self.c_type(&ty);
-                        let drop = self.count(&ty, false, "lt_old");
+                        let drop = self.types.count(&ty, false, "lt_old");
                         self.line(&format!("{{ {c} *lt_s = {slot}; {c} lt_old = *lt_s; *lt_s = {value}; {drop} }}"));
                     } else {
                         self.line(&format!("*{slot} = {value};"));
@@ -389,19 +271,25 @@ impl Writer<'_> {
                 StmtKind::Inc(local) | StmtKind::Dec(local) => {
                     let ty = self.function.locals[*local].ty.clone();
                     let name = self.name(*local);
-                    let text = self.count(&ty, matches!(stmt.kind, StmtKind::Inc(_)), &name);
+                    let text = self.types.count(&ty, matches!(stmt.kind, StmtKind::Inc(_)), &name);
                     if !text.is_empty() {
                         self.line(&text);
                     }
                 }
-                StmtKind::Mutate { name, place, args, at } => {
+                StmtKind::Mutate { name, place, args, at, result } => {
                     let slot = self.slot_of_container(place);
                     let mut all = vec![slot];
                     all.extend(args.iter().map(|a| self.arg(a)));
                     if *at {
                         all.push("LT_HERE".to_string());
                     }
-                    self.line(&format!("{name}({});", all.join(", ")));
+                    match result {
+                        Some(r) => {
+                            let r = self.name(*r);
+                            self.line(&format!("{r} = {name}({});", all.join(", ")));
+                        }
+                        None => self.line(&format!("{name}({});", all.join(", "))),
+                    }
                 }
                 StmtKind::Do(expr) => {
                     let value = self.expr(expr);
@@ -432,7 +320,7 @@ impl Writer<'_> {
                         self.line("return;");
                     } else if matches!(value, Operand::Const(Const::Unit)) {
                         // After a panic: never reached, but C wants a value.
-                        let zero = if matches!(self.function.ret, Ty::Tuple(_)) {
+                        let zero = if self.types.by_value(&self.function.ret) {
                             format!("({}){{0}}", self.c_type(&self.function.ret))
                         } else {
                             "0".to_string()
@@ -506,30 +394,35 @@ impl Writer<'_> {
         let mut ty = self.function.locals[place.local].ty.clone();
         let mut slot = format!("&{}", self.name(place.local));
         for proj in &place.proj {
-            let Proj::Index(i) = proj;
-            let elem = match &ty {
-                Ty::List(t) => (**t).clone(),
-                _ => Ty::Unit,
-            };
-            let i = self.operand(i);
-            slot = format!("(({} *)lt_list_slot({slot}, {i}, LT_HERE))", self.c_type(&elem));
-            ty = elem;
+            match proj {
+                Proj::Index(i) => {
+                    let elem = match &ty {
+                        Ty::List(t) => (**t).clone(),
+                        _ => Ty::Unit,
+                    };
+                    let i = self.operand(i);
+                    slot = format!("(({} *)lt_list_slot({slot}, {i}, LT_HERE))", self.c_type(&elem));
+                    ty = elem;
+                }
+                Proj::Field(index) => {
+                    let id = self.types.ids[&ty];
+                    let field = self.record_field_ty(&ty, *index);
+                    slot = format!("(&lt_own_t{id}({slot})->f{index})");
+                    ty = field;
+                }
+            }
         }
         (ty, slot)
     }
 
-    /// The C statement adding (`inc`) or taking a count of the value `name`, of type `ty`; empty
-    /// for a type that holds none. A local not yet set is NULL, which neither touches.
-    fn count(&self, ty: &Ty, inc: bool, name: &str) -> String {
-        match ty {
-            Ty::Str | Ty::List(_) if inc => format!("if ({name}) lt_inc({name});"),
-            Ty::Str => format!("lt_str_drop({name});"),
-            Ty::List(_) => format!("lt_list_drop({name});"),
-            Ty::Tuple(_) if self.types.counted(ty) => {
-                let id = self.types.ids[ty];
-                format!("lt_{}_t{id}(&{name});", if inc { "inc" } else { "dec" })
+    /// The type of the field `index` of the record type `ty`.
+    fn record_field_ty(&self, ty: &Ty, index: usize) -> Ty {
+        let Ty::Adt(name, args) = ty else { return Ty::Unit };
+        match self.declared.get(name) {
+            Some(lotml_check::TypeDef::Record { params, fields }) => {
+                fields.get(index).map(|f| f.ty.substitute(params, args)).unwrap_or(Ty::Unit)
             }
-            _ => String::new(),
+            _ => Ty::Unit,
         }
     }
 
@@ -559,6 +452,7 @@ impl Writer<'_> {
         match arg {
             Arg::Value(o) => self.operand(o),
             Arg::Address(o, ty) => self.address(o, ty),
+            Arg::Out(local, _) => format!("&{}", self.name(*local)),
         }
     }
 
@@ -650,6 +544,39 @@ impl Writer<'_> {
                 format!("(({}){{{}}})", self.c_type(ty), items.join(", "))
             }
             Expr::TupleGet { tuple, index } => format!("({}).f{index}", self.operand(tuple)),
+            Expr::Construct { .. } => "0 /* written by its Let */".to_string(),
+            Expr::UnitVariant { ty, variant } => {
+                format!("(({}) &{})", self.c_type(ty), self.types.variant(ty, *variant))
+            }
+            Expr::Field { value, ty, variant, index } => {
+                let v = self.operand(value);
+                match variant {
+                    None => format!("({v})->f{index}"),
+                    Some(k) => format!("(({} *)({v}))->f{index}", self.types.variant(ty, *k)),
+                }
+            }
+            Expr::Tag(value) => format!("((lt_cell *)({}))->aux", self.operand(value)),
+            Expr::OptNew { ty, value } => match value {
+                Some(v) => format!("(({}){{true, {}}})", self.c_type(ty), self.operand(v)),
+                None => format!("(({}){{false}})", self.c_type(ty)),
+            },
+            Expr::OptIsSome(v) => format!("({}).some", self.operand(v)),
+            Expr::OptIf { ty, cond, value } => {
+                let t = self.c_type(ty);
+                format!("({} ? ({t}){{true, {}}} : ({t}){{false}})", self.operand(cond), self.operand(value))
+            }
+            Expr::OptValue(v) => format!("({}).value", self.operand(v)),
+            Expr::ResultNew { ty, ok, value } => {
+                let v = self.operand(value);
+                if *ok {
+                    format!("(({}){{.ok = true, .value = {v}}})", self.c_type(ty))
+                } else {
+                    format!("(({}){{.ok = false, .error = {v}}})", self.c_type(ty))
+                }
+            }
+            Expr::ResultIsOk(v) => format!("({}).ok", self.operand(v)),
+            Expr::ResultValue(v) => format!("({}).value", self.operand(v)),
+            Expr::ResultError(v) => format!("({}).error", self.operand(v)),
         }
     }
 
@@ -671,7 +598,7 @@ impl Writer<'_> {
                     _ => format!("(lt_str_compare({a}, {b}) {symbol} 0)"),
                 }
             }
-            Ty::List(_) | Ty::Tuple(_) => {
+            Ty::List(_) | Ty::Tuple(_) | Ty::Adt(..) | Ty::Optional(_) | Ty::Result(..) => {
                 let desc = self.types.desc(ty);
                 let (a, b) = (self.address(a, ty), self.address(b, ty));
                 match op {
