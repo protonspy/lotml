@@ -63,7 +63,7 @@ deepagents and in a second harness — on held-out tasks, and the wiki records w
 - [ ] 1.3 (Unit) Write the spec for the seeded failures: lotml programs that check and pass, mutated the ways agents break them, kept only when `check` refuses the mutant or a test then fails, with the known fix as the record
 - [ ] 1.4 (Unit) Write the spec for the guide's evaluation offline: top-1 and top-3 location against the real fix, the share of proposed patches that check and pass, how often it stays silent, latency and memory, on held-out real failures, never seeded ones
 - [ ] 1.5 (Unit) Write the spec for the guide's tool: one MCP call taking the agent's state and answering with a location, a kind of change and at most one patch that `check` accepts, or nothing below the threshold, reachable from every harness `lotml init` registers
-- [ ] 2.1 (Unit) Decide in an ADR, from a pilot, the base model and size, the runtime it is served from and whether it runs on the CPU, and where training runs, with measured time, memory and cost, and record them in `docs/stack.md`
+- [ ] 2.1 (Unit) Decide in an ADR, from a pilot, the base model and size, the runtime it is served from — llama.cpp's `llama-server` the first candidate: GGUF quantized for the CPU, answers held to the guide's JSON schema — and where training runs, with measured time, memory and cost, and record them in `docs/stack.md`
   _Depends 1.1_
 - [ ] 2.2 (Unit) Fine-tune the guide on the guidance records and the seeded failures, and report it on the validation split
   _Depends 1.2, 1.3, 1.4, 2.1_
