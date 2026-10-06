@@ -17,7 +17,7 @@ written for Python, which lotml's syntax follows, and its original release is MI
 tasks can be both measured and trained on — unlike the task set's copy, which comes through
 MultiPL-E and may not be trained on. The same runs are the data the wiki says a compiler-embedded
 model needs — refused answers, the checker as critic, repairs that check
-(docs/wiki/pages/compiler-embedded-model.md). Done when every HumanEval task the translator keeps
+(docs/wiki/pages/compiler-embedded-model.md). Done when every HumanEval task kept
 has run in both arms with its report committed, and a dataset has been exported from it holding
 only sources and models whose terms allow training, each with its evidence.
 
