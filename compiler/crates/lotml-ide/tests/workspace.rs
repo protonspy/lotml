@@ -203,3 +203,28 @@ fn a_changed_file_is_answered_from_its_new_text() {
     assert!(ws.remove(path));
     assert!(ws.diagnostics(path).is_empty() && !ws.contains(path));
 }
+
+#[test]
+fn an_outline_s_symbols_are_named_as_show_and_replace_take_them() {
+    let text = "type Shape = Circle(r: f64) | Empty\n\ntype Point(x: f64, y: f64)\n\ntype Stack[T](items: [T])\n\nimpl Stack[T]:\n    fn push(inout self, item: T):\n        self.items.append(item)\n\ntrait Show:\n    fn show(self) -> str\n\nimpl Show for Point:\n    fn show(self) -> str:\n        return \"p\"\n\nfn area(s: Shape) -> f64:\n    return 0.0\n\ntest \"area\":\n    assert area(Empty) == 0.0\n";
+    let mut workspace = lotml_ide::Workspace::new();
+    let path = std::path::Path::new("shapes.lotml");
+    workspace.set(path, text.to_string());
+    let found = lotml_ide::symbols(&workspace.outline(path));
+    for expected in [
+        "Shape",
+        "Circle",
+        "Empty",
+        "Point",
+        "Point.x",
+        "Stack",
+        "Stack.push",
+        "Show",
+        "Show.show",
+        "Point.show",
+        "area",
+        "test \"area\"",
+    ] {
+        assert!(found.contains(&expected.to_string()), "{expected} missing from {found:?}");
+    }
+}

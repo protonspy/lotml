@@ -372,3 +372,18 @@ fn dev_mutate_lists_each_mutant_as_json_in_source_order_and_is_hidden_from_help(
     assert_eq!(stdout(&lotml(&["dev", "mutate", "a.lotml", "--json"], &dir)), stdout(&out), "deterministic");
     assert!(!stdout(&lotml(&["--help"], &dir)).contains("dev"), "the dev group is hidden");
 }
+
+#[test]
+fn dev_diff_says_where_a_change_falls_and_which_edit_makes_it() {
+    let before = "fn add(a: int, b: int) -> int:\n    return a - b\n";
+    let after = "fn add(a: int, b: int) -> int:\n    return a + b\n";
+    let dir = scratch("dev-diff", &[("before.lotml", before), ("after.lotml", after)]);
+    let out = lotml(&["dev", "diff", "before.lotml", "after.lotml", "--path", "src/add.lotml", "--json"], &dir);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let found: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(found["declarations"], serde_json::json!([{"symbol": "add", "kind": "function", "lines": [1, 2]}]));
+    assert_eq!(found["edit"]["tool"], "replace");
+    assert_eq!(found["edit"]["kind"], "body");
+    assert_eq!(found["edit"]["arguments"]["path"], "src/add.lotml");
+    assert_eq!(found["edit"]["arguments"]["symbol"], "add");
+}

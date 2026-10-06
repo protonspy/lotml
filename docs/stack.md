@@ -19,7 +19,9 @@ is an open decision, never something adopted silently. Decisions that are hard t
 
 A uv project with a lock file, because the harness is a deliverable rather than a one-off
 measurement; it reuses the research stack above (lark, tiktoken, llguidance, pytest, ruff) at the
-same pinned versions.
+same pinned versions, and tokenizers with huggingface_hub to count a guidance record against the
+base model's context with its own tokenizer (specs/guide-records/ R2.6), in a `guide` dependency
+group the default environment leaves out.
 
 - **pytest-cov** — line coverage for the test gate `scc check` reads; chosen over running
   `coverage` by hand because it attaches to the pytest run the suite already is.
