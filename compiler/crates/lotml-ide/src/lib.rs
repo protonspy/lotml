@@ -8,6 +8,7 @@
 
 pub mod edit;
 pub mod lines;
+pub mod mutate;
 pub mod symbols;
 
 use std::collections::{BTreeMap, HashMap, HashSet};

@@ -28,6 +28,6 @@
 
 ## 4 · The split
 
-- [ ] 4.1 (TDD) Map every source's id to its original problem and bucket it by the salted hash, MBPP held out whole, the benchmark in train, an unknown id refused — R4.1, R4.2, R4.3, R4.4
+- [x] 4.1 (TDD) Map every source's id to its original problem and bucket it by the salted hash, MBPP held out whole, the benchmark in train, an unknown id refused — R4.1, R4.2, R4.3, R4.4
 - [ ] 4.2 (Unit) Mark every record with its problem and split, write train and validation apart and held-out nowhere, and count them per source and split in the manifest — R4.5, R4.6
   _Depends 3.4, 4.1_

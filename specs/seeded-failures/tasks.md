@@ -2,10 +2,10 @@
 
 ## 1 · The mutation command
 
-- [ ] 1.1 (TDD) List the mutants of the families that break checking — names, types, calls, mutability — each a single span replaced, with its operator and declaration — R2.1, R2.2
-- [ ] 1.2 (TDD) List the mutants that keep a program checking but change its meaning — operators, bounds, swapped arguments, negated conditions, constants, dropped statements — R2.1, R2.2
+- [x] 1.1 (TDD) List the mutants of the families that break checking — names, types, calls, mutability — each a single span replaced, with its operator and declaration — R2.1, R2.2
+- [x] 1.2 (TDD) List the mutants that keep a program checking but change its meaning — operators, bounds, swapped arguments, negated conditions, constants, dropped statements — R2.1, R2.2
   _Depends 1.1_
-- [ ] 1.3 (Unit) Print them as `lotml dev mutate <file> --json`, deterministic and in source order — R2.1
+- [x] 1.3 (Unit) Print them as `lotml dev mutate <file> --json`, deterministic and in source order — R2.1
   _Depends 1.2_
 
 ## 2 · The programs

@@ -4,6 +4,7 @@
 //! the command could not run.
 
 mod check;
+mod dev;
 mod exec;
 mod files;
 mod index;
@@ -132,6 +133,21 @@ enum Command {
         #[arg(long, default_value = ".")]
         root: PathBuf,
     },
+    /// Commands that build the harness guide's data.
+    #[command(subcommand, hide = true)]
+    Dev(Dev),
+}
+
+#[derive(Subcommand)]
+enum Dev {
+    /// List a file's mutants: each a span replaced, with its operator and declaration.
+    Mutate {
+        /// The file.
+        path: PathBuf,
+        /// Print them as JSON, each with the mutated text.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -178,6 +194,7 @@ fn run() -> ExitCode {
         Command::Init { dir, harness, yes } => return status(init::run(&dir, harness.as_deref(), yes)),
         Command::Lsp => return status(lsp::serve()),
         Command::Mcp { root } => return status(mcp::serve(&root)),
+        Command::Dev(Dev::Mutate { path, json }) => dev::mutate(&path, json),
         Command::Show { symbol, paths } => sources(&paths).map(|s| match index::show(&symbol, &s) {
             Ok(text) => {
                 print!("{text}");
