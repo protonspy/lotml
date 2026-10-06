@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-06 — the tree-sitter grammar for editors generated from the parser's source: [[constrained-decoding]] describes it, [[requirements-and-roadmap]] marks it built
 - 2026-10-06 — C libraries callable from lotml: [[transpilation-strategy]] describes the interfaces named `c.<library>` (adr:0013)
 - 2026-10-06 — colorless concurrency built on the Python target: [[colorless-concurrency]] says what `parallel` does and the capture bug it found
 - 2026-10-06 — the Python→lotml corpus built, 509 programs validated by their tests: [[training-prior]] reports it, [[transpilation-strategy]] describes the pipeline

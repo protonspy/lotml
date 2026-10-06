@@ -78,3 +78,5 @@ over this file answers with the example above as well as with the notes. -->
 - n-0038 2026-10-06 #gotcha @compiler/crates/lotml/src/exec.rs — Python's text-mode stdout writes \r\n on Windows: output a Rust command reads from Python is normalized before it is written to a file
 - n-0039 2026-10-06 #ceiling @compiler/crates/lotml-py/runtime/lotml_rt.py — parallel runs each task on an OS thread, at most 256 at once: tasks beyond that wait for a thread, and a blocking call holds one; green threads arrive with the C target
 - n-0040 2026-10-06 #ceiling @compiler/crates/lotml-check/src/interface.rs — a C interface passes scalars and read-only strings only: pointers, structs, arrays and callbacks need an ownership rule first
+- n-0041 2026-10-06 #gotcha @harness/lotml_harness/lang/dialects.py — Lark settles shift/reduce conflicts by shifting without a word; a grammar generated for another engine must say it (prec.right in tree-sitter)
+- n-0042 2026-10-06 #gotcha @compiler/crates/lotml/src/files.rs — a git hook exports GIT_DIR, and a git command a test or the compiler runs inherits it: clear the GIT_* location variables, or it writes into the repository being pushed

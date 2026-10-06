@@ -104,6 +104,8 @@ class Grammar:
     rules: dict[str, object]
     terminals: dict[str, object]
     ignore: list[str]
+    inlined: frozenset[str] = frozenset()
+    """The rules marked `?`, which leave no node of their own when they hold one child."""
 
 
 def unquote(text: str) -> str:
@@ -144,6 +146,9 @@ def convert(node) -> object:
 def load(variant: str) -> Grammar:
     grammar, _ = load_grammar(source(variant), "<lotml>", [], False)
     rules = {str(name): convert(tree) for name, _params, tree, _options in grammar.rule_defs}
+    inlined = frozenset(
+        str(name) for name, _params, _tree, options in grammar.rule_defs if options.expand1
+    )
     terminals = {}
     for name, (tree, priority) in grammar.term_defs:
         if tree is None:
@@ -151,7 +156,7 @@ def load(variant: str) -> Grammar:
         if priority != 0:
             raise Unportable(f"terminal priority on {name}")
         terminals[name] = convert(tree)
-    return Grammar(rules, terminals, list(grammar.ignore))
+    return Grammar(rules, terminals, list(grammar.ignore), inlined)
 
 
 CONTROL = {"\n": "\\n", "\r": "\\r", "\t": "\\t", "\f": "\\f", "\v": "\\v"}
@@ -1009,12 +1014,172 @@ def gbnf(variant: str = "b") -> str:
     return "\n".join(lines) + "\n"
 
 
+# tree-sitter ------------------------------------------------------------------------------
+
+TREE_SITTER = PUBLISHED / "tree-sitter"
+EXTERNALS = {"_NEWLINE": "_newline", "_INDENT": "_indent", "_DEDENT": "_dedent"}
+"""The layout tokens, which tree-sitter takes from the external scanner in src/scanner.c."""
+
+
+def ts_name(name: str, grammar: Grammar) -> str:
+    """A symbol's name in grammar.js: the start rule is `source_file`, a token is lower case."""
+    if name in EXTERNALS:
+        return EXTERNALS[name]
+    if name == "start":
+        return "source_file"
+    if name in grammar.terminals and name.lower() not in grammar.rules:
+        return name.lower()
+    # A rule Lark inlines is hidden in tree-sitter, so the tree has the same nodes; where the
+    # source already has a rule of that hidden name (`comparison` and `_comparison`), the
+    # inlined one is told apart.
+    if name not in grammar.inlined:
+        return name
+    return f"_{name}_rule" if f"_{name}" in grammar.rules else f"_{name}"
+
+
+def js_string(text: str) -> str:
+    return "'" + text.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n") + "'"
+
+
+def js_regex(pattern: str) -> str:
+    return "/" + pattern.replace("/", "\\/") + "/"
+
+
+def ts_expression(node, grammar: Grammar) -> str:
+    """A node of the source grammar as a grammar.js expression. A token that is a literal, a
+    keyword or an operator, is written in place, so tree-sitter can lex a keyword only where
+    one is expected, as lotml's soft keywords ask."""
+    if isinstance(node, Sym):
+        defined = grammar.terminals.get(node.name)
+        if node.terminal and isinstance(defined, Lit):
+            return js_string(defined.text)
+        return f"$.{ts_name(node.name, grammar)}"
+    if isinstance(node, Lit):
+        return js_string(node.text)
+    if isinstance(node, Re):
+        return js_regex(node.pattern)
+    if isinstance(node, Seq):
+        return "seq(" + ", ".join(ts_expression(i, grammar) for i in node.items) + ")"
+    if isinstance(node, Alt):
+        return "choice(" + ", ".join(ts_expression(o, grammar) for o in node.options) + ")"
+    inner = ts_expression(node.item, grammar)
+    if (node.low, node.high) == (0, 1):
+        return f"optional({inner})"
+    if (node.low, node.high) == (0, None):
+        return f"repeat({inner})"
+    if (node.low, node.high) == (1, None):
+        return f"repeat1({inner})"
+    required = [inner] * node.low
+    if node.high is None:
+        return "seq(" + ", ".join([*required, f"repeat({inner})"]) + ")"
+    return "seq(" + ", ".join(required + [f"optional({inner})"] * (node.high - node.low)) + ")"
+
+
+def without_layout(node):
+    """`node` with the NEWLINE options taken out of its alternatives."""
+    if isinstance(node, Alt):
+        return alt([without_layout(o) for o in node.options if o != Sym("_NEWLINE", terminal=True)])
+    if isinstance(node, Rep):
+        return Rep(without_layout(node.item), node.low, node.high)
+    if isinstance(node, Seq):
+        return seq([without_layout(i) for i in node.items])
+    return node
+
+
+def keywords(variant: str = "b") -> list[str]:
+    """Every word the grammar writes as a literal: lotml's keywords, soft as they are."""
+    grammar = load(variant)
+    found: set[str] = set()
+
+    def walk(node):
+        if isinstance(node, Lit) and node.text.isidentifier():
+            found.add(node.text)
+        for child in children(node):
+            walk(child)
+
+    for node in [*grammar.rules.values(), *grammar.terminals.values()]:
+        walk(node)
+    return sorted(found)
+
+
+CONSTANTS = ("None", "True", "False")
+
+
+def highlights(variant: str = "b") -> str:
+    """tree-sitter's highlight queries for editors: keywords from the same source."""
+    words = [w for w in keywords(variant) if w not in CONSTANTS]
+    lines = [
+        f"; lotml highlights, variant {variant.upper()}. {HEADER}",
+        "",
+        "[" + " ".join(f'"{w}"' for w in words) + "] @keyword",
+        "[" + " ".join(f'"{w}"' for w in CONSTANTS) + "] @constant.builtin",
+        "",
+        "(fn_head (name) @function)",
+        "(type_def (name) @type)",
+        "(type (name) @type)",
+        "(param (name) @variable.parameter)",
+        "",
+        "(string) @string",
+        "(number) @number",
+        "(comment) @comment",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def tree_sitter(variant: str = "b") -> str:
+    """The grammar as tree-sitter's grammar.js, for editors: the same rules, the layout tokens
+    from the external scanner, and the ignored tokens as extras."""
+    grammar = load(variant)
+    rules = []
+    for name, node in grammar.rules.items():
+        if name == "start":
+            # Blank lines between items are the scanner's to skip, not tokens of the file.
+            node = without_layout(node)
+        # Lark's LALR parser settles a shift/reduce conflict by shifting; a rule associating to
+        # the right does the same in tree-sitter, so the two read the same language.
+        body = ts_expression(node, grammar)
+        rules.append(f"    {ts_name(name, grammar)}: $ => prec.right({body}),")
+    for name, node in grammar.terminals.items():
+        if name.startswith("__") or name in EXTERNALS or isinstance(node, Lit):
+            continue
+        body = ts_expression(node, grammar)
+        rules.append(f"    {ts_name(name, grammar)}: $ => token({body}),")
+    # A line break is whitespace once the scanner has looked past it for the layout tokens.
+    extras = ["/\\r?\\n/"] + [
+        ts_expression(grammar.terminals[name], grammar)
+        if name.startswith("__")
+        else f"$.{ts_name(name, grammar)}"
+        for name in grammar.ignore
+    ]
+    externals = ", ".join(f"$.{n}" for n in EXTERNALS.values())
+    lines = [
+        f"// lotml grammar, variant {variant.upper()}, for tree-sitter.",
+        f"// {HEADER}",
+        "// NEWLINE, INDENT and DEDENT come from src/scanner.c, as Python's tokenizer makes them;",
+        "// inside brackets a line break is ignored. Keywords are written in place, so a word is a",
+        "// keyword only where the grammar expects one: lotml's keywords are soft.",
+        "",
+        "module.exports = grammar({",
+        "  name: 'lotml',",
+        f"  externals: $ => [{externals}],",
+        f"  extras: $ => [{', '.join(extras)}],",
+        f"  word: $ => $.{ts_name('NAME', grammar)},",
+        "  rules: {",
+        *rules,
+        "  },",
+        "});",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def published() -> dict[Path, str]:
     """Each published grammar file and the text it should hold."""
     return {
         PUBLISHED / "lotml.ebnf": ebnf("b"),
         PUBLISHED / "lotml.lark": llguidance("b"),
         PUBLISHED / "lotml.gbnf": gbnf("b"),
+        TREE_SITTER / "grammar.js": tree_sitter("b"),
+        TREE_SITTER / "queries" / "highlights.scm": highlights("b"),
     }
 
 

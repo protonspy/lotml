@@ -239,3 +239,83 @@ def test_regex_features_other_engines_lack_are_refused(pattern):
 def test_the_published_grammars_are_generated_from_the_current_source():
     for path, text in dialects.published().items():
         assert path.read_text(encoding="utf-8") == text, f"{path}: run dialects.write()"
+
+
+# tree-sitter ------------------------------------------------------------------------------
+
+
+def test_tree_sitter_writes_each_construct_as_grammar_js_does():
+    grammar = dialects.load("b")
+    name = dialects.Sym("NAME", terminal=True)
+    assert dialects.ts_expression(dialects.Rep(name, 0, 1), grammar) == "optional($.name)"
+    assert dialects.ts_expression(dialects.Rep(name, 1, None), grammar) == "repeat1($.name)"
+    assert dialects.ts_expression(dialects.Rep(name, 2, 3), grammar) == (
+        "seq($.name, $.name, optional($.name))"
+    )
+    assert dialects.ts_expression(dialects.Sym("INOUT", terminal=True), grammar) == "'inout'"
+    assert dialects.ts_expression(dialects.Lit("it's"), grammar) == r"'it\'s'"
+    assert dialects.ts_expression(dialects.Re("a/b"), grammar) == r"/a\/b/"
+
+
+def test_tree_sitter_hides_what_lark_inlines_and_keeps_names_apart():
+    grammar = dialects.load("b")
+    assert dialects.ts_name("start", grammar) == "source_file"
+    assert dialects.ts_name("_NEWLINE", grammar) == "_newline"
+    assert dialects.ts_name("NAME", grammar) == "name"
+    assert dialects.ts_name("fn_def", grammar) == "fn_def"
+    assert dialects.ts_name("item", grammar) == "_item", "`?item` leaves no node in Lark"
+    assert dialects.ts_name("comparison", grammar) == "_comparison_rule", (
+        "the source has `_comparison`"
+    )
+    text = dialects.tree_sitter("b")
+    assert text.count("    _comparison: ") == 1 and text.count("    _comparison_rule: ") == 1
+
+
+def test_the_highlights_name_the_keywords_of_the_grammar():
+    assert {"fn", "match", "case", "parallel"} - set(dialects.keywords("b")) == {"parallel"}
+    text = dialects.highlights("b")
+    assert '"fn"' in text and '"None" "True" "False"] @constant.builtin' in text
+
+
+def tree_sitter_cli():
+    """`npx` to run tree-sitter's CLI, which compiles the parser with the platform's compiler;
+    None where there is none, or where LOTML_SKIP_TREE_SITTER is set."""
+    import os
+    import shutil
+
+    if os.environ.get("LOTML_SKIP_TREE_SITTER"):
+        return None
+    return shutil.which("npx")
+
+
+@pytest.mark.skipif(tree_sitter_cli() is None, reason="needs npx for tree-sitter's CLI")
+def test_tree_sitter_parses_the_corpus_and_the_reference_without_an_error(tmp_path):
+    import shutil
+    import subprocess
+
+    grammar = tmp_path / "tree-sitter"
+    shutil.copytree(
+        dialects.TREE_SITTER,
+        grammar,
+        ignore=shutil.ignore_patterns("parser.c", "*.json", "tree_sitter"),
+    )
+    shutil.copy(dialects.TREE_SITTER / "tree-sitter.json", grammar / "tree-sitter.json")
+    cli = [tree_sitter_cli(), "--yes", "tree-sitter-cli@0.27.0"]
+    generated = subprocess.run(  # noqa: S603 - the CLI, run on the generated grammar
+        [*cli, "generate"], cwd=grammar, capture_output=True, text=True, check=False
+    )
+    assert generated.returncode == 0, generated.stderr
+    sources = tmp_path / "sources"
+    sources.mkdir()
+    for path in CORPUS.glob("*/b.x"):
+        (sources / f"{path.parent.name}.lotml").write_text(
+            path.read_text("utf-8"), encoding="utf-8"
+        )
+    for i, example in enumerate(reference.examples(reference.text())):
+        (sources / f"reference-{i}.lotml").write_text(reference.program(example), encoding="utf-8")
+    files = sorted(str(p) for p in sources.glob("*.lotml"))
+    parsed = subprocess.run(  # noqa: S603 - the CLI, run on the corpus
+        [*cli, "parse", "--quiet", *files], cwd=grammar, capture_output=True, text=True, check=False
+    )
+    errors = [line for line in parsed.stdout.splitlines() if "ERROR" in line or "MISSING" in line]
+    assert parsed.returncode == 0 and not errors, "\n".join(errors[:10]) or parsed.stderr

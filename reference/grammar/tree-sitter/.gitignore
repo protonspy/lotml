@@ -1,0 +1,5 @@
+# What `tree-sitter generate` writes from grammar.js; scanner.c is written by hand.
+src/parser.c
+src/grammar.json
+src/node-types.json
+src/tree_sitter/

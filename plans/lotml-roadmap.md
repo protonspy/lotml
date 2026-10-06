@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: 2ca55785aca5512afb9148a1212253cf9bfaf86247b1ddbab2feb59f903f94d5
+checksum: ebbf9172c251d68ed394cf1b4f01f61c2fe586a4386683e2c61f8887de32a74b
 ---
 
 # lotml roadmap
@@ -113,7 +113,7 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 3.1_
 - [x] 3.8 (Unit) Add the FFI with C, handing blocking calls to dedicated threads (R17; docs/wiki/pages/colorless-concurrency.md)
   _Depends 3.5_
-- [ ] 3.9 (Unit) Generate the tree-sitter grammar for editors from the parser's single source (docs/wiki/pages/requirements-and-roadmap.md)
+- [x] 3.9 (Unit) Generate the tree-sitter grammar for editors from the parser's single source (docs/wiki/pages/requirements-and-roadmap.md)
   _Depends 1.6_
 - [ ] 3.7 (Unit) Review the phase 2 gate — incremental adoption from Python working, corpus validated by tests
   _Depends 3.2, 3.3, 3.4, 3.5, 3.6, 3.8, 3.9_

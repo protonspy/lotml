@@ -24,6 +24,10 @@ same pinned versions.
 - **pytest-cov** — line coverage for the test gate `scc check` reads; chosen over running
   `coverage` by hand because it attaches to the pytest run the suite already is.
 
+- **tree-sitter CLI** 0.27 (development only, through `npx`) — generates the editor grammar in
+  `reference/grammar/tree-sitter/` and parses the corpus with it in the harness tests, which
+  skip without `npx`; it compiles the parser with the platform's C compiler.
+
 ## Compiler (`compiler/`)
 
 A Cargo workspace, Rust 1.97 and edition 2024 (adr:0006-compiler-written-in-rust), with a lock

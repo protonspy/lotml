@@ -116,6 +116,15 @@ legal. Building them surfaced one engine constraint: llguidance's lexer decides 
 ahead, so no lexeme may run on into the next line's indentation — a line end is one lexeme per line,
 and GBNF whitespace is a recursive rule so a converter cannot fuse `is` and `not` into one lexeme.
 
+A fourth dialect is for editors, not for decoding: `reference/grammar/tree-sitter/`, a
+tree-sitter grammar generated from the same source, with highlight queries whose keywords come
+from it too. Three things had to be said explicitly that Lark implies. The layout tokens come
+from a hand-written external scanner, zero-width, so comment lines stay in the tree. Every rule
+associates to the right, because Lark's LALR parser settles each shift/reduce conflict by
+shifting. A rule Lark inlines (`?rule`) is hidden, and renamed where the source also has a rule
+of that hidden name. It is tested by tree-sitter's own CLI, which generates the parser and parses
+every variant B program of the paired corpus and every reference example without an error.
+
 ## Requirements for the published grammar
 
 1. **The grammar accepts exactly the compiler's language**, never less: it is generated from the
