@@ -2,7 +2,8 @@
 autonomy: auto
 ci: wait
 branch: feat/guide-tool
-delivery: in-progress
+delivery: in-review
+pr: 20
 ---
 
 # Guide records — requirements
