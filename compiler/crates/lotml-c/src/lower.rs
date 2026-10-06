@@ -11,7 +11,7 @@ use lotml_syntax::span::Span;
 
 use crate::mir::{
     Arg, BinOp, Block, CmpOp, Const, Expr, FormatPart, Function, Local, LocalInfo, Operand, Panic, Place, Proj, Stmt,
-    StmtKind, UnOp,
+    StmtKind, UnOp, counted,
 };
 
 /// The program as functions of the intermediate form.
@@ -437,7 +437,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let line = self.line;
                 let inner = self.block(|b| body(b, Operand::Local(var), INT));
                 self.line = line;
-                self.push(StmtKind::ForRange { var, start, stop, step, body: inner });
+                self.push(StmtKind::ForRange { var, start, stop, step, body: inner, exit: Vec::new() });
                 return;
             }
             if self.is_prelude(func, "enumerate") && !positional.is_empty() {
@@ -491,7 +491,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let line = self.line;
                 let inner = self.block(|b| body(b, Operand::Local(var), Ty::Str));
                 self.line = line;
-                self.push(StmtKind::ForStr { var, over: snapshot, body: inner });
+                self.push(StmtKind::ForStr { var, over: snapshot, body: inner, exit: Vec::new() });
             }
             _ => {
                 self.unsupported(iter.span, "a loop over this value");
@@ -613,8 +613,12 @@ impl<'c, 'a> Builder<'c, 'a> {
 
     // Expressions -----------------------------------------------------------------------
 
-    /// Evaluate `e` for its effect.
+    /// Evaluate `e` for its effect; a counted value it gives is held, so that it is dropped.
     fn effect(&mut self, e: &ast::Expr) {
+        if counted(&self.ty(e)) {
+            self.value(e);
+            return;
+        }
         match self.expr(e) {
             Value::Done(_) => {}
             Value::Expr(expr) => self.push(StmtKind::Do(expr)),

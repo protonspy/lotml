@@ -71,22 +71,29 @@ pub enum StmtKind {
     Break,
     Continue,
     Return(Option<Operand>),
-    /// Walk `range`: `local` takes each value in turn; the body runs once per value.
+    /// Walk `range`: `local` takes each value in turn; the body runs once per value, and `exit`
+    /// once the range is spent.
     ForRange {
         var: Local,
         start: Operand,
         stop: Operand,
         step: Operand,
         body: Block,
+        exit: Block,
     },
-    /// Walk a string: `var` takes each character in turn.
+    /// Walk a string: `var` takes each character in turn; `exit` runs once it is spent.
     ForStr {
         var: Local,
         over: Operand,
         body: Block,
+        exit: Block,
     },
     /// Stop the program.
     Panic(Panic),
+    /// Add a count to the value of a local.
+    Inc(Local),
+    /// Take a count off the value of a local, freeing it when it was the last.
+    Dec(Local),
 }
 
 #[derive(Clone, Debug)]
@@ -305,17 +312,24 @@ pub fn block_operands(block: &Block, f: &mut impl FnMut(&Operand)) {
             }
             StmtKind::Loop(body) => block_operands(body, f),
             StmtKind::Return(Some(v)) => f(v),
-            StmtKind::ForRange { start, stop, step, body, .. } => {
+            StmtKind::ForRange { start, stop, step, body, exit, .. } => {
                 f(start);
                 f(stop);
                 f(step);
                 block_operands(body, f);
+                block_operands(exit, f);
             }
-            StmtKind::ForStr { over, body, .. } => {
+            StmtKind::ForStr { over, body, exit, .. } => {
                 f(over);
                 block_operands(body, f);
+                block_operands(exit, f);
             }
-            StmtKind::Break | StmtKind::Continue | StmtKind::Return(None) | StmtKind::Panic(_) => {}
+            StmtKind::Break
+            | StmtKind::Continue
+            | StmtKind::Return(None)
+            | StmtKind::Panic(_)
+            | StmtKind::Inc(_)
+            | StmtKind::Dec(_) => {}
         }
     }
 }
@@ -359,5 +373,14 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
         }
         Expr::Print { args, .. } => args.iter().for_each(|(_, ty)| f(ty)),
         _ => {}
+    }
+}
+
+/// Whether a value of `ty` holds a count: a cell, or a struct holding one.
+pub fn counted(ty: &Ty) -> bool {
+    match ty {
+        Ty::Str | Ty::List(_) | Ty::Set(_) | Ty::Dict(..) | Ty::Heap(_) => true,
+        Ty::Tuple(items) => items.iter().any(counted),
+        _ => false,
     }
 }

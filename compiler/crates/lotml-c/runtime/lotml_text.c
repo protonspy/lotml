@@ -184,7 +184,7 @@ lt_str *lt_str_from_buf(lt_buf *b) {
 }
 
 void lt_str_drop(lt_str *s) {
-    if (lt_dec(s)) lt_free(s);
+    if (s != NULL && lt_dec(s)) lt_free(s);
 }
 
 void lt_buf_str(lt_buf *b, const lt_str *s) {

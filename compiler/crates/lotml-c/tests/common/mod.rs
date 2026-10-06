@@ -45,9 +45,17 @@ pub fn run_c_with(name: &str, source: &str, counting: bool) -> Run {
     lotml_c::write_runtime(&dir).unwrap();
     let compiler = lotml_c::driver::find().expect("a C compiler");
     let exe = dir.join(if cfg!(windows) { "prog.exe" } else { "prog" });
-    compiler.build(&dir.join("prog.c"), &exe, &[]).unwrap_or_else(|e| panic!("{e}\n--- the C ---\n{c}"));
-    let out = Command::new(&exe).current_dir(&dir).output().expect("the program runs");
-    finish(out, c)
+    let sanitize = std::env::var_os("LOTML_SANITIZE").is_some();
+    compiler.build_with(&dir.join("prog.c"), &exe, &[], sanitize).unwrap_or_else(|e| panic!("{e}\n--- the C ---\n{c}"));
+    let out =
+        Command::new(&exe).current_dir(&dir).env("ASAN_OPTIONS", "detect_leaks=0").output().expect("the program runs");
+    let run = finish(out, c);
+    assert!(
+        !run.stderr.contains("Sanitizer") && !run.stderr.contains("runtime error:"),
+        "{name}: the sanitizer stopped the program\n{}",
+        run.stderr
+    );
+    run
 }
 
 pub fn run_c(name: &str, source: &str) -> Run {

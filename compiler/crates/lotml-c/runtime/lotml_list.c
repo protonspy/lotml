@@ -152,7 +152,7 @@ static void lt_repr_none(lt_buf *b, const void *a) {
 const lt_type lt_type_none = {sizeof(uint8_t), NULL, NULL, lt_eq_none, lt_cmp_none, lt_hash_none, lt_repr_none, lt_repr_none, NULL};
 
 static void lt_inc_str(void *a) {
-    lt_inc(*(lt_str **)a);
+    if (*(lt_str **)a != NULL) lt_inc(*(lt_str **)a);
 }
 static void lt_dec_str(void *a) {
     lt_str_drop(*(lt_str **)a);
@@ -211,7 +211,7 @@ lt_list *lt_list_new(const lt_type *type, int64_t cap) {
 #define LT_AT(l, i) ((l)->data + (size_t)(i) * (l)->type->size)
 
 void lt_list_drop(lt_list *l) {
-    if (!lt_dec(l)) return;
+    if (l == NULL || !lt_dec(l)) return;
     if (l->type->dec != NULL) {
         for (int64_t i = 0; i < l->len; i++) l->type->dec(LT_AT(l, i));
     }
@@ -220,7 +220,7 @@ void lt_list_drop(lt_list *l) {
 }
 
 void lt_list_inc(void *value) {
-    lt_inc(*(lt_list **)value);
+    if (*(lt_list **)value != NULL) lt_inc(*(lt_list **)value);
 }
 
 void lt_list_dec(void *value) {

@@ -139,6 +139,7 @@ void lt_assert_failed(lt_at at, const char *expression) {
 /* Text ------------------------------------------------------------------------------------- */
 
 void lt_buf_put(lt_buf *b, const char *bytes, size_t length) {
+    if (length == 0) return;
     if (b->len + length > b->cap) {
         size_t cap = b->cap < 64 ? 64 : b->cap * 2;
         while (cap < b->len + length) cap *= 2;

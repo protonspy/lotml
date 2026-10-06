@@ -84,10 +84,20 @@ impl CCompiler {
     /// Build `source`, one C file, into the executable `exe`, linking `libraries` by name; the
     /// compiler's own output when it fails.
     pub fn build(&self, source: &Path, exe: &Path, libraries: &[String]) -> Result<(), String> {
+        self.build_with(source, exe, libraries, false)
+    }
+
+    /// [`CCompiler::build`], with AddressSanitizer and UndefinedBehaviorSanitizer when
+    /// `sanitize` is set and the compiler is gcc or clang: a use after free, a double free or
+    /// undefined behaviour then stops the program with a report.
+    pub fn build_with(&self, source: &Path, exe: &Path, libraries: &[String], sanitize: bool) -> Result<(), String> {
         let mut command = Command::new(&self.program);
         command.args(&self.args).envs(self.env.iter().map(|(k, v)| (k, v)));
         match self.flavor {
             Flavor::Gnu => {
+                if sanitize {
+                    command.args(["-fsanitize=address,undefined", "-fno-sanitize-recover=undefined", "-g"]);
+                }
                 command.args(["-std=c11", "-O2", "-o"]).arg(exe).arg(source).arg("-lm");
                 if !cfg!(windows) {
                     command.arg("-pthread");

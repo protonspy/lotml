@@ -376,9 +376,23 @@ impl Writer<'_> {
                     }
                 }
                 StmtKind::Store(place, value) => {
-                    let slot = self.slot(place);
+                    let (ty, slot) = self.place(place);
                     let value = self.operand(value);
-                    self.line(&format!("*{slot} = {value};"));
+                    if self.types.counted(&ty) {
+                        let c = self.c_type(&ty);
+                        let drop = self.count(&ty, false, "lt_old");
+                        self.line(&format!("{{ {c} *lt_s = {slot}; {c} lt_old = *lt_s; *lt_s = {value}; {drop} }}"));
+                    } else {
+                        self.line(&format!("*{slot} = {value};"));
+                    }
+                }
+                StmtKind::Inc(local) | StmtKind::Dec(local) => {
+                    let ty = self.function.locals[*local].ty.clone();
+                    let name = self.name(*local);
+                    let text = self.count(&ty, matches!(stmt.kind, StmtKind::Inc(_)), &name);
+                    if !text.is_empty() {
+                        self.line(&text);
+                    }
                 }
                 StmtKind::Mutate { name, place, args, at } => {
                     let slot = self.slot_of_container(place);
@@ -429,20 +443,26 @@ impl Writer<'_> {
                         self.line(&format!("return {value};"));
                     }
                 }
-                StmtKind::ForRange { var, start, stop, step, body } => {
+                StmtKind::ForRange { var, start, stop, step, body, exit } => {
                     let walk = self.fresh("r");
                     let (start, stop, step) = (self.operand(start), self.operand(stop), self.operand(step));
                     self.line("{");
                     self.depth += 1;
                     self.line(&format!("lt_range {walk} = lt_range_new({start}, {stop}, {step}, LT_HERE);"));
                     let var = self.name(*var);
-                    self.line(&format!("while (lt_range_step(&{walk}, &{var})) {{"));
+                    self.line("for (;;) {");
+                    self.depth += 1;
+                    self.line(&format!("if (!lt_range_step(&{walk}, &{var})) {{"));
+                    self.nested(exit);
+                    self.line("    break;");
+                    self.line("}");
+                    self.depth -= 1;
                     self.nested(body);
                     self.line("}");
                     self.depth -= 1;
                     self.line("}");
                 }
-                StmtKind::ForStr { var, over, body } => {
+                StmtKind::ForStr { var, over, body, exit } => {
                     let at = self.fresh("p");
                     let width = self.fresh("n");
                     let over = self.operand(over);
@@ -450,8 +470,12 @@ impl Writer<'_> {
                     self.line("{");
                     self.depth += 1;
                     self.line(&format!("int64_t {at} = 0;"));
-                    self.line(&format!("while ({at} < ({over})->size) {{"));
+                    self.line("for (;;) {");
                     self.depth += 1;
+                    self.line(&format!("if ({at} >= ({over})->size) {{"));
+                    self.nested(exit);
+                    self.line("    break;");
+                    self.line("}");
                     self.line(&format!("int {width};"));
                     self.line(&format!("lt_decode(({over})->bytes + {at}, &{width});"));
                     self.line(&format!("{var} = lt_str_new(({over})->bytes + {at}, {width});"));
@@ -494,9 +518,19 @@ impl Writer<'_> {
         (ty, slot)
     }
 
-    /// A pointer to the slot `place` names, for a store.
-    fn slot(&self, place: &Place) -> String {
-        self.place(place).1
+    /// The C statement adding (`inc`) or taking a count of the value `name`, of type `ty`; empty
+    /// for a type that holds none. A local not yet set is NULL, which neither touches.
+    fn count(&self, ty: &Ty, inc: bool, name: &str) -> String {
+        match ty {
+            Ty::Str | Ty::List(_) if inc => format!("if ({name}) lt_inc({name});"),
+            Ty::Str => format!("lt_str_drop({name});"),
+            Ty::List(_) => format!("lt_list_drop({name});"),
+            Ty::Tuple(_) if self.types.counted(ty) => {
+                let id = self.types.ids[ty];
+                format!("lt_{}_t{id}(&{name});", if inc { "inc" } else { "dec" })
+            }
+            _ => String::new(),
+        }
     }
 
     /// A pointer to the slot of the container `place` names, for a runtime function changing it.
@@ -575,7 +609,7 @@ impl Writer<'_> {
                 if *at {
                     args.push("LT_HERE".to_string());
                 }
-                format!("(*(const {} *){name}({}))", self.c_type(ty), args.join(", "))
+                format!("(*({} const *){name}({}))", self.c_type(ty), args.join(", "))
             }
             Expr::Contains { container, item, ty } => {
                 let c = self.operand(container);

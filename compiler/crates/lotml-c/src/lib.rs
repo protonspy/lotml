@@ -5,6 +5,7 @@ pub mod driver;
 mod emit;
 mod lower;
 mod mir;
+mod own;
 
 use std::path::Path;
 
@@ -38,6 +39,9 @@ pub fn compile(source: &str, path: &Path) -> Result<String, Vec<Diagnostic>> {
     if !errors.is_empty() {
         return Err(errors);
     }
-    let lowered = lower::lower(&parsed.module, &checked, source)?;
+    let mut lowered = lower::lower(&parsed.module, &checked, source)?;
+    for f in &mut lowered.functions {
+        own::insert_counts(f);
+    }
     Ok(emit::program(&lowered, &path.display().to_string()))
 }
