@@ -116,6 +116,22 @@ void *lt_alloc(size_t size) {
     return cell;
 }
 
+/* `size` bytes that are not a cell: the program stops when there are none to give. */
+void *lt_malloc(size_t size) {
+    void *p = malloc(size == 0 ? 1 : size);
+    if (p == NULL) lt_panic((lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
+    return p;
+}
+
+/* The bytes `count` elements of `size` take: the program stops when no memory could hold them,
+ * rather than allocate a size that wrapped around. */
+size_t lt_bytes(int64_t count, size_t size) {
+    if (count < 0 || (size > 0 && (uint64_t)count > (uint64_t)PTRDIFF_MAX / size)) {
+        lt_panic((lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
+    }
+    return (size_t)count * size;
+}
+
 /* A cell of `size` for a constructor: the reuse token `token`, of `token_size` bytes, when it is
  * large enough (R3.4), else a new one, the token freed. */
 void *lt_reuse_or_alloc(void *token, size_t token_size, size_t size) {

@@ -209,7 +209,7 @@ pub fn run(path: &Path, target: Target) -> Result<u8, Failure> {
     if target == Target::C {
         let Some(exe) = c_executable(path, &scratch.0, false)? else { return Ok(1) };
         let status = Command::new(&exe).status().map_err(|e| Failure(format!("cannot run {}: {e}", exe.display())))?;
-        return Ok(status.code().map_or(101, |c| u8::try_from(c).unwrap_or(1)));
+        return Ok(exit_status(status));
     }
     let Some(modules) = compile_or_report(&[path.to_path_buf()], &scratch.0)? else { return Ok(1) };
     let name = &modules[0].name;
@@ -224,6 +224,20 @@ pub fn run(path: &Path, target: Target) -> Result<u8, Failure> {
         .status()
         .map_err(|e| Failure(format!("cannot run Python: {e}")))?;
     Ok(status.code().map_or(101, |c| u8::try_from(c).unwrap_or(1)))
+}
+
+/// The C program's exit status as `lotml run` returns it. A program the system stopped — a
+/// signal, or an exception on Windows — says so and counts as a panic, so a crash is never
+/// mistaken for an ordinary exit.
+fn exit_status(status: std::process::ExitStatus) -> u8 {
+    if let Some(code) = status.code().and_then(|c| u8::try_from(c).ok()) {
+        return code;
+    }
+    match status.code() {
+        Some(code) => eprintln!("lotml: the program was stopped by the system (exception {code:#x})"),
+        None => eprintln!("lotml: the program was stopped by a signal ({status})"),
+    }
+    101
 }
 
 /// `lotml test`: every `test` block, with the values a failed comparison saw.

@@ -17,7 +17,7 @@ fn main() {
     let compiler = lotml_c::driver::find().unwrap_or_else(|e| panic!("{e}"));
     let program = compiler.program.file_name().map_or(String::new(), |n| n.to_string_lossy().into_owned());
     println!("{{\"compiler\": {program:?}}}");
-    let scratch = std::env::temp_dir().join(format!("lotml-bench-{}", std::process::id()));
+    let scratch = scratch();
     let mut names: Vec<String> = std::fs::read_dir(&dir)
         .expect("the benchmarks")
         .filter_map(|e| e.ok()?.path().file_name()?.to_str()?.strip_suffix(".lotml").map(String::from))
@@ -49,6 +49,22 @@ fn main() {
         );
     }
     let _ = std::fs::remove_dir_all(&scratch);
+}
+
+/// A directory of its own for the builds, created anew: never one already there.
+fn scratch() -> PathBuf {
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    let dir = std::env::temp_dir().join(format!("lotml-bench-{}-{nanos}", std::process::id()));
+    let builder = std::fs::DirBuilder::new();
+    #[cfg(unix)]
+    let builder = {
+        use std::os::unix::fs::DirBuilderExt;
+        let mut owned = builder;
+        owned.mode(0o700);
+        owned
+    };
+    builder.create(&dir).expect("a new scratch directory");
+    dir
 }
 
 fn exe(dir: &Path, stem: &str) -> PathBuf {

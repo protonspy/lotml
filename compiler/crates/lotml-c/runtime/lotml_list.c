@@ -209,8 +209,7 @@ lt_list *lt_list_new(const lt_type *type, int64_t cap) {
     l->len = 0;
     l->cap = cap > 0 ? cap : 0;
     l->type = type;
-    l->data = cap > 0 ? malloc((size_t)cap * type->size) : NULL;
-    if (cap > 0 && l->data == NULL) lt_panic((lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
+    l->data = cap > 0 ? lt_malloc(lt_bytes(cap, type->size)) : NULL;
     return l;
 }
 
@@ -235,9 +234,9 @@ void lt_list_dec(void *value) {
 
 static void lt_list_grow(lt_list *l, int64_t need) {
     if (need <= l->cap) return;
-    int64_t cap = l->cap < 4 ? 4 : l->cap * 2;
-    while (cap < need) cap *= 2;
-    char *data = realloc(l->data, (size_t)cap * l->type->size);
+    int64_t cap = l->cap < 4 ? 4 : l->cap > INT64_MAX / 2 ? need : l->cap * 2;
+    while (cap < need) cap = cap > INT64_MAX / 2 ? need : cap * 2;
+    char *data = realloc(l->data, lt_bytes(cap, l->type->size));
     if (data == NULL) lt_panic((lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
     l->data = data;
     l->cap = cap;
@@ -389,7 +388,7 @@ void lt_list_sort(lt_list **slot, bool reverse, lt_at at) {
     lt_list_unique(slot);
     lt_list *l = *slot;
     if (l->len < 2) return;
-    char *scratch = malloc((size_t)(l->len / 2 + 1) * l->type->size);
+    char *scratch = lt_malloc(lt_bytes(l->len / 2 + 1, l->type->size));
     lt_merge_sort(l->data, scratch, l->len, l->type, reverse, at);
     free(scratch);
 }
@@ -417,11 +416,11 @@ void lt_list_sort_by_keys(lt_list **slot, const lt_list *keys, bool reverse, lt_
     lt_list_unique(slot);
     lt_list *l = *slot;
     if (l->len < 2) return;
-    int64_t *order = malloc(sizeof(int64_t) * (size_t)l->len);
-    int64_t *scratch = malloc(sizeof(int64_t) * (size_t)(l->len / 2 + 1));
+    int64_t *order = lt_malloc(lt_bytes(l->len, sizeof(int64_t)));
+    int64_t *scratch = lt_malloc(lt_bytes(l->len / 2 + 1, sizeof(int64_t)));
     for (int64_t i = 0; i < l->len; i++) order[i] = i;
     lt_sort_indices(order, scratch, l->len, keys, reverse, at);
-    char *sorted = malloc((size_t)l->len * l->type->size);
+    char *sorted = lt_malloc(lt_bytes(l->len, l->type->size));
     for (int64_t i = 0; i < l->len; i++) memcpy(sorted + (size_t)i * l->type->size, LT_AT(l, order[i]), l->type->size);
     free(l->data);
     l->data = sorted;

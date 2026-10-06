@@ -59,7 +59,7 @@ int64_t lt_hash_str(lt_str *s) {
         i += n;
     }
     int width = widest < 0x100 ? 1 : widest < 0x10000 ? 2 : 4;
-    uint8_t *units = malloc((size_t)(s->length * width));
+    uint8_t *units = lt_malloc(lt_bytes(s->length, (size_t)width));
     int64_t k = 0;
     for (int64_t i = 0; i < s->size;) {
         int n;
@@ -107,7 +107,7 @@ lt_dict *lt_dict_new(const lt_type *key, const lt_type *value) {
     d->cap = 0;
     d->entries = NULL;
     d->mask = 7;
-    d->index = malloc(sizeof(int64_t) * 8);
+    d->index = lt_malloc(sizeof(int64_t) * 8);
     for (int i = 0; i < 8; i++) d->index[i] = LT_DICT_EMPTY;
     return d;
 }
@@ -154,7 +154,7 @@ static void lt_dict_rebuild(lt_dict *d, int64_t size) {
     d->used = live;
     free(d->index);
     d->mask = size - 1;
-    d->index = malloc(sizeof(int64_t) * (size_t)size);
+    d->index = lt_malloc(lt_bytes(size, sizeof(int64_t)));
     for (int64_t i = 0; i < size; i++) d->index[i] = LT_DICT_EMPTY;
     for (int64_t k = 0; k < d->used; k++) {
         char *e = lt_dict_entry(d, k);
@@ -216,7 +216,7 @@ void lt_dict_set(lt_dict **slot, const void *key, const void *value) {
     }
     if (d->used == d->cap) {
         int64_t cap = d->cap < 8 ? 8 : d->cap * 2;
-        char *entries = realloc(d->entries, (size_t)cap * lt_dict_entry_size(d));
+        char *entries = realloc(d->entries, lt_bytes(cap, lt_dict_entry_size(d)));
         if (entries == NULL) lt_panic((lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
         d->entries = entries;
         d->cap = cap;
@@ -725,6 +725,25 @@ lt_set *lt_set_from_list(const lt_type *type, const lt_list *items) {
     return s;
 }
 
+/* A set display of three or more constants as CPython 3.12 and 3.13 build it, which CI and the
+ * harness run: the compiler folds the items into a frozenset (`built`, the items added in order),
+ * rebuilds that frozenset from its own iteration order when it merges constants, and the code
+ * merges it into a new empty set. CPython 3.14 adds the items in order. Takes `built` over. */
+lt_set *lt_set_folded(lt_set *built) {
+    lt_set *again = lt_set_new(built->type);
+    for (int64_t i = 0; i <= built->mask; i++) {
+        char *e = lt_set_slot(built, (uint64_t)i);
+        if (LT_SLOT_STATE(e) != LT_SET_ACTIVE) continue;
+        if (built->type->inc != NULL) built->type->inc(LT_SLOT_KEY(e));
+        lt_set_add_hashed(again, LT_SLOT_KEY(e), LT_SLOT_HASH(e));
+    }
+    lt_set *result = lt_set_new(built->type);
+    lt_set_merge(result, again);
+    lt_set_drop(again);
+    lt_set_drop(built);
+    return result;
+}
+
 /* `a | b`: a copy of `a` with `b` merged in. */
 lt_set *lt_set_union(const lt_set *a, const lt_set *b) {
     lt_set *c = lt_set_copy(a);
@@ -841,8 +860,7 @@ static void lt_show_set(lt_buf *b, const void *a) {
         lt_buf_puts(b, "set()");
         return;
     }
-    char **texts = malloc((size_t)s->used * sizeof(char *));
-    if (texts == NULL) abort();
+    char **texts = lt_malloc(lt_bytes(s->used, sizeof(char *)));
     int64_t n = 0;
     for (int64_t i = 0; i <= s->mask; i++) {
         char *e = lt_set_slot(s, (uint64_t)i);

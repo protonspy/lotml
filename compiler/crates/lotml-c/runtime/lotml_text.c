@@ -340,7 +340,7 @@ lt_str *lt_str_slice(const lt_str *s, bool has_lo, int64_t lo, bool has_hi, int6
         for (int64_t i = 0; i < count; i++) r->bytes[i] = s->bytes[start + i * by];
         return r;
     }
-    int64_t *offsets = malloc(sizeof(int64_t) * (size_t)(s->length + 1));
+    int64_t *offsets = lt_malloc(lt_bytes(s->length + 1, sizeof(int64_t)));
     int64_t at_byte = 0;
     for (int64_t i = 0; i < s->length; i++) {
         offsets[i] = at_byte;
@@ -459,7 +459,7 @@ bool lt_str_to_float(const lt_str *s, double *out) {
         lt_str_drop(t);
         return true;
     }
-    char *clean = malloc((size_t)size + 1);
+    char *clean = lt_malloc((size_t)size + 1);
     int64_t n = 0;
     int64_t start = 0;
     if (start < size && (p[start] == '+' || p[start] == '-')) clean[n++] = p[start++];
@@ -833,6 +833,17 @@ typedef struct lt_spec {
     char type;
 } lt_spec;
 
+/* The most a width or a precision may be. CPython takes up to `sys.maxsize`; past this the text
+ * is beyond any use, and its layout costs time quadratic in it. */
+#define LT_SPEC_LIMIT 10000
+
+/* `value` with the decimal digit `digit` appended, stopping past the limit. */
+static int64_t lt_spec_digit(int64_t value, char digit, lt_at at) {
+    value = value * 10 + (digit - '0');
+    if (value > LT_SPEC_LIMIT) lt_panic(at, "ValueError", "Too many decimal digits in format string");
+    return value;
+}
+
 static LT_NORETURN void lt_bad_spec(const char *spec, size_t size, const char *kind, lt_at at) {
     lt_panicf(at, "ValueError", "Invalid format specifier '%.*s' for object of type '%s'", (int)size, spec, kind);
 }
@@ -873,14 +884,14 @@ static lt_spec lt_parse_spec(const char *spec, size_t size, const char *kind, lt
     }
     if (i < size && spec[i] >= '0' && spec[i] <= '9') {
         s.width = 0;
-        while (i < size && spec[i] >= '0' && spec[i] <= '9') s.width = s.width * 10 + (spec[i++] - '0');
+        while (i < size && spec[i] >= '0' && spec[i] <= '9') s.width = lt_spec_digit(s.width, spec[i++], at);
     }
     if (i < size && (spec[i] == ',' || spec[i] == '_')) s.grouping = spec[i++];
     if (i < size && spec[i] == '.') {
         i++;
         if (i >= size || spec[i] < '0' || spec[i] > '9') lt_panic(at, "ValueError", "Format specifier missing precision");
         s.precision = 0;
-        while (i < size && spec[i] >= '0' && spec[i] <= '9') s.precision = s.precision * 10 + (spec[i++] - '0');
+        while (i < size && spec[i] >= '0' && spec[i] <= '9') s.precision = lt_spec_digit(s.precision, spec[i++], at);
     }
     if (i < size) s.type = spec[i++];
     if (i < size) lt_bad_spec(spec, size, kind, at);
@@ -1051,30 +1062,43 @@ void lt_format_none(lt_buf *b, const char *spec, size_t size, lt_at at) {
     lt_buf_puts(b, "None");
 }
 
+/* `format` applied to `precision` and `value`, in memory of its own as long as the text comes out:
+ * its length in `length`. */
+static char *lt_print_double(const char *format, int precision, double value, int *length) {
+    int n = snprintf(NULL, 0, format, precision, value);
+    char *text = n < 0 ? NULL : malloc((size_t)n + 1);
+    if (text == NULL) lt_panic((lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
+    snprintf(text, (size_t)n + 1, format, precision, value);
+    *length = n;
+    return text;
+}
+
 /* The digits of `magnitude` rounded to `precision` significant digits, and the exponent of the
- * first: as `%.*e` writes them, from which 'g' and the default are laid out. */
-static int lt_round_digits(double magnitude, int precision, char digits[400], int *exponent) {
-    char text[440];
-    snprintf(text, sizeof text, "%.*e", precision - 1, magnitude);
+ * first: as `%.*e` writes them, from which 'g' and the default are laid out. The digits are the
+ * caller's to free; `count` says how many. */
+static char *lt_round_digits(double magnitude, int precision, int *count, int *exponent) {
+    int length;
+    char *text = lt_print_double("%.*e", precision - 1, magnitude, &length);
+    char *p = text;
     int n = 0;
-    const char *p = text;
     for (; *p != 'e'; p++) {
-        if (*p != '.') digits[n++] = *p;
+        if (*p != '.') text[n++] = *p;
     }
-    digits[n] = '\0';
     *exponent = atoi(p + 1);
-    return n;
+    text[n] = '\0';
+    *count = n;
+    return text;
 }
 
 /* 'g' and the default with a precision: positional when -4 <= exponent < threshold, trailing
  * zeros dropped unless `keep`, and ".0" added to a whole number when `dot_zero`. */
 static void lt_general(lt_buf *out, double magnitude, int precision, bool keep, bool dot_zero, bool upper, int threshold) {
-    char digits[400];
-    int exponent;
-    int n = lt_round_digits(magnitude, precision, digits, &exponent);
+    int n, exponent;
+    char *digits = lt_round_digits(magnitude, precision, &n, &exponent);
     if (!keep) {
         while (n > 1 && digits[n - 1] == '0') n--;
     }
+    int whole = exponent + 1;
     if (exponent < -4 || exponent >= threshold) {
         lt_buf_put(out, digits, 1);
         if (n > 1 || keep) lt_buf_put(out, ".", 1);
@@ -1082,16 +1106,11 @@ static void lt_general(lt_buf *out, double magnitude, int precision, bool keep, 
         char tail[8];
         int t = snprintf(tail, sizeof tail, "%c%c%02d", upper ? 'E' : 'e', exponent < 0 ? '-' : '+', exponent < 0 ? -exponent : exponent);
         lt_buf_put(out, tail, (size_t)t);
-        return;
-    }
-    if (exponent < 0) {
+    } else if (exponent < 0) {
         lt_buf_put(out, "0.", 2);
         for (int i = 0; i < -exponent - 1; i++) lt_buf_put(out, "0", 1);
         lt_buf_put(out, digits, (size_t)n);
-        return;
-    }
-    int whole = exponent + 1;
-    if (n <= whole) {
+    } else if (n <= whole) {
         lt_buf_put(out, digits, (size_t)n);
         for (int i = n; i < whole; i++) lt_buf_put(out, "0", 1);
         if (dot_zero) lt_buf_put(out, ".0", 2);
@@ -1099,11 +1118,12 @@ static void lt_general(lt_buf *out, double magnitude, int precision, bool keep, 
             lt_buf_put(out, ".", 1);
             for (int i = whole; i < precision; i++) lt_buf_put(out, "0", 1);
         }
-        return;
+    } else {
+        lt_buf_put(out, digits, (size_t)whole);
+        lt_buf_put(out, ".", 1);
+        lt_buf_put(out, digits + whole, (size_t)(n - whole));
     }
-    lt_buf_put(out, digits, (size_t)whole);
-    lt_buf_put(out, ".", 1);
-    lt_buf_put(out, digits + whole, (size_t)(n - whole));
+    free(digits);
 }
 
 void lt_format_f64(lt_buf *b, double value, const char *spec, size_t size, lt_at at) {
@@ -1122,24 +1142,27 @@ void lt_format_f64(lt_buf *b, double value, const char *spec, size_t size, lt_at
         if (s.type == '%') lt_buf_put(&digits, "%", 1);
     } else {
         int precision = s.precision < 0 ? 6 : (int)s.precision;
-        char text[440];
         switch (s.type) {
         case 'f':
         case 'F':
         case '%': {
             double shown = s.type == '%' ? magnitude * 100.0 : magnitude;
-            int n = snprintf(text, sizeof text, s.alternate && precision == 0 ? "%#.*f" : "%.*f", precision, shown);
+            int n;
+            char *text = lt_print_double(s.alternate && precision == 0 ? "%#.*f" : "%.*f", precision, shown, &n);
             lt_buf_put(&digits, text, (size_t)n);
+            free(text);
             if (s.type == '%') lt_buf_put(&digits, "%", 1);
             break;
         }
         case 'e':
         case 'E': {
-            int n = snprintf(text, sizeof text, s.alternate && precision == 0 ? "%#.*e" : "%.*e", precision, magnitude);
+            int n;
+            char *text = lt_print_double(s.alternate && precision == 0 ? "%#.*e" : "%.*e", precision, magnitude, &n);
             if (upper) {
                 for (int i = 0; i < n; i++) if (text[i] == 'e') text[i] = 'E';
             }
             lt_buf_put(&digits, text, (size_t)n);
+            free(text);
             break;
         }
         case 'g':

@@ -77,6 +77,8 @@ typedef struct lt_cell {
 } lt_cell;
 
 void *lt_alloc(size_t size);
+void *lt_malloc(size_t size);
+size_t lt_bytes(int64_t count, size_t size);
 void *lt_reuse_or_alloc(void *token, size_t token_size, size_t size);
 void lt_free(void *cell);
 int32_t lt_atomic_add(int32_t *count, int32_t delta);
@@ -92,13 +94,15 @@ static inline int32_t lt_count_of(const lt_cell *c) {
 #endif
 }
 
+/* A count that reaches the edge of its range stays there: the cell is never freed, rather than
+ * freed while still held. */
 static inline void lt_inc(void *p) {
     lt_cell *c = (lt_cell *)p;
     int32_t n = lt_count_of(c);
     if (LT_LIKELY(n > 0)) {
-        c->count = n + 1;
+        if (LT_LIKELY(n < INT32_MAX)) c->count = n + 1;
     } else if (n < 0) {
-        lt_atomic_add(&c->count, -1);
+        if (LT_LIKELY(n > INT32_MIN + 1)) lt_atomic_add(&c->count, -1);
     }
 }
 
@@ -107,13 +111,13 @@ static inline bool lt_dec(void *p) {
     lt_cell *c = (lt_cell *)p;
     int32_t n = lt_count_of(c);
     if (LT_LIKELY(n > 1)) {
-        c->count = n - 1;
+        if (LT_LIKELY(n < INT32_MAX)) c->count = n - 1;
         return false;
     }
     if (n == 1) {
         return true;
     }
-    if (n == 0) {
+    if (n == 0 || n <= INT32_MIN + 1) {
         return false;
     }
     return lt_atomic_add(&c->count, 1) == 0;
@@ -693,6 +697,7 @@ bool lt_set_pop(lt_set **slot, void *out);
 bool lt_set_contains(const lt_set *s, const void *key);
 lt_list *lt_set_list(const lt_set *s);
 lt_set *lt_set_from_list(const lt_type *type, const lt_list *items);
+lt_set *lt_set_folded(lt_set *built);
 lt_set *lt_set_union(const lt_set *a, const lt_set *b);
 lt_set *lt_set_intersection(const lt_set *a, const lt_set *b);
 lt_set *lt_set_difference(const lt_set *a, const lt_set *b);
