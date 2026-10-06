@@ -115,6 +115,8 @@ pub enum StmtKind {
 pub enum Panic {
     Todo,
     Assert(String),
+    /// A ValueError with this message.
+    Value(String),
 }
 
 #[derive(Clone, Debug)]
@@ -301,6 +303,26 @@ pub enum Expr {
         elem: Ty,
         items: Vec<Operand>,
     },
+    /// A closure of the lambda `lambda`, of type `ty`, holding copies of `captures`.
+    Closure {
+        lambda: usize,
+        ty: Ty,
+        captures: Vec<Operand>,
+    },
+    /// The module's function `name` as a value.
+    FnRef(String),
+    /// A call of the closure `callee`, of type `ty`; the closure and the arguments taken over.
+    CallClosure {
+        callee: Operand,
+        args: Vec<Operand>,
+        ty: Ty,
+    },
+    /// What the lambda `lambda` captured at `index`, read from its closure.
+    Capture {
+        closure: Operand,
+        lambda: usize,
+        index: usize,
+    },
     /// An optional `ty` holding `value` when `cond` holds, else `None`.
     OptIf {
         ty: Ty,
@@ -343,6 +365,13 @@ impl Expr {
             | Expr::ResultValue(tuple)
             | Expr::ResultError(tuple) => f(tuple),
             Expr::OptNew { value, .. } => value.iter().for_each(f),
+            Expr::Closure { captures, .. } => captures.iter().for_each(f),
+            Expr::FnRef(_) => {}
+            Expr::CallClosure { callee, args, .. } => {
+                f(callee);
+                args.iter().for_each(f);
+            }
+            Expr::Capture { closure, .. } => f(closure),
             Expr::ReadPlace(place) => {
                 f(&Operand::Local(place.local));
                 place_operands(place, f);
@@ -495,6 +524,8 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
         | Expr::OptIf { ty, .. }
         | Expr::ResultNew { ty, .. }
         | Expr::Len(_, ty)
+        | Expr::Closure { ty, .. }
+        | Expr::CallClosure { ty, .. }
         | Expr::Compare(_, _, _, ty) => f(ty),
         Expr::Rt { args, .. } => arg_types(args, f),
         Expr::RtValue { args, ty, .. } => {
@@ -509,7 +540,7 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
 /// Whether a value of `ty` holds a count: a cell, or a struct holding one.
 pub fn counted(ty: &Ty) -> bool {
     match ty {
-        Ty::Str | Ty::List(_) | Ty::Set(_) | Ty::Dict(..) | Ty::Heap(_) | Ty::Adt(..) => true,
+        Ty::Str | Ty::List(_) | Ty::Set(_) | Ty::Dict(..) | Ty::Heap(_) | Ty::Adt(..) | Ty::Func(..) => true,
         Ty::Tuple(items) => items.iter().any(counted),
         Ty::Optional(t) => counted(t),
         Ty::Result(t, e) => counted(t) || counted(e),

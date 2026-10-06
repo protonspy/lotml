@@ -394,6 +394,42 @@ void lt_list_sort(lt_list **slot, bool reverse, lt_at at) {
     free(scratch);
 }
 
+/* The order of `n` keys, a stable merge sort of their indices by `keys->type->cmp`. */
+static void lt_sort_indices(int64_t *order, int64_t *scratch, int64_t n, const lt_list *keys, bool reverse, lt_at at) {
+    if (n < 2) return;
+    int64_t half = n / 2;
+    lt_sort_indices(order, scratch, half, keys, reverse, at);
+    lt_sort_indices(order + half, scratch, n - half, keys, reverse, at);
+    memcpy(scratch, order, (size_t)half * sizeof(int64_t));
+    int64_t i = 0, j = half, k = 0;
+    while (i < half && j < n) {
+        int c = keys->type->cmp(LT_AT(keys, order[j]), LT_AT(keys, scratch[i]), at);
+        if (reverse ? c > 0 : c < 0) {
+            order[k++] = order[j++];
+        } else {
+            order[k++] = scratch[i++];
+        }
+    }
+    while (i < half) order[k++] = scratch[i++];
+}
+
+void lt_list_sort_by_keys(lt_list **slot, const lt_list *keys, bool reverse, lt_at at) {
+    lt_list_unique(slot);
+    lt_list *l = *slot;
+    if (l->len < 2) return;
+    int64_t *order = malloc(sizeof(int64_t) * (size_t)l->len);
+    int64_t *scratch = malloc(sizeof(int64_t) * (size_t)(l->len / 2 + 1));
+    for (int64_t i = 0; i < l->len; i++) order[i] = i;
+    lt_sort_indices(order, scratch, l->len, keys, reverse, at);
+    char *sorted = malloc((size_t)l->len * l->type->size);
+    for (int64_t i = 0; i < l->len; i++) memcpy(sorted + (size_t)i * l->type->size, LT_AT(l, order[i]), l->type->size);
+    free(l->data);
+    l->data = sorted;
+    l->cap = l->len;
+    free(order);
+    free(scratch);
+}
+
 lt_list *lt_list_sorted(const lt_list *l, bool reverse, lt_at at) {
     lt_list *c = lt_list_copy(l);
     lt_list_sort(&c, reverse, at);
@@ -691,5 +727,37 @@ static void lt_share_list(void *a) {
         for (int64_t i = 0; i < l->len; i++) l->type->share(LT_AT(l, i));
     }
 }
+
+void lt_closure_drop(lt_closure *c) {
+    if (c == NULL || !lt_dec(c)) return;
+    if (c->drop != NULL) c->drop(c);
+    lt_free(c);
+}
+
+static void lt_inc_closure(void *value) {
+    if (*(lt_closure **)value != NULL) lt_inc(*(lt_closure **)value);
+}
+
+static void lt_dec_closure(void *value) {
+    lt_closure_drop(*(lt_closure **)value);
+}
+
+static bool lt_eq_closure(const void *a, const void *b) {
+    return *(lt_closure *const *)a == *(lt_closure *const *)b;
+}
+
+static int lt_cmp_closure(const void *a, const void *b, lt_at at) {
+    (void)a;
+    (void)b;
+    lt_unorderable(at, "function");
+}
+
+static void lt_repr_closure(lt_buf *b, const void *a) {
+    (void)a;
+    lt_buf_puts(b, "<function>");
+}
+
+const lt_type lt_type_closure = {sizeof(lt_closure *), lt_inc_closure, lt_dec_closure, lt_eq_closure, lt_cmp_closure, NULL,
+                                 lt_repr_closure, lt_repr_closure, lt_share_cell};
 
 const lt_type lt_type_list = {sizeof(lt_list *), lt_list_inc, lt_list_dec, lt_eq_list, lt_cmp_list, NULL, lt_repr_list, lt_repr_list, lt_share_list};

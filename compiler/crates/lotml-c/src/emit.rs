@@ -7,7 +7,7 @@ use std::fmt::Write;
 
 use lotml_check::ty::{FloatKind, IntKind, Ty};
 
-use crate::lower::{Lowered, function_name};
+use crate::lower::{Lowered, function_name, lambda_name};
 use crate::mir::{
     Arg, BinOp, Block, CmpOp, Const, Expr, FormatPart, Function, Local, Operand, Panic, Place, Proj, StmtKind, UnOp,
     block_operands, block_types,
@@ -49,6 +49,7 @@ pub fn program(lowered: &Lowered, file: &str) -> String {
         let _ = writeln!(out, "{};", signature(f, &types));
     }
     out.push('\n');
+    closures(&mut out, lowered, &types);
     for f in &lowered.functions {
         Writer {
             out: &mut out,
@@ -85,6 +86,52 @@ pub fn program(lowered: &Lowered, file: &str) -> String {
     }
     out.push_str("}\n");
     out
+}
+
+/// The C function type a closure of `ty` is called through.
+fn closure_call_type(ty: &Ty, types: &Types) -> String {
+    let Ty::Func(params, ret) = ty else { return "void (*)(void)".to_string() };
+    let ret = if is_unit(ret) || matches!(**ret, Ty::Never) { "void".to_string() } else { types.c_type(ret) };
+    let mut all = vec!["lt_closure *".to_string()];
+    all.extend(params.iter().filter(|p| !is_unit(p)).map(|p| types.c_type(p)));
+    format!("{ret} (*)({})", all.join(", "))
+}
+
+/// Each lambda's closure struct and the function dropping what it captured; each function used
+/// as a value, a static closure calling it through a function taking the closure first.
+fn closures(out: &mut String, lowered: &Lowered, types: &Types) {
+    for (k, (captures, _)) in lowered.lambdas.iter().enumerate() {
+        let fields: String = captures.iter().enumerate().map(|(i, t)| format!(" {} c{i};", types.c_type(t))).collect();
+        let _ = writeln!(
+            out,
+            "typedef struct lt_c{k} {{ lt_cell cell; void *fn; void (*drop)(lt_closure *self);{fields} }} lt_c{k};"
+        );
+        let drops: String = captures
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| types.counted(t))
+            .map(|(i, t)| format!(" ({})->dec(&c->c{i});", types.desc(t)))
+            .collect();
+        let _ = writeln!(
+            out,
+            "static void lt_drop_c{k}(lt_closure *self) {{ lt_c{k} *c = (lt_c{k} *)self; (void)c;{drops} }}"
+        );
+    }
+    for name in &lowered.fn_refs {
+        let Some(f) = lowered.functions.iter().find(|f| f.name == function_name(name)) else { continue };
+        let params: Vec<&Local> = f.params.iter().filter(|&&p| !is_unit(&f.locals[p].ty)).collect();
+        let declared: Vec<String> =
+            params.iter().enumerate().map(|(i, &&p)| format!("{} a{i}", types.c_type(&f.locals[p].ty))).collect();
+        let passed: Vec<String> = (0..params.len()).map(|i| format!("a{i}")).collect();
+        let ret = if is_unit(&f.ret) || matches!(f.ret, Ty::Never) { "void".to_string() } else { types.c_type(&f.ret) };
+        let mut all = vec!["lt_closure *self".to_string()];
+        all.extend(declared);
+        let call = format!("{}({})", f.name, passed.join(", "));
+        let body = if ret == "void" { format!("{call};") } else { format!("return {call};") };
+        let _ = writeln!(out, "static {ret} lt_tramp_{name}({}) {{ (void)self; {body} }}", all.join(", "));
+        let _ = writeln!(out, "static lt_closure lt_fnref_{name} = {{{{0, 0}}, (void *)lt_tramp_{name}, NULL}};");
+    }
+    out.push('\n');
 }
 
 fn signature(f: &Function, types: &Types) -> String {
@@ -212,6 +259,19 @@ impl Writer<'_> {
                     self.format_into("b", parts);
                     self.line(&format!("{target} = lt_str_from_buf(&b);"));
                     self.depth -= 1;
+                    self.line("}");
+                }
+                StmtKind::Let(local, Expr::Closure { lambda, captures, .. }) => {
+                    let target = self.name(*local);
+                    let values: Vec<String> = captures.iter().map(|c| self.operand(c)).collect();
+                    self.line("{");
+                    self.line(&format!("    lt_c{lambda} *c = lt_alloc(sizeof(lt_c{lambda}));"));
+                    self.line(&format!("    c->fn = (void *){};", lambda_name(*lambda)));
+                    self.line(&format!("    c->drop = lt_drop_c{lambda};"));
+                    for (i, v) in values.iter().enumerate() {
+                        self.line(&format!("    c->c{i} = {v};"));
+                    }
+                    self.line(&format!("    {target} = (lt_closure *)c;"));
                     self.line("}");
                 }
                 StmtKind::Let(local, Expr::DictNew { key, value, items }) => {
@@ -404,6 +464,10 @@ impl Writer<'_> {
                     self.line("}");
                 }
                 StmtKind::Panic(Panic::Todo) => self.line("lt_todo(LT_HERE);"),
+                StmtKind::Panic(Panic::Value(message)) => {
+                    let text = c_string_text(message.as_bytes());
+                    self.line(&format!("lt_value_error(LT_HERE, \"{text}\");"));
+                }
                 StmtKind::Panic(Panic::Assert(expression)) => {
                     let text = c_string_text(expression.as_bytes());
                     self.line(&format!("lt_assert_failed(LT_HERE, \"{text}\");"));
@@ -567,6 +631,17 @@ impl Writer<'_> {
                 "0 /* written by its Let */".to_string()
             }
             Expr::ReadPlace(place) => format!("(*{})", self.place(place).1),
+            Expr::Closure { .. } => "0 /* written by its Let */".to_string(),
+            Expr::FnRef(name) => format!("((lt_closure *)&lt_fnref_{name})"),
+            Expr::Capture { closure, lambda, index } => {
+                format!("((lt_c{lambda} *)({}))->c{index}", self.operand(closure))
+            }
+            Expr::CallClosure { callee, args, ty } => {
+                let f = self.operand(callee);
+                let mut all = vec![f.clone()];
+                all.extend(args.iter().filter(|a| !matches!(a, Operand::Const(Const::Unit))).map(|a| self.operand(a)));
+                format!("(({}){f}->fn)({})", closure_call_type(ty, self.types), all.join(", "))
+            }
             Expr::ToStr(value, ty) => {
                 let v = self.operand(value);
                 match ty {

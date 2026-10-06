@@ -44,6 +44,12 @@ impl<'d> Types<'d> {
                 self.register(k);
                 self.register(v);
             }
+            Ty::Func(params, ret) => {
+                for t in params {
+                    self.register(t);
+                }
+                self.register(ret);
+            }
             Ty::Tuple(items) => {
                 for t in items {
                     self.register(t);
@@ -128,6 +134,7 @@ impl<'d> Types<'d> {
             Ty::List(_) => "lt_list *".into(),
             Ty::Dict(..) => "lt_dict *".into(),
             Ty::Set(_) => "lt_set *".into(),
+            Ty::Func(..) => "lt_closure *".into(),
             Ty::Tuple(_) | Ty::Optional(_) | Ty::Result(..) => format!("lt_t{}", self.ids[ty]),
             Ty::Adt(..) => format!("lt_t{} *", self.ids[ty]),
             _ => "uint8_t".into(),
@@ -156,6 +163,7 @@ impl<'d> Types<'d> {
             Ty::List(_) => "&lt_type_list".into(),
             Ty::Dict(..) => "&lt_type_dict".into(),
             Ty::Set(_) => "&lt_type_set".into(),
+            Ty::Func(..) => "&lt_type_closure".into(),
             Ty::Tuple(_) | Ty::Optional(_) | Ty::Result(..) | Ty::Adt(..) => format!("&lt_type_t{}", self.ids[ty]),
             _ => "&lt_type_none".into(),
         }
@@ -169,9 +177,10 @@ impl<'d> Types<'d> {
     /// for a type that holds none. A local not yet set is NULL or zero, which neither touches.
     pub fn count(&self, ty: &Ty, inc: bool, name: &str) -> String {
         match ty {
-            Ty::Str | Ty::List(_) | Ty::Dict(..) | Ty::Set(_) | Ty::Adt(..) if inc => {
+            Ty::Str | Ty::List(_) | Ty::Dict(..) | Ty::Set(_) | Ty::Adt(..) | Ty::Func(..) if inc => {
                 format!("if ({name}) lt_inc({name});")
             }
+            Ty::Func(..) => format!("lt_closure_drop({name});"),
             Ty::Str => format!("lt_str_drop({name});"),
             Ty::List(_) => format!("lt_list_drop({name});"),
             Ty::Dict(..) => format!("lt_dict_drop({name});"),

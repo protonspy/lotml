@@ -481,6 +481,26 @@ bool lt_list_last(const lt_list *l, void *out);
 void lt_slice_indices(int64_t length, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step,
                       int64_t *start, int64_t *count, int64_t *by, lt_at at);
 
+/* Functions as values --------------------------------------------------------------------- */
+
+/* A closure: the C function a call goes to, what drops the values it captured, then those
+ * values. A named function used as a value is a static closure with no captures. */
+typedef struct lt_closure {
+    lt_cell cell;
+    void *fn;
+    void (*drop)(struct lt_closure *self);
+} lt_closure;
+
+extern const lt_type lt_type_closure;
+void lt_closure_drop(lt_closure *c);
+
+/* `xs.sort(key=f)`: the elements ordered by `keys`, one per element, stably. */
+void lt_list_sort_by_keys(lt_list **slot, const lt_list *keys, bool reverse, lt_at at);
+
+/* `int(s)` and `float(s)` of a string: the number, or the program stops with ValueError. */
+int64_t lt_str_int(const lt_str *s, lt_at at);
+double lt_str_float(const lt_str *s, lt_at at);
+
 /* Dicts and sets --------------------------------------------------------------------------- */
 
 /* `{K: V}`: entries in insertion order — hash, liveness, key, value — behind an index table. */

@@ -1,7 +1,7 @@
 //! Lowering: the checked syntax tree to the intermediate form, every call resolved and every
 //! intermediate value named (specs/c-backend/design.md).
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use lotml_check::ty::{INT, IntKind, Ty};
 use lotml_check::{Checked, FieldSig, TypeDef};
@@ -23,6 +23,16 @@ pub struct Lowered {
     pub main: bool,
     /// The records and sum types the module declares.
     pub declared: BTreeMap<String, TypeDef>,
+    /// Each lambda: the types of what it captures, and its function type; its code is the
+    /// function `lambda_name(index)`.
+    pub lambdas: Vec<(Vec<Ty>, Ty)>,
+    /// The module's functions used as values.
+    pub fn_refs: BTreeSet<String>,
+}
+
+/// The C name of the function of the lambda `index`.
+pub fn lambda_name(index: usize) -> String {
+    format!("lf_lambda{index}")
 }
 
 /// The C name of the lotml function `name`.
@@ -39,6 +49,8 @@ pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, 
         fns: HashMap::new(),
         variant_of: HashMap::new(),
         defaults: HashMap::new(),
+        lambdas: Vec::new(),
+        fn_refs: BTreeSet::new(),
         diagnostics: Vec::new(),
     };
     for item in &module.items {
@@ -75,7 +87,18 @@ pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, 
     if !cx.diagnostics.is_empty() {
         return Err(cx.diagnostics);
     }
-    Ok(Lowered { main: cx.fns.contains_key("main"), functions, declared: checked.declared.clone() })
+    let mut lambdas = Vec::new();
+    for (function, captures, ty) in std::mem::take(&mut cx.lambdas) {
+        functions.push(function);
+        lambdas.push((captures, ty));
+    }
+    Ok(Lowered {
+        main: cx.fns.contains_key("main"),
+        functions,
+        declared: checked.declared.clone(),
+        lambdas,
+        fn_refs: std::mem::take(&mut cx.fn_refs),
+    })
 }
 
 struct Context<'a> {
@@ -89,6 +112,9 @@ struct Context<'a> {
     variant_of: HashMap<String, (String, usize)>,
     /// The default of each field of a record (`None` variant) or of a variant.
     defaults: HashMap<(String, Option<usize>), Vec<Option<&'a ast::Expr>>>,
+    /// The lambdas lowered so far: each one's function, the types it captures and its type.
+    lambdas: Vec<(Function, Vec<Ty>, Ty)>,
+    fn_refs: BTreeSet<String>,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -1188,6 +1214,10 @@ impl<'c, 'a> Builder<'c, 'a> {
                 }
                 None => match self.cx.variant_of.get(name).cloned() {
                     Some((_, variant)) => Value::Expr(Expr::UnitVariant { ty: self.ty(e), variant }),
+                    None if self.cx.fns.contains_key(name.as_str()) => {
+                        self.cx.fn_refs.insert(name.clone());
+                        Value::Expr(Expr::FnRef(name.clone()))
+                    }
                     None => Value::Done(self.unsupported(e.span, &format!("the value `{name}`"))),
                 },
             },
@@ -1371,6 +1401,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 Value::Done(Operand::Local(t))
             }
             ExprKind::Call { func, args } => self.call(e, func, args),
+            ExprKind::Lambda { params, body } => self.lambda(e, params, body),
             ExprKind::Index { object, index } => {
                 let ty = self.ty(object);
                 match &ty {
@@ -1556,12 +1587,24 @@ impl<'c, 'a> Builder<'c, 'a> {
         if let ExprKind::Attr { object, name } = &func.kind {
             return self.method(whole, object, &name.name, args);
         }
+        let call_value = !matches!(&func.kind, ExprKind::Name(_)) || self.local_of(func.span).is_some();
+        if call_value {
+            let ty = self.ty(func);
+            let Ty::Func(params, _) = &ty else {
+                return Value::Done(self.unsupported(func.span, "a call of this value"));
+            };
+            let params = params.clone();
+            let callee = self.value(func);
+            let mut operands = Vec::new();
+            for (a, p) in args.iter().zip(&params) {
+                let v = self.value(a.expr());
+                operands.push(self.coerce(v, p));
+            }
+            return Value::Expr(Expr::CallClosure { callee, args: operands, ty });
+        }
         let ExprKind::Name(name) = &func.kind else {
             return Value::Done(self.unsupported(func.span, "a call of this value"));
         };
-        if self.local_of(func.span).is_some() {
-            return Value::Done(self.unsupported(func.span, "a call of a local"));
-        }
         if let Some(f) = self.cx.fns.get(name.as_str()).copied() {
             return self.call_function(name, f, args);
         }
@@ -1621,6 +1664,36 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let ty = self.ty(x);
                 let v = self.value(x);
                 Value::Expr(Expr::Unary(UnOp::Abs, v, ty))
+            }
+            ("min" | "max", [single]) if keyword("key").is_some() => {
+                let key = keyword("key").expect("a key");
+                Value::Done(self.extreme_by(single, key, name == "max", &result_ty))
+            }
+            ("map", [f, x]) => {
+                let list = self.materialize(x);
+                let elem = element(&self.local_ty(&list));
+                let out_elem = match element(&result_ty) {
+                    Ty::Error | Ty::Var(_) => self.key_type(f, &elem),
+                    known => known,
+                };
+                let out = self.new_list(&out_elem);
+                self.indexed(&[(list, elem)], false, &mut |b, item, ty| {
+                    let (v, _) = b.apply(f, vec![(item, ty)]);
+                    let v = b.coerce(v, &out_elem);
+                    b.push_element(out, v, &out_elem);
+                });
+                Value::Done(Operand::Local(out))
+            }
+            ("filter", [f, x]) => {
+                let list = self.materialize(x);
+                let elem = element(&self.local_ty(&list));
+                let out = self.new_list(&elem);
+                self.indexed(&[(list, elem.clone())], false, &mut |b, item, ty| {
+                    let (keep, _) = b.apply(f, vec![(item.clone(), ty)]);
+                    let then = b.block(|b| b.push_element(out, item, &elem));
+                    b.push(StmtKind::If(keep, then, Vec::new()));
+                });
+                Value::Done(Operand::Local(out))
             }
             ("min" | "max", [single]) => {
                 let elem = result_ty;
@@ -1697,15 +1770,21 @@ impl<'c, 'a> Builder<'c, 'a> {
                 Value::Expr(rt(if any { "lt_list_any" } else { "lt_list_all" }, vec![list], false))
             }
             ("sorted", [x]) => {
-                if keyword("key").is_some() {
-                    return Value::Done(self.unsupported(whole.span, "`sorted` with a `key`"));
-                }
                 let reverse = match keyword("reverse") {
                     Some(r) => self.value(r),
                     None => flag(false),
                 };
                 let list = self.materialize(x);
-                Value::Expr(rt("lt_list_sorted", vec![list, reverse], true))
+                let Some(key) = keyword("key") else {
+                    return Value::Expr(rt("lt_list_sorted", vec![list, reverse], true));
+                };
+                let ty = self.local_ty(&list);
+                let Operand::Local(copy) = self.hold(ty, rt("lt_list_copy", vec![list], false)) else {
+                    unreachable!("a held value")
+                };
+                let place = Place { local: copy, proj: Vec::new() };
+                self.sort_by_key(place, key, reverse);
+                Value::Done(Operand::Local(copy))
             }
             ("reversed", [x]) => {
                 let list = self.materialize(x);
@@ -1750,7 +1829,13 @@ impl<'c, 'a> Builder<'c, 'a> {
                 ))
             }
             ("list", [x]) => match &x.kind {
-                ExprKind::Call { .. } | ExprKind::Generator { .. } => {
+                ExprKind::Call { func, .. }
+                    if ["range", "enumerate", "zip", "reversed"].iter().any(|n| self.is_prelude(func, n)) =>
+                {
+                    let elem = element(&result_ty);
+                    Value::Done(self.collect(x, &elem))
+                }
+                ExprKind::Generator { .. } => {
                     let elem = element(&result_ty);
                     Value::Done(self.collect(x, &elem))
                 }
@@ -1788,6 +1873,10 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let v = self.value(x);
                 Value::Expr(rt("lt_str_chr", vec![v], true))
             }
+            ("int" | "float", [x]) if self.ty(x) == Ty::Str => {
+                let v = self.value(x);
+                Value::Expr(rt(if name == "int" { "lt_str_int" } else { "lt_str_float" }, vec![v], true))
+            }
             ("int" | "float" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32", [x])
                 if self.ty(x).is_numeric() || self.ty(x) == Ty::Bool =>
             {
@@ -1797,6 +1886,202 @@ impl<'c, 'a> Builder<'c, 'a> {
             }
             _ => Value::Done(self.unsupported(whole.span, &format!("`{name}` here"))),
         }
+    }
+
+    /// A lambda as a closure: its body lowered as a function of its own, taking the closure
+    /// and its parameters, which reads what it captured from the closure; the closure holds
+    /// copies of the outer locals the body uses, taken now.
+    fn lambda(&mut self, whole: &ast::Expr, params: &[ast::Ident], body: &ast::Expr) -> Value {
+        let ty = self.ty(whole);
+        let Ty::Func(param_types, ret) = &ty else {
+            return Value::Done(self.unsupported(whole.span, "this lambda"));
+        };
+        let (param_types, ret) = (param_types.clone(), (**ret).clone());
+        let mut names = Vec::new();
+        names_in(body, &mut names);
+        let mut captures: Vec<(Span, String, Local)> = Vec::new();
+        for (name, span) in names {
+            if let Some(decl) = self.cx.resolved.get(&span).copied()
+                && let Some(&outer) = self.vars.get(&decl)
+                && !captures.iter().any(|(d, ..)| *d == decl)
+            {
+                captures.push((decl, name, outer));
+            }
+        }
+        let index = self.cx.lambdas.len();
+        let capture_types: Vec<Ty> = captures.iter().map(|(_, _, l)| self.function.locals[*l].ty.clone()).collect();
+        let line = self.line;
+        let mut b = Builder {
+            cx: &mut *self.cx,
+            function: Function {
+                name: lambda_name(index),
+                source_name: "<lambda>".to_string(),
+                params: Vec::new(),
+                ret: ret.clone(),
+                locals: Vec::new(),
+                body: Vec::new(),
+                line,
+            },
+            vars: HashMap::new(),
+            blocks: vec![Vec::new()],
+            line,
+        };
+        let closure = b.new_local(ty.clone(), Some("self"));
+        b.function.params.push(closure);
+        for (i, ((decl, name, _), t)) in captures.iter().zip(&capture_types).enumerate() {
+            let local = b.declare(*decl, name, t.clone());
+            b.push(StmtKind::Let(local, Expr::Capture { closure: Operand::Local(closure), lambda: index, index: i }));
+        }
+        for (p, t) in params.iter().zip(&param_types) {
+            let local = b.declare(p.span, &p.name, t.clone());
+            b.function.params.push(local);
+        }
+        let v = b.value(body);
+        let v = b.coerce(v, &ret);
+        let returned = if is_unit(&ret) { None } else { Some(v) };
+        b.push(StmtKind::Return(returned));
+        let mut function = b.function;
+        function.body = b.blocks.pop().unwrap_or_default();
+        self.cx.lambdas.push((function, capture_types, ty.clone()));
+        let operands = captures.iter().map(|(_, _, l)| Operand::Local(*l)).collect();
+        Value::Expr(Expr::Closure { lambda: index, ty, captures: operands })
+    }
+
+    /// `func(args)` where `func` is what a prelude function was given: a lambda applied in place,
+    /// a function of the module, a prelude function or a closure. The result and its type.
+    fn apply(&mut self, func: &ast::Expr, args: Vec<(Operand, Ty)>) -> (Operand, Ty) {
+        match &func.kind {
+            ExprKind::Lambda { params, body } => {
+                for (p, (a, t)) in params.iter().zip(args) {
+                    let local = self.declare(p.span, &p.name, t);
+                    self.push(StmtKind::Let(local, Expr::Use(a)));
+                }
+                let ty = self.ty(body);
+                (self.value(body), ty)
+            }
+            ExprKind::Name(name) if self.local_of(func.span).is_none() => {
+                if let Some(sig) = self.cx.checked.functions.get(name).cloned() {
+                    let operands = args.into_iter().zip(&sig.params).map(|((a, _), p)| self.coerce(a, &p.ty)).collect();
+                    let ty = sig.ret.clone();
+                    return (self.hold(ty.clone(), Expr::Call(function_name(name), operands)), ty);
+                }
+                let Some((a, t)) = args.into_iter().next() else {
+                    return (self.unsupported(func.span, "this function"), Ty::Error);
+                };
+                let (expr, ty) = match name.as_str() {
+                    "len" => (Expr::Len(a, t), INT),
+                    "str" => (Expr::ToStr(a, t), Ty::Str),
+                    "int" if t == Ty::Str => (rt("lt_str_int", vec![a], true), INT),
+                    "float" if t == Ty::Str => {
+                        (rt("lt_str_float", vec![a], true), Ty::Float(lotml_check::ty::FloatKind::F64))
+                    }
+                    "int" => (Expr::Convert(a, t, INT), INT),
+                    "float" => (
+                        Expr::Convert(a, t, Ty::Float(lotml_check::ty::FloatKind::F64)),
+                        Ty::Float(lotml_check::ty::FloatKind::F64),
+                    ),
+                    "abs" => (Expr::Unary(UnOp::Abs, a, t.clone()), t),
+                    "ord" => (rt("lt_str_ord", vec![a], true), INT),
+                    "chr" => (rt("lt_str_chr", vec![a], true), Ty::Str),
+                    _ => return (self.unsupported(func.span, &format!("`{name}` as a value here")), Ty::Error),
+                };
+                (self.hold(ty.clone(), expr), ty)
+            }
+            _ => {
+                let ty = self.ty(func);
+                let Ty::Func(params, ret) = &ty else {
+                    return (self.unsupported(func.span, "calling this value"), Ty::Error);
+                };
+                let (params, ret) = (params.clone(), (**ret).clone());
+                let callee = self.value(func);
+                let operands = args.into_iter().zip(&params).map(|((a, _), p)| self.coerce(a, p)).collect();
+                (self.hold(ret.clone(), Expr::CallClosure { callee, args: operands, ty }), ret)
+            }
+        }
+    }
+
+    /// Sort the list at `place` by the key `key` gives each element, computed once each, in a
+    /// stable order: Python's `sort(key=…)`.
+    fn sort_by_key(&mut self, place: Place, key: &ast::Expr, reverse: Operand) {
+        let list = self.read_place(&place);
+        let elem = element(&self.local_ty(&list));
+        let key_ty = self.key_type(key, &elem);
+        let keys = self.new_list(&key_ty);
+        let target = key_ty.clone();
+        self.indexed(&[(list, elem)], false, &mut |b, item, ty| {
+            let (k, _) = b.apply(key, vec![(item, ty)]);
+            let k = b.coerce(k, &target);
+            b.push_element(keys, k, &target);
+        });
+        self.push(StmtKind::Mutate {
+            name: "lt_list_sort_by_keys",
+            place,
+            args: vec![Arg::Value(Operand::Local(keys)), Arg::Value(reverse)],
+            at: true,
+            result: None,
+        });
+    }
+
+    /// The type of what `func` gives for an argument of `arg`.
+    fn key_type(&self, func: &ast::Expr, arg: &Ty) -> Ty {
+        match &func.kind {
+            ExprKind::Lambda { body, .. } => self.ty(body),
+            ExprKind::Name(name) if self.local_of(func.span).is_none() => {
+                if let Some(sig) = self.cx.checked.functions.get(name) {
+                    return sig.ret.clone();
+                }
+                match name.as_str() {
+                    "len" | "ord" | "int" => INT,
+                    "str" | "chr" => Ty::Str,
+                    "float" => Ty::Float(lotml_check::ty::FloatKind::F64),
+                    _ => arg.clone(),
+                }
+            }
+            _ => match self.ty(func) {
+                Ty::Func(_, ret) => *ret,
+                _ => Ty::Error,
+            },
+        }
+    }
+
+    /// `min(x, key=f)` and `max(x, key=f)`: the first element whose key is smallest (largest).
+    fn extreme_by(&mut self, x: &ast::Expr, key: &ast::Expr, max: bool, ty: &Ty) -> Operand {
+        let list = self.materialize(x);
+        let elem = element(&self.local_ty(&list));
+        let key_ty = self.key_type(key, &elem);
+        let n = self.hold(INT, Expr::Len(list.clone(), Ty::list(elem.clone())));
+        let empty = self.hold(Ty::Bool, Expr::Compare(CmpOp::Eq, n.clone(), int(0), INT));
+        let message = if max { "max() iterable argument is empty" } else { "min() iterable argument is empty" };
+        let stop = self.block(|b| b.push(StmtKind::Panic(Panic::Value(message.to_string()))));
+        self.push(StmtKind::If(empty, stop, Vec::new()));
+        let best = self.temp(ty.clone());
+        let first = self.hold(elem.clone(), Expr::ListGet { list: list.clone(), index: int(0), elem: elem.clone() });
+        self.push(StmtKind::Let(best, Expr::Use(first.clone())));
+        let (k0, _) = self.apply(key, vec![(first, elem.clone())]);
+        let best_key = self.temp(key_ty.clone());
+        self.push(StmtKind::Let(best_key, Expr::Use(k0)));
+        let i = self.temp(INT);
+        self.push(StmtKind::Let(i, Expr::Use(int(1))));
+        let line = self.line;
+        let body = self.block(|b| {
+            let more = b.hold(Ty::Bool, Expr::Compare(CmpOp::Lt, Operand::Local(i), n.clone(), INT));
+            let done = b.block(|b| b.push(StmtKind::Break));
+            b.push(StmtKind::If(more, Vec::new(), done));
+            let item = b
+                .hold(elem.clone(), Expr::ListGet { list: list.clone(), index: Operand::Local(i), elem: elem.clone() });
+            b.push(StmtKind::Let(i, Expr::Binary(BinOp::Add, Operand::Local(i), int(1), INT)));
+            let (k, _) = b.apply(key, vec![(item.clone(), elem.clone())]);
+            let op = if max { CmpOp::Gt } else { CmpOp::Lt };
+            let better = b.hold(Ty::Bool, Expr::Compare(op, k.clone(), Operand::Local(best_key), key_ty.clone()));
+            let then = b.block(|b| {
+                b.push(StmtKind::Let(best, Expr::Use(item)));
+                b.push(StmtKind::Let(best_key, Expr::Use(k)));
+            });
+            b.push(StmtKind::If(better, then, Vec::new()));
+        });
+        self.line = line;
+        self.push(StmtKind::Loop(body));
+        Operand::Local(best)
     }
 
     /// `object.name(args)`: a method of a built-in type.
@@ -2147,8 +2432,10 @@ impl<'c, 'a> Builder<'c, 'a> {
         if !mutating {
             let list = self.value(object);
             let mut values = Vec::new();
-            for e in positional {
-                values.push(self.value(e));
+            if name != "find" {
+                for e in positional {
+                    values.push(self.value(e));
+                }
             }
             return match (name, values.as_slice()) {
                 ("count" | "contains", [x]) => Value::Expr(rt_args(
@@ -2162,6 +2449,21 @@ impl<'c, 'a> Builder<'c, 'a> {
                     self.optional_from(&self.ty(whole), "lt_list_index", args, false)
                 }
                 ("last", []) => self.optional_from(&self.ty(whole), "lt_list_last", vec![Arg::Value(list)], false),
+                ("find", []) if positional.len() == 1 => {
+                    let ty = self.ty(whole);
+                    let result = self.temp(ty.clone());
+                    self.push(StmtKind::Let(result, Expr::OptNew { ty: ty.clone(), value: None }));
+                    let pred = positional[0];
+                    self.indexed(&[(list, elem.clone())], false, &mut |b, item, item_ty| {
+                        let (hit, _) = b.apply(pred, vec![(item.clone(), item_ty)]);
+                        let then = b.block(|b| {
+                            b.push(StmtKind::Let(result, Expr::OptNew { ty: ty.clone(), value: Some(item) }));
+                            b.push(StmtKind::Break);
+                        });
+                        b.push(StmtKind::If(hit, then, Vec::new()));
+                    });
+                    Value::Done(Operand::Local(result))
+                }
                 _ => Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
             };
         }
@@ -2212,13 +2514,14 @@ impl<'c, 'a> Builder<'c, 'a> {
             }
             ("reverse", []) => mutate("lt_list_reverse", Vec::new(), false),
             ("sort", []) => {
-                if keywords.iter().any(|(k, _)| *k == "key") {
-                    return Value::Done(self.unsupported(whole.span, "`sort` with a `key`"));
-                }
                 let reverse = match keywords.iter().find(|(k, _)| *k == "reverse") {
                     Some((_, r)) => self.value(r),
                     None => flag(false),
                 };
+                if let Some((_, key)) = keywords.iter().find(|(k, _)| *k == "key") {
+                    self.sort_by_key(place.clone(), key, reverse);
+                    return Value::Done(Operand::Const(Const::Unit));
+                }
                 mutate("lt_list_sort", vec![Arg::Value(reverse)], true)
             }
             _ => return Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
@@ -2296,6 +2599,90 @@ fn binop(op: ast::BinOp) -> BinOp {
         ast::BinOp::BitOr => BinOp::BitOr,
         ast::BinOp::BitXor => BinOp::BitXor,
         ast::BinOp::BitAnd => BinOp::BitAnd,
+    }
+}
+
+/// Every name an expression reads, with its span, lambdas' bodies included.
+fn names_in(e: &ast::Expr, out: &mut Vec<(String, Span)>) {
+    let mut each = |x: &ast::Expr| names_in(x, out);
+    match &e.kind {
+        ExprKind::Name(n) => out.push((n.clone(), e.span)),
+        ExprKind::Tuple(items) | ExprKind::List(items) | ExprKind::Set(items) => items.iter().for_each(each),
+        ExprKind::Dict(pairs) => {
+            for (k, v) in pairs {
+                names_in(k, out);
+                names_in(v, out);
+            }
+        }
+        ExprKind::ListComp { element, loops }
+        | ExprKind::SetComp { element, loops }
+        | ExprKind::Generator { element, loops } => {
+            names_in(element, out);
+            for l in loops {
+                names_in(&l.iter, out);
+                l.conditions.iter().for_each(|c| names_in(c, out));
+            }
+        }
+        ExprKind::DictComp { key, value, loops } => {
+            names_in(key, out);
+            names_in(value, out);
+            for l in loops {
+                names_in(&l.iter, out);
+                l.conditions.iter().for_each(|c| names_in(c, out));
+            }
+        }
+        ExprKind::Unary { operand, .. } | ExprKind::Not(operand) | ExprKind::Try(operand) | ExprKind::Fail(operand) => {
+            each(operand)
+        }
+        ExprKind::Binary { left, right, .. } => {
+            names_in(left, out);
+            names_in(right, out);
+        }
+        ExprKind::Compare { first, rest } => {
+            names_in(first, out);
+            rest.iter().for_each(|(_, x)| names_in(x, out));
+        }
+        ExprKind::Logical { operands, .. } => operands.iter().for_each(each),
+        ExprKind::Coalesce { value, default } => {
+            names_in(value, out);
+            names_in(default, out);
+        }
+        ExprKind::IfExp { test, then, orelse } => {
+            names_in(test, out);
+            names_in(then, out);
+            names_in(orelse, out);
+        }
+        ExprKind::Lambda { body, .. } => names_in(body, out),
+        ExprKind::Call { func, args } => {
+            names_in(func, out);
+            args.iter().for_each(|a| names_in(a.expr(), out));
+        }
+        ExprKind::Index { object, index } => {
+            names_in(object, out);
+            names_in(index, out);
+        }
+        ExprKind::Slice { object, lower, upper, step } => {
+            names_in(object, out);
+            for b in [lower, upper, step].into_iter().flatten() {
+                names_in(b, out);
+            }
+        }
+        ExprKind::Attr { object, .. } => names_in(object, out),
+        ExprKind::Str(literals) => {
+            for l in literals {
+                parts_names(&l.parts, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn parts_names(parts: &[StrPart], out: &mut Vec<(String, Span)>) {
+    for p in parts {
+        if let StrPart::Expr { expr, spec, .. } = p {
+            names_in(expr, out);
+            parts_names(spec, out);
+        }
     }
 }
 

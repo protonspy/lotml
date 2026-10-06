@@ -234,6 +234,8 @@ impl Pass {
                 | Expr::ResultNew { .. }
                 | Expr::DictNew { .. }
                 | Expr::SetNew { .. }
+                | Expr::Closure { .. }
+                | Expr::CallClosure { .. }
         );
         e.operands(&mut |o| {
             if let Operand::Local(l) = o
@@ -286,6 +288,7 @@ impl Pass {
                         | Expr::OptValue(_)
                         | Expr::ResultValue(_)
                         | Expr::ResultError(_)
+                        | Expr::Capture { .. }
                 );
                 self.simple(line, uses, live_out, Some((x, borrowed)), StmtKind::Let(x, e), out);
                 self.drop_unused(line, &set, live_out, out);

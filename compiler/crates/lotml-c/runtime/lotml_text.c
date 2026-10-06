@@ -496,6 +496,32 @@ bool lt_str_to_float(const lt_str *s, double *out) {
     return true;
 }
 
+/* `int(s)`: what to_int gives, or ValueError as Python raises it. */
+int64_t lt_str_int(const lt_str *s, lt_at at) {
+    int64_t value;
+    if (!lt_str_to_int(s, &value, at)) {
+        lt_buf b = LT_BUF;
+        lt_buf_puts(&b, "invalid literal for int() with base 10: ");
+        lt_buf_str_repr(&b, s);
+        lt_buf_put(&b, "", 1);
+        lt_value_error(at, b.data);
+    }
+    return value;
+}
+
+/* `float(s)`: what to_float gives, or ValueError as Python raises it. */
+double lt_str_float(const lt_str *s, lt_at at) {
+    double value;
+    if (!lt_str_to_float(s, &value)) {
+        lt_buf b = LT_BUF;
+        lt_buf_puts(&b, "could not convert string to float: ");
+        lt_buf_str_repr(&b, s);
+        lt_buf_put(&b, "", 1);
+        lt_value_error(at, b.data);
+    }
+    return value;
+}
+
 /* `s.find(sub)` and `s.rfind(sub)`: the code point index of the first (or last) occurrence. */
 bool lt_str_find(const lt_str *s, const lt_str *sub, bool last, int64_t *out) {
     *out = 0;
