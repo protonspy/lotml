@@ -101,6 +101,13 @@ pub const ALL: &[Code] = &[
         write `x += 1`. The fix rewrites each.",
     },
     Code {
+        code: "E0112",
+        title: "`async` or `await`",
+        explanation: "lotml's functions have no colour: none is marked `async`, and none is awaited. A call that \
+        waits blocks only its own task; run tasks at once with `parallel`, which waits for them all:\n\n\
+        ```\npages = parallel([lambda: fetch(a), lambda: fetch(b)])\n```\n\nThe fix removes the keyword.",
+    },
+    Code {
         code: "E0201",
         title: "an unresolved name",
         explanation: "No variable, function, type or variant of this name is in scope. The diagnostic lists the names \
@@ -213,6 +220,15 @@ pub const ALL: &[Code] = &[
         title: "a name reserved for the compiler",
         explanation: "A name starting with `__` is the compiler's: it marks the runtime, the test list and \
         the generated helpers a program must not reach or shadow. Name your own values without the leading `__`.",
+    },
+    Code {
+        code: "E0221",
+        title: "not allowed in an interface",
+        explanation: "An interface (`bindings/<module>.lotmli`) declares the functions of a Python module, as \
+        `lotml bind` wrote them: one signature per line, no body, no type parameters, over the types every \
+        program has, each returning `T ! PyError` because any call into Python can fail:\n\n    \
+        fn dedent(text: str) -> str ! PyError\n\nRegenerate the file with `lotml bind <module> --stub <file.pyi>` \
+        rather than editing it.",
     },
     Code {
         code: "E0301",

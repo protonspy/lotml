@@ -3,8 +3,8 @@ autonomy: auto
 ci: wait
 status: approved
 pr: per-group
-merge: auto
-checksum: d73c807b57ff8c6b16612d6e1a0eb2be4d88c48e4300f74234d5a4dcaea24ca7
+merge: manual
+checksum: fcccd56e561dcf2f59ea9aafe8757c65404f4955e6fe5951c60cd5092c435b87
 ---
 
 # lotml roadmap
@@ -99,23 +99,23 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 2.2_
 - [x] 2.13 (Unit) Review the phase 1 gate on the harness — lotml pass@1 ≥ typed Python, median rounds to green ≤ 2, tokens ≤ typed Python
   _Depends 2.6, 2.7, 2.9, 2.10, 2.11, 2.12_
-- [ ] 3.1 (Unit) Serve LSP and MCP from the incremental engine, with a warm index and references that carry their surrounding lines (R16; docs/wiki/pages/semantic-compiler.md)
+- [x] 3.1 (Unit) Serve LSP and MCP from the incremental engine, with a warm index and references that carry their surrounding lines (R16; docs/wiki/pages/semantic-compiler.md)
   _Depends 2.13_
-- [ ] 3.2 (Unit) Offer symbol-addressed edits and atomic refactorings, rename listing textual mentions too (R32; docs/wiki/pages/editing-robustness.md)
+- [x] 3.2 (Unit) Offer symbol-addressed edits and atomic refactorings, rename listing textual mentions too (R32; docs/wiki/pages/editing-robustness.md)
   _Depends 3.1_
-- [ ] 3.3 (Unit) Make lotml callable from Python and generate typed bindings from typeshed's `.pyi` stubs, every call into Python returning `T ! PyError` (R14, R27; docs/wiki/pages/transpilation-strategy.md)
+- [x] 3.3 (Unit) Make lotml callable from Python and generate typed bindings from typeshed's `.pyi` stubs, every call into Python returning `T ! PyError` (R14, R27; docs/wiki/pages/transpilation-strategy.md)
   _Depends 2.13_
-- [ ] 3.4 (Unit) Build the Python→lotml corpus pipeline: rules for the mechanical part, a frontier model with the compiler for the rest, tests to validate (docs/wiki/pages/training-prior.md, docs/wiki/pages/transpilation-strategy.md)
+- [x] 3.4 (Unit) Build the Python→lotml corpus pipeline: rules for the mechanical part, a frontier model with the compiler for the rest, tests to validate (docs/wiki/pages/training-prior.md, docs/wiki/pages/transpilation-strategy.md)
   _Depends 2.13_
-- [ ] 3.5 (Unit) Implement colorless concurrency on the Python target with values marked shared when handed to a task, and blocking calls on dedicated threads (R20; docs/wiki/pages/colorless-concurrency.md)
+- [x] 3.5 (Unit) Implement colorless concurrency on the Python target with values marked shared when handed to a task, and blocking calls on dedicated threads (R20; docs/wiki/pages/colorless-concurrency.md)
   _Depends 2.13_
-- [ ] 3.6 (TDD) Measure in the harness what the literature left open: terse against detailed diagnostics, type masks for open models, and the forgotten-`await` hypothesis (docs/wiki/pages/semantic-compiler.md, docs/wiki/pages/constrained-decoding.md)
+- [x] 3.6 (TDD) Measure in the harness what the literature left open: terse against detailed diagnostics, type masks for open models, and the forgotten-`await` hypothesis (docs/wiki/pages/semantic-compiler.md, docs/wiki/pages/constrained-decoding.md)
   _Depends 3.1_
-- [ ] 3.8 (Unit) Add the FFI with C, handing blocking calls to dedicated threads (R17; docs/wiki/pages/colorless-concurrency.md)
+- [x] 3.8 (Unit) Add the FFI with C, handing blocking calls to dedicated threads (R17; docs/wiki/pages/colorless-concurrency.md)
   _Depends 3.5_
-- [ ] 3.9 (Unit) Generate the tree-sitter grammar for editors from the parser's single source (docs/wiki/pages/requirements-and-roadmap.md)
+- [x] 3.9 (Unit) Generate the tree-sitter grammar for editors from the parser's single source (docs/wiki/pages/requirements-and-roadmap.md)
   _Depends 1.6_
-- [ ] 3.7 (Unit) Review the phase 2 gate — incremental adoption from Python working, corpus validated by tests
+- [x] 3.7 (Unit) Review the phase 2 gate — incremental adoption from Python working, corpus validated by tests
   _Depends 3.2, 3.3, 3.4, 3.5, 3.6, 3.8, 3.9_
 - [ ] 4.1 (TDD) Write the C backend: reference counting with Perceus-style reuse, non-atomic counts, checked arithmetic and `#line` directives (R18, R19; docs/wiki/pages/memory-model.md, docs/wiki/pages/transpilation-strategy.md)
   _Depends 3.7_

@@ -6,6 +6,8 @@
 //! fixes are safe to apply without a model round. The JSON form is versioned and only ever
 //! gains fields.
 
+use std::collections::HashMap;
+
 use lotml_syntax::span::{Span, line_column};
 use serde::Serialize;
 
@@ -376,9 +378,52 @@ pub fn apply_fixes(text: &str, diagnostics: &[Diagnostic]) -> (String, usize) {
     (out, applied)
 }
 
+/// The diagnostics of `after` that `before` did not have. A diagnostic is matched by its code,
+/// its message and the text of its line, so moving code does not make it new.
+pub fn introduced(
+    after: Vec<Diagnostic>,
+    after_text: &str,
+    before: &[Diagnostic],
+    before_text: &str,
+) -> Vec<Diagnostic> {
+    let key = |d: &Diagnostic, text: &str| {
+        let start = (d.span.start as usize).min(text.len());
+        let line_start = text[..start].rfind('\n').map_or(0, |i| i + 1);
+        let line_end = text[start..].find('\n').map_or(text.len(), |i| start + i);
+        (d.code, d.message.clone(), text[line_start..line_end].trim().to_string())
+    };
+    let mut old: HashMap<_, usize> = HashMap::new();
+    for d in before {
+        *old.entry(key(d, before_text)).or_default() += 1;
+    }
+    after
+        .into_iter()
+        .filter(|d| match old.get_mut(&key(d, after_text)) {
+            Some(n) if *n > 0 => {
+                *n -= 1;
+                false
+            }
+            _ => true,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_new_diagnostics_are_introduced() {
+        let before_text = "a\nb\n";
+        let after_text = "z\na\nb\nc\n";
+        let old = vec![Diagnostic::error("E0201", Span::new(0, 1), "`a` is not defined")];
+        let new = vec![
+            Diagnostic::error("E0201", Span::new(2, 3), "`a` is not defined"),
+            Diagnostic::error("E0201", Span::new(6, 7), "`c` is not defined"),
+        ];
+        let kept = introduced(new, after_text, &old, before_text);
+        assert_eq!(kept.iter().map(|d| d.message.as_str()).collect::<Vec<_>>(), vec!["`c` is not defined"]);
+    }
 
     fn sample() -> Report<'static> {
         let text = "fn f():\n    retrun 1\n";

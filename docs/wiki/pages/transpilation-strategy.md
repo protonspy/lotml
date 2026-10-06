@@ -100,6 +100,15 @@ classes become a sum type, `Optional` becomes `T?`). What is not mechanical is d
 functions fail: it requires following `raise` statements transitively. The workable design is
 hybrid — rules for the mechanical part, an LLM for the rest, tests to validate.
 
+The pipeline exists (`harness/lotml_harness/corpus/`): the rules write an expression as Python
+writes it, where variant B's syntax is Python's, and rewrite what differs by rule — `def` to
+`fn` with the task's types, `var` for a local assigned again or changed in place and for a
+parameter the body changes, the `typing` imports dropped, a collection's or a number's truth
+compared explicitly. What they leave — `re`, a tuple assigned to names that change, a nested
+function, an untyped helper — goes to a frontier model with the reason, then the compiler's
+diagnostics or the failing tests. A program is kept only when it passes the task's hidden
+tests, and is stored with them as a `test` block ([[training-prior]] has the counts).
+
 ## The phase 1 backend
 
 `compiler/crates/lotml-py` writes Python's syntax tree as JSON, every node at its lotml position,
@@ -109,6 +118,34 @@ or leaving one into a binding, a container, a capture or a call that may keep th
 when the elements cannot change — and traps integer arithmetic inline, after the statement when the
 result is assigned. On the 694 stored variant B answers the checker accepts, it gives the same
 verdict on the hidden tests as the phase 0 transpiler.
+
+## Python and lotml calling each other
+
+Phase 2 built both directions of R14 and R27 on one checked boundary
+(adr:0012-python-interop-through-checked-boundaries-and-interface-files):
+
+- **Python calling lotml.** A compiled module loads its program into a namespace of its own and
+  shows Python each function wrapped. The arguments are checked against the lotml signature —
+  integer ranges, `int` widened to `f64`, element types, records and variants rebuilt field by
+  field — and copied, so a caller's list is never shared. A function returning `T ! E` raises
+  `lotml_rt.LotmlError` carrying the error. `lotml build` writes a `.pyi` beside each module, with
+  records as classes and a sum type as the union of its variants. `lotml run` and `lotml test`
+  still see the program unwrapped.
+- **lotml calling Python.** `lotml bind <module> --stub <file.pyi>` reads a stub with Python's own
+  parser — typeshed's, from an installed mypy or jedi, when no stub is given — and writes
+  `bindings/<module>.lotmli`, an interface of bodyless signatures each returning `T ! PyError`.
+  Unions other than `X | None`, `Any`, callables, overloads and classes are listed in comments
+  with the reason rather than half-bound; an optional parameter whose default is not a literal is
+  written `= todo()`. `import m` finds the nearest `bindings/m.lotmli` up the directory tree. At
+  run time any exception, and any returned value that does not match the declared type, is
+  `Err(PyError(kind, message))`.
+- **lotml calling C** (R17, adr:0013-c-libraries-through-interfaces-named-c). An interface named
+  `c.<library>`, written by hand, declares C functions over what C passes by value — integers,
+  `f32`, `f64`, `bool`, and `str` as a `const char*` argument — none of which can fail. On the
+  Python target `ctypes` loads the library when the module loads, so a missing one stops the
+  program as linking would, and releases the interpreter during a call, so a call that blocks
+  holds up only its own task's thread. Calling C made the sized integers usable: a literal
+  takes the integer type expected where it fits, and `i32(n)`, `u8(n)` and the rest convert.
 
 ## Recommended order
 

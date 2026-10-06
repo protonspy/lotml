@@ -80,6 +80,18 @@ relative. The lesson for lotml: a type system checkable on prefixes is worth hav
 [[semantic-compiler]]'s prefix checks and repair, and masking by types is a tool for weak open
 models, not a default — see [[type-system]].
 
+**Measured on lotml** (phase 2, `harness/results/masks.md`): three open models wrote 100 tasks of
+the phase 1 sample twice, free in one greedy call and masked a line at a time, each line checked by
+`lotml check --prefix` and drawn again when the program could no longer complete. Neither Ollama
+nor OpenRouter lets a caller mask tokens, so the line is the unit refused — a coarse mask. It helped
+the weakest model and no other: Llama 3.1 8B rose from 17% to 29% (12 tasks passed only masked, none
+only free; McNemar p < 0.001), Qwen2.5-Coder 7B from 51% to 56% (5 against 0, p = 0.062), and
+GLM-5.3-Flash went from 61% to 59% (6 against 8, p = 0.79). The masks cut programs that do not
+check in every model (Llama 72 to 53) but turned few of them into passing ones once a model was
+strong enough to write code that checks — the alignment paper's pattern, at the scale of a line.
+Llama and GLM ran on OpenRouter from one pinned provider each, Qwen locally; each comparison is
+within one model and one provider.
+
 ## Indentation needs a line-oriented, bounded grammar — not more decode time
 
 `research/experiments/grammar/` tested lotml's block structure with llguidance 1.9.1 and the `o200k`
@@ -115,6 +127,15 @@ whitespace only between two words, splitting rules such as the comparison operat
 legal. Building them surfaced one engine constraint: llguidance's lexer decides a lexeme one byte
 ahead, so no lexeme may run on into the next line's indentation — a line end is one lexeme per line,
 and GBNF whitespace is a recursive rule so a converter cannot fuse `is` and `not` into one lexeme.
+
+A fourth dialect is for editors, not for decoding: `reference/grammar/tree-sitter/`, a
+tree-sitter grammar generated from the same source, with highlight queries whose keywords come
+from it too. Three things had to be said explicitly that Lark implies. The layout tokens come
+from a hand-written external scanner, zero-width, so comment lines stay in the tree. Every rule
+associates to the right, because Lark's LALR parser settles each shift/reduce conflict by
+shifting. A rule Lark inlines (`?rule`) is hidden, and renamed where the source also has a rule
+of that hidden name. It is tested by tree-sitter's own CLI, which generates the parser and parses
+every variant B program of the paired corpus and every reference example without an error.
 
 ## Requirements for the published grammar
 

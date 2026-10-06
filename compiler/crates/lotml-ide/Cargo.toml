@@ -1,0 +1,16 @@
+[package]
+name = "lotml-ide"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+salsa = { workspace = true }
+lotml-syntax = { path = "../lotml-syntax" }
+lotml-check = { path = "../lotml-check" }
+lotml-db = { path = "../lotml-db" }
+lotml-diag = { path = "../lotml-diag" }
+lotml-fmt = { path = "../lotml-fmt" }
+
+[lints]
+workspace = true

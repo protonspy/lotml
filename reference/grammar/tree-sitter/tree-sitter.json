@@ -1,0 +1,20 @@
+{
+  "grammars": [
+    {
+      "name": "lotml",
+      "camelcase": "Lotml",
+      "scope": "source.lotml",
+      "path": ".",
+      "file-types": ["lotml"],
+      "highlights": "queries/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "lotml for tree-sitter: highlighting in editors",
+    "links": {
+      "repository": "https://github.com/protonspy/lotml"
+    }
+  }
+}

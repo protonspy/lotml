@@ -23,3 +23,4 @@ Every avoided synonym is reported wherever it appears as a whole word under `doc
 - **compiler-embedded model** — a small language model specialised to one language and shipped inside its compiler or toolchain to repair errors, explain diagnostics or suggest improvements; lotml has none.
 - **prefix check** — the semantic compiler judging a partial file while a model writes it: completable, an error here, or not yet decidable; it never rejects a prefix that can still be completed.
 - **symbol-addressed edit** — an edit that names a syntax entity (a function body, a `match` arm, a method) and gives only its new content; the tool re-indents it and rejects it if it breaks the syntax. Avoid: AST edit
+- **interface** — a `.lotmli` file declaring the functions of a Python module, written by `lotml bind` from its stub with each returning `T ! PyError`, or of a C library, named `c.<library>` and written by hand. Avoid: binding file

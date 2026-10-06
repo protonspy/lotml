@@ -10,7 +10,7 @@ use lotml_syntax::span::Span;
 use crate::builtins;
 use crate::closest;
 use crate::program::{FnSig, Method, Program, TypeDef};
-use crate::ty::{F64, INT, Infer, Ty};
+use crate::ty::{F64, INT, Infer, IntKind, Ty};
 
 #[derive(Clone, Debug)]
 pub struct Local {
@@ -61,6 +61,9 @@ pub struct Body<'p> {
     returned: BTreeSet<String>,
     /// The type of every expression checked, by its span; resolved by `types`.
     seen: HashMap<Span, Ty>,
+    /// Each name that resolved to a local, with where that local was declared; a declaration
+    /// refers to itself.
+    locals: Vec<(Span, Span)>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -96,6 +99,7 @@ impl<'p> Body<'p> {
             mutated: BTreeSet::new(),
             returned: BTreeSet::new(),
             seen: HashMap::new(),
+            locals: Vec::new(),
             diagnostics: Vec::new(),
         };
         if let Some(sig) = sig {
@@ -107,6 +111,7 @@ impl<'p> Body<'p> {
             for p in &sig.params {
                 let mutable = matches!(p.convention, Convention::Inout | Convention::Var);
                 body.params.insert(p.name.clone(), p.convention);
+                body.locals.push((p.span, p.span));
                 body.scopes[0].locals.insert(
                     p.name.clone(),
                     Local {
@@ -181,6 +186,7 @@ impl<'p> Body<'p> {
         scope
             .locals
             .insert(name.name.clone(), Local { ty, mutable, span: name.span, declared_at, moved: false, origin });
+        self.locals.push((name.span, name.span));
     }
 
     fn with_scope<T>(&mut self, facts: &[(String, Ty)], f: impl FnOnce(&mut Self) -> T) -> (T, Scope) {
@@ -203,6 +209,16 @@ impl<'p> Body<'p> {
             }
             if branches[1..].iter().all(|b| b.locals.get(name).is_some_and(|l| self.infer.unify(&l.ty, &local.ty))) {
                 self.scopes.last_mut().expect("a scope").locals.insert(name.clone(), local.clone());
+                // One local, declared in each branch: the later declarations, and what referred
+                // to them, refer to the first.
+                for branch in &branches[1..] {
+                    let declared = branch.locals[name].span;
+                    for (_, to) in &mut self.locals {
+                        if *to == declared {
+                            *to = local.span;
+                        }
+                    }
+                }
             }
         }
     }
@@ -777,6 +793,7 @@ impl<'p> Body<'p> {
         match self.lookup(&name.name).cloned() {
             None => self.declare(name, ty, false, at),
             Some(local) => {
+                self.locals.push((name.span, local.span));
                 if !local.mutable {
                     self.immutable(&name.name, &local, name.span, "assigned again");
                     return;
@@ -1019,6 +1036,11 @@ impl<'p> Body<'p> {
         self.seen.iter().map(|(span, ty)| (*span, self.infer.resolve(ty)))
     }
 
+    /// Each name that resolved to a local, with the span of its declaration.
+    pub fn locals(&self) -> &[(Span, Span)] {
+        &self.locals
+    }
+
     /// Accept `found` where `expected` is wanted, allowing the coercions lotml has: a value
     /// where an optional is wanted, a type implementing a trait where `dyn` is.
     pub fn coerce(&mut self, found: &Ty, expected: &Ty, span: Span) -> bool {
@@ -1082,11 +1104,53 @@ impl<'p> Body<'p> {
         }
     }
 
+    /// An integer literal: an `int`, or the integer type expected where it fits — `limit: u8 =
+    /// 200`, an `i32` argument — and reported where it does not.
+    fn int_literal(&mut self, text: &str, span: Span, expected: Option<&Ty>) -> Ty {
+        let wanted = match expected.map(|e| self.resolve(e)) {
+            Some(Ty::Int(kind)) => kind,
+            Some(Ty::Optional(inner)) => match *inner {
+                Ty::Int(kind) => kind,
+                _ => return INT,
+            },
+            _ => return INT,
+        };
+        if wanted == IntKind::I64 {
+            return INT;
+        }
+        let digits = text.replace('_', "").to_ascii_lowercase();
+        let (negative, lower) = match digits.strip_prefix('-') {
+            Some(rest) => (true, rest.to_string()),
+            None => (false, digits),
+        };
+        let value = match lower.get(..2) {
+            Some("0x") => i128::from_str_radix(&lower[2..], 16),
+            Some("0o") => i128::from_str_radix(&lower[2..], 8),
+            Some("0b") => i128::from_str_radix(&lower[2..], 2),
+            _ => lower.parse::<i128>(),
+        }
+        .map(|v| if negative { -v } else { v });
+        let (low, high) = int_range(wanted);
+        if value.is_ok_and(|v| v < low || v > high) {
+            let ty = Ty::Int(wanted);
+            self.report(Diagnostic::error(
+                "E0204",
+                span,
+                format!("`{text}` does not fit in `{ty}`, from {low} to {high}"),
+            ));
+        }
+        Ty::Int(wanted)
+    }
+
     fn expr_inner(&mut self, expr: &Expr, expected: Option<&Ty>) -> Ty {
         match &expr.kind {
             ExprKind::Error => Ty::Error,
-            ExprKind::Int(_) => INT,
-            ExprKind::Float(_) => F64,
+            ExprKind::Int(text) => self.int_literal(text, expr.span, expected),
+            ExprKind::Float(_) => match expected.map(|e| self.resolve(e)) {
+                Some(Ty::Float(kind)) => Ty::Float(kind),
+                Some(Ty::Optional(inner)) if matches!(*inner, Ty::Float(_)) => *inner,
+                _ => F64,
+            },
             ExprKind::Str(literals) => {
                 for literal in literals {
                     for part in &literal.parts {
@@ -1162,8 +1226,19 @@ impl<'p> Body<'p> {
                     _ => Ty::Error,
                 }
             }
+            ExprKind::Unary { op: UnaryOp::Neg, operand }
+                if matches!(operand.kind, ExprKind::Int(_))
+                    && matches!(expected.map(|e| self.resolve(e)), Some(Ty::Int(_) | Ty::Optional(_))) =>
+            {
+                // `-128` is one literal for its range: an `i8`, though `128` alone is not.
+                let ExprKind::Int(text) = &operand.kind else { unreachable!("matched above") };
+                let ty = self.int_literal(&format!("-{text}"), expr.span, expected);
+                self.seen.insert(operand.span, ty.clone());
+                ty
+            }
             ExprKind::Unary { op, operand } => {
-                let ty = self.expr(operand, None);
+                let numeric = expected.filter(|e| self.resolve(e).is_numeric());
+                let ty = self.expr(operand, numeric);
                 let ok = match op {
                     UnaryOp::Neg | UnaryOp::Pos => ty.is_numeric() || ty.is_poison() || matches!(ty, Ty::Var(_)),
                     UnaryOp::Invert => matches!(ty, Ty::Int(_) | Ty::Error | Ty::Never | Ty::Var(_)),
@@ -1436,6 +1511,9 @@ impl<'p> Body<'p> {
     }
 
     fn name(&mut self, name: &str, span: Span) -> Ty {
+        if let Some(local) = self.lookup(name) {
+            self.locals.push((span, local.span));
+        }
         if let Some(ty) = self.narrowed(name) {
             return ty;
         }
@@ -1450,7 +1528,7 @@ impl<'p> Body<'p> {
             return local.ty;
         }
         if let Some(sig) = self.program.functions.get(name) {
-            return Ty::Func(sig.params.iter().map(|p| p.ty.clone()).collect(), Box::new(sig.ret.clone()));
+            return function_value(sig);
         }
         if let Some(owner) = self.program.variant_of.get(name).cloned() {
             return self.variant_value(name, &owner, span);
@@ -1495,6 +1573,7 @@ impl<'p> Body<'p> {
                 .note("a name is in scope after the statement that declares it"),
         );
         // Declare it as unknown so the same mistake is reported once.
+        self.locals.push((span, span));
         self.scopes[0].locals.insert(
             name.to_string(),
             Local { ty: Ty::Error, mutable: true, span, declared_at: None, moved: false, origin: Origin::Declared },
@@ -1800,6 +1879,23 @@ impl<'p> Body<'p> {
                     Ty::Error
                 }
             },
+            Ty::Module(module) if self.program.foreign.contains_key(module) => {
+                match self.program.foreign[module].get(&name.name) {
+                    Some(sig) => function_value(sig),
+                    None => {
+                        let names: Vec<String> = self.program.foreign[module].keys().cloned().collect();
+                        self.report(
+                            Diagnostic::error(
+                                "E0205",
+                                name.span,
+                                format!("`{module}`'s interface has no `{}`", name.name),
+                            )
+                            .alternatives(closest(&name.name, &names)),
+                        );
+                        Ty::Error
+                    }
+                }
+            }
             Ty::Module(module) => builtins::module_member(module, &name.name).unwrap_or_else(|| {
                 self.report(
                     Diagnostic::error("E0205", name.span, format!("`{module}` has no `{}`", name.name)).alternatives(
@@ -2078,7 +2174,39 @@ impl<'p> Body<'p> {
             }
             Err(message) => {
                 let code = if message.contains("takes") && message.contains("argument") { "E0203" } else { "E0204" };
-                self.report(Diagnostic::error(code, span, message));
+                let mut d = Diagnostic::error(code, span, message);
+                // Python's habit, `gather(f(a), f(b))`: the calls given where tasks are wanted.
+                let calls: Vec<&Expr> = args
+                    .iter()
+                    .filter_map(|a| match a {
+                        Arg::Positional(e) if matches!(e.kind, ExprKind::Call { .. }) => Some(e),
+                        _ => None,
+                    })
+                    .collect();
+                if name == "parallel" && !calls.is_empty() && calls.len() == args.len() {
+                    let tasks: Vec<String> = calls.iter().map(|e| format!("lambda: {}", self.source(e.span))).collect();
+                    let whole = calls[0].span.to(calls[calls.len() - 1].span);
+                    d = d.fix(
+                        "make each call a task",
+                        Applicability::MaybeIncorrect,
+                        vec![(whole, format!("[{}]", tasks.join(", ")))],
+                    );
+                }
+                // `map`'s habit, `[lambda k: f(k) for k in keys]`: a task given the loop's
+                // variable as a parameter, where it should capture it.
+                if let (true, [Arg::Positional(list)]) = (name == "parallel", args)
+                    && let ExprKind::ListComp { element, loops } = &list.kind
+                    && let ExprKind::Lambda { params, body } = &element.kind
+                    && !params.is_empty()
+                    && params.iter().all(|p| loops.iter().any(|l| l.target.names().iter().any(|n| n.name == p.name)))
+                {
+                    d = d.fix(
+                        "capture the loop's variable instead: a task takes no parameter",
+                        Applicability::MaybeIncorrect,
+                        vec![(Span { start: element.span.start, end: body.span.start }, "lambda: ".into())],
+                    );
+                }
+                self.report(d);
                 Ty::Error
             }
         }
@@ -2384,6 +2512,19 @@ impl<'p> Body<'p> {
                         Ty::Error
                     }
                 }
+            }
+            Ty::Module(module) if self.program.foreign.contains_key(&module) => {
+                if let Some(sig) = self.program.foreign[&module].get(&name.name).cloned() {
+                    return self.call_signature(&sig, &[], &[], args, span, None);
+                }
+                self.arg_types(args, &[]);
+                let names: Vec<String> = self.program.foreign[&module].keys().cloned().collect();
+                self.report(
+                    Diagnostic::error("E0205", name.span, format!("`{module}`'s interface has no `{}`", name.name))
+                        .alternatives(closest(&name.name, &names))
+                        .note("a function the binding could not type is listed in the interface's comments"),
+                );
+                Ty::Error
             }
             Ty::Module(module) => {
                 let ty = builtins::module_member(&module, &name.name);
@@ -2698,4 +2839,27 @@ fn assigned(block: &Block) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     walk(block, &mut out);
     out
+}
+
+/// A function used as a value: its parameters and, for one that can fail, its result.
+fn function_value(sig: &FnSig) -> Ty {
+    let ret = match &sig.error {
+        Some(error) => Ty::Result(Box::new(sig.ret.clone()), Box::new(error.clone())),
+        None => sig.ret.clone(),
+    };
+    Ty::Func(sig.params.iter().map(|p| p.ty.clone()).collect(), Box::new(ret))
+}
+
+/// The values an integer type holds.
+fn int_range(kind: IntKind) -> (i128, i128) {
+    match kind {
+        IntKind::I8 => (i8::MIN.into(), i8::MAX.into()),
+        IntKind::I16 => (i16::MIN.into(), i16::MAX.into()),
+        IntKind::I32 => (i32::MIN.into(), i32::MAX.into()),
+        IntKind::I64 => (i64::MIN.into(), i64::MAX.into()),
+        IntKind::U8 => (0, u8::MAX.into()),
+        IntKind::U16 => (0, u16::MAX.into()),
+        IntKind::U32 => (0, u32::MAX.into()),
+        IntKind::U64 => (0, u64::MAX.into()),
+    }
 }

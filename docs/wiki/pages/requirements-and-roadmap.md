@@ -73,7 +73,8 @@ research's adjustments. Each gate's criteria are in [[evaluation-harness]].
 | 4 | native backend (Cranelift in debug, LLVM in release), effects, contracts | — |
 
 **The original study's technical choices:** a compiler in Rust, a hand-written recursive-descent
-parser, a query-based incremental architecture (Salsa), a tree-sitter grammar for editors. One
+parser, a query-based incremental architecture (Salsa), a tree-sitter grammar for editors (built
+in phase 2, [[constrained-decoding]]). One
 data point to weigh: Roc rewrote its compiler from Rust to Zig to cut the compiler's own
 incremental rebuild time (3.4 s to about 35 ms), at a cost of 487 days — the implementation
 language is expensive to change, and the decision is recorded in

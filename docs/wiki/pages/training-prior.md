@@ -80,7 +80,12 @@ of lotml drew the C family's `else if`. Every neighbour's prior leaks where lotm
    and its authors expect it not to work as is for a language the model never saw — lotml's case. The
    PyLang corpus was produced by Claude Opus in an agentic loop against the real interpreter, keeping
    30.4% of attempts. For lotml the translator is a rule-based transpiler plus a frontier model in a
-   loop with the compiler ([[transpilation-strategy]]).
+   loop with the compiler ([[transpilation-strategy]]). Built in phase 2 on the 509 tasks whose
+   canonical typed Python passes its hidden tests: the rules alone translated 310 (61%) that
+   passed, and Claude Sonnet with the compiler the other 199 — 197 on its first answer, from the
+   Python, the reference and what the rules wrote — so every task is in the corpus, each program
+   with its tests (`harness/results/corpus.md`). The cases are small functions; a corpus that
+   teaches a model lotml needs larger, more varied programs than these.
 4. **RL with verifiable rewards.** [Agnostics](https://arxiv.org/abs/2508.04865) trained Qwen3-4B with an
    input/output verifier: Lua 11→23%, Julia 10→22%, OCaml 1→7% on its LiveCodeBench port. It needed a
    5,369-problem dataset, a prompt of language tips and a nonzero starting success rate, and it failed

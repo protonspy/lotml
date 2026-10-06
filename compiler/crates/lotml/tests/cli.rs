@@ -91,9 +91,9 @@ fn prefix_gives_a_verdict() {
     assert_eq!(json["prefix"][0]["verdict"], "error");
 }
 
-#[test]
-fn since_reports_only_what_the_edit_introduced() {
-    let dir = scratch("since", &[("a.lotml", "fn f() -> int:\n    return y\n")]);
+/// A scratch git repository holding `files`, committed.
+fn repository(name: &str, files: &[(&str, &str)]) -> PathBuf {
+    let dir = scratch(name, files);
     let git = |args: &[&str]| {
         let status = isolated("git", &dir).args(args).output().expect("git runs").status;
         assert!(status.success(), "git {args:?}");
@@ -101,6 +101,25 @@ fn since_reports_only_what_the_edit_introduced() {
     git(&["init", "-q"]);
     git(&["-c", "user.name=t", "-c", "user.email=t@t", "add", "."]);
     git(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "start"]);
+    dir
+}
+
+#[test]
+fn since_reads_the_file_s_repository_whatever_git_dir_says() {
+    let decoy = repository("since-decoy", &[("a.lotml", "fn f() -> int:\n    return 1\n")]);
+    let dir = repository("since-hook", &[("a.lotml", "fn f() -> int:\n    return y\n")]);
+    let out = isolated(env!("CARGO_BIN_EXE_lotml"), &dir)
+        .args(["check", "--since", "HEAD", "--json", "a.lotml"])
+        .env("GIT_DIR", decoy.join(".git"))
+        .output()
+        .expect("the binary runs");
+    let json: serde_json::Value = serde_json::from_str(&stdout(&out)).expect("JSON");
+    assert_eq!(json["diagnostics"].as_array().map(Vec::len), Some(0), "the error was already there at HEAD");
+}
+
+#[test]
+fn since_reports_only_what_the_edit_introduced() {
+    let dir = repository("since", &[("a.lotml", "fn f() -> int:\n    return y\n")]);
     std::fs::write(dir.join("a.lotml"), "fn f() -> int:\n    return y\n\nfn g() -> int:\n    return z\n")
         .expect("edit");
     let out = lotml(&["check", "--since", "HEAD", "--json", "a.lotml"], &dir);
@@ -253,4 +272,18 @@ fn show_finds_variants_traits_and_types_used_through_patterns() {
     assert!(built.contains("# uses Shape") && built.contains("type Shape ="), "{built}");
     let none = lotml(&["show", "zzz", "shapes.lotml"], &dir);
     assert_eq!(stdout(&none).trim_end(), "nothing is called `zzz`");
+}
+
+#[test]
+fn test_runs_hundreds_of_files_at_once() {
+    // The modules once went to Python on its command line, which Windows caps at 32,767 characters.
+    let files: Vec<(String, String)> = (0..400)
+        .map(|i| (format!("module_with_a_long_name_{i}.lotml"), format!("test \"t{i}\":\n    assert {i} == {i}\n")))
+        .collect();
+    let named: Vec<(&str, &str)> = files.iter().map(|(n, t)| (n.as_str(), t.as_str())).collect();
+    let dir = scratch("many", &named);
+    let out = lotml(&["test", "--json", "."], &dir);
+    assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
+    let json: serde_json::Value = serde_json::from_str(stdout(&out).trim()).expect("JSON");
+    assert_eq!(json["summary"]["passed"], 400);
 }

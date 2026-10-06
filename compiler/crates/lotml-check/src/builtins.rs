@@ -37,11 +37,25 @@ pub const PRELUDE: &[&str] = &[
     "todo",
     "Ok",
     "Err",
+    // A record: what a call into Python fails with (adr:0012).
+    "PyError",
     "wrapping_add",
     "wrapping_sub",
     "wrapping_mul",
     "isqrt",
     "gcd",
+    // Runs tasks concurrently and waits for them all, in no function marked `async` (R20).
+    "parallel",
+    // Conversions to the sized numbers, stopping on a value that does not fit.
+    "i8",
+    "i16",
+    "i32",
+    "i64",
+    "u8",
+    "u16",
+    "u32",
+    "u64",
+    "f32",
 ];
 
 pub fn is_prelude(name: &str) -> bool {
@@ -188,6 +202,22 @@ pub fn call(name: &str, args: &[Ty], keywords: &[(String, Ty)], infer: &mut Infe
                 _ => Err("`dict` takes a list of (key, value) pairs".into()),
             }
         }
+        "parallel" => {
+            let usage = "`parallel` takes one list of tasks, each a function with no parameters: \
+                         `parallel([lambda: work(a), lambda: work(b)])`";
+            if args.len() != 1 {
+                return Err(usage.into());
+            }
+            match infer.resolve(&args[0]) {
+                Ty::List(task) => match infer.resolve(&task) {
+                    Ty::Func(params, result) if params.is_empty() => Ok(Ty::list(*result)),
+                    Ty::Var(_) | Ty::Error | Ty::Never => Ok(Ty::list(infer.fresh())),
+                    other => Err(format!("{usage}, not a list of `{other}`")),
+                },
+                Ty::Error | Ty::Never => Ok(Ty::list(infer.fresh())),
+                other => Err(format!("{usage}, not a `{other}`")),
+            }
+        }
         "Heap" => {
             if args.is_empty() {
                 return Ok(Ty::Heap(Box::new(infer.fresh())));
@@ -248,12 +278,14 @@ pub fn call(name: &str, args: &[Ty], keywords: &[(String, Ty)], infer: &mut Infe
             }
             Ok(Ty::Bool)
         }
-        "int" | "float" => {
+        "int" | "float" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" => {
             count(1, 1)?;
             match infer.resolve(&args[0]) {
-                Ty::Int(_) | Ty::Float(_) | Ty::Bool | Ty::Var(_) | Ty::Error | Ty::Never => {
-                    Ok(if name == "int" { INT } else { F64 })
-                }
+                Ty::Int(_) | Ty::Float(_) | Ty::Bool | Ty::Var(_) | Ty::Error | Ty::Never => Ok(match name {
+                    "int" => INT,
+                    "float" => F64,
+                    sized => Ty::primitive(sized).unwrap_or(INT),
+                }),
                 Ty::Str => Err(format!(
                     "`{name}` converts numbers; text converts with `.{}()`, which returns an optional",
                     if name == "int" { "to_int" } else { "to_float" }

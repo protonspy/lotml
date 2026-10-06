@@ -24,13 +24,24 @@ same pinned versions.
 - **pytest-cov** — line coverage for the test gate `scc check` reads; chosen over running
   `coverage` by hand because it attaches to the pytest run the suite already is.
 
+- **Ollama** and **OpenRouter** (services, called over HTTP with the standard library) — serve the
+  open models the experiments ask. Ollama runs them on the local machine; OpenRouter's raw text
+  completions run hosted open-weight models from one provider pinned per model, checked to take
+  the prompt as written, when a local run would take hours. The key is read from
+  `OPENROUTER_API_KEY` and never written to the repository.
+
+- **tree-sitter CLI** 0.27 (development only, through `npx`) — generates the editor grammar in
+  `reference/grammar/tree-sitter/` and parses the corpus with it in the harness tests, which
+  skip without `npx`; it compiles the parser with the platform's C compiler.
+
 ## Compiler (`compiler/`)
 
 A Cargo workspace, Rust 1.97 and edition 2024 (adr:0006-compiler-written-in-rust), with a lock
 file. Each crate is a stage: `lotml-syntax` (lexer, tolerant parser), `lotml-diag` (diagnostics
 and their codes), `lotml-check` (types, mutability, errors as values), `lotml-db` (the queries),
-`lotml-fmt` (the formatter), `lotml-py` (the Python backend and its runtime), `lotml` (the
-command).
+`lotml-fmt` (the formatter), `lotml-py` (the Python backend and its runtime), `lotml-ide` (what
+each name refers to, and the workspace an editor or agent queries), `lotml` (the command, with
+its language and MCP servers — JSON-RPC written over `serde_json`, with no protocol library).
 
 - **salsa** 0.28 — incremental queries over source files, the property the under-100 ms check
   rests on ([[transpilation-strategy]]); chosen over a hand-rolled cache because rust-analyzer
@@ -41,5 +52,8 @@ command).
   cannot drift apart; chosen over hand parsing for its error messages.
 - **cargo-llvm-cov** (development only) — line coverage of the Rust tests for the test gate,
   next to the harness's pytest-cov; it needs the `llvm-tools-preview` component.
+- **typeshed** (read, not linked) — the stubs `lotml bind` writes interfaces from
+  (adr:0012-python-interop-through-checked-boundaries-and-interface-files); found in an installed
+  mypy or jedi when no `--stub` is given, never installed by lotml.
 - **CPython** 3.11 or later — runs what the Python backend writes (`lotml run`, `lotml test`);
   found as `LOTML_PYTHON`, `python3`, `python` or `py -3`. Not a library the compiler links.

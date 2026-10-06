@@ -8,7 +8,7 @@ use lotml_diag::{Diagnostic, Severity};
 use lotml_syntax::lexer::{TokenKind, lex};
 use lotml_syntax::parse;
 
-use crate::check_source;
+use crate::{Interfaces, check_source_with};
 
 /// What a prefix check can say.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,6 +47,12 @@ const LATER: &[&str] = &["E0201", "E0202", "E0205", "E0213"];
 const UNFINISHED: &[&str] = &["E0206", "E0209", "E0219"];
 
 pub fn check_prefix(source: &str) -> PrefixCheck {
+    check_prefix_with(source, &Interfaces::new())
+}
+
+/// [`check_prefix`] for a file that may import the Python modules in `interfaces`.
+pub fn check_prefix_with(source: &str, interfaces: &Interfaces) -> PrefixCheck {
+    let check_source = |text: &str| check_source_with(text, interfaces);
     let tail = open_tail(source);
     let last_item = parse(source).module.items.last().map_or(source.len() as u32, |item| item.span().start);
     // The tail can change what came before it — a signature still being typed changes every

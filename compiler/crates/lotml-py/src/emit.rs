@@ -1,16 +1,21 @@
 //! lotml's syntax tree to Python's, as JSON the runtime turns back into `ast` nodes.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
-use lotml_check::Types;
 use lotml_check::ty::{IntKind, Ty};
+use lotml_check::{FnSig, Types};
 use lotml_syntax::ast::*;
 use lotml_syntax::span::Span;
 use serde_json::{Map, Value, json};
 
-/// The Python module for a checked lotml module.
-pub fn module(text: &str, module: &Module, types: &Types) -> Value {
-    let mut emitter = Emitter::new(text, module, types);
+/// The Python modules a lotml module imports through interfaces, each with its functions.
+pub type Foreign = BTreeMap<String, BTreeMap<String, FnSig>>;
+
+/// The Python module for a checked lotml module. `locals` are the checker's: each name that
+/// resolved to a local, with where that local was declared.
+pub fn module(text: &str, module: &Module, types: &Types, foreign: &Foreign, locals: &[(Span, Span)]) -> Value {
+    let mut emitter = Emitter::new(text, module, types, foreign);
+    emitter.locals = locals.iter().copied().collect();
     emitter.module(module)
 }
 
@@ -46,6 +51,9 @@ struct Emitter<'a> {
     enums: HashSet<String>,
     /// Names of top-level functions.
     functions: HashSet<String>,
+    foreign: &'a Foreign,
+    /// Where the local each name resolved to was declared, by the name's span.
+    locals: HashMap<Span, Span>,
     scope: Scope,
     temporaries: usize,
     /// Inside a comprehension's iterable or a default value, where `:=` is not allowed.
@@ -174,7 +182,26 @@ fn stored_ctx(mut target: Value) -> Value {
     target
 }
 
-fn range_of(kind: IntKind) -> (i128, i128) {
+/// The C type a value of `ty` crosses into C as, by the name the runtime's `c_function` reads.
+fn c_type(ty: &Ty) -> &'static str {
+    match ty {
+        Ty::Int(IntKind::I8) => "i8",
+        Ty::Int(IntKind::I16) => "i16",
+        Ty::Int(IntKind::I32) => "i32",
+        Ty::Int(IntKind::I64) => "i64",
+        Ty::Int(IntKind::U8) => "u8",
+        Ty::Int(IntKind::U16) => "u16",
+        Ty::Int(IntKind::U32) => "u32",
+        Ty::Int(IntKind::U64) => "u64",
+        Ty::Float(lotml_check::ty::FloatKind::F32) => "f32",
+        Ty::Float(_) => "f64",
+        Ty::Bool => "bool",
+        Ty::Str => "str",
+        _ => "none",
+    }
+}
+
+pub(crate) fn range_of(kind: IntKind) -> (i128, i128) {
     match kind {
         IntKind::I8 => (i8::MIN.into(), i8::MAX.into()),
         IntKind::I16 => (i16::MIN.into(), i16::MAX.into()),
@@ -188,7 +215,7 @@ fn range_of(kind: IntKind) -> (i128, i128) {
 }
 
 impl<'a> Emitter<'a> {
-    fn new(text: &'a str, module: &Module, types: &'a Types) -> Emitter<'a> {
+    fn new(text: &'a str, module: &Module, types: &'a Types, foreign: &'a Foreign) -> Emitter<'a> {
         let mut lines = vec![0];
         lines.extend(text.match_indices('\n').map(|(i, _)| i as u32 + 1));
         let mut units = HashSet::new();
@@ -219,6 +246,8 @@ impl<'a> Emitter<'a> {
             units,
             enums,
             functions,
+            foreign,
+            locals: HashMap::new(),
             scope: Scope::default(),
             temporaries: 0,
             no_walrus: false,
@@ -538,6 +567,13 @@ impl<'a> Emitter<'a> {
     }
 
     fn import(&mut self, import: &Import) -> Vec<Value> {
+        let path = import.module.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(".");
+        if let Some(functions) = self.foreign.get(&path) {
+            if lotml_check::is_c_library(&path) {
+                return self.import_c(import, &path, functions);
+            }
+            return self.import_python(import, &path, functions);
+        }
         let module = rt("math");
         if import.names.is_empty() {
             let id = import.module.first().map_or("math", |m| m.name.as_str());
@@ -547,6 +583,55 @@ impl<'a> Emitter<'a> {
             .names
             .iter()
             .map(|n| self.at(assign(vec![target(&n.name)], attr(module.clone(), &n.name)), n.span))
+            .collect()
+    }
+
+    /// `from c.<library> import f`: each C function loaded when the module loads, with the C
+    /// types of its parameters and result (adr:0013).
+    fn import_c(&mut self, import: &Import, path: &str, functions: &BTreeMap<String, FnSig>) -> Vec<Value> {
+        let library = constant(path.trim_start_matches("c.").into());
+        import
+            .names
+            .iter()
+            .filter_map(|n| functions.get(&n.name).map(|sig| (n, sig)))
+            .map(|(n, sig)| {
+                let params: Vec<Value> = sig.params.iter().map(|p| constant(c_type(&p.ty).into())).collect();
+                let loaded = call(
+                    rt("c_function"),
+                    vec![
+                        library.clone(),
+                        constant(n.name.clone().into()),
+                        node("List", vec![("elts", Value::Array(params)), ("ctx", load())]),
+                        constant(c_type(&sig.ret).into()),
+                    ],
+                );
+                self.at(assign(vec![target(&n.name)], loaded), n.span)
+            })
+            .collect()
+    }
+
+    /// A Python module's functions, called through the runtime's checked boundary: `import m`
+    /// binds a module of them, `from m import f` each one.
+    fn import_python(&mut self, import: &Import, path: &str, functions: &BTreeMap<String, FnSig>) -> Vec<Value> {
+        let returns = |sig: &FnSig| constant(crate::boundary::descriptor(&sig.ret).to_string().into());
+        let module = constant(path.into());
+        if import.names.is_empty() {
+            let id = import.module.first().map_or(path, |m| m.name.as_str());
+            let keys: Vec<Value> = functions.keys().map(|k| constant(k.clone().into())).collect();
+            let values: Vec<Value> = functions.values().map(returns).collect();
+            let table = node("Dict", vec![("keys", Value::Array(keys)), ("values", Value::Array(values))]);
+            return vec![
+                self.at(assign(vec![target(id)], call(rt("ForeignModule"), vec![module, table])), import.span),
+            ];
+        }
+        import
+            .names
+            .iter()
+            .filter_map(|n| functions.get(&n.name).map(|sig| (n, sig)))
+            .map(|(n, sig)| {
+                let bound = call(rt("foreign"), vec![module.clone(), constant(n.name.clone().into()), returns(sig)]);
+                self.at(assign(vec![target(&n.name)], bound), n.span)
+            })
             .collect()
     }
 
@@ -1056,7 +1141,7 @@ impl<'a> Emitter<'a> {
                 let orelse = self.expr(orelse);
                 node("IfExp", vec![("test", test), ("body", body), ("orelse", orelse)])
             }
-            ExprKind::Lambda { params, body } => self.lambda(params, body),
+            ExprKind::Lambda { params, body } => self.lambda(params, body, e.span),
             ExprKind::Call { func, args } => self.call(func, args, e),
             ExprKind::Index { object, index } => {
                 let o = self.expr(object);
@@ -1175,14 +1260,24 @@ impl<'a> Emitter<'a> {
 
     /// A lambda; the locals it uses that may change after it is made are captured as copies,
     /// through keyword defaults evaluated when the lambda is.
-    fn lambda(&mut self, params: &[Ident], body: &Expr) -> Value {
+    /// A lambda captures a copy of each local it uses that was declared outside it (R05): taken
+    /// when the lambda is made, as a default, since Python would read the variable when the
+    /// lambda is called — after a loop has bound it again.
+    fn lambda(&mut self, params: &[Ident], body: &Expr, whole: Span) -> Value {
         let mut free = Vec::new();
         names_in(body, &mut free);
         let own: HashSet<&str> = params.iter().map(|p| p.name.as_str()).collect();
+        let outside = |declared: &Span| declared.start < whole.start || declared.end > whole.end;
         let mut seen = HashSet::new();
         let captured: Vec<String> = free
             .into_iter()
-            .filter(|n| !own.contains(n.as_str()) && (self.scope.mutable.contains(n) || self.scope.boxed.contains(n)))
+            .filter(|(n, at)| {
+                !own.contains(n.as_str())
+                    && (self.scope.mutable.contains(n)
+                        || self.scope.boxed.contains(n)
+                        || self.locals.get(at).is_some_and(outside))
+            })
+            .map(|(n, _)| n)
             .filter(|n| seen.insert(n.clone()))
             .collect();
         let saved = self.scope.clone();
@@ -1191,7 +1286,17 @@ impl<'a> Emitter<'a> {
             self.scope.boxed.remove(&p.name);
             self.scope.tainted.remove(&p.name);
         }
-        let kw_defaults: Vec<Value> = captured.iter().map(|n| call(rt("copy"), vec![self.place_name(n)])).collect();
+        let kw_defaults: Vec<Value> = captured
+            .iter()
+            .map(|n| {
+                // A value a `var` still holds may change after the lambda is made.
+                if self.scope.mutable.contains(n) || self.scope.boxed.contains(n) || self.scope.tainted.contains(n) {
+                    call(rt("copy"), vec![self.place_name(n)])
+                } else {
+                    name(n)
+                }
+            })
+            .collect();
         for n in &captured {
             self.scope.mutable.remove(n);
             self.scope.boxed.remove(n);
@@ -1424,10 +1529,11 @@ fn irrefutable(p: &Pattern, units: &HashSet<String>) -> bool {
 }
 
 /// Every name an expression reads, in order.
-fn names_in(e: &Expr, out: &mut Vec<String>) {
+/// Every name an expression reads, with where.
+fn names_in(e: &Expr, out: &mut Vec<(String, Span)>) {
     let mut go = |x: &Expr| names_in(x, out);
     match &e.kind {
-        ExprKind::Name(n) => out.push(n.clone()),
+        ExprKind::Name(n) => out.push((n.clone(), e.span)),
         ExprKind::Tuple(items) | ExprKind::List(items) | ExprKind::Set(items) => items.iter().for_each(go),
         ExprKind::Dict(pairs) => pairs.iter().for_each(|(k, v)| {
             names_in(k, out);

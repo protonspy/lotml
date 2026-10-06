@@ -68,13 +68,14 @@ def load(namespace: dict, path: str, payload: str, prelude: dict | None = None):
 
 
 def stub_arguments(stub: str) -> tuple[str, str]:
-    """The path and the payload a compiled module's stub hands `load`."""
+    """The path and the payload a compiled module's stub hands `load_module` (or, from an older
+    compiler, `load`)."""
     tree = ast.parse(stub)
     for node in ast.walk(tree):
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "load"
+            and node.func.attr in ("load", "load_module")
         ):
             return ast.literal_eval(node.args[1]), ast.literal_eval(node.args[2])
     raise ValueError("not a module compiled by lotml")
@@ -323,6 +324,284 @@ def python(function, *args, **kwargs):
         return Err(PyError(type(error).__name__, str(error)))
 
 
+TASK_THREADS = 256
+"""The most tasks of one `parallel` that run at once; the rest wait for a thread."""
+
+
+def parallel(tasks):
+    """`parallel([lambda: …, …])` (R20): each task on a thread of its own, so a call that blocks
+    — into Python, say — holds up only its task; the caller waits for them all and gets their
+    results in order. Nothing is marked `async`. A task reaches no value another can change: a
+    lambda captures copies, and every other value is immutable. A task that panicked stops the
+    program once the others have finished."""
+    import concurrent.futures
+
+    tasks = list(tasks)
+    if not tasks:
+        return []
+    workers = min(len(tasks), TASK_THREADS)
+    with concurrent.futures.ThreadPoolExecutor(workers, thread_name_prefix="lotml-task") as pool:
+        futures = [pool.submit(task) for task in tasks]
+        concurrent.futures.wait(futures)
+    for future in futures:
+        error = future.exception()
+        if error is not None:
+            raise error
+    return [future.result() for future in futures]
+
+
+class LotmlError(Exception):
+    """What a lotml function returning `T ! E` raises when Python calls it and it fails: the
+    lotml error is in `error`."""
+
+    def __init__(self, error):
+        super().__init__(error)
+        self.error = error
+
+
+def accept(value, descriptor, types: dict, classes: dict, where: str):
+    """`value` as the lotml type `descriptor` describes, copied, so the side that gave it never
+    shares it; a `TypeError` or `OverflowError` saying where, when it is not one.
+
+    A descriptor is a list: `["int", low, high, name]`, `["float"]`, `["bool"]`, `["str"]`,
+    `["bytes"]`, `["none"]`, `["list", d]`, `["set", d]`, `["dict", k, v]`, `["tuple", d…]`,
+    `["optional", d]`, `["adt", name]` — a record or sum type described in `types` and built
+    from `classes` — or `["any"]`."""
+    kind = descriptor[0]
+
+    def wrong(expected: str):
+        return TypeError(f"{where}: expected {expected}, got {type(value).__name__}")
+
+    if kind == "any":
+        return _copy.deepcopy(value)
+    if kind == "int":
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise wrong(descriptor[3])
+        if not descriptor[1] <= value <= descriptor[2]:
+            raise OverflowError(f"{where}: {value} does not fit in {descriptor[3]}")
+        return int(value)
+    if kind == "float":
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise wrong("float")
+        return float(value)
+    if kind == "bool":
+        if not isinstance(value, bool):
+            raise wrong("bool")
+        return value
+    if kind == "str":
+        if not isinstance(value, str):
+            raise wrong("str")
+        return str(value)
+    if kind == "bytes":
+        if not isinstance(value, (bytes, bytearray)):
+            raise wrong("bytes")
+        return bytes(value)
+    if kind == "none":
+        if value is not None:
+            raise wrong("None")
+        return None
+    if kind == "optional":
+        return None if value is None else accept(value, descriptor[1], types, classes, where)
+    if kind == "list":
+        if not isinstance(value, list):
+            raise wrong("list")
+        return [
+            accept(v, descriptor[1], types, classes, f"{where}[{i}]") for i, v in enumerate(value)
+        ]
+    if kind == "set":
+        if not isinstance(value, (set, frozenset)):
+            raise wrong("set")
+        return {accept(v, descriptor[1], types, classes, f"{where} element") for v in value}
+    if kind == "dict":
+        if not isinstance(value, dict):
+            raise wrong("dict")
+        return {
+            accept(k, descriptor[1], types, classes, f"{where} key"): accept(
+                v, descriptor[2], types, classes, f"{where}[{k!r}]"
+            )
+            for k, v in value.items()
+        }
+    if kind == "tuple":
+        items = descriptor[1:]
+        if not isinstance(value, tuple) or len(value) != len(items):
+            raise wrong(f"a tuple of {len(items)}")
+        return tuple(
+            accept(v, d, types, classes, f"{where}[{i}]")
+            for i, (v, d) in enumerate(zip(value, items, strict=True))
+        )
+    if kind == "adt":
+        return _accept_adt(value, descriptor[1], types, classes, where)
+    raise TypeError(f"{where}: no lotml type `{kind}`")
+
+
+def _accept_adt(value, name: str, types: dict, classes: dict, where: str):
+    """A record of type `name`, or a variant of the sum type `name`, rebuilt field by field."""
+    shape = types.get(name)
+    if shape is None:
+        return _copy.deepcopy(value)
+    cases = [(name, shape[1])] if shape[0] == "record" else shape[1]
+    for case, fields in cases:
+        cls = classes.get(case)
+        if fields is None:
+            if value is cls:
+                return value
+            continue
+        if isinstance(cls, type) and type(value) is cls:
+            built = {
+                field: accept(getattr(value, field), d, types, classes, f"{where}.{field}")
+                for field, d in fields
+            }
+            return cls(**built)
+    raise TypeError(f"{where}: expected {name}, got {type(value).__name__}")
+
+
+def export(function, name: str, spec: dict, types: dict, classes: dict):
+    """A lotml function as Python calls it: its arguments checked against the lotml signature
+    and copied, and a failure raised as `LotmlError` rather than returned."""
+    params = spec["params"]
+    names = [p[0] for p in params]
+
+    def exported(*args, **kwargs):
+        if spec.get("inout"):
+            raise TypeError(f"{name} changes an argument in place (`inout`): call it from lotml")
+        if len(args) > len(params):
+            raise TypeError(f"{name}() takes {len(params)} arguments, {len(args)} were given")
+        given = dict(zip(names, args, strict=False))
+        for key, value in kwargs.items():
+            if key not in names:
+                raise TypeError(f"{name}() has no parameter `{key}`")
+            if key in given:
+                raise TypeError(f"{name}() was given `{key}` twice")
+            given[key] = value
+        missing = [p[0] for p in params if p[0] not in given and not p[2]]
+        if missing:
+            raise TypeError(f"{name}() is missing {', '.join(missing)}")
+        checked = {
+            p[0]: accept(given[p[0]], p[1], types, classes, f"{name}({p[0]})")
+            for p in params
+            if p[0] in given
+        }
+        result = function(**checked)
+        if spec["error"] is None:
+            return result
+        if isinstance(result, Err):
+            raise LotmlError(result.error)
+        return result.value
+
+    exported.__name__ = exported.__qualname__ = name
+    exported.__doc__ = getattr(function, "__doc__", None)
+    exported.__wrapped__ = function
+    return exported
+
+
+def load_module(namespace: dict, path: str, payload: str):
+    """Load a compiled module as Python imports it: the program runs in a namespace of its own,
+    and the module shows its types as they are and its functions behind the checked boundary
+    of `export` (adr:0012)."""
+    program = {"__name__": namespace.get("__name__", "lotml_program")}
+    code = load(program, path, payload)
+    exports = json.loads(payload).get("exports", {"functions": {}, "types": {}, "names": []})
+    for name in exports["names"]:
+        namespace[name] = program[name]
+    for name, spec in exports["functions"].items():
+        namespace[name] = export(program[name], name, spec, exports["types"], program)
+    namespace.update({"__program": program, "__tests": program["__tests"], "__lotml__": path})
+    return code
+
+
+def foreign(module: str, name: str, returns: str):
+    """A Python function a lotml program calls through its interface: the arguments copied, any
+    exception and any returned value of the wrong type an `Err(PyError)`, the rest `Ok`."""
+    descriptor = json.loads(returns)
+
+    def call(*args, **kwargs):
+        try:
+            import importlib
+
+            function = getattr(importlib.import_module(module), name)
+            value = function(*_copy.deepcopy(args), **_copy.deepcopy(kwargs))
+        except Exception as error:  # noqa: BLE001 - the boundary turns every exception into a value
+            return Err(PyError(type(error).__name__, str(error)))
+        try:
+            return Ok(accept(value, descriptor, {}, {}, f"{module}.{name}() returned"))
+        except (TypeError, OverflowError) as error:
+            return Err(PyError(type(error).__name__, str(error)))
+
+    call.__name__ = call.__qualname__ = name
+    return call
+
+
+_C_LIBRARIES: dict = {}
+
+
+def _c_library(name: str):
+    """A C library by its name — `m`, `c`, `msvcrt` — as the platform finds it."""
+    import ctypes
+    import ctypes.util
+
+    if name not in _C_LIBRARIES:
+        found = ctypes.util.find_library(name)
+        try:
+            _C_LIBRARIES[name] = ctypes.CDLL(found or name)
+        except OSError as error:
+            raise LinkError(f"the C library `{name}` cannot be loaded: {error}") from None
+    return _C_LIBRARIES[name]
+
+
+class LinkError(Panic):
+    """A C library or one of its functions that is not there: the program cannot start."""
+
+
+def c_function(library: str, name: str, params: list, returns: str):
+    """A C function a lotml program calls through its interface (adr:0013), loaded when the
+    module loads. `ctypes` releases the interpreter while the call runs, so a call that blocks
+    holds up only its own task's thread."""
+    import ctypes
+
+    kinds = {
+        "i8": ctypes.c_int8,
+        "i16": ctypes.c_int16,
+        "i32": ctypes.c_int32,
+        "i64": ctypes.c_int64,
+        "u8": ctypes.c_uint8,
+        "u16": ctypes.c_uint16,
+        "u32": ctypes.c_uint32,
+        "u64": ctypes.c_uint64,
+        "f32": ctypes.c_float,
+        "f64": ctypes.c_double,
+        "bool": ctypes.c_bool,
+        "str": ctypes.c_char_p,
+        "none": None,
+    }
+    try:
+        function = getattr(_c_library(library), name)
+    except AttributeError:
+        raise LinkError(f"the C library `{library}` has no function `{name}`") from None
+    function.argtypes = [kinds[p] for p in params]
+    function.restype = kinds[returns]
+
+    def call(*args):
+        converted = []
+        for value, param in zip(args, params, strict=True):
+            if param == "str":
+                if "\0" in value:
+                    raise Panic(f"{name}: a str holding a NUL byte cannot be passed to C")
+                value = value.encode("utf-8")
+            converted.append(value)
+        return function(*converted)
+
+    call.__name__ = call.__qualname__ = name
+    return call
+
+
+class ForeignModule:
+    """`import m` of a Python module with an interface: its functions, through `foreign`."""
+
+    def __init__(self, module: str, functions: dict):
+        for name, returns in functions.items():
+            setattr(self, name, foreign(module, name, returns))
+
+
 # The prelude -------------------------------------------------------------------------------
 
 
@@ -363,6 +642,31 @@ def _abs(value):
 
 def _int(value):
     return i64(builtins.int(value))
+
+
+def _sized(name: str, low: int, high: int):
+    """`i32(x)` and the rest: a number made the sized integer, stopping when it does not fit."""
+
+    def convert(value):
+        return check(builtins.int(value), low, high)
+
+    convert.__name__ = convert.__qualname__ = name
+    return convert
+
+
+SIZED = {
+    name: _sized(name, low, high)
+    for name, low, high in (
+        ("i8", -(2**7), 2**7 - 1),
+        ("i16", -(2**15), 2**15 - 1),
+        ("i32", -(2**31), 2**31 - 1),
+        ("i64", I64_MIN, I64_MAX),
+        ("u8", 0, 2**8 - 1),
+        ("u16", 0, 2**16 - 1),
+        ("u32", 0, 2**32 - 1),
+        ("u64", 0, 2**64 - 1),
+    )
+}
 
 
 def _round(value, digits=None):
@@ -469,11 +773,15 @@ PRELUDE = {
     "todo": todo,
     "Ok": Ok,
     "Err": Err,
+    "PyError": PyError,
     "wrapping_add": wrapping_add,
     "wrapping_sub": wrapping_sub,
     "wrapping_mul": wrapping_mul,
     "isqrt": math.isqrt,
     "gcd": _math.gcd,
+    "parallel": parallel,
+    **SIZED,
+    "f32": builtins.float,
 }
 """The names every program sees without an import (R35)."""
 
@@ -683,7 +991,7 @@ def main(module_name: str) -> int:
 
     try:
         module = importlib.import_module(module_name)
-        entry = vars(module).get("main")
+        entry = vars(module).get("__program", vars(module)).get("main")
         if entry is None:
             sys.stderr.write("the program has no `fn main()`\n")
             return 2

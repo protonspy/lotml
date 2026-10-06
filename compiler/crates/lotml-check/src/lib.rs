@@ -4,16 +4,19 @@
 
 mod body;
 mod builtins;
+mod interface;
 mod prefix;
 mod program;
 pub mod ty;
 
-pub use prefix::{PrefixCheck, Verdict, check_prefix};
+pub use interface::{Interface, Interfaces, c_interface, interface, interface_of, is_c_library};
+pub use prefix::{PrefixCheck, Verdict, check_prefix, check_prefix_with};
+pub use program::{FieldSig, FnSig, ParamSig, TypeDef, VariantSig};
 
 /// The names every program sees without an import (R35).
 pub const PRELUDE: &[&str] = builtins::PRELUDE;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use lotml_diag::{Applicability, Diagnostic};
 use lotml_syntax::ast::{FnDef, Item, Module, TypeKind};
@@ -21,14 +24,19 @@ use lotml_syntax::span::Span;
 use lotml_syntax::{SyntaxError, parse};
 
 use crate::body::Body;
-use crate::program::{FnSig, Program};
+use crate::program::Program;
 use crate::ty::Ty;
 
 /// Parse and check one file, returning every diagnostic in source order.
 pub fn check_source(source: &str) -> Vec<Diagnostic> {
+    check_source_with(source, &Interfaces::new())
+}
+
+/// [`check_source`] for a file that may import the Python modules in `interfaces`.
+pub fn check_source_with(source: &str, interfaces: &Interfaces) -> Vec<Diagnostic> {
     let parsed = parse(source);
     let mut diagnostics: Vec<Diagnostic> = parsed.errors.iter().map(syntax).collect();
-    diagnostics.extend(check(&parsed.module, source));
+    diagnostics.extend(check_resolved_with(&parsed.module, source, interfaces).diagnostics);
     diagnostics.sort_by_key(|d| d.span.start);
     diagnostics
 }
@@ -60,14 +68,50 @@ pub type Types = HashMap<Span, Ty>;
 
 /// Type-check a parsed module, keeping the type of every expression for a backend.
 pub fn check_typed(module: &Module, text: &str) -> (Vec<Diagnostic>, Types) {
-    let mut types = Types::new();
-    let mut program = Program::collect(module);
-    let mut diagnostics = std::mem::take(&mut program.diagnostics);
+    let checked = check_resolved(module, text);
+    (checked.diagnostics, checked.types)
+}
+
+/// What checking a module found: its diagnostics, the type of every expression, and what each
+/// name of a local refers to.
+#[derive(Debug, Default, PartialEq)]
+pub struct Checked {
+    pub diagnostics: Vec<Diagnostic>,
+    pub types: Types,
+    /// Each name that resolved to a local, parameter or binding, with the span of the name
+    /// that declared it; a declaration refers to itself. One span may be listed more than once.
+    pub locals: Vec<(Span, Span)>,
+    /// The signature of each top-level function.
+    pub functions: BTreeMap<String, FnSig>,
+    /// The records and sum types the module declares, with their fields.
+    pub declared: BTreeMap<String, TypeDef>,
+    /// The Python modules imported through interfaces, each with its functions.
+    pub foreign: BTreeMap<String, BTreeMap<String, FnSig>>,
+}
+
+impl Checked {
+    fn absorb(&mut self, body: Body) {
+        self.types.extend(body.types());
+        self.locals.extend_from_slice(body.locals());
+        self.diagnostics.extend(body.diagnostics);
+    }
+}
+
+/// Type-check a parsed module, keeping the type of every expression and what each local's name
+/// refers to, for a backend or an editor.
+pub fn check_resolved(module: &Module, text: &str) -> Checked {
+    check_resolved_with(module, text, &Interfaces::new())
+}
+
+/// [`check_resolved`] for a module that may import the Python modules in `interfaces`.
+pub fn check_resolved_with(module: &Module, text: &str, interfaces: &Interfaces) -> Checked {
+    let mut program = Program::collect(module, &interface::functions(interfaces));
+    let mut checked = Checked { diagnostics: std::mem::take(&mut program.diagnostics), ..Checked::default() };
     for item in &module.items {
         match item {
             Item::Fn(f) => {
                 let sig = quiet_signature(&program, f, &[], None);
-                diagnostics.extend(function(&program, text, f, &sig, &[], &mut types));
+                function(&program, text, f, &sig, &[], &mut checked);
             }
             Item::Impl(imp) => {
                 let TypeKind::Named { name, .. } = &imp.target.kind else { continue };
@@ -77,14 +121,14 @@ pub fn check_typed(module: &Module, text: &str) -> (Vec<Diagnostic>, Types) {
                 let outer: Vec<(String, Option<String>)> = params.iter().map(|p| (p.clone(), None)).collect();
                 for method in &imp.methods {
                     let sig = quiet_signature(&program, method, &params, Some(&self_ty));
-                    diagnostics.extend(function(&program, text, method, &sig, &outer, &mut types));
+                    function(&program, text, method, &sig, &outer, &mut checked);
                 }
             }
             Item::Trait(t) => {
                 let outer = vec![("Self".to_string(), Some(t.name.name.clone()))];
                 for method in &t.methods {
                     let sig = quiet_signature(&program, method, &[], Some(&Ty::Param("Self".into())));
-                    diagnostics.extend(function(&program, text, method, &sig, &outer, &mut types));
+                    function(&program, text, method, &sig, &outer, &mut checked);
                 }
             }
             Item::Record(r) => {
@@ -97,19 +141,30 @@ pub fn check_typed(module: &Module, text: &str) -> (Vec<Diagnostic>, Types) {
                         }
                     }
                 }
-                types.extend(body.types());
-                diagnostics.extend(body.diagnostics);
+                checked.absorb(body);
             }
             Item::Test(t) => {
                 let mut body = Body::new(&program, text, None, &[], true);
                 body.block(&t.body);
-                types.extend(body.types());
-                diagnostics.extend(body.diagnostics);
+                checked.absorb(body);
             }
             Item::Sum(_) | Item::Import(_) | Item::Error(_) => {}
         }
     }
-    (diagnostics, types)
+    let declared_here = |name: &String| {
+        module.items.iter().any(|item| match item {
+            Item::Fn(f) => f.name.name == *name,
+            Item::Record(r) => r.name.name == *name,
+            Item::Sum(s) => s.name.name == *name,
+            _ => false,
+        })
+    };
+    checked.functions =
+        program.functions.iter().filter(|(n, _)| declared_here(n)).map(|(n, s)| (n.clone(), s.clone())).collect();
+    checked.declared =
+        program.types.iter().filter(|(n, _)| declared_here(n)).map(|(n, t)| (n.clone(), t.clone())).collect();
+    checked.foreign = program.foreign;
+    checked
 }
 
 /// A signature already reported on when the program was collected, lowered again without
@@ -125,8 +180,8 @@ fn function(
     f: &FnDef,
     sig: &FnSig,
     outer: &[(String, Option<String>)],
-    types: &mut Types,
-) -> Vec<Diagnostic> {
+    checked: &mut Checked,
+) {
     let mut body = Body::new(program, text, Some(sig), outer, false);
     for (param, param_sig) in f.params.iter().zip(&sig.params) {
         if let Some(default) = &param.default {
@@ -137,8 +192,7 @@ fn function(
     if let Some(block) = &f.body {
         body.function_body(block, sig);
     }
-    types.extend(body.types());
-    body.diagnostics
+    checked.absorb(body);
 }
 
 /// Whether a name belongs to the compiler: everything the backend generates starts with `__`,

@@ -167,7 +167,10 @@ function by name, since the open models answer that way. Results in `harness/res
    Text edits stay available for everything else, matching whole lines and re-indenting
    relatively; the parser is tolerant, so structured edits work on a file that does not parse;
    and the formatter is canonical, so whitespace never carries information a tool could lose.
+   Built in phase 2, as the compiler's `replace`, `add`, `remove` and `edit` tools
+   ([[semantic-compiler]]).
 3. **Check on every edit, against the pre-edit state**, with the error, the attempted edit and the
-   original text in the response, and an explicit "no errors" when there are none.
+   original text in the response, and an explicit "no errors" when there are none. Every one of
+   those tools does.
 4. **Diagnose the neighbours' idioms**: `else if` and `{`-blocks from the C family as well as
    Python's habits, each with the fix ([[semantic-compiler]]).

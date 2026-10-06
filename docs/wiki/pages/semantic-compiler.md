@@ -59,6 +59,14 @@ and mutability diagnostics with the fix ready.
   et al. ([arXiv 2410.08105](https://arxiv.org/abs/2410.08105)) varied runtime feedback, not compiler
   messages, and found small differences. Hence two modes, terse for people and detailed for agents,
   with the alternatives always present.
+- **Measured in lotml's harness** (`harness/results/diagnostics.md`): each of the 258 lotml first
+  answers the compiler refused in phase 1 was answered twice, with the terse report (location, code,
+  message and the alternatives) and with the detailed one (the full report and each code's page).
+  The next answer was repaired about as often either way: 2 answers only with the terse report, 7
+  only with the detailed one (p = 0.180). Haiku and Sonnet repaired the same answers in both modes;
+  the open models did a little better with the detailed one (Llama 17 against 15 of 143, Qwen 25
+  against 22 of 91), too little to tell apart. Detail beyond the alternatives buys little; the
+  default stays the full report for agents, and nothing measured argues for spending more on it.
 - **Stable codes, never reused**, each with an explanation page; JSON of our own with SARIF export
   (`tsc` has no JSON output; GCC 16 removed its JSON format in favour of SARIF).
 
@@ -216,3 +224,43 @@ above except `rename` and `refs`, over Salsa queries:
 - **`test --json`** reports each `test` block: pass, fail with the value each side of the
   comparison had, an error passed on by `?`, or a panic with its line.
 - **`fmt`** is the canonical form; on 1,509 stored programs it changes no tree and loses no comment.
+
+## What phase 2 adds
+
+The same engine serves an editor and an agent (`compiler/crates/lotml-ide`), with no protocol
+library — JSON-RPC over `serde_json`:
+
+- **What each name refers to.** The checker records, for every local, parameter and binding,
+  the name that declared it — a local declared in each branch of an `if` is one local — and the
+  rest is resolved by name: functions, types, traits and variants by declaration, fields and
+  methods through the checked type of the value they are read from (`c.get()` is `Counter.get`
+  because `c` is a `Counter`), keyword arguments to the parameter or field they name. Each file
+  is its own module, so a name refers to a declaration in the same file.
+- **`lotml lsp`** loads and checks every `.lotml` file under the workspace's folders when the
+  client connects, so the first question meets a warm index, and publishes their diagnostics —
+  notes and alternatives in the message, labels as related locations. It answers definitions,
+  references, hover (a local's type, a declaration's signature and documentation), outlines,
+  workspace symbols, formatting, and the diagnostics' fixes as quick fixes, the
+  machine-applicable ones preferred. Columns are UTF-16 units unless the client accepts UTF-8.
+- **`lotml mcp`** offers `check`, `digest`, `show`, `references`, `definition`, `hover`,
+  `explain` and `test` as tools. A reference comes with the two lines around it and its own
+  marked, the inline context that recovered most of the location-only results' loss
+  ([arXiv 2608.13568](https://arxiv.org/abs/2608.13568)). Files changed on the disk are read
+  again before each call and only they are checked again. It speaks both eras of the protocol:
+  the `initialize` handshake and the stateless requests of the 2026-07-28 revision.
+- **Edits through the compiler** ([[editing-robustness]]). The MCP tools `replace` (a
+  definition, a body — the comments opening it included — or one `match` arm, found by its
+  pattern or its variant), `add` (after a declaration, a method inside its `impl`) and `remove`
+  are addressed to symbols and take their indentation from the target, so a body written flush
+  lands at the depth of the one it replaces. `edit` replaces whole lines found by their text,
+  matching up to one indentation offset common to all of them, as the editing pilot's tolerant
+  mode did. Every edit that would add a syntax error is refused with the errors, the attempted
+  text and the original; one that is made is written whole or not at all and answered with the
+  diagnostics it introduced against the text before it, or "no errors introduced".
+- **Rename is atomic.** It changes every reference or nothing: a new name that would make any
+  name resolve elsewhere — a local captured by another, a method colliding with its sibling —
+  or that would add an error is refused. The places the old name is still written that no
+  reference resolves to — comments, strings, other files — are listed with their lines rather
+  than changed, since a rename is a textual operation semantic references cannot complete
+  ([arXiv 2608.13568](https://arxiv.org/abs/2608.13568)). The language server offers the same
+  rename.

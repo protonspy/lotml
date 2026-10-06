@@ -6,4 +6,4 @@ pub mod parser;
 pub mod span;
 pub mod strings;
 
-pub use parser::{Parsed, SyntaxError, parse};
+pub use parser::{Parsed, SyntaxError, parse, parse_interface};
