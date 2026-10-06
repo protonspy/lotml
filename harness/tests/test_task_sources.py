@@ -61,7 +61,7 @@ def test_multipl_e_reads_one_dataset_by_task_id(tmp_path, monkeypatch):
         ]
     }
 
-    def download(url, target):
+    def download(url, target, limit=None):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(tree) if url.endswith("recursive=1") else url)
         return target
@@ -74,7 +74,7 @@ def test_multipl_e_reads_one_dataset_by_task_id(tmp_path, monkeypatch):
 
 
 def test_mbpp_canonical_and_livecodebench_read_the_cached_files(tmp_path, monkeypatch):
-    def download(url, target):
+    def download(url, target, limit=None):
         target.parent.mkdir(parents=True, exist_ok=True)
         if url.endswith(".json"):
             target.write_text(json.dumps([{"task_id": 7, "code": "def f(): pass"}]))

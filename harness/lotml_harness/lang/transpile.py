@@ -67,14 +67,9 @@ def guarded(name: str) -> str:
     return name
 
 
-REFUSED_ATTRIBUTES = ("__", "gi_", "f_", "cr_", "ag_", "tb_", "co_", "func_")
-"""Attribute prefixes that reach the interpreter itself — frames, code objects, generator,
-coroutine and traceback internals — and from there the executor's own globals."""
-
-
 def attribute(name: str) -> str:
     """An attribute name a program may read: none that leads into the interpreter."""
-    if name.startswith(REFUSED_ATTRIBUTES):
+    if runtime.refused(name):
         raise TranspileError(f"attribute `{name}` is not lotml")
     return name
 
@@ -507,6 +502,12 @@ class Transpiler:
         if isinstance(item, Tree) and item.data == "testlist":
             elements = [self.expr(i) for i in item.children]
             return store(self.at(ast.Tuple(elements, ast.Load()), item))
+        inner = bare(item)
+        if isinstance(inner, Tree) and inner.data == "getattr":
+            # A field is written as it is, even one named like a checked method.
+            obj, name = inner.children
+            place = ast.Attribute(self.expr(obj), attribute(name.value), ast.Load())
+            return store(self.at(place, inner))
         return store(self.expr(item))
 
     def s_expr_stmt(self, target, rest=None):

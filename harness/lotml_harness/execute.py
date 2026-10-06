@@ -156,7 +156,10 @@ def load(source: str, variant: str, mode: str, path: str):
             "__builtins__": prelude,
         }
     )
-    code = compile(tree, path, "exec")
+    try:
+        code = compile(tree, path, "exec")
+    except (ValueError, TypeError, SyntaxError) as error:
+        return Result(error=f"transpile: {error}")
     try:
         exec(code, namespace)  # noqa: S102
     except BaseException as error:  # noqa: BLE001

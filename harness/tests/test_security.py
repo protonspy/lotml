@@ -81,7 +81,10 @@ def test_format_fields_cannot_walk_into_the_interpreter(mode, field):
 
 
 def test_a_field_named_format_can_still_be_assigned():
-    source = 'type R(format: str)\n\ntest "t":\n    var r = R("a")\n    r.format = "b"\n    assert r.format == "b"\n'
+    source = (
+        'type R(format: str)\n\ntest "t":\n'
+        '    var r = R("a")\n    r.format = "b"\n    assert r.format == "b"\n'
+    )
     assert run(source).tests == {"t": "pass"}
 
 

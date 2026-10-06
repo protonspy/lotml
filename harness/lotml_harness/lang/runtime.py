@@ -1,5 +1,6 @@
 """Runtime support for Python transpiled from lotml: results, values, the prelude, panics."""
 
+import _string
 import builtins
 import copy
 import dataclasses
@@ -314,10 +315,27 @@ def _format_fields(text: str) -> list[str]:
     return fields
 
 
+REFUSED_ATTRIBUTES = ("__", "gi_", "f_", "cr_", "ag_", "tb_", "co_", "func_")
+"""Attribute prefixes that reach the interpreter itself — frames, code objects, generator,
+coroutine and traceback internals — and from there the executor's own globals."""
+
+
+def refused(name: str) -> bool:
+    """Whether a program may not read the attribute `name`."""
+    return name.startswith(REFUSED_ATTRIBUTES)
+
+
 def _safe_format(text: str, *args, format_map: bool = False, **kwargs):
-    """`str.format`, refusing a field that walks into a dunder attribute: `{0.__class__}`."""
-    if any("__" in field for field in _format_fields(text)):
-        raise LotmlTypeError("a format field names a dunder attribute")
+    """`str.format`, refusing a field that walks into the interpreter: `{0.__class__}`,
+    `{0.gi_frame}`. Each field is split by the formatter's own parser, so the check reads it
+    the way `str.format` will."""
+    for field in _format_fields(text):
+        if "__" in field:
+            raise LotmlTypeError("a format field names a dunder attribute")
+        _first, rest = _string.formatter_field_name_split(field)
+        for is_attribute, key in rest:
+            if is_attribute and refused(key):
+                raise LotmlTypeError(f"a format field names the attribute `{key}`")
     return text.format_map(*args) if format_map else text.format(*args, **kwargs)
 
 

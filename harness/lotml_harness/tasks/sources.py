@@ -29,19 +29,27 @@ FILENAME = re.compile(r"^(?:HumanEval|mbpp)_(\d+)_\w+\.py$")
 
 DOWNLOAD_LIMIT = 2 * 2**30
 """Bytes one download may take; the largest source, LiveCodeBench's test file, is far below."""
+CHUNK = 2**20
+MULTIPL_E_LIMIT = 64 * 2**20
+"""Bytes for one MultiPL-E file or listing: they are kilobytes."""
 
 
 def download(url: str, target: Path, limit: int = DOWNLOAD_LIMIT) -> Path:
-    """`url` saved at `target`, unless an earlier run already saved it; a response larger
-    than `limit` is refused rather than filling the disk."""
+    """`url` saved at `target`, unless an earlier run already saved it. The body is written in
+    pieces, and one longer than `limit` is refused and removed rather than filling the disk."""
     if not target.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
-        with urllib.request.urlopen(url, timeout=120) as response:  # noqa: S310
-            body = response.read(limit + 1)
-        if len(body) > limit:
-            raise ValueError(f"{url} is larger than {limit} bytes")
         partial = target.with_suffix(target.suffix + ".part")
-        partial.write_bytes(body)
+        written = 0
+        with urllib.request.urlopen(url, timeout=120) as response, partial.open("wb") as out:  # noqa: S310
+            while piece := response.read(CHUNK):
+                written += len(piece)
+                if written > limit:
+                    break
+                out.write(piece)
+        if written > limit:
+            partial.unlink()
+            raise ValueError(f"{url} is larger than {limit} bytes")
         partial.replace(target)
     return target
 
@@ -53,13 +61,13 @@ def task_id(source: str, filename: str) -> str | None:
 
 def multipl_e_paths() -> list[str]:
     url = f"https://api.github.com/repos/nuprl/MultiPL-E/git/trees/{MULTIPL_E}?recursive=1"
-    listing = download(url, CACHE / "multipl-e" / MULTIPL_E / "tree.json")
+    listing = download(url, CACHE / "multipl-e" / MULTIPL_E / "tree.json", MULTIPL_E_LIMIT)
     return [entry["path"] for entry in json.loads(listing.read_text())["tree"]]
 
 
 def multipl_e_file(path: str) -> Path:
     url = f"https://raw.githubusercontent.com/nuprl/MultiPL-E/{MULTIPL_E}/{path}"
-    return download(url, CACHE / "multipl-e" / MULTIPL_E / path)
+    return download(url, CACHE / "multipl-e" / MULTIPL_E / path, MULTIPL_E_LIMIT)
 
 
 def multipl_e(source: str) -> dict[str, str]:
