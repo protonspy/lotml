@@ -66,7 +66,9 @@ fn every_integer_operation_traps_outside_its_type() {
         ("div-zero", "7 / (n - 1)"),
         ("abs", "abs(-9223372036854775807 - n)"),
     ] {
-        let source = format!("fn f(n: int) -> int:\n    return n\n\nfn main():\n    n = f(1)\n    print(\"before\")\n    print({expr})\n");
+        let source = format!(
+            "fn f(n: int) -> int:\n    return n\n\nfn main():\n    n = f(1)\n    print(\"before\")\n    print({expr})\n"
+        );
         let run = parity(&format!("trap-{name}"), &source);
         assert_eq!(run.code, Some(101), "{name}: {expr}");
         assert_eq!(run.stdout, "before\n", "{name}");

@@ -2,10 +2,15 @@
 //! adr:0014, specs/c-backend).
 
 pub mod driver;
+mod emit;
+mod lower;
+mod mir;
 
 use std::path::Path;
 
-use lotml_diag::Diagnostic;
+use lotml_check::check_resolved;
+use lotml_diag::{Diagnostic, Severity};
+use lotml_syntax::parse;
 
 /// The runtime's declarations, written next to every compiled program as `lotml.h`.
 pub const RUNTIME_H: &str = include_str!("../runtime/lotml.h");
@@ -21,6 +26,14 @@ pub fn write_runtime(dir: &Path) -> std::io::Result<()> {
 }
 
 /// The C program for `source`, which was read from `path`; or the errors that stop it.
-pub fn compile(_source: &str, _path: &Path) -> Result<String, Vec<Diagnostic>> {
-    Err(Vec::new())
+pub fn compile(source: &str, path: &Path) -> Result<String, Vec<Diagnostic>> {
+    let parsed = parse(source);
+    let mut errors: Vec<Diagnostic> = parsed.errors.iter().map(lotml_check::syntax).collect();
+    let checked = check_resolved(&parsed.module, source);
+    errors.extend(checked.diagnostics.iter().filter(|d| d.severity == Severity::Error).cloned());
+    if !errors.is_empty() {
+        return Err(errors);
+    }
+    let lowered = lower::lower(&parsed.module, &checked, source)?;
+    Ok(emit::program(&lowered, &path.display().to_string()))
 }
