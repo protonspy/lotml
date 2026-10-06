@@ -29,7 +29,7 @@
   _Depends 2.3_
 - [x] 3.3 (TDD) Compile generics, traits and `dyn` by monomorphization and vtables — R1.1, R1.2
   _Depends 3.2_
-- [ ] 3.4 (Unit) Compile `Heap`, `math`, sized integers, conversions, the wrapping operations and the rest of the prelude — R1.2, R2.1
+- [x] 3.4 (Unit) Compile `Heap`, `math`, sized integers, conversions, the wrapping operations and the rest of the prelude — R1.2, R2.1
   _Depends 2.5_
 
 ## 4 · Running
