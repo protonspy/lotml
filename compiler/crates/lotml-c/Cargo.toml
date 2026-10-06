@@ -12,5 +12,8 @@ lotml-check = { path = "../lotml-check" }
 [target.'cfg(windows)'.dependencies]
 find-msvc-tools = "0.1.14"
 
+[dev-dependencies]
+lotml-py = { path = "../lotml-py" }
+
 [lints]
 workspace = true

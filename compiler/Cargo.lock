@@ -281,6 +281,7 @@ dependencies = [
  "find-msvc-tools",
  "lotml-check",
  "lotml-diag",
+ "lotml-py",
  "lotml-syntax",
 ]
 
