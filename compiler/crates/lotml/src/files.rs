@@ -86,6 +86,29 @@ pub fn read(path: &Path) -> Result<String, Failure> {
     std::fs::read_to_string(path).map_err(|e| Failure(format!("cannot read {}: {e}", path.display())))
 }
 
+/// The variables that point git at a repository other than the one it finds from its
+/// directory. A git hook sets `GIT_DIR`, and one inherited sends `git -C dir` to the hook's
+/// repository instead of the file's.
+const GIT_LOCATION: &[&str] = &[
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_NAMESPACE",
+];
+
+/// `git -C dir`, for the repository holding `dir` whatever this process inherited.
+fn git(dir: &Path) -> Command {
+    let mut command = Command::new("git");
+    for variable in GIT_LOCATION {
+        command.env_remove(variable);
+    }
+    command.arg("-C").arg(dir);
+    command
+}
+
 /// The text of `path` at git revision `rev`: empty when the file did not exist then.
 pub fn at_revision(rev: &str, path: &Path) -> Result<String, Failure> {
     // A revision is never an option: `--output=…` would make `git show` write a file.
@@ -95,9 +118,7 @@ pub fn at_revision(rev: &str, path: &Path) -> Result<String, Failure> {
     let dir = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
     let name = path.file_name().ok_or_else(|| Failure(format!("{} is not a file", path.display())))?;
     // `rev:./name` is resolved against the directory git runs in.
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(dir)
+    let output = git(dir)
         .arg("show")
         .arg(format!("{rev}:./{}", name.to_string_lossy()))
         .output()
@@ -106,9 +127,7 @@ pub fn at_revision(rev: &str, path: &Path) -> Result<String, Failure> {
         return String::from_utf8(output.stdout)
             .map_err(|_| Failure(format!("{} at {rev} is not UTF-8", path.display())));
     }
-    let verify = Command::new("git")
-        .arg("-C")
-        .arg(dir)
+    let verify = git(dir)
         .args(["rev-parse", "--verify", "--quiet"])
         .arg(format!("{rev}^{{commit}}"))
         .output()
