@@ -1,0 +1,87 @@
+"""Type masks for open models, by the line: each line an open model writes is checked as a prefix
+by the compiler, and one the compiler says can no longer complete is drawn again."""
+
+from lotml_harness.experiments import masks
+from lotml_harness.experiments.phase1 import Lotml
+
+
+def test_the_raw_prompt_follows_each_family_s_chat_template():
+    qwen = masks.raw_prompt("qwen2.5-coder:7b", "SYS", "USER", "```lotml\n")
+    assert qwen == (
+        "<|im_start|>system\nSYS<|im_end|>\n<|im_start|>user\nUSER<|im_end|>\n"
+        "<|im_start|>assistant\n```lotml\n"
+    )
+    llama = masks.raw_prompt("llama3.1:8b", "SYS", "USER", "```lotml\n")
+    assert llama.startswith("<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nSYS<|eot_id|>")
+    assert llama.endswith("<|start_header_id|>assistant<|end_header_id|>\n\n```lotml\n")
+
+
+class Lines:
+    """A model answering line by line from a script, keyed by how many lines it has accepted."""
+
+    def __init__(self, script: dict[int, list[str]]):
+        self.script = {k: list(v) for k, v in script.items()}
+        self.calls = []
+
+    def __call__(self, prompt: str, temperature: float, seed: int) -> str:
+        accepted = prompt.count("\n") - PREFIX_LINES
+        self.calls.append((accepted, temperature))
+        return self.script[accepted].pop(0)
+
+
+PREFIX_LINES = masks.raw_prompt("qwen2.5-coder:7b", "s", "u", "```lotml\n").count("\n")
+
+
+def verdicts(errors: set[str]):
+    def check(code: str) -> str:
+        return "error" if any(e in code for e in errors) else "completable"
+
+    return check
+
+
+def test_a_line_the_compiler_refuses_is_drawn_again_hotter():
+    model = Lines(
+        {
+            0: ["fn f(x: int) -> int:"],
+            1: ["    x = x + 1", "    return x + 1"],
+            2: ["```"],
+        }
+    )
+    decoded = masks.masked("qwen2.5-coder:7b", "s", "u", model, verdicts({"x = x"}))
+    assert decoded.code == "fn f(x: int) -> int:\n    return x + 1\n"
+    assert decoded.rejected == 1
+    assert [t for _, t in model.calls] == [0.0, 0.0, masks.TEMPERATURE, 0.0]
+
+
+def test_a_line_refused_every_time_is_kept_and_the_decoding_goes_on():
+    model = Lines({0: ["bad"] * (masks.RETRIES + 1), 1: ["```"]})
+    decoded = masks.masked("qwen2.5-coder:7b", "s", "u", model, verdicts({"bad"}))
+    assert decoded.code == "bad\n" and decoded.rejected == masks.RETRIES
+
+
+def test_decoding_stops_at_the_fence_at_two_blank_lines_or_at_the_cap():
+    blank = Lines({0: ["fn f():"], 1: ["    pass"], 2: [""], 3: [""]})
+    assert masks.masked("qwen2.5-coder:7b", "s", "u", blank, verdicts(set())).code == "fn f():\n    pass\n"
+    endless = Lines({i: ["x"] for i in range(masks.MAX_LINES + 5)})
+    assert masks.masked("qwen2.5-coder:7b", "s", "u", endless, verdicts(set())).code.count("\n") == masks.MAX_LINES
+
+
+def test_the_compiler_says_whether_a_prefix_can_still_complete():
+    check = masks.prefix_checker(Lotml())
+    assert check('fn f() -> int:\n    return "a"\n') == "error"
+    assert check("fn f(x: int) -> int:\n    y = x +\n") != "error"
+
+
+def test_the_summary_pairs_the_free_and_the_masked_answer():
+    rows = [
+        {"model": "m", "task": "a", "arm": "free", "passed": False, "outcome": "does not check", "rejected": 0},
+        {"model": "m", "task": "a", "arm": "masked", "passed": True, "outcome": "pass", "rejected": 2},
+        {"model": "m", "task": "b", "arm": "free", "passed": True, "outcome": "pass", "rejected": 0},
+        {"model": "m", "task": "b", "arm": "masked", "passed": True, "outcome": "pass", "rejected": 0},
+    ]  # fmt: skip
+    s = masks.summarize(rows)["m"]
+    assert s["pairs"] == 2
+    assert s["passed"] == {"free": 1, "masked": 2}
+    assert s["refused"] == {"free": 1, "masked": 0}
+    assert (s["only_free"], s["only_masked"]) == (0, 1)
+    assert s["rejected"] == 2
