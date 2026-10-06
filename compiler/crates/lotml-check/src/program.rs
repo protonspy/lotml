@@ -105,6 +105,7 @@ impl Program {
             match item {
                 Item::Record(r) => {
                     declare(&mut program, &r.name);
+                    reserved_params(&mut program.diagnostics, &r.type_params);
                     program.types.insert(
                         r.name.name.clone(),
                         TypeDef::Record { params: params(&r.type_params), fields: vec![] },
@@ -112,6 +113,7 @@ impl Program {
                 }
                 Item::Sum(s) => {
                     declare(&mut program, &s.name);
+                    reserved_params(&mut program.diagnostics, &s.type_params);
                     program
                         .types
                         .insert(s.name.name.clone(), TypeDef::Sum { params: params(&s.type_params), variants: vec![] });
@@ -149,6 +151,9 @@ impl Program {
                     program.functions.insert(f.name.name.clone(), sig);
                 }
                 Item::Trait(t) => {
+                    for m in &t.methods {
+                        crate::report_reserved(&mut program.diagnostics, &m.name);
+                    }
                     let methods = t
                         .methods
                         .iter()
@@ -258,6 +263,7 @@ impl Program {
         }
         let mut seen = HashSet::new();
         for method in &imp.methods {
+            crate::report_reserved(&mut self.diagnostics, &method.name);
             if !seen.insert(method.name.name.clone()) {
                 self.diagnostics.push(Diagnostic::error(
                     "E0210",
@@ -303,6 +309,7 @@ impl Program {
 
     pub fn signature(&mut self, f: &ast::FnDef, outer: &[String], self_ty: Option<&Ty>) -> FnSig {
         let mut scope: Vec<String> = outer.to_vec();
+        reserved_params(&mut self.diagnostics, &f.type_params);
         scope.extend(f.type_params.iter().map(|p| p.name.name.clone()));
         let mut params = Vec::new();
         for p in &f.params {
@@ -502,6 +509,13 @@ fn typing_type(name: &str, args: Vec<Ty>) -> Option<Ty> {
 
 fn typing_spelling(name: &str, args: &[Ty]) -> Option<String> {
     typing_type(name, args.to_vec()).map(|t| t.to_string())
+}
+
+/// Report a type parameter that takes a name reserved for the compiler.
+fn reserved_params(diagnostics: &mut Vec<Diagnostic>, type_params: &[ast::TypeParam]) {
+    for p in type_params {
+        crate::report_reserved(diagnostics, &p.name);
+    }
 }
 
 fn params(type_params: &[ast::TypeParam]) -> Vec<String> {

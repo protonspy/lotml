@@ -260,6 +260,13 @@ impl<'a> Emitter<'a> {
         self.types.get(&e.span)
     }
 
+    /// Whether the checker left `e` without a type. It reports a member of such a value, so a
+    /// program reaching the backend has none; should one slip through, its members are never
+    /// emitted as live attributes, since nothing says what object they would read.
+    fn untyped(&self, e: &Expr) -> bool {
+        matches!(self.ty(e), Some(Ty::Error | Ty::Var(_)))
+    }
+
     /// Whether a value of `ty` can change in place, so sharing it with a `var` is visible.
     fn changeable(&self, ty: &Ty) -> bool {
         match ty {
@@ -1064,6 +1071,9 @@ impl<'a> Emitter<'a> {
                 node("Subscript", vec![("value", o), ("slice", slice), ("ctx", load())])
             }
             ExprKind::Attr { object, name: field } => {
+                if self.untyped(object) {
+                    return call(rt("forbidden"), vec![constant(field.name.clone().into())]);
+                }
                 let o = self.expr(object);
                 member(o, &field.name)
             }

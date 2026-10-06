@@ -7,6 +7,7 @@ trap, value semantics, records and variants, the prelude and the built-in method
 behaviour differs from Python's.
 """
 
+import _string
 import ast
 import builtins
 import copy as _copy
@@ -518,9 +519,13 @@ def _format_fields(text: str) -> list[str]:
 
 
 def str_format(text: str, *args, **kwargs):
-    """`str.format`, refusing a field that walks into a dunder attribute: `{0.__class__}`."""
-    if any("__" in field for field in _format_fields(text)):
-        raise ValueError("a format field names a dunder attribute")
+    """`str.format`, refusing a field that reads an attribute: `{0.x}` happens inside Python, out
+    of the checker's sight, and walks the interpreter's objects whatever the name. A field may
+    still name an argument and index into it: `{0}`, `{name}`, `{0[1]}`."""
+    for field in _format_fields(text):
+        _, rest = _string.formatter_field_name_split(field)
+        if any(is_attribute for is_attribute, _ in rest):
+            raise ValueError(f"the format field `{{{field}}}` reads an attribute; lotml does not")
     return text.format(*args, **kwargs)
 
 

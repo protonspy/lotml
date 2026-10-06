@@ -128,6 +128,26 @@ impl<'p> Body<'p> {
         self.diagnostics.push(d);
     }
 
+    /// Whether this body already has an error, so a program it belongs to cannot compile.
+    fn has_error(&self) -> bool {
+        self.diagnostics.iter().any(|d| d.severity == lotml_diag::Severity::Error)
+    }
+
+    /// A member of a value whose type is not known: what it would reach is not known either.
+    /// An error type counts once nothing has been reported for it, since it then came from
+    /// calling or indexing such a value rather than from a mistake already shown; reading
+    /// through it is how a program would reach the interpreter's objects.
+    fn unknown_member(&mut self, name: &Ident, what: &str, verb: &str) {
+        self.report(
+            Diagnostic::error(
+                "E0205",
+                name.span,
+                format!("the type here is not known, so {what} `{}` cannot be {verb}", name.name),
+            )
+            .note("annotate the value, or let where a lambda is used pin its parameter's type"),
+        );
+    }
+
     fn resolve(&self, ty: &Ty) -> Ty {
         self.infer.resolve(ty)
     }
@@ -1791,18 +1811,17 @@ impl<'p> Body<'p> {
                 );
                 Ty::Error
             }),
-            Ty::Error | Ty::Never => Ty::Error,
+            Ty::Never => Ty::Error,
+            Ty::Error => {
+                if !self.has_error() {
+                    self.unknown_member(name, "the field", "read");
+                }
+                Ty::Error
+            }
             Ty::Var(_) => {
                 // The value's type was never pinned, so its fields are not known either. Reading
                 // one anyway is how a lambda parameter reached `.__class__`.
-                self.report(
-                    Diagnostic::error(
-                        "E0205",
-                        name.span,
-                        format!("the type here is not known, so the field `{}` cannot be read", name.name),
-                    )
-                    .note("annotate the value, or let where a lambda is used pin its parameter's type"),
-                );
+                self.unknown_member(name, "the field", "read");
                 Ty::Error
             }
             other => {
@@ -2418,20 +2437,20 @@ impl<'p> Body<'p> {
                 self.trait_method(bound.as_deref(), &receiver, name, args, span)
             }
             Ty::Dyn(trait_name) => self.trait_method(Some(&trait_name), &receiver, name, args, span),
-            Ty::Error | Ty::Never => {
+            Ty::Never => {
                 self.arg_types(args, &[]);
+                Ty::Error
+            }
+            Ty::Error => {
+                self.arg_types(args, &[]);
+                if !self.has_error() {
+                    self.unknown_member(name, "the method", "called");
+                }
                 Ty::Error
             }
             Ty::Var(_) => {
                 self.arg_types(args, &[]);
-                self.report(
-                    Diagnostic::error(
-                        "E0205",
-                        name.span,
-                        format!("the type here is not known, so the method `{}` cannot be called", name.name),
-                    )
-                    .note("annotate the value, or let where a lambda is used pin its parameter's type"),
-                );
+                self.unknown_member(name, "the method", "called");
                 Ty::Error
             }
             builtin => {

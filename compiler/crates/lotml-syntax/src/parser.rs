@@ -41,10 +41,14 @@ pub fn parse(text: &str) -> Parsed {
     Parsed { module, errors, comments: lexed.comments }
 }
 
-/// Parse one expression from `text`, whose spans start at `base` in the enclosing file.
-fn parse_expression(text: &str, base: u32) -> (Expr, Vec<SyntaxError>) {
+/// Parse one expression from `text`, whose spans start at `base` in the enclosing file, inside
+/// an expression already `depth` deep and `chain` long, so a field nested in a field is bounded
+/// with the rest.
+fn parse_expression(text: &str, base: u32, depth: u32, chain: u32) -> (Expr, Vec<SyntaxError>) {
     let lexed = lexer::lex(text);
     let mut parser = Parser::new(text, lexed.tokens, base);
+    parser.depth = depth;
+    parser.chain = chain;
     let expr = parser.test();
     if !matches!(parser.peek(), T::Newline | T::Eof) {
         parser.error_here("expected the end of the f-string field");
@@ -62,15 +66,21 @@ struct Parser<'a> {
     reported: bool,
     /// How deep the recursive descent is, so pathological nesting is refused, not a stack crash.
     depth: u32,
+    chain: u32,
 }
 
 /// The deepest nesting of expressions, types or patterns the parser recurses into. Far beyond
 /// anything a program is written with, and well under the stack it would take to overflow.
 const MAX_DEPTH: u32 = 256;
 
+/// The longest chain of operators — `a + b + …`, `- - x`, `x.a.b…` — on any path through an
+/// expression. A chain builds a tree as deep as it is long, which every later pass recurses
+/// over, so it is bounded like nesting; cheaper to descend, so the bound is higher.
+const MAX_CHAIN: u32 = 1000;
+
 impl<'a> Parser<'a> {
     fn new(text: &'a str, tokens: Vec<Token>, base: u32) -> Parser<'a> {
-        Parser { text, tokens, pos: 0, base, errors: Vec::new(), reported: false, depth: 0 }
+        Parser { text, tokens, pos: 0, base, errors: Vec::new(), reported: false, depth: 0, chain: 0 }
     }
 
     /// Whether the descent has gone too deep; when it has, report once and let the caller bail
@@ -78,6 +88,16 @@ impl<'a> Parser<'a> {
     fn too_deep(&mut self) -> bool {
         if self.depth >= MAX_DEPTH {
             self.error_here("this nests too deeply to read");
+            return true;
+        }
+        false
+    }
+
+    /// Whether one more link would make the chain too long; when it would, report once and let
+    /// the caller stop the chain where it is.
+    fn too_long(&mut self) -> bool {
+        if self.chain >= MAX_CHAIN {
+            self.error_here("this expression is too long to read; split it with names");
             return true;
         }
         false
@@ -1146,14 +1166,18 @@ impl<'a> Parser<'a> {
 
     fn coalesce(&mut self) -> Expr {
         let start = self.span();
+        let base = self.chain;
         let mut value = self.or_test();
-        while self.eat(T::QuestionQuestion) {
+        while self.at(T::QuestionQuestion) && !self.too_long() {
+            self.bump();
+            self.chain += 1;
             let default = self.or_test();
             value = Expr {
                 span: self.since(start),
                 kind: ExprKind::Coalesce { value: Box::new(value), default: Box::new(default) },
             };
         }
+        self.chain = base;
         value
     }
 
@@ -1188,14 +1212,22 @@ impl<'a> Parser<'a> {
         let start = self.span();
         if self.at(T::Bang) {
             self.foreign_operator(T::Bang, "not");
-            let operand = self.not_test();
-            return Expr { span: self.since(start), kind: ExprKind::Not(Box::new(operand)) };
+            return self.negation(start);
         }
         if self.eat(T::Not) {
-            let operand = self.not_test();
-            return Expr { span: self.since(start), kind: ExprKind::Not(Box::new(operand)) };
+            return self.negation(start);
         }
         self.comparison()
+    }
+
+    fn negation(&mut self, start: Span) -> Expr {
+        if self.too_long() {
+            return Expr { span: self.span(), kind: ExprKind::Error };
+        }
+        self.chain += 1;
+        let operand = self.not_test();
+        self.chain -= 1;
+        Expr { span: self.since(start), kind: ExprKind::Not(Box::new(operand)) }
     }
 
     fn comparison(&mut self) -> Expr {
@@ -1232,6 +1264,13 @@ impl<'a> Parser<'a> {
     }
 
     fn binary(&mut self, operators: &[(T, BinOp)], next: fn(&mut Self) -> Expr) -> Expr {
+        let base = self.chain;
+        let expr = self.folds(operators, next);
+        self.chain = base;
+        expr
+    }
+
+    fn folds(&mut self, operators: &[(T, BinOp)], next: fn(&mut Self) -> Expr) -> Expr {
         let start = self.span();
         let mut left = next(self);
         'outer: loop {
@@ -1242,7 +1281,11 @@ impl<'a> Parser<'a> {
             }
             for (token, op) in operators {
                 if self.at(*token) {
+                    if self.too_long() {
+                        return left;
+                    }
                     self.bump();
+                    self.chain += 1;
                     let right = next(self);
                     left = Expr {
                         span: self.since(start),
@@ -1296,15 +1339,23 @@ impl<'a> Parser<'a> {
             _ => return self.power(),
         };
         self.bump();
+        if self.too_long() {
+            return Expr { span: self.span(), kind: ExprKind::Error };
+        }
+        self.chain += 1;
         let operand = self.factor();
+        self.chain -= 1;
         Expr { span: self.since(start), kind: ExprKind::Unary { op, operand: Box::new(operand) } }
     }
 
     fn power(&mut self) -> Expr {
         let start = self.span();
         let base = self.postfix();
-        if self.eat(T::StarStar) {
+        if self.at(T::StarStar) && !self.too_long() {
+            self.bump();
+            self.chain += 1;
             let exponent = self.factor();
+            self.chain -= 1;
             return Expr {
                 span: self.since(start),
                 kind: ExprKind::Binary { op: BinOp::Pow, left: Box::new(base), right: Box::new(exponent) },
@@ -1314,9 +1365,22 @@ impl<'a> Parser<'a> {
     }
 
     fn postfix(&mut self) -> Expr {
+        let base = self.chain;
+        let expr = self.postfixes();
+        self.chain = base;
+        expr
+    }
+
+    fn postfixes(&mut self) -> Expr {
         let start = self.span();
         let mut expr = self.atom();
         loop {
+            if matches!(self.peek(), T::LParen | T::LBracket | T::Dot | T::Question) {
+                if self.too_long() {
+                    return expr;
+                }
+                self.chain += 1;
+            }
             match self.peek() {
                 T::LParen => {
                     self.bump();
@@ -1563,7 +1627,12 @@ impl<'a> Parser<'a> {
                                 parts.push(StrPart::Text(self.decoded(&text, literal.raw, base)))
                             }
                             strings::Piece::Field { expr, conversion, spec } => {
-                                let (value, errors) = parse_expression(&body[expr.clone()], base + expr.start as u32);
+                                let (value, errors) = parse_expression(
+                                    &body[expr.clone()],
+                                    base + expr.start as u32,
+                                    self.depth,
+                                    self.chain,
+                                );
                                 self.errors.extend(errors);
                                 let spec = spec.map(|s| vec![StrPart::Text(body[s].to_string())]).unwrap_or_default();
                                 parts.push(StrPart::Expr { expr: Box::new(value), conversion, spec });
