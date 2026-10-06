@@ -28,6 +28,7 @@ class McpError(RuntimeError):
 
 class LotmlMcp:
     def __init__(self, root: Path, binary: Path = COMPILER, timeout: float = TIMEOUT):
+        self.root = root
         self.timeout = timeout
         self.ids = itertools.count(1)
         self.lock = threading.Lock()
@@ -114,6 +115,23 @@ class LotmlMcp:
         self.close()
 
 
+INTERFACE = ".lotmli"
+"""An interface binds a Python module or a C library: written by the agent, it would let the code
+`test` runs call `os.system`. The agent may not write one, and none is left when code runs."""
+
+
+def is_interface(path: str) -> bool:
+    return path.strip().lower().rstrip("/\\. ").endswith(INTERFACE)
+
+
+def scrub_interfaces(root: Path) -> list[str]:
+    """Delete every interface under `root`; the paths deleted."""
+    found = [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() == INTERFACE]
+    for path in found:
+        path.unlink()
+    return [p.relative_to(root).as_posix() for p in found]
+
+
 def relative(arguments: dict) -> dict:
     """Paths as the server takes them. The agent's file tools show the workspace as `/`, so it
     names `/stats.lotml`; the server reads an absolute path as one outside the project."""
@@ -125,14 +143,21 @@ def relative(arguments: dict) -> dict:
     return out
 
 
-def langchain_tools(server: LotmlMcp) -> list[BaseTool]:
+def langchain_tools(server: LotmlMcp, root: Path) -> list[BaseTool]:
     """Every tool the server lists, under its own name; an error it reports becomes the tool's
-    error, so the agent's trace marks the call as failed."""
+    error, so the agent's trace marks the call as failed. No tool may name an interface, and
+    `test` runs only after every interface under `root` is gone."""
 
     def bind(name: str):
         def run(**arguments) -> str:
+            arguments = relative(arguments)
+            named = [arguments.get("path"), *(arguments.get("paths") or [])]
+            if any(isinstance(p, str) and is_interface(p) for p in named):
+                raise ToolException(f"`{INTERFACE}` interfaces cannot be written or used here")
+            if name == "test":
+                scrub_interfaces(root)
             try:
-                text, failed = server.call(name, relative(arguments))
+                text, failed = server.call(name, arguments)
             except McpError as error:
                 raise ToolException(str(error)) from None
             if failed:

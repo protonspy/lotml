@@ -148,6 +148,10 @@ fn read(path: &Path) -> Result<Option<String>, Failure> {
 
 /// Write `text` to `path` unless it already holds exactly that.
 fn put(path: &Path, text: &str) -> Result<Outcome, Failure> {
+    // A link would carry the write out of the project, into whatever it points at.
+    if path.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(Failure(format!("{} is a symbolic link; init writes no file through one", path.display())));
+    }
     let existing = read(path)?;
     if existing.as_deref() == Some(text) {
         return Ok(Outcome::Unchanged);
@@ -292,7 +296,11 @@ fn servers_brace(text: &str) -> Option<usize> {
 /// `text`, Codex's `config.toml`, with a `[mcp_servers.lotml]` table appended; `None` when the
 /// table is already there.
 pub fn register_toml(text: &str) -> Option<String> {
-    if text.lines().any(|line| line.trim() == "[mcp_servers.lotml]") {
+    // `[ mcp_servers.lotml ]` and `[mcp_servers."lotml"]` name the same table: a second one
+    // would make the file invalid TOML.
+    let header =
+        |line: &str| line.chars().filter(|c| !c.is_whitespace() && *c != '"' && *c != '\'').collect::<String>();
+    if text.lines().any(|line| header(line) == "[mcp_servers.lotml]") {
         return None;
     }
     let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
@@ -414,6 +422,7 @@ mod tests {
             "model = \"o4\"\n\n[mcp_servers.lotml]\ncommand = \"lotml\"\nargs = [\"mcp\", \"--root\", \".\"]\n"
         );
         assert_eq!(register_toml(&out), None);
+        assert_eq!(register_toml("[ mcp_servers.\"lotml\" ]\ncommand = \"x\"\n"), None);
     }
 
     #[test]

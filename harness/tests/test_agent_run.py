@@ -191,6 +191,22 @@ def test_the_agent_has_no_shell_and_no_way_out(tmp_path: Path):
     assert not any("the key" in a for a in answers), answers
 
 
+def test_the_agent_cannot_write_an_interface(tmp_path: Path):
+    model = scripted(
+        said(
+            1, ("write_file", {"file_path": "/bindings/os.lotmli", "content": "fn getcwd() -> str"})
+        ),
+        said(2, ("write_file", {"file_path": "/Deep/OS.LOTMLI", "content": "x"})),
+        said(3, text="Done."),
+    )
+    runner.run(TASKS["median-mode"], "agents", 0, model, "scripted", traces=tmp_path)
+    trace = json.loads((tmp_path / "scripted" / "agents" / "median-mode-0.json").read_text("utf-8"))
+    answers = [m["data"] for m in trace["messages"] if m["type"] == "tool"]
+    assert len(answers) == 2
+    assert all(a["status"] == "error" or "denied" in a["content"].lower() for a in answers), answers
+    assert not any(name.endswith((".lotmli", ".LOTMLI")) for name in trace["final"])
+
+
 def test_the_arms_set_their_context(tmp_path: Path):
     lotml = Lotml()
     system, memory = runner.prepare(TASKS["median-mode"], tmp_path / "a", "agents", lotml)
@@ -210,6 +226,13 @@ def test_the_key_is_required(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     with pytest.raises(SystemExit, match="OPENROUTER_API_KEY is not set"):
         runner.openrouter()
+
+
+def test_the_model_waits_minutes_not_milliseconds(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test")
+    model = runner.openrouter()
+    assert model.request_timeout == runner.REQUEST_TIMEOUT * 1000
+    assert model.model_name == runner.MODEL
 
 
 def test_lines_changed_counts_both_sides():

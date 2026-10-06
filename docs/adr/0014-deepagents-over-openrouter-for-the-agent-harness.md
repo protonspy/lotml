@@ -33,3 +33,8 @@ compiler's tools reach it through a small client of `lotml mcp`. Both packages s
   response names it, and pinning one is a constructor argument when results must not mix them.
 - The key stays in `OPENROUTER_API_KEY`, never in a file, and never in the environment of the
   compiler process that runs the agent's code.
+- The agent's code runs, through the compiler's `test` tool and through grading, with the user's
+  privileges. lotml reaches nothing outside itself but through an interface (`.lotmli`), so the
+  agent may not write one and none is left in a workspace when its code runs; anything more —
+  an untrusted benchmark, a model meant to attack the harness — needs a disposable machine or a
+  container, which this harness does not provide.

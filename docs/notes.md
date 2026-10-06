@@ -92,3 +92,4 @@ over this file answers with the example above as well as with the notes. -->
 - n-0052 2026-10-06 #gotcha @compiler/crates/lotml/src/exec.rs — lotml bind takes ASCII module names only: Windows reserves COM¹ and LPT¹ too, and every name typeshed binds is ASCII
 - n-0053 2026-10-06 #gotcha @compiler/crates/lotml-fmt — lotml fmt puts a blank line before a comment that opens a function body; the guide keeps such comments above the fn
 - n-0054 2026-10-06 #gotcha @compiler/crates/lotml-check — a result of None compared with == Ok(None) is E0204 (Ok(None) types as an optional); a test unwraps it with ? instead
+- n-0055 2026-10-06 #gotcha @harness/lotml_harness/agent/run.py — ChatOpenRouter's request_timeout is in milliseconds (the SDK's timeout_ms): 180 meant 180 ms, and its retry backoff then ran 300 s before a ReadTimeout

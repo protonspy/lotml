@@ -45,6 +45,16 @@ def test_an_agent_s_own_hidden_tests_do_not_count(tmp_path: Path):
     assert result.outcome == "fail"
 
 
+def test_grading_runs_no_interface_the_agent_left(tmp_path: Path):
+    task = next(t for t in TASKS if t.id == "median-mode")
+    task.lay(tmp_path, solution=True)
+    (tmp_path / "bindings").mkdir()
+    (tmp_path / "bindings" / "os.lotmli").write_text("fn getcwd() -> str ! PyError\n", "utf-8")
+    result = grade(task, tmp_path)
+    assert result.outcome == "pass"
+    assert (tmp_path / "bindings" / "os.lotmli").exists(), "the workspace itself is left as it was"
+
+
 def test_a_missing_graded_file_fails_its_tests(tmp_path: Path):
     task = TASKS[0]
     result = grade(task, tmp_path)

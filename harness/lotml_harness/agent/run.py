@@ -47,6 +47,18 @@ SYSTEM = (
 )
 
 
+def _no_interfaces():
+    from deepagents.middleware.filesystem import FilesystemPermission
+
+    # The glob is case-sensitive and Windows' file system is not.
+    return FilesystemPermission(
+        operations=["write"], paths=["/**/*.[lL][oO][tT][mM][lL][iI]"], mode="deny"
+    )
+
+
+NO_INTERFACES = _no_interfaces()
+
+
 class Stop(Exception):
     """A limit was reached; `reason` is `steps` or `time`."""
 
@@ -66,8 +78,9 @@ def openrouter(model: str = MODEL) -> BaseChatModel:
     from langchain_openrouter import ChatOpenRouter
 
     require_key()
+    # ChatOpenRouter's timeout is in milliseconds: it is the SDK's `timeout_ms`.
     return ChatOpenRouter(
-        model=model, temperature=0, request_timeout=REQUEST_TIMEOUT, max_retries=2
+        model=model, temperature=0, request_timeout=REQUEST_TIMEOUT * 1000, max_retries=2
     )
 
 
@@ -227,10 +240,11 @@ def run(
         with LotmlMcp(workspace, binary=lotml.binary) as server:
             agent = create_deep_agent(
                 model=model,
-                tools=langchain_tools(server),
+                tools=langchain_tools(server, workspace),
                 system_prompt=system,
                 backend=FilesystemBackend(root_dir=workspace, virtual_mode=True),
                 memory=memory or None,
+                permissions=[NO_INTERFACES],
             )
             config = {"callbacks": [meter], "recursion_limit": steps * 4 + 20}
             try:
@@ -272,8 +286,14 @@ def run(
     }
     trace = traces / model_name.replace("/", "__") / arm / f"{task.id}-{attempt}.json"
     trace.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "row": row,
+        "messages": messages_to_dict(messages),
+        "final": after,
+        "grading": graded.details,
+    }
     trace.write_text(
-        json.dumps({"row": row, "messages": messages_to_dict(messages), "final": after}, indent=1),
+        json.dumps(record, indent=1),
         encoding="utf-8",
     )
     return row

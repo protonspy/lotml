@@ -35,7 +35,7 @@ def test_check_reports_the_diagnostics_as_json(server: LotmlMcp):
 
 
 def test_the_langchain_tools_answer_and_mark_errors(server: LotmlMcp):
-    tools = {t.name: t for t in langchain_tools(server)}
+    tools = {t.name: t for t in langchain_tools(server, server.root)}
     assert "E0204" in tools["explain"].invoke({"code": "E0204"})
     report = json.loads(tools["test"].invoke({"paths": ["b.lotml"]}))
     assert report["tests"][0]["outcome"] == "fail"
@@ -44,7 +44,7 @@ def test_the_langchain_tools_answer_and_mark_errors(server: LotmlMcp):
 
 
 def test_a_tool_error_becomes_an_error_tool_message(server: LotmlMcp):
-    tools = {t.name: t for t in langchain_tools(server)}
+    tools = {t.name: t for t in langchain_tools(server, server.root)}
     call = {"name": "explain", "args": {"code": "E9999"}, "id": "1", "type": "tool_call"}
     message = tools["explain"].invoke(call)
     assert message.status == "error"
@@ -52,10 +52,34 @@ def test_a_tool_error_becomes_an_error_tool_message(server: LotmlMcp):
 
 
 def test_the_agent_s_absolute_paths_name_the_workspace(server: LotmlMcp):
-    tools = {t.name: t for t in langchain_tools(server)}
+    tools = {t.name: t for t in langchain_tools(server, server.root)}
     report = json.loads(tools["check"].invoke({"paths": ["/a.lotml"]}))
     assert report["diagnostics"][0]["code"] == "E0301"
     assert "double" in tools["show"].invoke({"symbol": "double", "paths": ["/"]})
+
+
+def test_no_tool_may_name_an_interface(server: LotmlMcp):
+    tools = {t.name: t for t in langchain_tools(server, server.root)}
+    call = {
+        "name": "edit",
+        "args": {"path": "/bindings/OS.LotmlI", "search": "a", "replace": "b"},
+        "id": "1",
+        "type": "tool_call",
+    }
+    message = tools["edit"].invoke(call)
+    assert message.status == "error" and "interfaces" in message.content
+
+
+def test_test_runs_only_once_every_interface_is_gone(server: LotmlMcp):
+    bindings = server.root / "bindings"
+    bindings.mkdir()
+    (bindings / "os.lotmli").write_text("fn system(command: str) -> int ! PyError\n", "utf-8")
+    (server.root / "deep" / "x").mkdir(parents=True)
+    (server.root / "deep" / "x" / "c.m.LOTMLI").write_text("", "utf-8")
+    tools = {t.name: t for t in langchain_tools(server, server.root)}
+    tools["test"].invoke({"paths": ["b.lotml"]})
+    assert not (bindings / "os.lotmli").exists()
+    assert not (server.root / "deep" / "x" / "c.m.LOTMLI").exists()
 
 
 def test_the_server_never_gets_the_key(monkeypatch: pytest.MonkeyPatch):

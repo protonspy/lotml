@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from lotml_harness.agent.bench import AgentTask
+from lotml_harness.agent.mcp import scrub_interfaces
 from lotml_harness.experiments.phase1 import Lotml
 
 HIDDEN = re.compile(r'^test "hidden:', re.MULTILINE)
@@ -21,6 +22,9 @@ class Grade:
     passed: int
     total: int
     failures: list[str] = field(default_factory=list)
+    """Fixed text — file, hidden test, outcome — safe in the committed rows."""
+    details: list[str] = field(default_factory=list)
+    """The compiler's output when tests did not run: the agent's text, kept to the trace."""
 
     @property
     def outcome(self) -> str:
@@ -33,10 +37,14 @@ def grade(task: AgentTask, workspace: Path, lotml: Lotml | None = None) -> Grade
     lotml = lotml or Lotml()
     with tempfile.TemporaryDirectory(prefix="lotml-agent-grade-") as scratch:
         copy = Path(scratch)
-        shutil.copytree(workspace, copy, dirs_exist_ok=True)
+        shutil.copytree(workspace, copy, dirs_exist_ok=True, symlinks=True)
+        # The agent's code runs below: no interface may reach Python or C for it.
+        scrub_interfaces(copy)
+        for link in [p for p in copy.rglob("*") if p.is_symlink()]:
+            link.unlink()
         checked = lotml.compiler(["check", "."], scratch)
         checks = checked is not None and checked.returncode == 0
-        passed, total, failures = 0, 0, []
+        passed, total, failures, details = 0, 0, [], []
         for file in task.graded:
             hidden = task.hidden(file)
             total += len(HIDDEN.findall(hidden))
@@ -50,8 +58,8 @@ def grade(task: AgentTask, workspace: Path, lotml: Lotml | None = None) -> Grade
             ran = lotml.compiler(["test", "--json", file], scratch)
             report = _report(ran.stdout if ran else "")
             if report is None:
-                reason = (ran.stdout + ran.stderr)[-500:] if ran else "timed out"
-                failures.append(f"{file}: the tests did not run: {reason}")
+                failures.append(f"{file}: the tests did not run")
+                details.append((ran.stdout + ran.stderr)[-2000:] if ran else "timed out")
                 continue
             for test in report["tests"]:
                 if not test["name"].startswith("hidden:"):
@@ -60,7 +68,7 @@ def grade(task: AgentTask, workspace: Path, lotml: Lotml | None = None) -> Grade
                     passed += 1
                 else:
                     failures.append(f"{file}: {test['name']}: {test['outcome']}")
-        return Grade(checks, passed, total, failures)
+        return Grade(checks, passed, total, failures, details)
 
 
 def _report(stdout: str) -> dict | None:

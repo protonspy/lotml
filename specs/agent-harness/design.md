@@ -39,6 +39,11 @@ start with `hidden:` so they never collide with the agent's own.
   newline framing, synchronous, in the way the compiler speaks it with no protocol library; one
   server per run, started with `execute.child_environment()` so the agent's code, run by the
   `test` tool, never sees the key.
+- No interfaces — a `.lotmli` file binds a Python module or a C library, so one the agent wrote
+  would let `test` call `os.system`. A deepagents permission denies writing one, the MCP wrapper
+  refuses a tool call naming one, and every one is deleted before the `test` tool runs and from
+  the grading copy, whose symbolic links are removed too. Rows keep only fixed failure text; the
+  compiler's output on the agent's code goes to the trace.
 - `memory=["/AGENTS.md"]` in the `agents` arm (R2.4), after `lotml init --harness none`; the
   `reference` arm puts `variants.reference_text("b")` in the system prompt instead (R2.5).
 - Limits (R2.6) — a callback counts model calls and raises before one past the step limit or the
