@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/agent-harness
-delivery: in-review
+delivery: merged
 pr: 11
 ---
 

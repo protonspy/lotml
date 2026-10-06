@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/phase-3-c-backend
-delivery: in-review
+delivery: merged
 pr: 16
 ---
 
