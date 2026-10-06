@@ -14,6 +14,8 @@
   _Depends 1.1, 2.1_
 - [x] 2.3 (Unit) Read a run's metrics from its messages and keep its trace in the cache — R4.1, R4.4
   _Depends 2.2_
+- [ ] 2.4 (Unit) Pass a harness guide configuration to the server, and scrub interfaces before every `guide` call as before `test`, refusing one that names an interface — R2.9
+  _Depends 2.1_
 
 ## 3 · The report
 

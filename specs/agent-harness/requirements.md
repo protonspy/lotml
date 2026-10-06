@@ -33,6 +33,7 @@ hidden tests. It measures how often the agent gets lotml right, what it costs, a
 - **R2.6** If a run reaches its step limit or its wall-clock limit, then the agent harness shall stop the agent, grade the workspace as it stands, and record which limit stopped it.
 - **R2.7** If a model call fails, then the agent harness shall record the run as an error with the reason and go on to the next run.
 - **R2.8** If `OPENROUTER_API_KEY` is not set, then the agent harness shall refuse to start and say so.
+- **R2.9** Where a run is given a harness guide configuration, the agent harness shall pass it to the server's environment by absolute path, delete every interface in the workspace before each `guide` call as it does before `test`, and refuse a `guide` call naming an interface.
 
 ## R3 · Grading
 
