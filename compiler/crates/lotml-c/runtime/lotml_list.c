@@ -262,11 +262,6 @@ void lt_list_unique(lt_list **slot) {
     *slot = c;
 }
 
-void *lt_list_slot(lt_list **slot, int64_t index, lt_at at) {
-    lt_list_unique(slot);
-    return LT_AT(*slot, lt_index((*slot)->len, index, at));
-}
-
 void lt_list_push(lt_list **slot, const void *value) {
     lt_list_unique(slot);
     lt_list *l = *slot;
@@ -465,11 +460,24 @@ lt_list *lt_list_concat(const lt_list *a, const lt_list *b) {
     return c;
 }
 
+/* `xs * times`: the elements copied once, then the copy doubled until it is long enough; each
+ * element held once more for each copy of it. */
 lt_list *lt_list_repeat(const lt_list *l, int64_t times, lt_at at) {
-    if (times <= 0) return lt_list_new(l->type, 0);
-    if (l->len > 0 && times > INT64_MAX / l->len) lt_panic(at, "MemoryError", "the repeated list is too long");
-    lt_list *c = lt_list_new(l->type, l->len * times);
-    for (int64_t t = 0; t < times; t++) lt_list_extend(&c, l);
+    if (times <= 0 || l->len == 0) return lt_list_new(l->type, 0);
+    if (times > INT64_MAX / l->len) lt_panic(at, "MemoryError", "the repeated list is too long");
+    int64_t n = l->len * times;
+    lt_list *c = lt_list_new(l->type, n);
+    size_t total = (size_t)n * l->type->size, filled = (size_t)l->len * l->type->size;
+    memcpy(c->data, l->data, filled);
+    while (filled < total) {
+        size_t chunk = filled < total - filled ? filled : total - filled;
+        memcpy(c->data + filled, c->data, chunk);
+        filled += chunk;
+    }
+    c->len = n;
+    if (l->type->inc != NULL) {
+        for (int64_t i = 0; i < n; i++) l->type->inc(LT_AT(c, i));
+    }
     return c;
 }
 

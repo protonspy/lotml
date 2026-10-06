@@ -3,6 +3,7 @@
 
 pub mod driver;
 mod emit;
+mod hoist;
 mod lower;
 mod mir;
 mod own;
@@ -69,6 +70,7 @@ pub fn compile_program(
     for f in &mut lowered.functions {
         own::insert_counts(f);
         reuse::insert_reuse(f);
+        hoist::hoist_uniqueness(f);
     }
     let c = emit::program(&lowered, &path.display().to_string(), tests);
     Ok(Program { c, libraries: lowered.libraries.iter().filter(|l| !driver::linked_always(l)).cloned().collect() })

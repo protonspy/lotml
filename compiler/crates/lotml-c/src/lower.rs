@@ -965,7 +965,7 @@ impl<'c, 'a> Builder<'c, 'a> {
         let mut ty = self.function.locals[place.local].ty.clone();
         for proj in &place.proj {
             ty = match proj {
-                Proj::Index(_) => element(&ty),
+                Proj::Index(_) | Proj::OwnedIndex(_) => element(&ty),
                 Proj::Field(i) => self.fields(&ty, None).get(*i).cloned().unwrap_or(Ty::Error),
                 Proj::Key(_) | Proj::SetDefault(..) => match &ty {
                     Ty::Dict(_, v) => (**v).clone(),
@@ -986,10 +986,12 @@ impl<'c, 'a> Builder<'c, 'a> {
         let mut ty = self.function.locals[place.local].ty.clone();
         for proj in &place.proj {
             match proj {
-                Proj::Index(i) => {
+                Proj::Index(i) | Proj::OwnedIndex(i) => {
                     let elem = element(&ty);
-                    value =
-                        self.hold(elem.clone(), Expr::ListGet { list: value, index: i.clone(), elem: elem.clone() });
+                    value = self.hold(
+                        elem.clone(),
+                        Expr::ListGet { list: value, index: i.clone(), elem: elem.clone(), checked: true },
+                    );
                     ty = elem;
                 }
                 Proj::Field(index) => {
@@ -1410,7 +1412,12 @@ impl<'c, 'a> Builder<'c, 'a> {
                 self.push(StmtKind::Do(rt("lt_list_unpack", vec![value.clone(), int(n as i128)], true)));
                 (0..n)
                     .map(|i| {
-                        let get = Expr::ListGet { list: value.clone(), index: int(i as i128), elem: elem.clone() };
+                        let get = Expr::ListGet {
+                            list: value.clone(),
+                            index: int(i as i128),
+                            elem: elem.clone(),
+                            checked: true,
+                        };
                         ((i, self.hold(elem.clone(), get)), elem.clone())
                     })
                     .collect()
@@ -1540,12 +1547,17 @@ impl<'c, 'a> Builder<'c, 'a> {
             let elements: Vec<(Operand, Ty)> = lists
                 .iter()
                 .map(|(list, elem)| {
-                    let get = Expr::ListGet { list: list.clone(), index: Operand::Local(k), elem: elem.clone() };
+                    let get = Expr::ListGet {
+                        list: list.clone(),
+                        index: Operand::Local(k),
+                        elem: elem.clone(),
+                        checked: false,
+                    };
                     (b.hold(elem.clone(), get), elem.clone())
                 })
                 .collect();
-            let step = if reverse { BinOp::Sub } else { BinOp::Add };
-            b.push(StmtKind::Let(k, Expr::Binary(step, Operand::Local(k), int(1), INT)));
+            let name = if reverse { "lt_wrapping_sub" } else { "lt_wrapping_add" };
+            b.push(StmtKind::Let(k, rt(name, vec![Operand::Local(k), int(1)], false)));
             if let [(element, ty)] = elements.as_slice() {
                 body(b, element.clone(), ty.clone());
             } else {
@@ -1946,7 +1958,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                         let elem = (**elem).clone();
                         let o = self.value(object);
                         let i = self.value(index);
-                        Value::Expr(Expr::ListGet { list: o, index: i, elem })
+                        Value::Expr(Expr::ListGet { list: o, index: i, elem, checked: true })
                     }
                     Ty::Dict(k, v) => {
                         let (k, v) = ((**k).clone(), (**v).clone());
@@ -2888,7 +2900,8 @@ impl<'c, 'a> Builder<'c, 'a> {
         let stop = self.block(|b| b.push(StmtKind::Panic(Panic::Value(message.to_string()))));
         self.push(StmtKind::If(empty, stop, Vec::new()));
         let best = self.temp(ty.clone());
-        let first = self.hold(elem.clone(), Expr::ListGet { list: list.clone(), index: int(0), elem: elem.clone() });
+        let first = self
+            .hold(elem.clone(), Expr::ListGet { list: list.clone(), index: int(0), elem: elem.clone(), checked: true });
         self.push(StmtKind::Let(best, Expr::Use(first.clone())));
         let (k0, _) = self.apply(key, vec![(first, elem.clone())]);
         let best_key = self.temp(key_ty.clone());
@@ -2900,8 +2913,10 @@ impl<'c, 'a> Builder<'c, 'a> {
             let more = b.hold(Ty::Bool, Expr::Compare(CmpOp::Lt, Operand::Local(i), n.clone(), INT));
             let done = b.block(|b| b.push(StmtKind::Break));
             b.push(StmtKind::If(more, Vec::new(), done));
-            let item = b
-                .hold(elem.clone(), Expr::ListGet { list: list.clone(), index: Operand::Local(i), elem: elem.clone() });
+            let item = b.hold(
+                elem.clone(),
+                Expr::ListGet { list: list.clone(), index: Operand::Local(i), elem: elem.clone(), checked: true },
+            );
             b.push(StmtKind::Let(i, Expr::Binary(BinOp::Add, Operand::Local(i), int(1), INT)));
             let (k, _) = b.apply(key, vec![(item.clone(), elem.clone())]);
             let op = if max { CmpOp::Gt } else { CmpOp::Lt };

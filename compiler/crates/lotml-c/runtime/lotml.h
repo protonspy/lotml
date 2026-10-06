@@ -87,7 +87,8 @@ static inline int32_t lt_count_of(const lt_cell *c) {
 #if LT_GNU
     return __atomic_load_n(&c->count, __ATOMIC_RELAXED);
 #else
-    return *(volatile const int32_t *)&c->count;
+    /* An aligned 32-bit read is atomic on the targets MSVC builds for. */
+    return c->count;
 #endif
 }
 
@@ -551,7 +552,13 @@ void lt_list_drop(lt_list *l);
 void lt_list_inc(void *value);
 void lt_list_dec(void *value);
 void lt_list_unique(lt_list **slot);
-void *lt_list_slot(lt_list **slot, int64_t index, lt_at at);
+
+/* A pointer to the element `index` of the list in `slot`, made the slot's own first (R3.5). */
+static inline void *lt_list_slot(lt_list **slot, int64_t index, lt_at at) {
+    if (LT_UNLIKELY(!lt_unique(*slot))) lt_list_unique(slot);
+    lt_list *l = *slot;
+    return l->data + (size_t)lt_index(l->len, index, at) * l->type->size;
+}
 void lt_list_push(lt_list **slot, const void *value);
 void lt_list_extend(lt_list **slot, const lt_list *other);
 void lt_list_insert(lt_list **slot, int64_t index, const void *value);

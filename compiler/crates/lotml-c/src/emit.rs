@@ -2,7 +2,7 @@
 //! top, every statement after a `#line` naming its `.lotml` line (R2.3); one struct and one
 //! descriptor per tuple type the program uses.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 use lotml_check::ty::{FloatKind, IntKind, Ty};
@@ -293,6 +293,40 @@ fn local_name(f: &Function, local: Local) -> String {
     }
 }
 
+/// A function's C with each `LT_HERE` naming a location of its own: `lt_site_<line>`, a static
+/// constant declared at the function's top for each line that needs one. `LT_HERE` builds the
+/// location afresh at each use, which a compiler may do on every pass of a loop even though only a
+/// failing check reads it; a static one costs nothing until then. The line is the one `__LINE__`
+/// would give there: the last `#line` directive's, plus the lines since.
+fn with_sites(text: &str) -> String {
+    let mut used = BTreeSet::new();
+    let mut body = String::new();
+    let mut current: Option<u32> = None;
+    for raw in text.split_inclusive('\n') {
+        if let Some(rest) = raw.strip_prefix("#line ") {
+            current = rest.split_whitespace().next().and_then(|n| n.parse().ok());
+            body.push_str(raw);
+            continue;
+        }
+        match current {
+            Some(line) if raw.contains("LT_HERE") => {
+                used.insert(line);
+                body.push_str(&raw.replace("LT_HERE", &format!("lt_site_{line}")));
+            }
+            _ => body.push_str(raw),
+        }
+        current = current.map(|line| line + 1);
+    }
+    let anchor = "(void)lt_fn;\n";
+    let Some(at) = body.find(anchor).map(|i| i + anchor.len()) else { return text.to_string() };
+    let sites: String = used
+        .iter()
+        .map(|line| format!("    static const lt_at lt_site_{line} = {{__FILE__, {line}, lt_fn}};\n"))
+        .collect();
+    body.insert_str(at, &sites);
+    body
+}
+
 /// The range of a narrower integer kind, and its name, for `lt_fit`.
 fn range(kind: IntKind) -> Option<(i64, i64, &'static str)> {
     Some(match kind {
@@ -366,6 +400,7 @@ impl Writer<'_> {
     }
 
     fn function(&mut self) {
+        let start = self.out.len();
         let f = self.function;
         self.at(f.line);
         let _ = writeln!(self.out, "{} {{", signature(f, self.types));
@@ -382,6 +417,8 @@ impl Writer<'_> {
         }
         self.block(&f.body);
         self.out.push_str("}\n\n");
+        let text = self.out.split_off(start);
+        self.out.push_str(&with_sites(&text));
     }
 
     fn block(&mut self, block: &Block) {
@@ -558,6 +595,27 @@ impl Writer<'_> {
                         self.line(&format!("return {value};"));
                     }
                 }
+                StmtKind::ForRange { var, start, stop, step: Operand::Const(Const::Int(1, _)), body, exit } => {
+                    // A step of one: a C loop, whose counter cannot pass `stop`, so cannot overflow.
+                    let (at, end) = (self.fresh("r"), self.fresh("e"));
+                    let (start, stop) = (self.operand(start), self.operand(stop));
+                    self.line("{");
+                    self.depth += 1;
+                    self.line(&format!("int64_t {at} = {start}, {end} = {stop};"));
+                    let var = self.name(*var);
+                    self.line(&format!("for (;; {at}++) {{"));
+                    self.depth += 1;
+                    self.line(&format!("if ({at} >= {end}) {{"));
+                    self.nested(exit);
+                    self.line("    break;");
+                    self.line("}");
+                    self.line(&format!("{var} = {at};"));
+                    self.depth -= 1;
+                    self.nested(body);
+                    self.line("}");
+                    self.depth -= 1;
+                    self.line("}");
+                }
                 StmtKind::ForRange { var, start, stop, step, body, exit } => {
                     let walk = self.fresh("r");
                     let (start, stop, step) = (self.operand(start), self.operand(stop), self.operand(step));
@@ -633,6 +691,16 @@ impl Writer<'_> {
                     };
                     let i = self.operand(i);
                     slot = format!("(({} *)lt_list_slot({slot}, {i}, LT_HERE))", self.c_type(&elem));
+                    ty = elem;
+                }
+                Proj::OwnedIndex(i) => {
+                    let elem = match &ty {
+                        Ty::List(t) => (**t).clone(),
+                        _ => Ty::Unit,
+                    };
+                    let i = self.operand(i);
+                    let c = self.c_type(&elem);
+                    slot = format!("(({c} *)(*{slot})->data + lt_index((*{slot})->len, {i}, LT_HERE))");
                     ty = elem;
                 }
                 Proj::Field(index) => {
@@ -841,9 +909,13 @@ impl Writer<'_> {
                     _ => format!("0 /* len of {ty} */"),
                 }
             }
-            Expr::ListGet { list, index, elem } => {
+            Expr::ListGet { list, index, elem, checked } => {
                 let (l, i) = (self.operand(list), self.operand(index));
-                format!("(({} *)({l})->data)[lt_index(({l})->len, {i}, LT_HERE)]", self.c_type(elem))
+                if *checked {
+                    format!("(({} *)({l})->data)[lt_index(({l})->len, {i}, LT_HERE)]", self.c_type(elem))
+                } else {
+                    format!("(({} *)({l})->data)[{i}]", self.c_type(elem))
+                }
             }
             Expr::TupleNew { ty, items } => {
                 let items: Vec<String> = items.iter().map(|i| self.operand(i)).collect();

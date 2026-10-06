@@ -275,7 +275,7 @@ impl Pass {
         self.local_uses(&[&Operand::Local(place.local)], false, uses);
         for proj in &place.proj {
             match proj {
-                Proj::Index(i) | Proj::Key(i) => self.local_uses(&[i], false, uses),
+                Proj::Index(i) | Proj::OwnedIndex(i) | Proj::Key(i) => self.local_uses(&[i], false, uses),
                 Proj::SetDefault(k, d) => self.local_uses(&[k, d], true, uses),
                 Proj::Field(_) => {}
             }

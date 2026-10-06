@@ -52,6 +52,8 @@ pub struct Place {
 pub enum Proj {
     /// An element of a list.
     Index(Operand),
+    /// An element of a list known to be its slot's own: no check for a copy first.
+    OwnedIndex(Operand),
     /// A field of a record.
     Field(usize),
     /// The value of a key of a dict, which must be there.
@@ -246,11 +248,13 @@ pub enum Expr {
         elem: Ty,
         items: Vec<Operand>,
     },
-    /// An element of a list, read.
+    /// An element of a list, read; its index checked against the length unless the reader
+    /// already keeps it below.
     ListGet {
         list: Operand,
         index: Operand,
         elem: Ty,
+        checked: bool,
     },
     TupleNew {
         ty: Ty,
@@ -483,7 +487,7 @@ fn format_operands(parts: &[FormatPart], f: &mut impl FnMut(&Operand)) {
 pub fn place_operands(place: &Place, f: &mut impl FnMut(&Operand)) {
     for proj in &place.proj {
         match proj {
-            Proj::Index(i) | Proj::Key(i) => f(i),
+            Proj::Index(i) | Proj::OwnedIndex(i) | Proj::Key(i) => f(i),
             Proj::SetDefault(k, d) => {
                 f(k);
                 f(d);
