@@ -8,9 +8,12 @@
   unbounded integers. It is what a model's Python prior predicts the code does.
 
 Types are erased. Every node carries its lotml position, so a traceback names the
-`.lotml` line. The transpiler refuses imports outside `ALLOWED_MODULES` and dunder names,
-and the program sees only the prelude; that narrows what model-written code can reach
-but is not a sandbox, which is why `execute` runs it in a child process.
+`.lotml` line. The transpiler refuses imports outside `ALLOWED_MODULES` and every name
+starting with `__`, and names everything it generates with that prefix — the runtime, the
+variant table, the test list, temporaries — so a program can write none of them; the
+program sees only the prelude. That is a language boundary, not an operating-system one:
+`execute` adds a child process with a minimal environment and limits, and an unreviewed
+batch of model output still belongs on a machine you can throw away.
 """
 
 import ast
@@ -65,7 +68,7 @@ def guarded(name: str) -> str:
 
 
 def rt(name: str) -> ast.Attribute:
-    return ast.Attribute(ast.Name("_rt", ast.Load()), name, ast.Load())
+    return ast.Attribute(ast.Name("__rt", ast.Load()), name, ast.Load())
 
 
 def call(function: ast.expr, *args: ast.expr) -> ast.Call:
@@ -218,10 +221,23 @@ class Transpiler:
             return self.expr(value)
         return ast.IfExp(self.condition(self.expr(test)), self.expr(value), self.expr(orelse))
 
+    def operation(self, left: ast.expr, operator: ast.operator, right: ast.expr) -> ast.expr:
+        """`left operator right` under the target's semantics.
+
+        Under lotml's, `**` and `<<` go through the runtime, which traps a result too wide for
+        i64 before computing it — `10 ** 10 ** 9` would otherwise run for hours first.
+        """
+        if self.lotml and isinstance(operator, ast.Pow):
+            return call(rt("power"), left, right)
+        if self.lotml and isinstance(operator, ast.LShift):
+            return call(rt("lshift"), left, right)
+        node = ast.BinOp(left, operator, right)
+        return self.checked(node) if isinstance(operator, OVERFLOWING) else node
+
     def x_power(self, base, _power=None, exponent=None) -> ast.expr:
         if exponent is None:
             return self.expr(base)
-        return self.checked(ast.BinOp(self.expr(base), ast.Pow(), self.expr(exponent)))
+        return self.operation(self.expr(base), ast.Pow(), self.expr(exponent))
 
     def x_coalesce(self, first, *rest) -> ast.expr:
         node = self.expr(first)
@@ -261,10 +277,7 @@ class Transpiler:
     def binary(self, first, *rest) -> ast.expr:
         node = self.expr(first)
         for op, item in zip(rest[::2], rest[1::2], strict=True):
-            operator = BINARY[op.value]()
-            node = ast.BinOp(node, operator, self.expr(item))
-            if isinstance(operator, OVERFLOWING):
-                node = self.checked(node)
+            node = self.operation(node, BINARY[op.value](), self.expr(item))
         return node
 
     x_arith = x_term = x_shift = binary
@@ -299,13 +312,13 @@ class Transpiler:
         for argument in node.children if node is not None else []:
             if argument.data == "kwarg":
                 name, value = argument.children
-                keywords.append(ast.keyword(name.value, maybe_copied(self.expr(value))))
+                keywords.append(ast.keyword(guarded(name.value), maybe_copied(self.expr(value))))
             elif argument.data == "inout_arg":
                 place = self.expr(argument.children[0])
                 if not self.lotml:
                     args.append(place)
                     continue
-                box = f"_inout{next(self.temporaries)}"
+                box = f"__inout{next(self.temporaries)}"
                 args.append(ast.NamedExpr(ast.Name(box, ast.Store()), call(rt("Box"), place)))
                 writebacks.append(self.writeback(place, ast.Name(box, ast.Load())))
             elif argument.children[1] is not None:
@@ -436,7 +449,7 @@ class Transpiler:
 
     def p_variant_pattern(self, name: Token, *subpatterns) -> ast.pattern:
         patterns = [self.pattern(p) for p in subpatterns if p is not None]
-        return ast.MatchClass(ast.Name(name.value, ast.Load()), patterns, [], [])
+        return ast.MatchClass(ast.Name(guarded(name.value), ast.Load()), patterns, [], [])
 
     def p_tuple_pattern(self, *subpatterns) -> ast.pattern:
         return ast.MatchSequence([self.pattern(p) for p in subpatterns if p is not None])
@@ -445,7 +458,7 @@ class Transpiler:
         if name.value == "_":
             return ast.MatchAs()
         if name.value in self.units:
-            value = ast.Attribute(ast.Name("_variants", ast.Load()), name.value, ast.Load())
+            value = ast.Attribute(ast.Name("__variants", ast.Load()), name.value, ast.Load())
             return ast.MatchValue(self.at(value, name))
         return ast.MatchAs(name=guarded(name.value))
 
@@ -486,7 +499,7 @@ class Transpiler:
             operator = AUGMENTED[op.value]()
             place = self.assignable(target)
             if self.lotml and isinstance(operator, OVERFLOWING):
-                total = self.checked(ast.BinOp(load(place), operator, self.expr(value)))
+                total = self.operation(load(place), operator, self.expr(value))
                 return [ast.Assign([place], total)]
             return [ast.AugAssign(place, operator, self.expr(value))]
         value = rest.children[-1]
@@ -545,14 +558,14 @@ class Transpiler:
             for arm in arms
         ]
         if not any(isinstance(c.pattern, ast.MatchAs) and c.pattern.pattern is None for c in cases):
-            unmatched = ast.MatchAs(name="_unmatched")
-            fallback = ast.Expr(call(rt("no_match"), ast.Name("_unmatched", ast.Load())))
+            unmatched = ast.MatchAs(name="__unmatched")
+            fallback = ast.Expr(call(rt("no_match"), ast.Name("__unmatched", ast.Load())))
             cases.append(ast.match_case(unmatched, None, [fallback]))
         return [ast.Match(self.expr(subject), cases)]
 
     # Declarations ------------------------------------------------------------------
 
-    def function(self, node, name: str) -> ast.FunctionDef:
+    def function(self, node, name: str, generated: bool = False) -> ast.FunctionDef:
         head, suite = node.children
         _name, _type_params, params, ret_type = head.children
         args, defaults, boxed, copies = [], [], set(), []
@@ -572,10 +585,10 @@ class Transpiler:
         self.fallible = ret_type is not None and ret_type.children[1] is not None
         body = copies + self.suite(suite)
         if self.fallible:
-            failure = ast.Attribute(ast.Name("_failure", ast.Load()), "error", ast.Load())
+            failure = ast.Attribute(ast.Name("__failure", ast.Load()), "error", ast.Load())
             handler = ast.ExceptHandler(
                 rt("Fail"),
-                "_failure",
+                "__failure",
                 [ast.Return(call(ast.Name("Err", ast.Load()), failure))],
             )
             ok_none = ast.Return(call(ast.Name("Ok", ast.Load()), ast.Constant(None)))
@@ -583,7 +596,7 @@ class Transpiler:
         self.fallible = False
         self.boxed = outer_boxed
         function = ast.FunctionDef(
-            guarded(name),
+            name if generated else guarded(name),
             ast.arguments(args=args, defaults=defaults),
             body,
             [],
@@ -625,7 +638,7 @@ class Transpiler:
                 call(rt("Unit"), ast.Constant(name.value)),
             )
             register = ast.Assign(
-                [ast.Attribute(ast.Name("_variants", ast.Load()), name.value, ast.Store())],
+                [ast.Attribute(ast.Name("__variants", ast.Load()), name.value, ast.Store())],
                 ast.Name(name.value, ast.Load()),
             )
             statements += [self.at(unit, variant), self.at(register, variant)]
@@ -633,7 +646,7 @@ class Transpiler:
 
     def method(self, target: str, node: Tree) -> list[ast.stmt]:
         name = node.children[0].children[0].value
-        function = self.function(node, f"_{target}_{name}")
+        function = self.function(node, f"__{target}_{name}", generated=True)
         params = node.children[0].children[2]
         is_method = params is not None and params.children[0].children[1].value == "self"
         attach = call(
@@ -657,7 +670,7 @@ class Transpiler:
         if trait in defaults:
             table = ast.Dict(
                 [ast.Constant(m) for m in defaults[trait]],
-                [ast.Name(f"_{trait}_{m}", ast.Load()) for m in defaults[trait]],
+                [ast.Name(f"__{trait}_{m}", ast.Load()) for m in defaults[trait]],
             )
             attach = call(rt("attach_defaults"), ast.Name(target, ast.Load()), table)
             statements.append(self.at(ast.Expr(attach), item))
@@ -670,7 +683,7 @@ class Transpiler:
         for member in item.children[2:]:
             if isinstance(member, Tree) and member.data == "fn_def":
                 method = member.children[0].children[0].value
-                functions.append(self.function(member, f"_{name}_{method}"))
+                functions.append(self.function(member, f"__{name}_{method}", generated=True))
                 methods.append(method)
         return functions, methods
 
@@ -732,10 +745,10 @@ class Transpiler:
                 name, suite = item.children
                 tests += 1
                 function = ast.FunctionDef(
-                    f"_test_{tests}", ast.arguments(), self.suite(suite), [], None, type_params=[]
+                    f"__test_{tests}", ast.arguments(), self.suite(suite), [], None, type_params=[]
                 )
                 register = call(
-                    ast.Attribute(ast.Name("_tests", ast.Load()), "append", ast.Load()),
+                    ast.Attribute(ast.Name("__tests", ast.Load()), "append", ast.Load()),
                     ast.Tuple(
                         [
                             ast.Constant(ast.literal_eval(name.value)),

@@ -33,8 +33,15 @@ class PlainData(pickle.Unpickler):
         raise pickle.UnpicklingError(f"refused {module}.{name}")
 
 
-def decode_private(encoded: str) -> Any:
-    raw = zlib.decompress(base64.b64decode(encoded.encode()))
+PRIVATE_LIMIT = 512 * 2**20
+"""Bytes one record's private tests may decompress to: a bound on a decompression bomb."""
+
+
+def decode_private(encoded: str, limit: int = PRIVATE_LIMIT) -> Any:
+    inflater = zlib.decompressobj()
+    raw = inflater.decompress(base64.b64decode(encoded.encode()), limit)
+    if inflater.unconsumed_tail:
+        raise pickle.UnpicklingError(f"private tests decompress past {limit} bytes")
     text = PlainData(io.BytesIO(raw)).load()
     if not isinstance(text, str):
         raise pickle.UnpicklingError("private tests are not a JSON string")

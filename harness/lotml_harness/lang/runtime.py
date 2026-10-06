@@ -5,6 +5,8 @@ import copy
 import dataclasses
 import heapq
 import math
+import string
+import sys
 from typing import Any
 
 I64_MIN, I64_MAX = -(2**63), 2**63 - 1
@@ -38,6 +40,10 @@ class Overflow(Panic):
 
 class Todo(Panic):
     """`todo()` reached at run time."""
+
+
+class OutputLimit(Panic):
+    """A program printed more than a run allows."""
 
 
 class NonExhaustiveMatch(Panic):
@@ -79,6 +85,26 @@ def i64(value):
     if type(value) is int and not I64_MIN <= value <= I64_MAX:
         raise Overflow(f"{value} overflows int")
     return value
+
+
+def power(base, exponent):
+    """`base ** exponent`, trapping an `int` result too wide for i64 before computing it."""
+    if (
+        type(base) is int
+        and type(exponent) is int
+        and exponent > 0
+        and abs(base) > 1
+        and (abs(base).bit_length() - 1) * exponent > 64
+    ):
+        raise Overflow(f"{base} ** {exponent} overflows int")
+    return i64(base**exponent)
+
+
+def lshift(value, amount):
+    """`value << amount`, trapping a shift that leaves i64 before computing it."""
+    if type(value) is int and type(amount) is int and value != 0 and amount >= 64:
+        raise Overflow(f"{value} << {amount} overflows int")
+    return i64(value << amount)
 
 
 def wrap(value: int) -> int:
@@ -277,12 +303,32 @@ def _dict_pop(mapping: dict, key, *default):
     return mapping.pop(key, *default) if default else mapping.pop(key, None)
 
 
+def _format_fields(text: str) -> list[str]:
+    """Every replacement field of a format string, nested specs included."""
+    fields = []
+    for _literal, name, spec, _conversion in string.Formatter().parse(text):
+        if name is not None:
+            fields.append(name)
+        if spec:
+            fields += _format_fields(spec)
+    return fields
+
+
+def _safe_format(text: str, *args, format_map: bool = False, **kwargs):
+    """`str.format`, refusing a field that walks into a dunder attribute: `{0.__class__}`."""
+    if any("__" in field for field in _format_fields(text)):
+        raise LotmlTypeError("a format field names a dunder attribute")
+    return text.format_map(*args) if format_map else text.format(*args, **kwargs)
+
+
 SPECIAL = {
     str: {
         "to_int": lambda s: _to_number(s, int),
         "to_float": lambda s: _to_number(s, float),
         "find": _str_find,
         "split_once": _split_once,
+        "format": _safe_format,
+        "format_map": lambda s, mapping: _safe_format(s, mapping, format_map=True),
     },
     list: {
         "pop": _list_pop,
@@ -309,6 +355,26 @@ def method(obj, name: str, *args, **kwargs):
     if special is not None:
         return special(obj, *args, **kwargs)
     return getattr(obj, name)(*args, **kwargs)
+
+
+OUTPUT_LIMIT = 1_000_000
+"""Characters one program may print."""
+
+
+def capped_print(limit: int = OUTPUT_LIMIT):
+    """A `print` that stops the program once it has written `limit` characters."""
+    written = 0
+
+    def print_(*values, sep=" ", end="\n"):
+        nonlocal written
+        text = sep.join(str(v) for v in values) + end
+        written += len(text)
+        if written > limit:
+            raise OutputLimit(f"the program printed more than {limit} characters")
+        sys.stdout.write(text)
+
+    print_.__name__ = "print"
+    return print_
 
 
 def _listed(function):

@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from lotml_harness import ROOT
+from lotml_harness.execute import child_environment
 from lotml_harness.tasks import Task, livecodebench, sources
 from lotml_harness.tasks.extract import Untranslatable, from_multipl_e
 
@@ -45,7 +46,7 @@ def translate(sources: dict[str, str], report: Report) -> list[Task]:
 
 def passes(task: Task, timeout: float) -> bool:
     """Whether the canonical solution passes every hidden test, run in a child process."""
-    environment = os.environ | {"PYTHONPATH": str(HARNESS)}
+    environment = child_environment()
     try:
         child = subprocess.run(  # noqa: S603
             [sys.executable, "-m", "lotml_harness.tasks.canonical"],

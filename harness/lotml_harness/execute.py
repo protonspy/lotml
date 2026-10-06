@@ -10,12 +10,14 @@ import builtins
 import json
 import linecache
 import os
+import secrets
 import subprocess
 import sys
+import tempfile
 import traceback
 import types
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 from lark.exceptions import LarkError
 
@@ -47,7 +49,7 @@ OUTCOMES = [
     (runtime.LotmlTypeError, "type error"),
     (AssertionError, "assertion"),
     (NameError, "unresolved name"),
-    (Exception, "runtime error"),
+    (BaseException, "runtime error"),
 ]
 
 
@@ -140,26 +142,38 @@ def load(source: str, variant: str, mode: str, path: str):
         return Result(error=f"transpile: {error}")
     linecache.cache[path] = (len(source), None, source.splitlines(True), path)
     namespace = types.ModuleType("lotml_program").__dict__
+    prelude = {
+        **runtime.PRELUDE,
+        "print": runtime.capped_print(),
+        "__import__": restricted_import,
+    }
+    # Every name the transpiler generates starts with `__`, which a program cannot write.
     namespace.update(
-        _rt=runtime,
-        _variants=runtime.Variants(),
-        _tests=[],
-        __builtins__={**runtime.PRELUDE, "__import__": restricted_import},
+        {
+            "__rt": runtime,
+            "__variants": runtime.Variants(),
+            "__tests": [],
+            "__builtins__": prelude,
+        }
     )
     code = compile(tree, path, "exec")
     try:
         exec(code, namespace)  # noqa: S102
-    except Exception as error:  # noqa: BLE001
+    except BaseException as error:  # noqa: BLE001
         return Result(error=f"load: {type(error).__name__}: {error}")
     return namespace, code
 
 
 def attempt(budget: Budget, limit: int, function, *args) -> tuple[str | None, Any, BaseException]:
-    """`function(*args)` under the budget: (None, result, None) or (label, None, error)."""
+    """`function(*args)` under the budget: (None, result, None) or (label, None, error).
+
+    `BaseException` is caught too: a program that leaves through `SystemExit` has failed, not
+    finished.
+    """
     budget.left = limit
     try:
         return None, function(*args), None
-    except Exception as error:  # noqa: BLE001
+    except BaseException as error:  # noqa: BLE001
         return label(error), None, error
 
 
@@ -179,7 +193,7 @@ def run(
     result = Result(violations=violations(variant, source) if mode == "lotml" else [])
     with Budget(code) as counter:
         if task is None:
-            for name, test in namespace["_tests"]:
+            for name, test in namespace["__tests"]:
                 outcome, _, error = attempt(counter, budget, test)
                 result.tests[name] = outcome or "pass"
                 if error is not None:
@@ -203,6 +217,90 @@ def run(
     return result
 
 
+MEMORY = 2 * 2**30
+"""Bytes a child may use."""
+OUTPUT_TAIL = 1_000_000
+"""Bytes of a child's output the parent reads: the end, where the result line is."""
+ENVIRONMENT = ("PATH", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG")
+
+
+def child_environment() -> dict[str, str]:
+    """What a child needs to start Python and nothing else: no tokens, no keys."""
+    kept = {k: v for k, v in os.environ.items() if k.upper() in ENVIRONMENT}
+    return kept | {
+        "PYTHONPATH": str(ROOT / "harness"),
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+
+
+def limit_memory(limit: int) -> None:
+    """Cap this process's memory: an address-space rlimit on POSIX, a job object on Windows."""
+    if sys.platform != "win32":
+        import resource
+
+        resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+        return
+    import ctypes
+    from ctypes import wintypes
+
+    class IoCounters(ctypes.Structure):
+        _fields_: ClassVar = [(f"c{i}", ctypes.c_ulonglong) for i in range(6)]
+
+    class BasicLimits(ctypes.Structure):
+        _fields_: ClassVar = [
+            ("PerProcessUserTimeLimit", ctypes.c_int64),
+            ("PerJobUserTimeLimit", ctypes.c_int64),
+            ("LimitFlags", wintypes.DWORD),
+            ("MinimumWorkingSetSize", ctypes.c_size_t),
+            ("MaximumWorkingSetSize", ctypes.c_size_t),
+            ("ActiveProcessLimit", wintypes.DWORD),
+            ("Affinity", ctypes.c_size_t),
+            ("PriorityClass", wintypes.DWORD),
+            ("SchedulingClass", wintypes.DWORD),
+        ]
+
+    class ExtendedLimits(ctypes.Structure):
+        _fields_: ClassVar = [
+            ("BasicLimitInformation", BasicLimits),
+            ("IoInfo", IoCounters),
+            ("ProcessMemoryLimit", ctypes.c_size_t),
+            ("JobMemoryLimit", ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed", ctypes.c_size_t),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.SetInformationJobObject.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+    ]
+    kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    job = kernel32.CreateJobObjectW(None, None)
+    limits = ExtendedLimits()
+    limits.BasicLimitInformation.LimitFlags = 0x100  # JOB_OBJECT_LIMIT_PROCESS_MEMORY
+    limits.ProcessMemoryLimit = limit
+    extended = 9  # JobObjectExtendedLimitInformation
+    if not (
+        job
+        and kernel32.SetInformationJobObject(
+            job, extended, ctypes.byref(limits), ctypes.sizeof(limits)
+        )
+        and kernel32.AssignProcessToJobObject(job, kernel32.GetCurrentProcess())
+    ):
+        raise OSError(ctypes.get_last_error(), "could not limit the child's memory")
+
+
+def tail(file) -> str:
+    file.seek(0, os.SEEK_END)
+    file.seek(max(0, file.tell() - OUTPUT_TAIL))
+    return file.read().decode("utf-8", "replace")
+
+
 def isolated(
     source: str,
     variant: str = "b",
@@ -210,42 +308,53 @@ def isolated(
     task: Task | None = None,
     budget: int = BUDGET,
     timeout: float = 120,
+    memory: int = MEMORY,
 ) -> Result:
-    """`run` in a child process, which a wall-clock timeout can kill."""
+    """`run` in a child process with a minimal environment, a memory cap and a wall clock.
+
+    The child marks its result line with a nonce the program never sees, so a program
+    printing a result of its own is not believed; output goes to a file and only its end is
+    read, so a program printing without end cannot fill the parent's memory.
+    """
+    nonce = secrets.token_hex(16)
     request = {
         "source": source,
         "variant": variant,
         "mode": mode,
         "task": task.to_json() if task is not None else None,
         "budget": budget,
+        "memory": memory,
+        "nonce": nonce,
     }
-    environment = os.environ | {"PYTHONPATH": str(ROOT / "harness")}
-    try:
-        child = subprocess.run(  # noqa: S603
-            [sys.executable, "-m", "lotml_harness.execute"],
-            input=json.dumps(request),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=timeout,
-            env=environment,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        return Result(error="timeout: the program ran past the wall-clock limit")
-    lines = child.stdout.strip().splitlines()
-    if child.returncode != 0 or not lines:
-        reason = (child.stderr.strip().splitlines() or ["no output"])[-1]
-        return Result(error=f"crash: {reason}")
-    return Result(**json.loads(lines[-1]))
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        try:
+            subprocess.run(  # noqa: S603
+                [sys.executable, "-m", "lotml_harness.execute"],
+                input=json.dumps(request).encode("utf-8"),
+                stdout=out,
+                stderr=err,
+                timeout=timeout,
+                env=child_environment(),
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return Result(error="timeout: the program ran past the wall-clock limit")
+        output, errors = tail(out), tail(err)
+    for line in reversed(output.splitlines()):
+        if line.startswith(nonce):
+            return Result(**json.loads(line[len(nonce) :]))
+    reason = (errors.strip().splitlines() or ["no result"])[-1]
+    return Result(error=f"crash: {reason}")
 
 
 def main() -> None:
     request = json.load(sys.stdin)
+    nonce = request.pop("nonce")
+    limit_memory(request.pop("memory"))
     task = Task.from_json(request["task"]) if request["task"] is not None else None
     sys.setrecursionlimit(10_000)
     result = run(request["source"], request["variant"], request["mode"], task, request["budget"])
-    sys.stdout.write("\n" + json.dumps(asdict(result)) + "\n")
+    sys.stdout.write("\n" + nonce + json.dumps(asdict(result)) + "\n")
 
 
 if __name__ == "__main__":
