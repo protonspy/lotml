@@ -80,7 +80,11 @@ bytes — and keeps both with the parsed report and the call's arguments, taken 
 normalises them: the leading `/` the file tools show is stripped, so `paths` and snapshot keys are
 both workspace-relative. The trace gains `checks: [{"paths": [...], "before": {...},
 "after": {...}, "report": {...} | null, "status": "success" | "error"}]` in call order, and
-`tests` in the same shape for every `test` call (R2.5), whose report is `lotml test --json`'s.
+`tests` in the same shape for every `test` call (R2.5), whose report is `lotml test --json`'s. A
+`test` report can carry Python's load errors, which name host paths; the home directory and the
+user's name are replaced with `~` and `<user>` before the trace is written. A snapshot cut at its
+cap marks the call `truncated`, which R3.4 treats as files changed, so a cut file never opens or
+closes a repair. Of the model's invocation parameters only the tool schemas are kept.
 `lotml --version` is read once per run into the trace and the row. The first call of the main
 agent's model is caught in `on_chat_model_start`: its system message — deepagents' base prompt, the
 harness's, and the memory it injects — and the tool schemas in its invocation parameters are kept
@@ -89,7 +93,7 @@ as `system` and `tools`; the state's messages never hold them.
 **Trajectories** (R3.1, R3.5). One record per passing run, in the OpenAI chat shape most trainers
 read — `{"messages": [...], "tools": [...], "meta": {...}}` — the kept system message first,
 `tool_calls` on assistant turns, `tool` turns with their results. `meta` holds task, source, model,
-arm, outcome, compiler version. A trajectory is the main agent's: a deepagents subagent's calls
+arm, outcome, compiler version, problem and split (R4.5). A trajectory is the main agent's: a deepagents subagent's calls
 never reach its state and appear only as the `task` tool's call and result.
 
 **Repairs** (R3.2–R3.4, R3.6). Walking a trace's `checks` in order, a check counts only when its
@@ -99,11 +103,14 @@ empty, as the server's own selection reads them — with an error in the report 
 repair; the next counting check that judged that file and reports no error in it closes it, with
 the file at both points, the diagnostics, the task's prompt, and the changed line numbers from a
 `difflib` diff of the two. A file still failing at the end of the run gives nothing. Records are
-keyed by task and the SHA-256 of before, diagnostics and after; a key seen before is skipped.
+keyed by task and the SHA-256 of before, diagnostics and after; a key seen before is skipped. A
+repair's `meta` is a trajectory's with `origin: real`, the field the seeded failures set to `seeded`
+(specs/seeded-failures/), so the guide's records tell the two apart.
 
-A test repair (R3.9) walks `tests` the same way, with the same counting rule (R3.4). A failing
-block opens one only when the last counting `check` before it found no error in its file, so its
-state is a program that compiles and does the wrong thing — what the harness guide must locate when
+A test repair (R3.9) walks `tests` the same way, with the same counting rule (R3.4). `lotml test`
+runs no block in files that do not compile — its report is then the compile errors — so a block
+reported failing is itself the proof that the file checks, with no `check` call needed before it:
+its state is a program that compiles and does the wrong thing — what the harness guide must locate when
 no diagnostic points anywhere (plans/harness-guide.md). The next counting `test` reporting that
 block passing closes it with the file at both points, the block's name and the values each side of
 its comparison had, and the changed lines. A block the agent fixed by editing the block itself is

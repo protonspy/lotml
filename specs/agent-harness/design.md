@@ -2,7 +2,7 @@
 
 ## What changes
 
-Serves R1.1–R1.3, R2.1–R2.8, R3.1–R3.2, R4.1–R4.4.
+Serves R1.1–R1.3, R2.1–R2.9, R3.1–R3.2, R4.1–R4.4.
 
 A package `harness/lotml_harness/agent/` and a benchmark under `harness/agent_bench/`.
 Agent framework: adr:0014-deepagents-over-openrouter-for-the-agent-harness.
@@ -44,6 +44,10 @@ start with `hidden:` so they never collide with the agent's own.
   refuses a tool call naming one, and every one is deleted before the `test` tool runs and from
   the grading copy, whose symbolic links are removed too. Rows keep only fixed failure text; the
   compiler's output on the agent's code goes to the trace.
+- `guide` (R2.9), offered only when a run is given a harness guide configuration (specs/guide-tool/):
+  the configuration's absolute path joins `child_environment()`'s allow-list as
+  `LOTML_HARNESS_GUIDE`, and the wrapper treats `guide` as it treats `test` — interfaces deleted
+  before every call — because the tool runs the project's tests to find its state.
 - `memory=["/AGENTS.md"]` in the `agents` arm (R2.4), after `lotml init --harness none`; the
   `reference` arm puts `variants.reference_text("b")` in the system prompt instead (R2.5).
 - Limits (R2.6) — a callback counts model calls and raises before one past the step limit or the

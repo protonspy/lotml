@@ -23,11 +23,11 @@ for the 168 paired tasks a 10-point difference needs (plans/harness-guide.md).
 ## R1 · HumanEval's tasks
 
 - **R1.1** The agent harness shall read HumanEval from the original release's `HumanEval.jsonl.gz` at a pinned 40-character commit, downloaded into the git-ignored cache, checking its recorded SHA-256 before the file is moved into place and again on every read.
-- **R1.2** The agent harness shall take a problem's test cases by running its original `check` against its canonical solution under Python, random sources seeded, recording every call's arguments and result, at most 50 per problem in the order made.
+- **R1.2** The agent harness shall take a problem's test cases by running its original `check` against its canonical solution under Python, random sources seeded, recording every call's arguments and result, at most 50 per problem in the order made, in a child process with the harness's clean environment, an empty working directory, a memory cap, a timeout and its output capped.
 - **R1.3** When an agent run names a HumanEval task, the agent harness shall build its workspace as one file, `solution.lotml`, holding the function's name and parameter names without types, its docstring, and `todo()` as the body, graded against that file.
 - **R1.4** The agent harness shall ask the agent to give the function's parameters and return their lotml types and to implement it as its docstring says, in the same words for every HumanEval task.
 - **R1.5** The agent harness shall turn each case into a hidden `test` block whose arguments and expected value are lotml literals of the types the values had under Python, comparing within the harness's tolerance of 1e-6 relative or absolute where the expected value holds a float, and exactly otherwise.
-- **R1.6** If a problem's values have no lotml literal, or its hidden blocks check against no signature typed from those values, then the agent harness shall refuse the task and count it by reason.
+- **R1.6** If a problem's values have no lotml literal, its docstring cannot be written as a lotml string, or its hidden blocks check against no signature typed from those values, then the agent harness shall refuse the task and count it by reason.
 - **R1.7** Where a task comes from HumanEval, the agent harness shall hold no lotml reference solution, its cases being the canonical solution's own results, in place of specs/agent-harness/ R1.3.
 - **R1.8** The agent harness shall write `harness/results/agent-humaneval.md`: the problems read, kept and refused by reason, the cases recorded, the digest of the file read, and the MIT copyright notice.
 
@@ -43,7 +43,7 @@ for the 168 paired tasks a 10-point difference needs (plans/harness-guide.md).
 
 - **R3.1** The agent harness shall read MBPP from the original release's `mbpp.jsonl` at a pinned 40-character commit, checking its recorded SHA-256 as R1.1 checks HumanEval's.
 - **R3.2** The agent harness shall pose an MBPP problem as R1.3 poses a HumanEval one: the function its `test_list` calls, with the parameter names its canonical `code` gives it, the problem's `text` as its docstring, and `todo()` as its body.
-- **R3.3** The agent harness shall take an MBPP problem's cases by running its `test_setup_code` and `test_list` against its canonical code, recording the arguments and result of every outermost call to the tested function, and turn them into hidden blocks as R1.5 and R1.6 do.
+- **R3.3** The agent harness shall take an MBPP problem's cases by running its `test_setup_code` and `test_list` against its canonical code in the child process R1.2 runs, recording the arguments and result of every outermost call to the tested function, and turn them into hidden blocks as R1.5 and R1.6 do.
 - **R3.4** If an MBPP problem's tests call more than one function of its code, or none, then the agent harness shall refuse it and count it by reason.
 - **R3.5** Where `--source mbpp` is given, the agent harness shall run MBPP tasks as R2.1 runs HumanEval's, with task ids `mbpp-<n>` and the source `mbpp-original`.
 - **R3.6** The agent harness shall write `harness/results/agent-mbpp.md`: the problems read, kept and refused by reason, the cases recorded, the digest of the file read, and the CC BY 4.0 attribution.

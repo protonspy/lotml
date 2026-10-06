@@ -26,7 +26,13 @@ the record's `test` with `random.seed(0)`, calling `check(recorder)`. The record
 canonical function, deep-copies the arguments before the call (some solutions change them), and
 appends `(arguments, result)`. Every assertion in `check`, loops and random inputs included, thus
 becomes a case whose expected value is the canonical solution's own — consistent by construction,
-since the canonical solution passes its `check`. Duplicates are dropped and the first 50 kept.
+since the canonical solution passes its `check`. Duplicates are dropped and the first 50 kept. The child gets `execute.child_environment()`, so no key reaches
+dataset code, an empty temporary working directory, `execute.limit_memory`, a timeout, and its
+output read only up to a cap, so a result of a million elements is a refusal rather than a line
+that fills memory. The file is read once and its digest taken from the same bytes that are
+parsed. Task ids are built from the record's integer, never from its text, so `humaneval-<n>` and
+`mbpp-<n>` are safe as directory names; a docstring holding `"""` refuses the task (R1.6) rather
+than break `solution.lotml`.
 
 **Literals** (R1.5, R1.6). A value becomes a lotml literal by its Python type: `bool` as `True` and
 `False`, `int`, `float` by `repr` (`7.5`, `1.0`), `str` quoted as `values.render` quotes, `None` as

@@ -20,7 +20,7 @@ with the program as its known fix — and the guide is judged on real failures o
 
 ## R1 · The programs
 
-- **R1.1** The seeded failure generator shall take as programs only files that check and pass their tests, from the train and validation problems of the agent benchmark's solutions with their hidden blocks, the original HumanEval's canonical solutions translated to lotml, and the final files of passing runs the licence registry permits.
+- **R1.1** The seeded failure generator shall take as programs only files that check and pass their tests, from the train and validation problems of the agent benchmark's solutions with their hidden blocks, the original HumanEval's canonical solutions translated to lotml, and the files at the end of the trajectories the trace dataset exported.
 - **R1.2** The seeded failure generator shall translate a HumanEval canonical solution with the corpus pipeline's rules alone, its signature typed from its recorded cases as specs/agent-humaneval/ types its hidden blocks, and keep it only when it checks and passes those blocks.
 - **R1.3** If the rules cannot translate a canonical solution, then the seeded failure generator shall leave the problem out and count it by reason.
 
@@ -30,14 +30,15 @@ with the program as its known fix — and the guide is judged on real failures o
 - **R2.2** The mutation command shall hold operators that break what agents break — a name misspelt, a type annotation changed, an argument dropped or added, a `?` dropped from a fallible call, an immutable binding reassigned or mutated, a field or method misnamed — and operators that keep a program checking but change its meaning — a comparison or arithmetic operator swapped, a bound moved by one, two arguments swapped, a condition negated, a constant changed, a statement dropped.
 - **R2.3** The seeded failure generator shall keep a mutant only when `check` refuses it or one of its program's tests then fails.
 - **R2.4** If `check --fix` makes a mutant check clean, then the seeded failure generator shall drop it and count it.
-- **R2.5** The seeded failure generator shall draw mutants by operator in proportion to how often agents' failures fall in the operator's family, from the counts the harness's committed reports give, and name those counts in its report.
-- **R2.6** The seeded failure generator shall keep at most a fixed number of mutants per program and operator, and each identical mutant once per problem.
+- **R2.5** The seeded failure generator shall give each program a fixed budget of mutants, shared among the families in proportion to how often agents' failures fall in each family, from the counts the harness's committed reports give, with a family's unused share passed to the others, and name those counts in its report.
+- **R2.6** The seeded failure generator shall draw within a family uniformly over its operators' mutants, and keep each identical mutant once per problem.
+- **R2.7** The seeded failure generator shall judge each mutant in a scratch copy written through the agent harness's safe layer, running every `lotml` call in the harness's clean environment, with its files after `--`, a memory cap and a deadline that ends its process tree.
 
 ## R3 · The output
 
 - **R3.1** The seeded failure generator shall write each kept mutant as a repair record in the trace dataset's shape — the mutant as the failing file, its diagnostics or its failing block with the values each side had, the program as the fixed file — marked `origin: seeded` with its operator, problem and split.
 - **R3.2** If a program's problem is held out, then the seeded failure generator shall refuse it.
-- **R3.3** The seeded failure generator shall write the records to the git-ignored cache and commit `harness/results/seeded.md` with the programs taken by source, the mutants made, kept and dropped by operator and reason, and the counts that weighted the draw.
+- **R3.3** The seeded failure generator shall write the records to the git-ignored cache with the notices their sources require, and commit `harness/results/seeded.md` with the programs taken by source, the mutants made, kept and dropped by operator and reason, and the counts that weighted the draw.
 
 ## Out of scope
 

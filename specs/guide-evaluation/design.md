@@ -2,12 +2,16 @@
 
 ## What changes
 
-Serves R1.1–R1.4, R2.1–R2.7.
+Serves R1.1–R1.4, R2.1–R2.8.
 
-`harness/lotml_harness/guide/evaluate.py`, run as `python -m lotml_harness.guide.evaluate --guide
-<guide.toml>`, with the guide served as the guide's tool expects (specs/guide-tool/). It collects
-the failures, asks the guide about each, scores the answers against the real fix and the compiler's
-baseline, and writes the report and rows.
+`harness/lotml_harness/guide/evaluate.py`, run as `python -m lotml_harness.guide.evaluate --config
+<harness-guide.toml>`, with the guide served as the guide's tool expects (specs/guide-tool/). It
+collects the failures, asks the guide about each, scores the answers against the real fix and the
+compiler's baseline, and writes the report and rows. It builds on `lotml guide ask`
+(specs/guide-tool/), `lotml dev diff` (specs/guide-records/), and the trace dataset's repair
+extraction and problem split (specs/trace-dataset/), which come first; collecting more failures
+also needs the agent harness to record checks and tests (specs/trace-dataset/, group 2) and the
+HumanEval tasks (specs/agent-humaneval/).
 
 **Collecting** (R1.1, R1.2). Two sources, read where they already are:
 
@@ -31,24 +35,34 @@ report says how many more failures are needed and gives no verdict; plans/harnes
 adds held-out runs on cheap models through the agent harness until it is met — models whose
 mistakes are frequent, like the 7–8B ones the phase 1 gate saw refused 91 and 143 times in 200.
 
-**The guard** (R1.3). `guide.toml` names the records the guide was trained from
-(specs/guide-records/); before asking anything, the evaluation reads their `meta.problem` and
-stops if one is held out. A guide trained on the wrong split is the failure that makes every other
-number here worthless, and it is cheap to rule out.
+**The guard** (R1.3). The configuration names the records the guide was trained from
+(specs/guide-records/). Before asking anything the evaluation reads every one, derives its problem
+and split again through `split.py` rather than trusting `meta`, and stops — failing closed — when
+`records` is absent, empty or unreadable, when a record has no problem or split, or when one is
+held out. The records' SHA-256 goes in the report, so the number is tied to what was checked. A
+guide trained on the wrong split is the failure that makes every other number here worthless, and
+it is cheap to rule out.
 
-**Asking** (R2.1). Each failure's file goes into a fresh scratch directory, with its failing block
-appended when the failure is a hidden test's, and `lotml guide ask <file> --json` runs there with
-the task when one is known — the same check, test, render, model call and gating the MCP tool runs,
-so what is scored is what an agent would be shown. Latency is that call's wall time; peak memory is
-the guide server's resident size, read from its process before and after the run.
+**Asking** (R2.1, R2.8). Each failure's file goes into a fresh scratch directory, with its failing
+block appended when the failure is a hidden test's, written by the agent harness's `lay` — which
+refuses absolute names, `..`, reserved device names and any suffix but `.lotml` — and `lotml guide
+ask --root <scratch> --task <task> -- <file>` runs there, the task given when one is known: the same
+check, test, render, model call and gating the MCP tool runs, so what is scored is what an agent
+would be shown. Every `lotml` call here, `dev diff` included, goes through one helper:
+`execute.child_environment()`, `execute.limit_memory` — a job object on Windows, which ends the
+call's children with it — and on POSIX a new session killed as a group, at a deadline above the
+tool's own 75 s. Agent files come from traces of any model, so nothing about them is trusted.
+Latency is the call's wall time; peak memory is the guide server's resident size, read from its
+process before and after the run.
 
 **Scoring** (R2.2–R2.4). `lotml dev diff` on the failing and fixed files gives the declarations the
 fix changed. A location is right when its symbol is one of them; top-3 counts the first three
 locations the guide ranks. The baseline is computed from the same state: the declarations holding
 the first three diagnostics, deduplicated in order, or for a failing test the first function its
 block calls. A guide that does not beat that baseline adds a model to say what the compiler said.
-An edit is judged by the answer's own gating report: it is only shown when it checks, and for a
-test failure when the block passes, so the share reported is shown edits over answers.
+Edits are counted over those the guide proposed — an answer with an edit shown, or one whose
+`withheld` names why it was not — so the report gives shown over proposed and the withheld by
+reason; shown over shown would be 100% by construction.
 
 ```json
 {"problem": "mbpp/412", "origin": "phase1", "model": "qwen2.5-coder-7b", "kind": "check",
@@ -57,14 +71,17 @@ test failure when the block passes, so the share reported is shown edits over an
  "baseline_top1": true, "seconds": 0.41}
 ```
 
-Rows hold no code, so committing them commits no prompt; the report is built from rows alone.
+Rows hold symbols, booleans, numbers and the tool's fixed reason codes — no code and no free text
+from the model or the server — and pass the agent harness's scrub before writing, so committing
+them commits no prompt and no secret; the report is built from rows alone.
 
 ## Alternatives considered
 
 - Calling the model directly and re-implementing the gating here: two gatings would differ, and the
   number would describe neither.
 - Exact line match as the location score: an agent edits a declaration through the symbol tools,
-  and a fix's lines shift with its own length; line overlap is in the row for whoever wants it.
+  and a fix's lines shift with its own length; line overlap is a score in the row for whoever
+  wants it.
 - Seeded failures held out from training: easier to get in number, and the evidence says they
   measure the generator.
 
@@ -74,3 +91,8 @@ Rows hold no code, so committing them commits no prompt; the report is built fro
   by origin, so a guide good on one and not the other shows.
 - Few test failures: capable models fail `check` more than tests in lotml; the breakdown by kind
   says whether the meaning half of the guide was measured at all.
+- The interval is optimistic: failures cluster by problem, model and repeated mistake, and the
+  97 assumes them independent. Deduplicating by problem and file helps; the report also gives
+  top-1 per problem. The held-out quarter is a hash bucket of about 41 problems, give or take
+  five, fewer once agent-humaneval refuses some; validation, which calibrates the threshold, is
+  about 25.

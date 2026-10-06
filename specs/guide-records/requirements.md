@@ -18,8 +18,8 @@ taken from the fix, never from the diagnostic.
 
 ## R1 · Where a change falls
 
-- **R1.1** The diff command shall report, for two versions of a `.lotml` file, every declaration whose lines changed, innermost first, with its symbol as the MCP tools name it, its kind and its line span in each version.
-- **R1.2** The diff command shall report the one symbol-addressed edit that turns the first version into the second, trying in order a `match` arm, a body and a definition of the innermost changed declaration, an added declaration and a removed one, and last an `edit` of whole lines, each written as the arguments of the MCP tool that applies it.
+- **R1.1** The diff command shall report, for two versions of a `.lotml` file, every declaration of the first version whose lines changed, innermost first, and for a declaration only the second version has, the declaration of the first it follows, or the file's start when none does, each with its symbol as the MCP tools name it, its kind and its line span in the first version.
+- **R1.2** The diff command shall report the one symbol-addressed edit that turns the first version into the second, trying in order a `match` arm, a body and a definition of the innermost changed declaration, an added declaration and a removed one, and last an `edit` of whole lines, each written as the arguments of the MCP tool that applies it, the file's path among them.
 - **R1.3** The diff command shall report an edit only when applying it to the first version through the compiler's own edit functions gives the second, byte for byte.
 - **R1.4** If no single edit reproduces the change, then the diff command shall report the changed declarations and no edit.
 
@@ -29,8 +29,8 @@ taken from the fix, never from the diagnostic.
 - **R2.2** The guide records builder shall name the kind of change after the edit — `arm`, `body`, `definition`, `add`, `remove` or `lines` — and `several` when no single edit reproduces it.
 - **R2.3** The guide records builder shall write each record as a chat example: the guide's system message and the state as the guide's tool renders them (specs/guide-tool/), then the target as the assistant's answer in the JSON the tool's schema accepts.
 - **R2.4** Where a record's task is known, the guide records builder shall write it both with the task and without it, in the same split.
-- **R2.5** The guide records builder shall mark every record with its problem, split, origin — `real` or `seeded` — source, model and compiler version, write train and validation to separate files, and refuse a held-out record.
-- **R2.6** If a record's rendered state exceeds the guide's context budget, then the guide records builder shall leave it out and count it.
+- **R2.5** The guide records builder shall mark every record with its problem, split, origin — `real` or `seeded` — source, model, compiler version and renderer version, write train and validation to separate files, and refuse a held-out record.
+- **R2.6** If a record's rendered messages and the answer budget together exceed the guide's context, counted with the base model's tokenizer, then the guide records builder shall leave it out and count it.
 - **R2.7** The guide records builder shall write the records to the git-ignored cache and commit `harness/results/guide-records.md` with the records by origin, split, kind and source, and every record left out by reason.
 
 ## Out of scope
