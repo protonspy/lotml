@@ -96,6 +96,9 @@ fn since_reports_only_what_the_edit_introduced() {
     assert_eq!(messages, vec!["`z` is not defined"]);
     let out = lotml(&["check", "--since", "no-such-rev", "a.lotml"], &dir);
     assert_eq!(out.status.code(), Some(2));
+    let option = lotml(&["check", "--since=--output=leak.txt", "a.lotml"], &dir);
+    assert_eq!(option.status.code(), Some(2));
+    assert!(!dir.join("leak.txt").exists());
 }
 
 #[test]

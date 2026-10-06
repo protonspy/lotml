@@ -42,6 +42,10 @@ pub fn read(path: &Path) -> Result<String, Failure> {
 
 /// The text of `path` at git revision `rev`: empty when the file did not exist then.
 pub fn at_revision(rev: &str, path: &Path) -> Result<String, Failure> {
+    // A revision is never an option: `--output=…` would make `git show` write a file.
+    if rev.starts_with('-') || rev.is_empty() {
+        return Err(Failure(format!("`{rev}` is not a revision")));
+    }
     let dir = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
     let name = path.file_name().ok_or_else(|| Failure(format!("{} is not a file", path.display())))?;
     // `rev:./name` is resolved against the directory git runs in.
