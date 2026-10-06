@@ -26,7 +26,7 @@ from langchain_core.outputs import LLMResult
 from lotml_harness import ROOT
 from lotml_harness.agent.bench import AgentTask
 from lotml_harness.agent.grade import grade
-from lotml_harness.agent.mcp import LotmlMcp, langchain_tools
+from lotml_harness.agent.mcp import LotmlMcp, langchain_tools, relative
 from lotml_harness.experiments import variants
 from lotml_harness.experiments.phase1 import Lotml
 
@@ -39,6 +39,11 @@ REQUEST_TIMEOUT = 180
 """Seconds one model call may take: the time limit is checked between steps, so this bounds by
 how much a run can overshoot it."""
 TRACES = ROOT / "harness" / "cache" / "agent"
+SNAPSHOT_FILE = 256 * 1024
+SNAPSHOT_TOTAL = 2 * 2**20
+"""Bytes of one file, and of all of them, a check's or test's snapshot keeps; past either the
+call is marked truncated, and opens or closes no repair."""
+WATCHED = ("check", "test")
 
 SYSTEM = (
     "You are a coding agent working on a lotml project. The project's files are at `/`. Do the "
@@ -102,6 +107,14 @@ class Meter(BaseCallbackHandler):
     check_errors: int = 0
     running: dict = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
+    workspace: Path | None = None
+    """Where the `.lotml` files are snapshotted around every `check` and `test`."""
+    checks: list = field(default_factory=list)
+    tests: list = field(default_factory=list)
+    system: str | None = None
+    """The main agent's system message, memory included, as its model first received it."""
+    tool_schemas: list | None = None
+    opened: dict = field(default_factory=dict)
     live: Callable[[str], None] | None = None
     """Where to say each model call and tool call as it happens, for watching a run."""
 
@@ -109,13 +122,20 @@ class Meter(BaseCallbackHandler):
         if self.live:
             self.live(text)
 
-    def on_chat_model_start(self, *_: Any, **__: Any) -> None:
+    def on_chat_model_start(
+        self, serialized: Any = None, messages: Any = None, *_: Any, **kwargs: Any
+    ) -> None:
         with self.lock:
             if self.model_calls >= self.steps:
                 raise Stop("steps")
             if time.monotonic() > self.deadline:
                 raise Stop("time")
             self.model_calls += 1
+            if self.system is None and messages:
+                first = messages[0][0] if messages[0] else None
+                if first is not None and getattr(first, "type", "") == "system":
+                    self.system = str(first.content)
+                    self.tool_schemas = (kwargs.get("invocation_params") or {}).get("tools")
 
     def on_llm_end(self, response: LLMResult, **_: Any) -> None:
         for generations in response.generations:
@@ -146,6 +166,11 @@ class Meter(BaseCallbackHandler):
         with self.lock:
             self.tools[name] += 1
             self.running[run_id] = name
+        if name in WATCHED and self.workspace is not None:
+            arguments = relative(__.get("inputs") or {})
+            files, cut = bounded_snapshot(self.workspace)
+            with self.lock:
+                self.opened[run_id] = (name, arguments, files, cut)
         self.say(f"  {name} {' '.join(str(input_str).split())[:100]}")
 
     def on_tool_end(self, output: Any, *, run_id: Any = None, **_: Any) -> None:
@@ -153,6 +178,7 @@ class Meter(BaseCallbackHandler):
             name = self.running.pop(run_id, None)
         status = getattr(output, "status", "success")
         content = getattr(output, "content", output)
+        self.close(run_id, status, str(content))
         failed_check = name == "check" and reports_errors(str(content))
         with self.lock:
             if status == "error":
@@ -168,7 +194,36 @@ class Meter(BaseCallbackHandler):
         with self.lock:
             name = self.running.pop(run_id, None)
             self.tool_errors += 1
+        self.close(run_id, "error", str(error))
         self.say(f"    {name} failed: {str(error)[:100]}")
+
+    def close(self, run_id: Any, status: str, content: str) -> None:
+        """A watched call's record: the files before and after it, its arguments, its status and
+        its parsed report, null when it is not JSON; truncated when a snapshot was cut."""
+        with self.lock:
+            opened = self.opened.pop(run_id, None)
+        if opened is None or self.workspace is None:
+            return
+        name, arguments, before, cut_before = opened
+        after, cut_after = bounded_snapshot(self.workspace)
+        try:
+            report = json.loads(content) if status == "success" else None
+        except json.JSONDecodeError:
+            report = None
+        if name == "test" and report is not None:
+            report = json.loads(anonymised(json.dumps(report)))
+        named = [arguments["path"]] if arguments.get("path") else []
+        record = {
+            "paths": arguments.get("paths") or named,
+            "arguments": arguments,
+            "before": before,
+            "after": after,
+            "report": report,
+            "status": status,
+            "truncated": cut_before or cut_after,
+        }
+        with self.lock:
+            (self.checks if name == "check" else self.tests).append(record)
 
 
 def reports_errors(check_output: str) -> bool:
@@ -178,6 +233,37 @@ def reports_errors(check_output: str) -> bool:
     except json.JSONDecodeError:
         return "error[" in check_output
     return (report.get("summary") or {}).get("errors", 0) > 0
+
+
+def bounded_snapshot(workspace: Path) -> tuple[dict[str, str], bool]:
+    """The workspace's `.lotml` files, symbolic links skipped, each and all held to their caps;
+    and whether a cap cut it."""
+    files, total, cut = {}, 0, False
+    for path in sorted(workspace.rglob("*.lotml")):
+        if path.is_symlink() or not path.is_file():
+            continue
+        data = path.read_bytes()
+        if len(data) > SNAPSHOT_FILE or total + len(data) > SNAPSHOT_TOTAL:
+            cut = True
+            continue
+        total += len(data)
+        files[path.relative_to(workspace).as_posix()] = data.decode("utf-8", errors="replace")
+    return files, cut
+
+
+def anonymised(text: str) -> str:
+    """`text` with the user's home directory and name replaced by `~` and `<user>`: a test report's
+    load errors name host paths."""
+    home = str(Path.home())
+    for written in {home, home.replace("\\", "/"), home.replace("\\", "\\\\")}:
+        text = text.replace(written, "~")
+    user = Path.home().name
+    return text.replace(user, "<user>") if len(user) >= 3 else text
+
+
+def compiler_version(lotml: Lotml) -> str:
+    done = lotml.compiler(["--version"], ".")
+    return done.stdout.strip() if done is not None and done.returncode == 0 else "unknown"
 
 
 def snapshot(workspace: Path) -> dict[str, str]:
@@ -231,12 +317,14 @@ def run(
     seconds = task.seconds if task.seconds is not None else SECONDS
     start = time.monotonic()
     meter = Meter(steps=steps, deadline=start + seconds, live=live)
+    compiler = compiler_version(lotml)
     stopped, error = "done", None
     messages: list[BaseMessage] = []
     with tempfile.TemporaryDirectory(prefix="lotml-agent-") as scratch:
         workspace = Path(scratch) / "workspace"
         system, memory = prepare(task, workspace, arm, lotml)
         before = snapshot(workspace)
+        meter.workspace = workspace
         with LotmlMcp(workspace, binary=lotml.binary) as server:
             agent = create_deep_agent(
                 model=model,
@@ -283,6 +371,7 @@ def run(
         "lines_changed": lines_changed(before, after),
         "failures": graded.failures[:5],
         "error": error,
+        "compiler": compiler,
     }
     trace = traces / model_name.replace("/", "__") / arm / f"{task.id}-{attempt}.json"
     trace.parent.mkdir(parents=True, exist_ok=True)
@@ -291,6 +380,11 @@ def run(
         "messages": messages_to_dict(messages),
         "final": after,
         "grading": graded.details,
+        "compiler": compiler,
+        "system": meter.system,
+        "tools": meter.tool_schemas,
+        "checks": meter.checks,
+        "tests": meter.tests,
     }
     trace.write_text(
         json.dumps(record, indent=1),

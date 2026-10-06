@@ -15,7 +15,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from lotml_harness.agent import report
+from lotml_harness.agent import report, secrets
 from lotml_harness.agent.bench import AgentTask, tasks
 from lotml_harness.agent.run import ARMS, MODEL, error_row, openrouter, run
 from lotml_harness.experiments.phase1 import RESULTS
@@ -73,6 +73,7 @@ def main(argv: list[str] | None = None, runs: Path = RUNS, written: Path = REPOR
                     row = error_row(
                         task, arm, attempt, args.model, f"{type(failure).__name__}: {failure}"
                     )
+                row = secrets.scrub_value(row)
                 with lock, path.open("a", encoding="utf-8") as out:
                     out.write(json.dumps(row) + "\n")
                 print(
@@ -85,7 +86,7 @@ def main(argv: list[str] | None = None, runs: Path = RUNS, written: Path = REPOR
             with ThreadPoolExecutor(max_workers=args.workers) as pool:
                 list(pool.map(one, todo))
     rows = [row for path in sorted(runs.glob("*.jsonl")) for row in read_rows(path)]
-    text = report.markdown(rows)
+    text = secrets.scrub(report.markdown(rows))
     written.write_text(text, encoding="utf-8")
     sys.stdout.buffer.write(text.encode("utf-8"))
 

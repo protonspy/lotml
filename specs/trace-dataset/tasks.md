@@ -8,9 +8,9 @@
 
 ## 2 · The trace and what is committed
 
-- [ ] 2.1 (Unit) Keep the `.lotml` files before and after every `check`, symbolic links skipped and sizes capped, with its normalised arguments, status and report; the compiler's version; and the main agent's system message and tool schemas, in the trace and the row — R2.1, R2.2, R2.4
-- [ ] 2.2 (TDD) Redact secrets — environment values of eight characters or more and key shapes — from rows and reports before they are written under `harness/results/` — R2.3
-- [ ] 2.3 (Unit) Keep the `.lotml` files before and after every `test`, with its arguments, status and report, in the trace — R2.5
+- [x] 2.1 (Unit) Keep the `.lotml` files before and after every `check`, symbolic links skipped and sizes capped, with its normalised arguments, status and report; the compiler's version; and the main agent's system message and tool schemas, in the trace and the row — R2.1, R2.2, R2.4
+- [x] 2.2 (TDD) Redact secrets — environment values of eight characters or more and key shapes — from rows and reports before they are written under `harness/results/` — R2.3
+- [x] 2.3 (Unit) Keep the `.lotml` files before and after every `test`, with its arguments, status and report, in the trace — R2.5
   _Depends 2.1_
 
 ## 3 · Export
