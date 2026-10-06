@@ -286,4 +286,17 @@ pub const ALL: &[Code] = &[
         function. If the caller should see it, declare the parameter `inout`; in Python the change would have \
         reached the caller, in lotml it does not.",
     },
+    Code {
+        code: "E0401",
+        title: "a Python module on the C target",
+        explanation: "A program built with `--target c` runs without Python, so it cannot import a Python module \
+        through its interface. Build it for the Python target, or write the function in lotml; a C library is \
+        imported from its `c.<library>` interface instead.",
+    },
+    Code {
+        code: "E0402",
+        title: "not compiled by the C backend",
+        explanation: "The C backend does not compile this construct yet. The program checks and runs on the Python \
+        target; build it without `--target c`.",
+    },
 ];

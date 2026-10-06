@@ -11,7 +11,7 @@ pub mod ty;
 
 pub use interface::{Interface, Interfaces, c_interface, interface, interface_of, is_c_library};
 pub use prefix::{PrefixCheck, Verdict, check_prefix, check_prefix_with};
-pub use program::{FieldSig, FnSig, ParamSig, TypeDef, VariantSig};
+pub use program::{FieldSig, FnSig, Method, ParamSig, TypeDef, VariantSig};
 
 /// The names every program sees without an import (R35).
 pub const PRELUDE: &[&str] = builtins::PRELUDE;
@@ -89,6 +89,11 @@ pub struct Checked {
     pub declared: BTreeMap<String, TypeDef>,
     /// The Python modules imported through interfaces, each with its functions.
     pub foreign: BTreeMap<String, BTreeMap<String, FnSig>>,
+    /// The methods of each type the module declares, by type and by name.
+    pub methods: BTreeMap<String, BTreeMap<String, Method>>,
+    /// The methods of each trait the module declares, by trait and by name; `self` is of the
+    /// type `Self`.
+    pub traits: BTreeMap<String, BTreeMap<String, Method>>,
 }
 
 /// The most type nodes a module keeps for its expressions, in all: a long-lived editor or MCP
@@ -187,6 +192,13 @@ pub fn check_resolved_with(module: &Module, text: &str, interfaces: &Interfaces)
         program.functions.iter().filter(|(n, _)| declared_here(n)).map(|(n, s)| (n.clone(), s.clone())).collect();
     checked.declared =
         program.types.iter().filter(|(n, _)| declared_here(n)).map(|(n, t)| (n.clone(), t.clone())).collect();
+    checked.methods = program
+        .methods
+        .iter()
+        .filter(|(n, _)| checked.declared.contains_key(*n))
+        .map(|(n, m)| (n.clone(), m.clone()))
+        .collect();
+    checked.traits = program.traits;
     checked.foreign = program.foreign;
     checked
 }

@@ -672,7 +672,8 @@ SIZED = {
 def _round(value, digits=None):
     if digits is None:
         return i64(builtins.round(value))
-    return builtins.round(value, digits)
+    # `round(x, digits)` is a float in lotml, an int's too.
+    return builtins.float(builtins.round(value, digits))
 
 
 def _pow(base, exponent, modulus=None):
@@ -725,12 +726,11 @@ math = types.SimpleNamespace(
             "pi",
             "e",
             "inf",
-            "gcd",
         )
     },
     **{
         name: _checked(getattr(_math, name))
-        for name in ("floor", "ceil", "trunc", "isqrt", "factorial", "comb", "perm")
+        for name in ("floor", "ceil", "trunc", "isqrt", "factorial", "comb", "perm", "gcd")
     },
 )
 """The `math` module as lotml sees it: an `int` result too wide for i64 traps."""
@@ -778,7 +778,7 @@ PRELUDE = {
     "wrapping_sub": wrapping_sub,
     "wrapping_mul": wrapping_mul,
     "isqrt": math.isqrt,
-    "gcd": _math.gcd,
+    "gcd": math.gcd,
     "parallel": parallel,
     **SIZED,
     "f32": builtins.float,

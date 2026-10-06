@@ -1,0 +1,8 @@
+fn main():
+    base = list(range(40000))
+    var total = 0
+    for i in range(20000):
+        var copy = base
+        copy[i] = -1
+        total += copy[i] + copy[i + 1] + base[i]
+    print(total)

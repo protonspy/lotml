@@ -131,6 +131,13 @@ Graphs use the arena-and-index idiom, like the adjacency-dictionary graph in the
 The project's own benchmark must include allocation-heavy and sharing-heavy programs, not just
 numeric ones, and report them separately.
 
+Measured on the C target against the same programs in C, built by MSVC
+(`harness/results/benchmarks.md`): reuse brings binary trees to 1.03× C, where Swift's counting
+takes 10.5×; copy-on-write of a shared list costs what the explicit copy costs in C (1.01×). A
+dict of strings takes 3.33× and parallel tasks over a shared list 3.41×, the shared counts paid
+atomically. Of the numeric programs, the ones that index lists the most are the furthest from C
+(matmul 7.48×), from bounds checks rather than counting.
+
 ## Recommendations
 
 1. Keep value semantics with reference counting and Perceus-style reuse; add borrow inference

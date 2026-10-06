@@ -162,3 +162,14 @@ programs that carries its tests passed `lotml test`. Phase 2 also measured three
 literature left open: terse against detailed diagnostics ([[semantic-compiler]]), the
 forgotten-`await` hypothesis ([[colorless-concurrency]]), and type masks by the line for open
 models ([[constrained-decoding]]).
+
+The phase 3 gate does not pass (`harness/results/parity.md` and `harness/results/benchmarks.md`,
+from `python -m lotml_harness.experiments.parity` and `python -m
+lotml_harness.experiments.benchmarks`). Its first half passes: each of the 509 corpus programs
+runs its `test` blocks on the Python and the C target, and the two `lotml test` reports hold the
+same rows. Its second half does not. Built by MSVC, three of the five numeric programs are within
+2× C — mandelbrot 0.89×, fib 1.13×, sieve 1.81× — and two are not: collatz 2.27× and matmul
+7.48×. The C versions check nothing, and the lotml ones check every integer operation and index.
+That is where the time goes: matmul reads and writes its rows by index, each access checked, which
+keeps the C compiler from vectorizing the loop as it vectorizes the unchecked C. The other
+programs are reported apart, as [[memory-model]] asks.

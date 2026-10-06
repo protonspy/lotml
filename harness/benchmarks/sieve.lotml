@@ -1,0 +1,23 @@
+fn sieve(n: int) -> int:
+    var flags = [True] * (n + 1)
+    flags[0] = False
+    flags[1] = False
+    var i = 2
+    while i * i <= n:
+        if flags[i]:
+            var j = i * i
+            while j <= n:
+                flags[j] = False
+                j += i
+        i += 1
+    var count = 0
+    for f in flags:
+        if f:
+            count += 1
+    return count
+
+fn main():
+    var total = 0
+    for _ in range(20):
+        total += sieve(4000000)
+    print(total)
