@@ -155,7 +155,8 @@ def todo(*_args):
 
 
 def forbidden(name):
-    """A `__` attribute the checker should have refused; reaching it at run time is a bug."""
+    """An attribute the checker should have refused — a `__` name, or a member of a value it left
+    untyped; reaching it at run time is a bug."""
     raise Panic(f"the attribute `{name}` is not reachable from lotml")
 
 
