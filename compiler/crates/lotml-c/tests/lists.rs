@@ -15,7 +15,11 @@ fn lists_index_slice_sort_and_print_as_python() {
          print(squares(10), sum(squares(10)), min(xs), max(xs), sum([0.1, 0.2, 0.3]), total([1e100, 1.0, -1e100]))\n    \
          print([1, 2] + [3], [0] * 3, [\"s\"] * 2, str([1.5, 2.0]), f\"{xs}\", [[]], sorted([\"b\", \"a\", \"C\"]), sorted([(2, \"a\"), (1, \"b\"), (1, \"a\")]))\n",
     );
-    assert!(run.stdout.starts_with("[3, 1, 2] 3 3 2 [1, 2] [2, 1, 3] [1, 2, 3] [3, 2, 1] True True\n"), "{}", run.stdout);
+    assert!(
+        run.stdout.starts_with("[3, 1, 2] 3 3 2 [1, 2] [2, 1, 3] [1, 2, 3] [3, 2, 1] True True\n"),
+        "{}",
+        run.stdout
+    );
 }
 
 #[test]

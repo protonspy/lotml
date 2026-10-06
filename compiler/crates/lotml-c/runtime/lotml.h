@@ -380,6 +380,96 @@ bool lt_str_islower(const lt_str *s);
 lt_str *lt_str_zfill(const lt_str *s, int64_t width);
 lt_str *lt_str_pad(const lt_str *s, int64_t width, const lt_str *fill, char align, lt_at at);
 
+/* Types ------------------------------------------------------------------------------------ */
+
+/* What the runtime needs to know of a type to hold its values in a collection: their size, how
+ * to count and drop what a value holds, compare, order, hash and write it, and mark it shared.
+ * `inc` and `dec` are NULL for a type that holds nothing counted; `hash` for one that cannot be
+ * hashed. Every function takes a pointer to a value. */
+typedef struct lt_type {
+    size_t size;
+    void (*inc)(void *value);
+    void (*dec)(void *value);
+    bool (*eq)(const void *a, const void *b);
+    int (*cmp)(const void *a, const void *b, lt_at at);
+    int64_t (*hash)(const void *value);
+    void (*repr)(lt_buf *b, const void *value);
+    void (*str)(lt_buf *b, const void *value);
+    void (*share)(void *value);
+} lt_type;
+
+extern const lt_type lt_type_i8, lt_type_i16, lt_type_i32, lt_type_i64;
+extern const lt_type lt_type_u8, lt_type_u16, lt_type_u32, lt_type_u64;
+extern const lt_type lt_type_f64, lt_type_bool, lt_type_none, lt_type_str, lt_type_list;
+
+/* A value of any type as text: `str(value)`, and the f-string field `{value:spec}`. */
+void lt_buf_value(lt_buf *b, const lt_type *type, const void *value);
+lt_str *lt_str_of_value(const lt_type *type, const void *value);
+void lt_format_value(lt_buf *b, const lt_type *type, const void *value, const char *spec, size_t size, lt_at at);
+LT_NORETURN void lt_unorderable(lt_at at, const char *type);
+
+int64_t lt_hash_i64(int64_t value);
+int64_t lt_hash_u64(uint64_t value);
+int64_t lt_hash_f64(double value);
+int64_t lt_hash_part(const lt_type *type, const void *value);
+int64_t lt_hash_tuple(const int64_t *lanes, int64_t n);
+
+/* Lists ------------------------------------------------------------------------------------ */
+
+/* `[T]`: `len` elements of `type`, stored inline in `data`, which grows apart from the cell. */
+typedef struct lt_list {
+    lt_cell cell;
+    int64_t len;
+    int64_t cap;
+    const lt_type *type;
+    char *data;
+} lt_list;
+
+LT_NORETURN void lt_index_error(lt_at at, const char *message);
+
+/* `index` of a sequence of `len`, negative from the end, checked. */
+static inline int64_t lt_index(int64_t len, int64_t index, lt_at at) {
+    if (index < 0) index += len;
+    if (LT_UNLIKELY(index < 0 || index >= len)) lt_index_error(at, "list index out of range");
+    return index;
+}
+
+lt_list *lt_list_new(const lt_type *type, int64_t cap);
+void lt_list_drop(lt_list *l);
+void lt_list_inc(void *value);
+void lt_list_dec(void *value);
+void lt_list_unique(lt_list **slot);
+void *lt_list_slot(lt_list **slot, int64_t index, lt_at at);
+void lt_list_push(lt_list **slot, const void *value);
+void lt_list_extend(lt_list **slot, const lt_list *other);
+void lt_list_insert(lt_list **slot, int64_t index, const void *value);
+void lt_list_remove(lt_list **slot, const void *value, lt_at at);
+void lt_list_clear(lt_list **slot);
+void lt_list_reverse(lt_list **slot);
+void lt_list_sort(lt_list **slot, bool reverse, lt_at at);
+lt_list *lt_list_copy(const lt_list *l);
+lt_list *lt_list_sorted(const lt_list *l, bool reverse, lt_at at);
+lt_list *lt_list_reversed(const lt_list *l);
+lt_list *lt_list_slice(const lt_list *l, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step, lt_at at);
+lt_list *lt_list_concat(const lt_list *a, const lt_list *b);
+lt_list *lt_list_repeat(const lt_list *l, int64_t times, lt_at at);
+bool lt_list_contains(const lt_list *l, const void *value);
+int64_t lt_list_count(const lt_list *l, const void *value);
+const void *lt_list_extreme(const lt_list *l, bool max, lt_at at);
+bool lt_list_any(const lt_list *l);
+bool lt_list_all(const lt_list *l);
+int64_t lt_sum_i64(const lt_list *l, lt_at at);
+uint64_t lt_sum_u64(const lt_list *l, lt_at at);
+double lt_sum_f64(const lt_list *l);
+lt_list *lt_range_list(int64_t start, int64_t stop, int64_t step, lt_at at);
+lt_list *lt_str_chars(const lt_str *s);
+lt_list *lt_str_split(const lt_str *s, const lt_str *sep, int64_t maxsplit, lt_at at);
+lt_list *lt_str_splitlines(const lt_str *s);
+lt_str *lt_str_join(const lt_str *sep, const lt_list *parts);
+lt_str *lt_str_partition_part(const lt_str *s, const lt_str *sep, int which, lt_at at);
+void lt_slice_indices(int64_t length, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step,
+                      int64_t *start, int64_t *count, int64_t *by, lt_at at);
+
 /* The format mini-language: `format(value, spec)` as Python writes it, into `b`. */
 void lt_format_i64(lt_buf *b, int64_t value, const char *spec, size_t size, lt_at at);
 void lt_format_u64(lt_buf *b, uint64_t value, const char *spec, size_t size, lt_at at);
