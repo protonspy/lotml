@@ -31,6 +31,8 @@
   _Depends 3.2_
 - [x] 3.4 (Unit) Compile `Heap`, `math`, sized integers, conversions, the wrapping operations and the rest of the prelude — R1.2, R2.1
   _Depends 2.5_
+- [x] 3.5 (Unit) Refuse generics whose recursion grows their type arguments — R5.5
+  _Reason security review: polymorphic recursion exhausted memory at compile time_
 
 ## 4 · Running
 
