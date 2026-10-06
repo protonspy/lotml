@@ -306,6 +306,20 @@ fn errors_do_not_cascade_from_an_unknown_name() {
 }
 
 #[test]
+fn a_type_doubled_line_after_line_is_reported_once_it_is_too_large() {
+    // Eighteen lines are enough to pass the limit at the sixteenth and few enough that, were it
+    // gone, the checker would still finish in a few hundred megabytes rather than exhaust memory.
+    let mut doubled = String::from("fn main():\n    t0 = 1\n");
+    for i in 1..=18 {
+        doubled += &format!("    t{i} = (t{}, t{})\n", i - 1, i - 1);
+    }
+    doubled += "    print(t18)\n";
+    only(&doubled, "E0222");
+    let items: Vec<String> = (0..1000).map(|i| i.to_string()).collect();
+    clean(&format!("fn main():\n    t = ({})\n    print(t)\n", items.join(", ")));
+}
+
+#[test]
 fn the_corpus_programs_check_clean() {
     // The paired corpus is the language's reference material; it must type-check. It is
     // frozen as the pilot's models saw it, so warnings about semantics settled since are allowed.

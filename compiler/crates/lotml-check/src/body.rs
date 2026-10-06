@@ -12,6 +12,9 @@ use crate::closest;
 use crate::program::{FnSig, Method, Program, TypeDef};
 use crate::ty::{F64, INT, Infer, IntKind, Ty};
 
+/// The most nodes the type of one expression may have.
+const TYPE_LIMIT: usize = 65_536;
+
 #[derive(Clone, Debug)]
 pub struct Local {
     pub ty: Ty,
@@ -1026,7 +1029,17 @@ impl<'p> Body<'p> {
     /// The type of `expr`, checked against `expected` where one is known.
     pub fn expr(&mut self, expr: &Expr, expected: Option<&Ty>) -> Ty {
         let ty = self.expr_inner(expr, expected);
-        let ty = self.resolve(&ty);
+        let mut ty = self.resolve(&ty);
+        // A type is a tree, so a tuple paired with itself line after line doubles it each time:
+        // thirty lines ask for 2^30 nodes. Past the limit it is reported and checked on as an
+        // error, so nothing is built on it.
+        if ty.larger_than(TYPE_LIMIT) {
+            self.report(
+                Diagnostic::error("E0222", expr.span, format!("this type has more than {TYPE_LIMIT} parts"))
+                    .note("name the shape with a record type, or keep the values in a list"),
+            );
+            ty = Ty::Error;
+        }
         self.seen.insert(expr.span, ty.clone());
         ty
     }

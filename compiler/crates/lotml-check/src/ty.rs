@@ -72,6 +72,26 @@ impl Ty {
         matches!(self, Ty::Int(_) | Ty::Float(_))
     }
 
+    /// Whether the type has more than `limit` nodes, counted no further than the first node past
+    /// it: a type too large to walk is never walked whole.
+    pub fn larger_than(&self, limit: usize) -> bool {
+        fn exceeds(ty: &Ty, budget: &mut usize) -> bool {
+            if *budget == 0 {
+                return true;
+            }
+            *budget -= 1;
+            match ty {
+                Ty::List(t) | Ty::Set(t) | Ty::Heap(t) | Ty::Optional(t) => exceeds(t, budget),
+                Ty::Dict(a, b) | Ty::Result(a, b) => exceeds(a, budget) || exceeds(b, budget),
+                Ty::Tuple(items) | Ty::Adt(_, items) => items.iter().any(|t| exceeds(t, budget)),
+                Ty::Func(params, ret) => params.iter().any(|t| exceeds(t, budget)) || exceeds(ret, budget),
+                _ => false,
+            }
+        }
+        let mut budget = limit;
+        exceeds(self, &mut budget)
+    }
+
     pub fn is_poison(&self) -> bool {
         matches!(self, Ty::Error | Ty::Never)
     }
