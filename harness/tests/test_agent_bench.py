@@ -81,7 +81,7 @@ def a_task(tmp_path: Path) -> Path:
         "solution/src/a.lotml": "fn a() -> int:\n    return 1\n",
     }.items():
         (directory / path).parent.mkdir(parents=True, exist_ok=True)
-        (directory / path).write_text(text, encoding="utf-8")
+        (directory / path).write_text(text, encoding="utf-8", newline="")
     return directory
 
 

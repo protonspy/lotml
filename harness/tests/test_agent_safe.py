@@ -23,6 +23,7 @@ from lotml_harness.agent import safe
         "nul.lotml",
         "sub/COM1.lotml",
         "a.lotml.",
+        "b:c.lotml",
         "",
     ],
 )
@@ -39,6 +40,26 @@ def test_lay_writes_lotml_files_and_nothing_when_one_name_is_refused(tmp_path: P
     assert (tmp_path / "ok" / "src" / "b.lotml").read_text(encoding="utf-8") == "y"
     safe.lay(tmp_path / "lines", {"a.lotml": "x\ny\n"})
     assert (tmp_path / "lines" / "a.lotml").read_bytes() == b"x\ny\n", "written byte for byte"
+    assert (tmp_path / "lines" / ".git").is_dir(), "the interface search stops inside the copy"
+
+
+def test_lay_refuses_too_many_files_too_large_a_file_and_what_is_not_text(tmp_path: Path):
+    many = {f"f{i}.lotml": "" for i in range(safe.FILES + 1)}
+    large = {"a.lotml": "x" * (safe.FILE_BYTES + 1)}
+    for files in (many, large, {"a.lotml": 3}):
+        with pytest.raises(ValueError):
+            safe.lay(tmp_path / "refused", files)
+        assert not (tmp_path / "refused" / "a.lotml").exists()
+
+
+def test_a_call_printing_past_the_cap_gives_no_output(tmp_path: Path):
+    loud = "print('x' * 5000)"
+    done = safe.lotml(["-c", loud], [], tmp_path, binary=PYTHON, output=1000)
+    assert done is not None
+    assert (done.returncode, done.stdout) == (-1, "")
+    quiet = safe.lotml(["-c", loud], [], tmp_path, binary=PYTHON, output=10_000)
+    assert quiet is not None
+    assert quiet.stdout.strip() == "x" * 5000
     with pytest.raises(ValueError):
         safe.lay(tmp_path / "bad", {"a.lotml": "x", "b.lotmli": "y"})
     assert not (tmp_path / "bad").exists()

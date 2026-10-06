@@ -129,7 +129,7 @@ def translated(record: dict, lotml: Lotml | None = None) -> tuple[str, str]:
         workspace_files={"solution.lotml": translation.code},
         hidden_files={"solution.lotml": blocks},
     )
-    with tempfile.TemporaryDirectory(prefix="lotml-seeded-") as scratch:
+    with tempfile.TemporaryDirectory(prefix="lotml-seeded-", ignore_cleanup_errors=True) as scratch:
         graded.lay(Path(scratch))
         result = grade(graded, Path(scratch), lotml)
     if result.outcome != "pass":
@@ -196,13 +196,29 @@ def trajectory_programs(export: Path | None, hidden_for) -> Taken:
             if meta["source"] not in NOTICES:
                 taken.left_out["a source with no notice"] += 1
                 continue
-            task = hidden_for(meta["task"])
+            try:
+                problem = split.problem(meta["task"])
+            except ValueError:
+                taken.left_out["an unknown task"] += 1
+                continue
+            if split.split(problem) == HELD_OUT:
+                raise HeldOut(f"{meta['task']} is {problem}, which the split holds out")
+            try:
+                for name, text in files.items():
+                    safe.checked_name(name)
+                    if not isinstance(text, str):
+                        raise ValueError(f"{name!r} holds no text")
+                task = hidden_for(meta["task"])
+                joined = with_hidden(task, files)
+            except (ValueError, KeyError, StopIteration) as refusal:
+                taken.left_out[f"unusable files: {type(refusal).__name__}"] += 1
+                continue
             taken.programs.append(
                 program(
                     meta["task"],
                     meta["source"],
                     task.prompt,
-                    with_hidden(task, files),
+                    joined,
                     task.graded,
                     NOTICES[meta["source"]],
                 )
@@ -351,27 +367,42 @@ def _json(text: str, key: str) -> dict | None:
     return None
 
 
-def listed(program: Program, deadline: float = safe.DEADLINE) -> list[dict]:
-    """Every mutant `lotml dev mutate` lists in the program's graded files, each with its file."""
-    found = []
-    with tempfile.TemporaryDirectory(prefix="lotml-seeded-") as scratch:
-        safe.lay(Path(scratch), program.files)
+def listed(program: Program, deadline: float = safe.DEADLINE) -> tuple[list[dict], Counter]:
+    """Every mutant `lotml dev mutate` lists in the program's graded files, each with its file;
+    and, by reason, the files it could not list."""
+    found, failed = [], Counter()
+    with tempfile.TemporaryDirectory(prefix="lotml-seeded-", ignore_cleanup_errors=True) as scratch:
+        try:
+            safe.lay(Path(scratch), program.files)
+        except ValueError:
+            failed["unsafe files"] += len(program.graded)
+            return found, failed
         for name in program.graded:
             ran = safe.lotml(["dev", "mutate", "--json"], [name], Path(scratch), deadline)
-            if ran is None or ran.returncode != 0:
+            if ran is None:
+                failed["mutate timed out"] += 1
                 continue
-            for mutant in json.loads(ran.stdout):
-                found.append(mutant | {"file": name})
-    return found
+            try:
+                listing = json.loads(ran.stdout) if ran.returncode == 0 else None
+            except json.JSONDecodeError:
+                listing = None
+            if not isinstance(listing, list):
+                failed["mutate failed"] += 1
+                continue
+            found += [mutant | {"file": name} for mutant in listing]
+    return found, failed
 
 
 def judge(program: Program, file: str, text: str, deadline: float = safe.DEADLINE) -> Verdict:
     """One mutant judged in a scratch copy laid by the safe layer: kept when `check` refuses it
     and `check --fix` does not make it clean, or when it checks and one of the program's tests
     then fails (R2.3, R2.4, R2.7)."""
-    with tempfile.TemporaryDirectory(prefix="lotml-seeded-") as scratch:
+    with tempfile.TemporaryDirectory(prefix="lotml-seeded-", ignore_cleanup_errors=True) as scratch:
         root = Path(scratch)
-        names = safe.lay(root, program.files | {file: text})
+        try:
+            names = safe.lay(root, program.files | {file: text})
+        except ValueError:
+            return Verdict(False, "refused")
         checked = safe.lotml(["check", "--json"], names, root, deadline)
         if checked is None:
             return Verdict(False, "timeout")
@@ -381,8 +412,12 @@ def judge(program: Program, file: str, text: str, deadline: float = safe.DEADLIN
         errors = [d for d in report["diagnostics"] if d.get("severity") == "error"]
         if errors:
             fixed = safe.lotml(["check", "--fix", "--json"], names, root, deadline)
-            after = _json(fixed.stdout, "summary") if fixed is not None else None
-            if after is not None and after["summary"].get("errors") == 0:
+            if fixed is None:
+                return Verdict(False, "timeout")
+            after = _json(fixed.stdout, "summary")
+            if after is None:
+                return Verdict(False, "no report")
+            if after["summary"].get("errors") == 0:
                 return Verdict(False, "fixable")
             return Verdict(True, "check", diagnostics=errors)
         tested = safe.lotml(["test", "--json"], [file], root, deadline)
@@ -403,6 +438,7 @@ class Tally:
 
     programs: Counter = field(default_factory=Counter)
     left_out: dict[str, Counter] = field(default_factory=dict)
+    unlisted: Counter = field(default_factory=Counter)
     splits: Counter = field(default_factory=Counter)
     listed: Counter = field(default_factory=Counter)
     drawn: Counter = field(default_factory=Counter)
@@ -419,7 +455,8 @@ def seed(
     jobs = []
     for program in programs:
         tally.programs[program.source] += 1
-        found = listed(program)
+        found, failed = listed(program)
+        tally.unlisted.update(failed)
         for mutant in found:
             tally.listed[(mutant["family"], mutant["operator"])] += 1
         for mutant in draw(program, found, dict(weighting.families), seen[program.problem]):
@@ -467,7 +504,7 @@ def seed(
 
 SEEDED = CACHE / "guide" / "seeded"
 REPORT = RESULTS / "seeded.md"
-REASONS = ("check", "test", "equivalent", "fixable", "timeout", "no report")
+REASONS = ("check", "test", "equivalent", "fixable", "timeout", "no report", "refused")
 
 
 def write(records: list[dict], programs: list[Program], day: str, root: Path = SEEDED) -> Path:
@@ -510,6 +547,9 @@ def markdown(tally: Tally, weighting: Weights, compiler: str, day: str) -> str:
         out = tally.left_out.get(source, Counter())
         why = ", ".join(f"{r} {n}" for r, n in sorted(out.items())) or "—"
         lines.append(f"| {source} | {tally.programs[source]} | {why} |")
+    if tally.unlisted:
+        unlisted = ", ".join(f"{r} {n}" for r, n in sorted(tally.unlisted.items()))
+        lines += ["", f"Graded files whose mutants could not be listed: {unlisted}."]
     lines += [
         "",
         "| split | records |",

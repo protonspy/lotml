@@ -132,3 +132,13 @@ def test_floats_inside_lists_tuples_and_optionals_compare_element_by_element():
         "    if r0 is not None:\n"
         "        assert abs(r0 - 2.0) <= 1e-06 * max(1.0, abs(2.0))\n"
     )
+
+
+def test_floats_held_in_a_dict_compare_key_by_key():
+    blocks = hidden_blocks("prices", [((), {"a": 0.5})], [], Dict(STR, F64))
+    assert blocks == (
+        'test "hidden: 1":\n'
+        "    r0 = prices()\n"
+        "    assert len(r0) == 1\n"
+        '    assert abs(r0["a"] - 0.5) <= 1e-06 * max(1.0, abs(0.5))\n'
+    )

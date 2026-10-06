@@ -124,3 +124,25 @@ def test_a_trajectory_of_a_held_out_problem_stops_the_run(tmp_path):
     path = export(tmp_path, "validation", [record])
     with pytest.raises(HeldOut):
         seeded.trajectory_programs(path, lambda _: tasks()[0])
+
+
+def never(task_id):
+    raise AssertionError("the split is checked before the task is looked up")
+
+
+def test_a_held_out_trajectory_stops_before_its_task_is_looked_up(tmp_path):
+    record = {"files": {"a.lotml": ""}, "meta": {"task": "mbpp-7", "source": "bench"}}
+    with pytest.raises(HeldOut):
+        seeded.trajectory_programs(export(tmp_path, "train", [record]), never)
+
+
+def test_a_trajectory_with_an_unknown_task_or_unsafe_files_is_left_out_and_counted(tmp_path):
+    task = next(t for t in tasks() if t.id == "median-mode")
+    records = [
+        {"files": {"a.lotml": ""}, "meta": {"task": "no-such-task", "source": "bench"}},
+        {"files": {"bindings/os.lotmli": ""}, "meta": {"task": "median-mode", "source": "bench"}},
+        {"files": {"a.lotml": 3}, "meta": {"task": "median-mode", "source": "bench"}},
+    ]
+    taken = seeded.trajectory_programs(export(tmp_path, "train", records), lambda _: task)
+    assert taken.programs == []
+    assert taken.left_out == {"an unknown task": 1, "unusable files: ValueError": 2}

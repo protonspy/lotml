@@ -71,8 +71,9 @@ def test_an_equivalent_mutant_and_a_hang_are_dropped():
 
 
 def test_mutants_are_listed_from_the_graded_files_outside_the_test_blocks():
-    found = seeded.listed(program())
+    found, failed = seeded.listed(program())
     assert found
+    assert failed == {}
     assert {m["file"] for m in found} == {"solution.lotml"}
     assert all(m["start"] < len(CODE) for m in found), "no mutant falls in a test block"
 
@@ -84,7 +85,7 @@ def test_seeding_writes_each_kept_mutant_as_a_repair_marked_seeded(monkeypatch):
         {"family": "meaning", "operator": "swap-arithmetic", "declaration": "add",
          "file": "solution.lotml", "text": mutated("var total = a", "var total = a + 0")},
     ]  # fmt: skip
-    monkeypatch.setattr(seeded, "listed", lambda program: found)
+    monkeypatch.setattr(seeded, "listed", lambda program: (found, Counter()))
     weighting = seeded.Weights(Counter(dict.fromkeys(seeded.FAMILIES, 1)), Counter(), ["x"])
     records, tally = seeded.seed([program()], weighting, "lotml 0.1.0", workers=2)
     [record] = records
@@ -143,3 +144,19 @@ def test_the_report_counts_programs_weights_and_every_operator_s_outcomes():
 
 def test_a_verdict_is_a_plain_record():
     assert Verdict(True, "check").diagnostics is None
+
+
+def test_a_file_mutate_cannot_list_and_files_the_safe_layer_refuses_are_counted():
+    missing = Program("t", "humaneval/0", "train", "x", "", {"a.lotml": CODE}, ("b.lotml",), "")
+    assert seeded.listed(missing) == ([], {"mutate failed": 1})
+    unsafe = Program("t", "humaneval/0", "train", "x", "", {"a.txt": CODE}, ("a.txt",), "")
+    assert seeded.listed(unsafe) == ([], {"unsafe files": 1})
+    assert judge(unsafe, "a.txt", CODE).reason == "refused"
+
+
+def test_the_report_names_files_whose_mutants_could_not_be_listed():
+    tally = seeded.Tally()
+    tally.unlisted["mutate failed"] = 2
+    weighting = seeded.weights(seeded.PHASE1.read_text(encoding="utf-8"))
+    text = seeded.markdown(tally, weighting, "lotml 0.1.0", "2026-10-06")
+    assert "could not be listed: mutate failed 2." in text

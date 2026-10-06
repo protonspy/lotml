@@ -62,7 +62,7 @@ def files(directory: Path) -> dict[str, str]:
     if not directory.is_dir():
         return {}
     return {
-        path.relative_to(directory).as_posix(): path.read_text(encoding="utf-8")
+        path.relative_to(directory).as_posix(): path.read_text(encoding="utf-8", newline="")
         for path in sorted(directory.rglob("*"))
         if path.is_file() and not path.is_symlink()
     }

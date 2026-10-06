@@ -345,6 +345,12 @@ def _assertions(expression: str, value: Any, type_: types.Type, fresh) -> list[t
             for index, element in enumerate(value):
                 lines += _assertions(f"{name}[{index}]", element, item, fresh)
             return lines
+        case types.Dict(key, item) if not _holds_float(key):
+            name = fresh()
+            lines = [(0, f"{name} = {expression}"), (0, f"assert len({name}) == {len(value)}")]
+            for found, element in value.items():
+                lines += _assertions(f"{name}[{literal(found, key)}]", element, item, fresh)
+            return lines
         case types.Tuple(items) if len(items) > 1:
             names = [fresh() for _ in items]
             lines = [(0, f"{', '.join(names)} = {expression}")]
