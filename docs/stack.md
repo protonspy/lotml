@@ -24,6 +24,12 @@ same pinned versions.
 - **pytest-cov** — line coverage for the test gate `scc check` reads; chosen over running
   `coverage` by hand because it attaches to the pytest run the suite already is.
 
+- **Ollama** and **OpenRouter** (services, called over HTTP with the standard library) — serve the
+  open models the experiments ask. Ollama runs them on the local machine; OpenRouter's raw text
+  completions run hosted open-weight models from one provider pinned per model, checked to take
+  the prompt as written, when a local run would take hours. The key is read from
+  `OPENROUTER_API_KEY` and never written to the repository.
+
 - **tree-sitter CLI** 0.27 (development only, through `npx`) — generates the editor grammar in
   `reference/grammar/tree-sitter/` and parses the corpus with it in the harness tests, which
   skip without `npx`; it compiles the parser with the platform's C compiler.

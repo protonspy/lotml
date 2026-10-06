@@ -80,6 +80,18 @@ relative. The lesson for lotml: a type system checkable on prefixes is worth hav
 [[semantic-compiler]]'s prefix checks and repair, and masking by types is a tool for weak open
 models, not a default — see [[type-system]].
 
+**Measured on lotml** (phase 2, `harness/results/masks.md`): three open models wrote 100 tasks of
+the phase 1 sample twice, free in one greedy call and masked a line at a time, each line checked by
+`lotml check --prefix` and drawn again when the program could no longer complete. Neither Ollama
+nor OpenRouter lets a caller mask tokens, so the line is the unit refused — a coarse mask. It helped
+the weakest model and no other: Llama 3.1 8B rose from 17% to 29% (12 tasks passed only masked, none
+only free; McNemar p < 0.001), Qwen2.5-Coder 7B from 51% to 56% (5 against 0, p = 0.062), and
+GLM-5.3-Flash went from 61% to 59% (6 against 8, p = 0.79). The masks cut programs that do not
+check in every model (Llama 72 to 53) but turned few of them into passing ones once a model was
+strong enough to write code that checks — the alignment paper's pattern, at the scale of a line.
+Llama and GLM ran on OpenRouter from one pinned provider each, Qwen locally; each comparison is
+within one model and one provider.
+
 ## Indentation needs a line-oriented, bounded grammar — not more decode time
 
 `research/experiments/grammar/` tested lotml's block structure with llguidance 1.9.1 and the `o200k`
