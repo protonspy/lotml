@@ -81,6 +81,10 @@ pub enum Const {
     Unit,
     /// A string literal's text.
     Str(String),
+    /// No value, for an optional argument of the runtime left out: C's `NULL`.
+    Null,
+    /// A single ASCII character, for an option of the runtime: `'^'`.
+    Char(char),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -138,4 +142,83 @@ pub enum Expr {
         sep: Option<Operand>,
         end: Option<Operand>,
     },
+    /// A function of the runtime, given the place in the source when `at` is set.
+    Rt {
+        name: &'static str,
+        args: Vec<Operand>,
+        at: bool,
+    },
+    /// Whether `item` is in `container`, a value of `ty`.
+    Contains {
+        container: Operand,
+        item: Operand,
+        ty: Ty,
+    },
+    /// An f-string.
+    Format(Vec<FormatPart>),
+    /// `str(value)`.
+    ToStr(Operand, Ty),
+    /// `len(value)`.
+    Len(Operand, Ty),
+}
+
+#[derive(Clone, Debug)]
+pub enum FormatPart {
+    Text(String),
+    Value { value: Operand, ty: Ty, conversion: Option<char>, spec: Vec<FormatPart> },
+}
+
+impl Expr {
+    /// Every operand the expression reads, in order.
+    pub fn operands(&self, f: &mut impl FnMut(&Operand)) {
+        match self {
+            Expr::Use(a) | Expr::Unary(_, a, _) | Expr::Convert(a, ..) | Expr::ToStr(a, _) | Expr::Len(a, _) => f(a),
+            Expr::Binary(_, a, b, _) | Expr::Compare(_, a, b, _) | Expr::MinMax { a, b, .. } => {
+                f(a);
+                f(b);
+            }
+            Expr::Call(_, args) | Expr::Rt { args, .. } => args.iter().for_each(f),
+            Expr::Print { args, sep, end } => {
+                args.iter().for_each(|(a, _)| f(a));
+                sep.iter().chain(end).for_each(f);
+            }
+            Expr::Contains { container, item, .. } => {
+                f(container);
+                f(item);
+            }
+            Expr::Format(parts) => format_operands(parts, f),
+        }
+    }
+}
+
+fn format_operands(parts: &[FormatPart], f: &mut impl FnMut(&Operand)) {
+    for part in parts {
+        if let FormatPart::Value { value, spec, .. } = part {
+            f(value);
+            format_operands(spec, f);
+        }
+    }
+}
+
+/// Every operand a block reads, nested blocks included.
+pub fn block_operands(block: &Block, f: &mut impl FnMut(&Operand)) {
+    for stmt in block {
+        match &stmt.kind {
+            StmtKind::Let(_, e) | StmtKind::Do(e) => e.operands(f),
+            StmtKind::If(test, then, otherwise) => {
+                f(test);
+                block_operands(then, f);
+                block_operands(otherwise, f);
+            }
+            StmtKind::Loop(body) => block_operands(body, f),
+            StmtKind::Return(Some(v)) => f(v),
+            StmtKind::ForRange { start, stop, step, body, .. } => {
+                f(start);
+                f(stop);
+                f(step);
+                block_operands(body, f);
+            }
+            StmtKind::Break | StmtKind::Continue | StmtKind::Return(None) | StmtKind::Panic(_) => {}
+        }
+    }
 }

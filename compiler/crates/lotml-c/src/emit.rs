@@ -1,22 +1,46 @@
 //! Writing C from the intermediate form: one C function per function, its locals declared at the
 //! top, every statement after a `#line` naming its `.lotml` line (R2.3).
 
+use std::collections::BTreeMap;
 use std::fmt::Write;
 
 use lotml_check::ty::{FloatKind, IntKind, Ty};
 
 use crate::lower::{Lowered, function_name};
-use crate::mir::{BinOp, Block, CmpOp, Const, Expr, Function, Local, Operand, Panic, StmtKind, UnOp};
+use crate::mir::{
+    BinOp, Block, CmpOp, Const, Expr, FormatPart, Function, Local, Operand, Panic, StmtKind, UnOp, block_operands,
+};
 
 pub fn program(lowered: &Lowered, file: &str) -> String {
     let file = c_string_text(file.as_bytes());
+    let mut literals = BTreeMap::new();
+    for f in &lowered.functions {
+        block_operands(&f.body, &mut |o| {
+            if let Operand::Const(Const::Str(text)) = o {
+                let next = literals.len();
+                literals.entry(text.clone()).or_insert(next);
+            }
+        });
+    }
     let mut out = String::from("#include \"lotml.h\"\n#include \"lotml.c\"\n\n");
+    let mut ordered: Vec<(&String, &usize)> = literals.iter().collect();
+    ordered.sort_by_key(|(_, i)| **i);
+    for (text, i) in ordered {
+        let length = text.chars().count();
+        let _ = writeln!(
+            out,
+            "LT_STR_LITERAL(lt_lit{i}, {}, {length}, \"{}\");",
+            text.len(),
+            c_string_text(text.as_bytes())
+        );
+    }
+    out.push('\n');
     for f in &lowered.functions {
         let _ = writeln!(out, "{};", signature(f));
     }
     out.push('\n');
     for f in &lowered.functions {
-        Writer { out: &mut out, function: f, file: &file, depth: 1 }.function();
+        Writer { out: &mut out, function: f, file: &file, depth: 1, literals: &literals, fresh: 0 }.function();
     }
     out.push_str("int main(void) {\n    lt_init();\n");
     if lowered.main {
@@ -37,7 +61,7 @@ fn signature(f: &Function) -> String {
         .map(|&p| format!("{} {}", c_type(&f.locals[p].ty), local_name(f, p)))
         .collect();
     let params = if params.is_empty() { "void".to_string() } else { params.join(", ") };
-    format!("static {} {}({params})", return_type(&f.ret), f.name)
+    format!("static LT_UNUSED {} {}({params})", return_type(&f.ret), f.name)
 }
 
 fn return_type(ty: &Ty) -> &'static str {
@@ -62,6 +86,7 @@ pub fn c_type(ty: &Ty) -> &'static str {
         // An `f32` is a Python float on the Python target, so it is a double here too.
         Ty::Float(_) => "double",
         Ty::Bool => "bool",
+        Ty::Str => "lt_str *",
         _ => "int64_t",
     }
 }
@@ -111,6 +136,9 @@ struct Writer<'a> {
     function: &'a Function,
     file: &'a str,
     depth: usize,
+    literals: &'a BTreeMap<String, usize>,
+    /// The next number for a name the C needs: a buffer, a range.
+    fresh: usize,
 }
 
 impl Writer<'_> {
@@ -128,6 +156,11 @@ impl Writer<'_> {
 
     fn name(&self, local: Local) -> String {
         local_name(self.function, local)
+    }
+
+    fn fresh(&mut self, prefix: &str) -> String {
+        self.fresh += 1;
+        format!("{prefix}{}", self.fresh)
     }
 
     fn function(&mut self) {
@@ -152,6 +185,16 @@ impl Writer<'_> {
         for stmt in block {
             self.at(stmt.line);
             match &stmt.kind {
+                StmtKind::Let(local, Expr::Format(parts)) => {
+                    let target = self.name(*local);
+                    self.line("{");
+                    self.depth += 1;
+                    self.line("lt_buf b = LT_BUF;");
+                    self.format_into("b", parts);
+                    self.line(&format!("{target} = lt_str_from_buf(&b);"));
+                    self.depth -= 1;
+                    self.line("}");
+                }
                 StmtKind::Let(local, expr) => {
                     let value = self.expr(expr);
                     if is_unit(&self.function.locals[*local].ty) {
@@ -197,7 +240,7 @@ impl Writer<'_> {
                     }
                 }
                 StmtKind::ForRange { var, start, stop, step, body } => {
-                    let walk = format!("r{var}");
+                    let walk = self.fresh("r");
                     let (start, stop, step) = (self.operand(start), self.operand(stop), self.operand(step));
                     self.line("{");
                     self.depth += 1;
@@ -227,6 +270,7 @@ impl Writer<'_> {
     fn operand(&self, operand: &Operand) -> String {
         match operand {
             Operand::Local(local) => self.name(*local),
+            Operand::Const(Const::Str(text)) => format!("((lt_str *)&lt_lit{})", self.literals[text]),
             Operand::Const(c) => constant(c),
         }
     }
@@ -238,7 +282,7 @@ impl Writer<'_> {
             Operand::Const(Const::Float(_)) => Ty::Float(FloatKind::F64),
             Operand::Const(Const::Bool(_)) => Ty::Bool,
             Operand::Const(Const::Str(_)) => Ty::Str,
-            Operand::Const(Const::Unit) => Ty::Unit,
+            Operand::Const(Const::Unit | Const::Null | Const::Char(_)) => Ty::Unit,
         }
     }
 
@@ -257,8 +301,10 @@ impl Writer<'_> {
                     CmpOp::Ne => "!=",
                 };
                 let (a, b) = (self.operand(a), self.operand(b));
-                match ty {
-                    Ty::Str => format!("(lt_str_compare({a}, {b}) {symbol} 0)"),
+                match (ty, op) {
+                    (Ty::Str, CmpOp::Eq) => format!("lt_str_eq({a}, {b})"),
+                    (Ty::Str, CmpOp::Ne) => format!("(!lt_str_eq({a}, {b}))"),
+                    (Ty::Str, _) => format!("(lt_str_compare({a}, {b}) {symbol} 0)"),
                     _ => format!("({a} {symbol} {b})"),
                 }
             }
@@ -280,7 +326,127 @@ impl Writer<'_> {
                     .collect();
                 format!("{name}({})", args.join(", "))
             }
+            Expr::Rt { name, args, at } => {
+                let mut args: Vec<String> = args.iter().map(|a| self.operand(a)).collect();
+                if *at {
+                    args.push("LT_HERE".to_string());
+                }
+                format!("{name}({})", args.join(", "))
+            }
+            Expr::Contains { container, item, ty } => {
+                let (c, i) = (self.operand(container), self.operand(item));
+                match ty {
+                    Ty::Str => format!("lt_str_contains({c}, {i})"),
+                    _ => format!("false /* `in` on {ty} */"),
+                }
+            }
             Expr::Print { args, sep, end } => self.print(args, sep.as_ref(), end.as_ref()),
+            Expr::Format(_) => "0 /* an f-string is written by its Let */".to_string(),
+            Expr::ToStr(value, ty) => {
+                let v = self.operand(value);
+                match ty {
+                    Ty::Str => v,
+                    Ty::Int(IntKind::U64) => format!("lt_str_of_u64({v})"),
+                    Ty::Int(_) => format!("lt_str_of_i64((int64_t){v})"),
+                    Ty::Float(_) => format!("lt_str_of_f64({v})"),
+                    Ty::Bool => format!("lt_str_of_bool({v})"),
+                    _ => "lt_str_none()".to_string(),
+                }
+            }
+            Expr::Len(value, ty) => {
+                let v = self.operand(value);
+                match ty {
+                    Ty::Str => format!("{v}->length"),
+                    _ => format!("0 /* len of {ty} */"),
+                }
+            }
+        }
+    }
+
+    /// Write the parts of an f-string into the buffer named `buf`.
+    fn format_into(&mut self, buf: &str, parts: &[FormatPart]) {
+        for part in parts {
+            match part {
+                FormatPart::Text(text) => {
+                    let put = put_literal_into(buf, text);
+                    self.line(&put);
+                }
+                FormatPart::Value { value, ty, conversion, spec } => {
+                    let (spec_text, spec_len, spec_buf) = self.spec(spec);
+                    let v = self.operand(value);
+                    match conversion {
+                        Some(conversion) => {
+                            let shown = self.fresh("c");
+                            self.line(&format!("lt_buf {shown} = LT_BUF;"));
+                            let put = if *conversion == 's' {
+                                self.put_value_into(&shown, value, ty)
+                            } else {
+                                self.repr_into(&shown, value, ty)
+                            };
+                            self.line(&put);
+                            if spec.is_empty() {
+                                self.line(&format!("lt_buf_put(&{buf}, {shown}.data, {shown}.len);"));
+                                self.line(&format!("lt_buf_free(&{shown});"));
+                            } else {
+                                let text = self.fresh("s");
+                                self.line(&format!("lt_str *{text} = lt_str_from_buf(&{shown});"));
+                                self.line(&format!("lt_format_str(&{buf}, {text}, {spec_text}, {spec_len}, LT_HERE);"));
+                                self.line(&format!("lt_str_drop({text});"));
+                            }
+                        }
+                        None => {
+                            let call = match ty {
+                                Ty::Int(IntKind::U64) => format!("lt_format_u64(&{buf}, {v}, "),
+                                Ty::Int(_) => format!("lt_format_i64(&{buf}, (int64_t){v}, "),
+                                Ty::Float(_) => format!("lt_format_f64(&{buf}, {v}, "),
+                                Ty::Bool => format!("lt_format_bool(&{buf}, {v}, "),
+                                Ty::Str => format!("lt_format_str(&{buf}, {v}, "),
+                                _ => format!("lt_format_none(&{buf}, "),
+                            };
+                            self.line(&format!("{call}{spec_text}, {spec_len}, LT_HERE);"));
+                        }
+                    }
+                    if let Some(spec_buf) = spec_buf {
+                        self.line(&format!("lt_buf_free(&{spec_buf});"));
+                    }
+                }
+            }
+        }
+    }
+
+    /// A format spec as the C text of its bytes and length: a literal when it holds no value,
+    /// else a buffer filled now, whose name is returned to free after use.
+    fn spec(&mut self, spec: &[FormatPart]) -> (String, String, Option<String>) {
+        if spec.iter().all(|p| matches!(p, FormatPart::Text(_))) {
+            let text: String = spec.iter().map(|p| if let FormatPart::Text(t) = p { t.as_str() } else { "" }).collect();
+            return (format!("\"{}\"", c_string_text(text.as_bytes())), format!("{}", text.len()), None);
+        }
+        let buf = self.fresh("f");
+        self.line(&format!("lt_buf {buf} = LT_BUF;"));
+        self.format_into(&buf, spec);
+        (format!("({buf}.data == NULL ? \"\" : {buf}.data)"), format!("{buf}.len"), Some(buf))
+    }
+
+    fn repr_into(&self, buf: &str, value: &Operand, ty: &Ty) -> String {
+        let v = self.operand(value);
+        match ty {
+            Ty::Str => format!("lt_buf_str_repr(&{buf}, {v});"),
+            _ => self.put_value_into(buf, value, ty),
+        }
+    }
+
+    fn put_value_into(&self, buf: &str, value: &Operand, ty: &Ty) -> String {
+        if let Operand::Const(Const::Str(s)) = value {
+            return put_literal_into(buf, s);
+        }
+        let v = self.operand(value);
+        match ty {
+            Ty::Int(IntKind::U64) => format!("lt_buf_u64(&{buf}, {v});"),
+            Ty::Int(_) => format!("lt_buf_i64(&{buf}, (int64_t){v});"),
+            Ty::Float(_) => format!("lt_buf_f64(&{buf}, {v});"),
+            Ty::Bool => format!("lt_buf_bool(&{buf}, {v});"),
+            Ty::Str => format!("lt_buf_str(&{buf}, {v});"),
+            _ => put_literal_into(buf, "None"),
         }
     }
 
@@ -290,7 +456,8 @@ impl Writer<'_> {
             if i > 0 {
                 text.push_str(&self.put_text(sep, " "));
             }
-            text.push_str(&self.put_value(value, ty));
+            text.push_str(&self.put_value_into("b", value, ty));
+            text.push(' ');
         }
         text.push_str(&self.put_text(end, "\n"));
         text.push_str("lt_write(b.data, b.len); lt_buf_free(&b); } while (0)");
@@ -299,22 +466,9 @@ impl Writer<'_> {
 
     fn put_text(&self, text: Option<&Operand>, default: &str) -> String {
         match text {
-            Some(Operand::Const(Const::Str(s))) => put_literal(s),
-            _ => put_literal(default),
-        }
-    }
-
-    fn put_value(&self, value: &Operand, ty: &Ty) -> String {
-        if let Operand::Const(Const::Str(s)) = value {
-            return put_literal(s);
-        }
-        let v = self.operand(value);
-        match ty {
-            Ty::Int(IntKind::U64) => format!("lt_buf_u64(&b, {v}); "),
-            Ty::Int(_) => format!("lt_buf_i64(&b, (int64_t){v}); "),
-            Ty::Float(_) => format!("lt_buf_f64(&b, {v}); "),
-            Ty::Bool => format!("lt_buf_bool(&b, {v}); "),
-            _ => put_literal("None"),
+            None => format!("{} ", put_literal_into("b", default)),
+            Some(Operand::Const(Const::Str(s))) => format!("{} ", put_literal_into("b", s)),
+            Some(other) => format!("lt_buf_str(&b, {}); ", self.operand(other)),
         }
     }
 
@@ -415,8 +569,8 @@ fn fitted(computed: String, kind: IntKind) -> String {
     }
 }
 
-fn put_literal(text: &str) -> String {
-    format!("lt_buf_put(&b, \"{}\", {}); ", c_string_text(text.as_bytes()), text.len())
+fn put_literal_into(buf: &str, text: &str) -> String {
+    format!("lt_buf_put(&{buf}, \"{}\", {});", c_string_text(text.as_bytes()), text.len())
 }
 
 fn constant(c: &Const) -> String {
@@ -427,6 +581,8 @@ fn constant(c: &Const) -> String {
         Const::Float(v) => float_literal(*v),
         Const::Bool(b) => (if *b { "true" } else { "false" }).to_string(),
         Const::Unit => "0".to_string(),
+        Const::Null => "NULL".to_string(),
+        Const::Char(c) => format!("'{c}'"),
         Const::Str(s) => format!("\"{}\"", c_string_text(s.as_bytes())),
     }
 }

@@ -12,17 +12,20 @@ use lotml_check::check_resolved;
 use lotml_diag::{Diagnostic, Severity};
 use lotml_syntax::parse;
 
-/// The runtime's declarations, written next to every compiled program as `lotml.h`.
-pub const RUNTIME_H: &str = include_str!("../runtime/lotml.h");
-
-/// The runtime's functions, written as `lotml.c` and included into the program, which is one
-/// translation unit.
-pub const RUNTIME_C: &str = include_str!("../runtime/lotml.c");
+/// The runtime's files, written next to every compiled program: `lotml.h` declares it, `lotml.c`
+/// includes the rest, and the program includes both, so it is one translation unit.
+pub const RUNTIME: &[(&str, &str)] = &[
+    ("lotml.h", include_str!("../runtime/lotml.h")),
+    ("lotml.c", include_str!("../runtime/lotml.c")),
+    ("lotml_text.c", include_str!("../runtime/lotml_text.c")),
+];
 
 /// Write the runtime into `dir`, where a compiled program includes it from.
 pub fn write_runtime(dir: &Path) -> std::io::Result<()> {
-    std::fs::write(dir.join("lotml.h"), RUNTIME_H)?;
-    std::fs::write(dir.join("lotml.c"), RUNTIME_C)
+    for (name, text) in RUNTIME {
+        std::fs::write(dir.join(name), text)?;
+    }
+    Ok(())
 }
 
 /// The C program for `source`, which was read from `path`; or the errors that stop it.

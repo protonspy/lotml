@@ -9,7 +9,9 @@ use lotml_diag::Diagnostic;
 use lotml_syntax::ast::{self, Arg, BoolOp, ExprKind, FnDef, Item, Module, StmtKind as Ast, StrPart};
 use lotml_syntax::span::Span;
 
-use crate::mir::{BinOp, Block, CmpOp, Const, Expr, Function, Local, LocalInfo, Operand, Panic, Stmt, StmtKind, UnOp};
+use crate::mir::{
+    BinOp, Block, CmpOp, Const, Expr, FormatPart, Function, Local, LocalInfo, Operand, Panic, Stmt, StmtKind, UnOp,
+};
 
 /// The program as functions of the intermediate form.
 pub struct Lowered {
@@ -355,16 +357,14 @@ impl<'a> Builder<'_, 'a> {
             ExprKind::Bool(v) => Value::Done(Operand::Const(Const::Bool(*v))),
             ExprKind::None | ExprKind::Unit => Value::Done(Operand::Const(Const::Unit)),
             ExprKind::Str(literals) => {
-                let mut text = String::new();
-                for literal in literals {
-                    for part in &literal.parts {
-                        match part {
-                            StrPart::Text(t) => text.push_str(t),
-                            StrPart::Expr { .. } => return Value::Done(self.unsupported(e.span, "an f-string")),
-                        }
-                    }
+                let parts: Vec<&StrPart> = literals.iter().flat_map(|l| &l.parts).collect();
+                if parts.iter().all(|p| matches!(p, StrPart::Text(_))) {
+                    let text: String =
+                        parts.iter().map(|p| if let StrPart::Text(t) = p { t.as_str() } else { "" }).collect();
+                    return Value::Done(Operand::Const(Const::Str(text)));
                 }
-                Value::Done(Operand::Const(Const::Str(text)))
+                let parts = self.format_parts(&parts);
+                Value::Expr(Expr::Format(parts))
             }
             ExprKind::Name(name) => match self.local_of(e.span) {
                 Some(local) => Value::Done(Operand::Local(local)),
@@ -372,9 +372,15 @@ impl<'a> Builder<'_, 'a> {
             },
             ExprKind::Binary { op, left, right } => {
                 let ty = self.ty(left);
+                let right_ty = self.ty(right);
                 let a = self.value(left);
                 let b = self.value(right);
-                Value::Expr(Expr::Binary(binop(*op), a, b, ty))
+                match (op, &ty, &right_ty) {
+                    (ast::BinOp::Add, Ty::Str, _) => Value::Expr(rt("lt_str_concat", vec![a, b], false)),
+                    (ast::BinOp::Mul, Ty::Str, _) => Value::Expr(rt("lt_str_repeat", vec![a, b], true)),
+                    (ast::BinOp::Mul, _, Ty::Str) => Value::Expr(rt("lt_str_repeat", vec![b, a], true)),
+                    _ => Value::Expr(Expr::Binary(binop(*op), a, b, ty)),
+                }
             }
             ExprKind::Unary { op, operand } => {
                 let ty = self.ty(operand);
@@ -412,6 +418,37 @@ impl<'a> Builder<'_, 'a> {
                 Value::Done(Operand::Local(t))
             }
             ExprKind::Call { func, args } => self.call(e, func, args),
+            ExprKind::Index { object, index } => {
+                let ty = self.ty(object);
+                let o = self.value(object);
+                let i = self.value(index);
+                match ty {
+                    Ty::Str => Value::Expr(rt("lt_str_index", vec![o, i], true)),
+                    _ => Value::Done(self.unsupported(e.span, "indexing this value")),
+                }
+            }
+            ExprKind::Slice { object, lower, upper, step } => {
+                let ty = self.ty(object);
+                let o = self.value(object);
+                let mut args = vec![o];
+                for bound in [lower, upper, step] {
+                    match bound {
+                        Some(b) => {
+                            let v = self.value(b);
+                            args.push(Operand::Const(Const::Bool(true)));
+                            args.push(v);
+                        }
+                        None => {
+                            args.push(Operand::Const(Const::Bool(false)));
+                            args.push(Operand::Const(Const::Int(0, IntKind::I64)));
+                        }
+                    }
+                }
+                match ty {
+                    Ty::Str => Value::Expr(rt("lt_str_slice", args, true)),
+                    _ => Value::Done(self.unsupported(e.span, "slicing this value")),
+                }
+            }
             _ => Value::Done(self.unsupported(e.span, "this expression")),
         }
     }
@@ -428,19 +465,35 @@ impl<'a> Builder<'_, 'a> {
         let Some(((op, right), more)) = rest.split_first() else { return };
         let right_ty = self.ty(right);
         let right_value = self.value(right);
-        let op = match op {
-            ast::CmpOp::Lt => CmpOp::Lt,
-            ast::CmpOp::Le => CmpOp::Le,
-            ast::CmpOp::Gt => CmpOp::Gt,
-            ast::CmpOp::Ge => CmpOp::Ge,
-            ast::CmpOp::Eq => CmpOp::Eq,
-            ast::CmpOp::NotEq => CmpOp::Ne,
+        let compared = match op {
+            ast::CmpOp::In | ast::CmpOp::NotIn => {
+                let contains =
+                    Expr::Contains { container: right_value.clone(), item: left.clone(), ty: right_ty.clone() };
+                if *op == ast::CmpOp::In {
+                    contains
+                } else {
+                    let t = self.temp(Ty::Bool);
+                    self.push(StmtKind::Let(t, contains));
+                    Expr::Unary(UnOp::Not, Operand::Local(t), Ty::Bool)
+                }
+            }
             _ => {
-                self.unsupported(right.span, "this comparison");
-                CmpOp::Eq
+                let op = match op {
+                    ast::CmpOp::Lt => CmpOp::Lt,
+                    ast::CmpOp::Le => CmpOp::Le,
+                    ast::CmpOp::Gt => CmpOp::Gt,
+                    ast::CmpOp::Ge => CmpOp::Ge,
+                    ast::CmpOp::Eq => CmpOp::Eq,
+                    ast::CmpOp::NotEq => CmpOp::Ne,
+                    _ => {
+                        self.unsupported(right.span, "this comparison");
+                        CmpOp::Eq
+                    }
+                };
+                Expr::Compare(op, left.clone(), right_value.clone(), left_ty.clone())
             }
         };
-        self.push(StmtKind::Let(result, Expr::Compare(op, left.clone(), right_value.clone(), left_ty.clone())));
+        self.push(StmtKind::Let(result, compared));
         if more.is_empty() {
             return;
         }
@@ -472,6 +525,9 @@ impl<'a> Builder<'_, 'a> {
     }
 
     fn call(&mut self, whole: &ast::Expr, func: &ast::Expr, args: &[Arg]) -> Value {
+        if let ExprKind::Attr { object, name } = &func.kind {
+            return self.method(whole, object, &name.name, args);
+        }
         let ExprKind::Name(name) = &func.kind else {
             return Value::Done(self.unsupported(func.span, "a call of this value"));
         };
@@ -519,6 +575,24 @@ impl<'a> Builder<'_, 'a> {
                 let b = self.value(b);
                 Value::Expr(Expr::MinMax { max: name == "max", a, b, ty })
             }
+            ("len", [x]) => {
+                let ty = self.ty(x);
+                let v = self.value(x);
+                Value::Expr(Expr::Len(v, ty))
+            }
+            ("str", [x]) => {
+                let ty = self.ty(x);
+                let v = self.value(x);
+                Value::Expr(Expr::ToStr(v, ty))
+            }
+            ("ord", [x]) => {
+                let v = self.value(x);
+                Value::Expr(rt("lt_str_ord", vec![v], true))
+            }
+            ("chr", [x]) => {
+                let v = self.value(x);
+                Value::Expr(rt("lt_str_chr", vec![v], true))
+            }
             ("int" | "float" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32", [x])
                 if self.ty(x).is_numeric() || self.ty(x) == Ty::Bool =>
             {
@@ -529,6 +603,104 @@ impl<'a> Builder<'_, 'a> {
             }
             _ => Value::Done(self.unsupported(whole.span, &format!("`{name}` here"))),
         }
+    }
+
+    /// The parts of an f-string: text, and each value with its conversion and its spec.
+    fn format_parts(&mut self, parts: &[&StrPart]) -> Vec<FormatPart> {
+        let mut out = Vec::new();
+        for part in parts {
+            match part {
+                StrPart::Text(t) => out.push(FormatPart::Text(t.clone())),
+                StrPart::Expr { expr, conversion, spec } => {
+                    let ty = self.ty(expr);
+                    let value = self.value(expr);
+                    let spec_parts: Vec<&StrPart> = spec.iter().collect();
+                    let spec = self.format_parts(&spec_parts);
+                    out.push(FormatPart::Value { value, ty, conversion: *conversion, spec });
+                }
+            }
+        }
+        out
+    }
+
+    /// `object.name(args)`: a method of a built-in type.
+    fn method(&mut self, whole: &ast::Expr, object: &ast::Expr, name: &str, args: &[Arg]) -> Value {
+        let ty = self.ty(object);
+        if ty != Ty::Str {
+            return Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here")));
+        }
+        let receiver = self.value(object);
+        let mut values = Vec::new();
+        for a in args {
+            match a {
+                Arg::Positional(e) => values.push(self.value(e)),
+                _ => return Value::Done(self.unsupported(whole.span, &format!("these arguments of `{name}`"))),
+            }
+        }
+        let null = Operand::Const(Const::Null);
+        let flag = |b: bool| Operand::Const(Const::Bool(b));
+        let int = |v: i128| Operand::Const(Const::Int(v, IntKind::I64));
+        let mut all = vec![receiver];
+        let call = match (name, values.as_slice()) {
+            (
+                "lower" | "upper" | "swapcase" | "title" | "capitalize" | "isalpha" | "isdigit" | "isspace" | "isalnum"
+                | "isupper" | "islower",
+                [],
+            ) => {
+                let rt_name = match name {
+                    "lower" => "lt_str_lower",
+                    "upper" => "lt_str_upper",
+                    "swapcase" => "lt_str_swapcase",
+                    "title" => "lt_str_title",
+                    "capitalize" => "lt_str_capitalize",
+                    "isalpha" => "lt_str_isalpha",
+                    "isdigit" => "lt_str_isdigit",
+                    "isspace" => "lt_str_isspace",
+                    "isalnum" => "lt_str_isalnum",
+                    "isupper" => "lt_str_isupper",
+                    _ => "lt_str_islower",
+                };
+                rt(rt_name, all, false)
+            }
+            ("strip" | "lstrip" | "rstrip", rest @ ([] | [_])) => {
+                all.push(rest.first().cloned().unwrap_or(null));
+                all.push(flag(name != "rstrip"));
+                all.push(flag(name != "lstrip"));
+                rt("lt_str_strip", all, false)
+            }
+            ("startswith" | "endswith" | "count", [x]) => {
+                all.push(x.clone());
+                let rt_name = match name {
+                    "startswith" => "lt_str_startswith",
+                    "endswith" => "lt_str_endswith",
+                    _ => "lt_str_count",
+                };
+                rt(rt_name, all, false)
+            }
+            ("replace", [old, with, rest @ ..]) if rest.len() <= 1 => {
+                all.push(old.clone());
+                all.push(with.clone());
+                all.push(rest.first().cloned().unwrap_or(int(-1)));
+                rt("lt_str_replace", all, false)
+            }
+            ("zfill", [width]) => {
+                all.push(width.clone());
+                rt("lt_str_zfill", all, false)
+            }
+            ("center" | "ljust" | "rjust", [width, rest @ ..]) if rest.len() <= 1 => {
+                all.push(width.clone());
+                all.push(rest.first().cloned().unwrap_or(null));
+                let align = match name {
+                    "center" => '^',
+                    "ljust" => '<',
+                    _ => '>',
+                };
+                all.push(Operand::Const(Const::Char(align)));
+                rt("lt_str_pad", all, true)
+            }
+            _ => return Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
+        };
+        Value::Expr(call)
     }
 
     fn call_function(&mut self, name: &str, f: &'a FnDef, args: &[Arg]) -> Value {
@@ -562,6 +734,10 @@ impl<'a> Builder<'_, 'a> {
         }
         Value::Expr(Expr::Call(function_name(name), operands))
     }
+}
+
+fn rt(name: &'static str, args: Vec<Operand>, at: bool) -> Expr {
+    Expr::Rt { name, args, at }
 }
 
 enum Value {

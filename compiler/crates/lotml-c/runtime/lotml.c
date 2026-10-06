@@ -368,3 +368,5 @@ double lt_pow_f64(double a, double b, lt_at at) {
     }
     return r;
 }
+
+#include "lotml_text.c"

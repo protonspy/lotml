@@ -28,6 +28,12 @@
 #define LT_UNLIKELY(x) (x)
 #endif
 
+#if LT_GNU
+#define LT_UNUSED __attribute__((unused))
+#else
+#define LT_UNUSED
+#endif
+
 #if defined(_MSC_VER) && !defined(__clang__)
 #include <intrin.h>
 #endif
@@ -311,5 +317,75 @@ static inline bool lt_range_step(lt_range *r, int64_t *value) {
 #endif
     return true;
 }
+
+/* Strings ---------------------------------------------------------------------------------- */
+
+/* `str`: immutable UTF-8 text in a cell. `length` counts code points, so a string is ASCII when
+ * it equals `size`; `hash` is 0 until computed. */
+typedef struct lt_str {
+    lt_cell cell;
+    int64_t size;
+    int64_t length;
+    uint64_t hash;
+    char bytes[];
+} lt_str;
+
+/* A string literal: a static cell, never counted or freed. */
+#define LT_STR_LITERAL(name, size, length, text) \
+    static struct {                               \
+        lt_cell cell;                             \
+        int64_t s;                                \
+        int64_t l;                                \
+        uint64_t h;                               \
+        char bytes[(size) + 1];                   \
+    } name LT_UNUSED = {{0, 0}, (size), (length), 0, text}
+
+lt_str *lt_str_new(const char *bytes, int64_t size);
+lt_str *lt_str_from_buf(lt_buf *b);
+void lt_str_drop(lt_str *s);
+void lt_buf_str(lt_buf *b, const lt_str *s);
+void lt_buf_str_repr(lt_buf *b, const lt_str *s);
+lt_str *lt_str_of_i64(int64_t value);
+lt_str *lt_str_of_u64(uint64_t value);
+lt_str *lt_str_of_f64(double value);
+lt_str *lt_str_of_bool(bool value);
+lt_str *lt_str_none(void);
+
+lt_str *lt_str_concat(const lt_str *a, const lt_str *b);
+lt_str *lt_str_repeat(const lt_str *s, int64_t times, lt_at at);
+int lt_str_compare(const lt_str *a, const lt_str *b);
+bool lt_str_eq(const lt_str *a, const lt_str *b);
+bool lt_str_contains(const lt_str *haystack, const lt_str *needle);
+lt_str *lt_str_index(const lt_str *s, int64_t index, lt_at at);
+lt_str *lt_str_slice(const lt_str *s, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step, lt_at at);
+int64_t lt_str_ord(const lt_str *s, lt_at at);
+lt_str *lt_str_chr(int64_t code, lt_at at);
+
+lt_str *lt_str_lower(const lt_str *s);
+lt_str *lt_str_upper(const lt_str *s);
+lt_str *lt_str_swapcase(const lt_str *s);
+lt_str *lt_str_title(const lt_str *s);
+lt_str *lt_str_capitalize(const lt_str *s);
+lt_str *lt_str_strip(const lt_str *s, const lt_str *chars, bool left, bool right);
+bool lt_str_startswith(const lt_str *s, const lt_str *prefix);
+bool lt_str_endswith(const lt_str *s, const lt_str *suffix);
+lt_str *lt_str_replace(const lt_str *s, const lt_str *old, const lt_str *with, int64_t count);
+int64_t lt_str_count(const lt_str *s, const lt_str *sub);
+bool lt_str_isalpha(const lt_str *s);
+bool lt_str_isdigit(const lt_str *s);
+bool lt_str_isspace(const lt_str *s);
+bool lt_str_isalnum(const lt_str *s);
+bool lt_str_isupper(const lt_str *s);
+bool lt_str_islower(const lt_str *s);
+lt_str *lt_str_zfill(const lt_str *s, int64_t width);
+lt_str *lt_str_pad(const lt_str *s, int64_t width, const lt_str *fill, char align, lt_at at);
+
+/* The format mini-language: `format(value, spec)` as Python writes it, into `b`. */
+void lt_format_i64(lt_buf *b, int64_t value, const char *spec, size_t size, lt_at at);
+void lt_format_u64(lt_buf *b, uint64_t value, const char *spec, size_t size, lt_at at);
+void lt_format_f64(lt_buf *b, double value, const char *spec, size_t size, lt_at at);
+void lt_format_bool(lt_buf *b, bool value, const char *spec, size_t size, lt_at at);
+void lt_format_str(lt_buf *b, const lt_str *value, const char *spec, size_t size, lt_at at);
+void lt_format_none(lt_buf *b, const char *spec, size_t size, lt_at at);
 
 #endif
