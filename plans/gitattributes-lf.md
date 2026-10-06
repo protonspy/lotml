@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 status: approved
-checksum: 807bde5c9242e122e454347143a47056025cc2b1ec22198a2d2c89db860de185
+checksum: 32aa1505612b3a9ed2ce793fb8e1b7af41112aeb06c099a2947a0e0d9f2fc9d0
 ---
 
 # Line endings
@@ -23,7 +23,7 @@ tests pass.
 
 ## Tasks
 
-- [ ] 1.1 (Unit) Check out every text file with LF, binaries untouched
+- [x] 1.1 (Unit) Check out every text file with LF, binaries untouched
 
 ## Done when
 
