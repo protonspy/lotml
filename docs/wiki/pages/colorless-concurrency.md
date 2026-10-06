@@ -65,8 +65,18 @@ reads a closure's variable when it is called, so lambdas made in a loop all saw 
 each captured local is now a default bound when the lambda is made. With the GIL the threads
 interleave rather than run in parallel; free-threaded CPython runs them at once.
 
-## Unmeasured hypothesis
+## The forgotten-`await` hypothesis, measured
 
 No source found measures how often "forgot the `await`" or spreading `async` happens in
-LLM-generated code. The original study's argument is plausible, but it is a hypothesis: it enters
-the [[evaluation-harness]] as a question, not as a fact.
+LLM-generated code, so it entered the [[evaluation-harness]] as a question
+(`harness/results/awaits.md`). Four models wrote 30 concurrency tasks twice: with asyncio, given
+helper coroutines, and in lotml, given helper functions and `parallel`. The hypothesis was not
+borne out. In 120 asyncio answers there was one forgotten `await` (Llama made coroutines it never
+awaited, and still returned the right values) and no colour mistake; every Python answer ran the
+calls concurrently, and 117 were right. Writing lotml, the frontier models made no concurrency
+mistake either, but the open ones misused the tasks 26 times: Qwen 23 of 30 times, writing each
+task as `lambda k: f(k)` inside `[… for k in keys]`, which is the habit `map` builds. So the
+colorless form traded a mistake models rarely make for one the small ones make often, before any
+feedback. The compiler now offers the fix for that habit (drop the parameter the loop binds). What
+the colorless form keeps is what the paper argued from: no function's signature changes because it
+starts waiting.

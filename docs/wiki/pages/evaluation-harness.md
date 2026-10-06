@@ -146,3 +146,14 @@ most of the score where it cannot.
 The runs used the compiler before its security review's boundary fixes; checked again with the
 fixed compiler, none of the 584 passing lotml programs is refused, so the result stands. One
 Llama answer lost to a local server error was asked again with the fixed compiler.
+
+The phase 2 gate passed (`harness/results/gate-2.md`, from `python -m
+lotml_harness.experiments.gate2`). Both criteria were checked on data rather than on a
+demonstration. Python imported each of the 509 corpus programs from `lotml build` and called it
+through the checked boundary on its task's hidden tests, and all 509 passed. A lotml program
+called Python's `textwrap` through the interface `lotml bind` wrote from a stub, and printed
+what Python prints, including the `PyError` of a call Python refuses. Each of the 508 corpus
+programs that carries its tests passed `lotml test`. Phase 2 also measured three questions the
+literature left open: terse against detailed diagnostics ([[semantic-compiler]]), the
+forgotten-`await` hypothesis ([[colorless-concurrency]]), and type masks by the line for open
+models ([[constrained-decoding]]).

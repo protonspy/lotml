@@ -59,6 +59,14 @@ and mutability diagnostics with the fix ready.
   et al. ([arXiv 2410.08105](https://arxiv.org/abs/2410.08105)) varied runtime feedback, not compiler
   messages, and found small differences. Hence two modes, terse for people and detailed for agents,
   with the alternatives always present.
+- **Measured in lotml's harness** (`harness/results/diagnostics.md`): each of the 258 lotml first
+  answers the compiler refused in phase 1 was answered twice, with the terse report (location, code,
+  message and the alternatives) and with the detailed one (the full report and each code's page).
+  The next answer was repaired about as often either way: 2 answers only with the terse report, 7
+  only with the detailed one (p = 0.180). Haiku and Sonnet repaired the same answers in both modes;
+  the open models did a little better with the detailed one (Llama 17 against 15 of 143, Qwen 25
+  against 22 of 91), too little to tell apart. Detail beyond the alternatives buys little; the
+  default stays the full report for agents, and nothing measured argues for spending more on it.
 - **Stable codes, never reused**, each with an explanation page; JSON of our own with SARIF export
   (`tsc` has no JSON output; GCC 16 removed its JSON format in favour of SARIF).
 
