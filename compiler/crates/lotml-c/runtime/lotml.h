@@ -484,7 +484,21 @@ typedef struct lt_type {
     void (*repr)(lt_buf *b, const void *value);
     void (*str)(lt_buf *b, const void *value);
     void (*share)(void *value);
+    /* the value as a test report shows it: `show` of the Python target's runtime */
+    void (*show)(lt_buf *b, const void *value);
 } lt_type;
+
+/* Test blocks: each run by `lt_run_test`, a failed `assert`, an error passed on by `?` or a
+ * panic caught and kept; `lt_test_report` writes what `lotml test` reads (R1.4). */
+typedef void (*lt_test_fn)(void);
+void lt_run_test(const char *name, lt_test_fn test);
+void lt_test_report(void);
+LT_NORETURN void lt_assert_fail(lt_at at, const char *expression, const char *op, const lt_type *lt, const void *l,
+                                const lt_type *rt, const void *r, const lt_type *mt, const void *m);
+LT_NORETURN void lt_test_error(const lt_type *type, const void *error, lt_at at);
+LT_NORETURN void lt_assert_compared(const lt_str *expression, const lt_str *op, const lt_type *lt, const void *l,
+                                    const lt_type *rt, const void *r, const lt_type *mt, const void *m, lt_at at);
+void lt_buf_json(lt_buf *b, const char *text, size_t length);
 
 extern const lt_type lt_type_i8, lt_type_i16, lt_type_i32, lt_type_i64;
 extern const lt_type lt_type_u8, lt_type_u16, lt_type_u32, lt_type_u64;

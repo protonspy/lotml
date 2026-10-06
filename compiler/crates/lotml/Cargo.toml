@@ -18,6 +18,7 @@ lotml-check = { path = "../lotml-check" }
 lotml-db = { path = "../lotml-db" }
 lotml-fmt = { path = "../lotml-fmt" }
 lotml-py = { path = "../lotml-py" }
+lotml-c = { path = "../lotml-c" }
 lotml-ide = { path = "../lotml-ide" }
 
 [lints]

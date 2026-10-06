@@ -89,7 +89,7 @@ void lt_unorderable(lt_at at, const char *type) {
         PUT(b, (WIDE) * (const CTYPE *)a);                                                                   \
     }                                                                                                        \
     const lt_type lt_type_##NAME = {sizeof(CTYPE), NULL, NULL, lt_v_eq_##NAME, lt_v_cmp_##NAME, lt_v_hash_##NAME,  \
-                                    lt_v_repr_##NAME, lt_v_repr_##NAME, NULL};
+                                    lt_v_repr_##NAME, lt_v_repr_##NAME, NULL, lt_v_repr_##NAME};
 
 LT_INT_TYPE(i8, int8_t, int64_t, lt_buf_i64, lt_hash_i64)
 LT_INT_TYPE(i16, int16_t, int64_t, lt_buf_i64, lt_hash_i64)
@@ -114,7 +114,7 @@ static int64_t lt_hash_f64_value(const void *a) {
 static void lt_repr_f64(lt_buf *b, const void *a) {
     lt_buf_f64(b, *(const double *)a);
 }
-const lt_type lt_type_f64 = {sizeof(double), NULL, NULL, lt_eq_f64, lt_cmp_f64, lt_hash_f64_value, lt_repr_f64, lt_repr_f64, NULL};
+const lt_type lt_type_f64 = {sizeof(double), NULL, NULL, lt_eq_f64, lt_cmp_f64, lt_hash_f64_value, lt_repr_f64, lt_repr_f64, NULL, lt_repr_f64};
 
 static bool lt_eq_bool(const void *a, const void *b) {
     return *(const bool *)a == *(const bool *)b;
@@ -129,7 +129,7 @@ static int64_t lt_hash_bool(const void *a) {
 static void lt_repr_bool(lt_buf *b, const void *a) {
     lt_buf_bool(b, *(const bool *)a);
 }
-const lt_type lt_type_bool = {sizeof(bool), NULL, NULL, lt_eq_bool, lt_cmp_bool, lt_hash_bool, lt_repr_bool, lt_repr_bool, NULL};
+const lt_type lt_type_bool = {sizeof(bool), NULL, NULL, lt_eq_bool, lt_cmp_bool, lt_hash_bool, lt_repr_bool, lt_repr_bool, NULL, lt_repr_bool};
 
 static bool lt_eq_none(const void *a, const void *b) {
     (void)a;
@@ -149,7 +149,7 @@ static void lt_repr_none(lt_buf *b, const void *a) {
     (void)a;
     lt_buf_puts(b, "None");
 }
-const lt_type lt_type_none = {sizeof(uint8_t), NULL, NULL, lt_eq_none, lt_cmp_none, lt_hash_none, lt_repr_none, lt_repr_none, NULL};
+const lt_type lt_type_none = {sizeof(uint8_t), NULL, NULL, lt_eq_none, lt_cmp_none, lt_hash_none, lt_repr_none, lt_repr_none, NULL, lt_repr_none};
 
 static void lt_inc_str(void *a) {
     if (*(lt_str **)a != NULL) lt_inc(*(lt_str **)a);
@@ -175,7 +175,12 @@ static void lt_share_cell(void *a) {
     if (lt_count_of(c) > 0) c->count = -c->count;
 }
 static int64_t lt_hash_str_value(const void *value);
-const lt_type lt_type_str = {sizeof(lt_str *), lt_inc_str, lt_dec_str, lt_eq_str, lt_cmp_str, lt_hash_str_value, lt_repr_str, lt_str_str, lt_share_cell};
+/* A string as JSON writes it, with `ensure_ascii=False`. */
+static void lt_show_str(lt_buf *b, const void *a) {
+    const lt_str *s = *(lt_str *const *)a;
+    lt_buf_json(b, s->bytes, s->size);
+}
+const lt_type lt_type_str = {sizeof(lt_str *), lt_inc_str, lt_dec_str, lt_eq_str, lt_cmp_str, lt_hash_str_value, lt_repr_str, lt_str_str, lt_share_cell, lt_show_str};
 
 void lt_buf_value(lt_buf *b, const lt_type *type, const void *value) {
     type->str(b, value);
@@ -766,9 +771,19 @@ static void lt_share_closure(void *a) {
 }
 
 const lt_type lt_type_closure = {sizeof(lt_closure *), lt_inc_closure, lt_dec_closure, lt_eq_closure, lt_cmp_closure, NULL,
-                                 lt_repr_closure, lt_repr_closure, lt_share_closure};
+                                 lt_repr_closure, lt_repr_closure, lt_share_closure, lt_repr_closure};
 
-const lt_type lt_type_list = {sizeof(lt_list *), lt_list_inc, lt_list_dec, lt_eq_list, lt_cmp_list, NULL, lt_repr_list, lt_repr_list, lt_share_list};
+static void lt_show_list(lt_buf *b, const void *a) {
+    const lt_list *l = *(lt_list *const *)a;
+    lt_buf_put(b, "[", 1);
+    for (int64_t i = 0; i < l->len; i++) {
+        if (i > 0) lt_buf_put(b, ", ", 2);
+        l->type->show(b, LT_AT(l, i));
+    }
+    lt_buf_put(b, "]", 1);
+}
+
+const lt_type lt_type_list = {sizeof(lt_list *), lt_list_inc, lt_list_dec, lt_eq_list, lt_cmp_list, NULL, lt_repr_list, lt_repr_list, lt_share_list, lt_show_list};
 
 /* Heaps ----------------------------------------------------------------------------------- */
 
@@ -902,7 +917,16 @@ static void lt_repr_heap(lt_buf *b, const void *a) {
     lt_buf_puts(b, "<Heap>");
 }
 
-const lt_type lt_type_heap = {sizeof(lt_list *), lt_list_inc, lt_list_dec, lt_eq_heap, lt_cmp_heap, NULL, lt_repr_heap, lt_repr_heap, lt_share_list};
+/* `Heap([…])`: the elements in order. */
+static void lt_show_heap(lt_buf *b, const void *a) {
+    lt_list *sorted = lt_list_sorted(*(lt_list *const *)a, false, (lt_at){NULL, 0, NULL});
+    lt_buf_puts(b, "Heap(");
+    lt_show_list(b, &sorted);
+    lt_buf_put(b, ")", 1);
+    lt_list_drop(sorted);
+}
+
+const lt_type lt_type_heap = {sizeof(lt_list *), lt_list_inc, lt_list_dec, lt_eq_heap, lt_cmp_heap, NULL, lt_repr_heap, lt_repr_heap, lt_share_list, lt_show_heap};
 
 /* `hash(x)`: what a set would file x under; a value that has none stops the program. */
 int64_t lt_hash_value(const lt_type *type, const void *value, lt_at at) {

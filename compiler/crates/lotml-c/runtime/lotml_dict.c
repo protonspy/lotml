@@ -425,7 +425,23 @@ static void lt_share_dict(void *value) {
     }
 }
 
-const lt_type lt_type_dict = {sizeof(lt_dict *), lt_inc_dict, lt_dec_dict, lt_eq_dict, lt_cmp_dict, NULL, lt_repr_dict, lt_repr_dict, lt_share_dict};
+static void lt_show_dict(lt_buf *b, const void *a) {
+    const lt_dict *d = *(lt_dict *const *)a;
+    lt_buf_put(b, "{", 1);
+    bool first = true;
+    for (int64_t i = 0; i < d->used; i++) {
+        char *e = lt_dict_entry(d, i);
+        if (!LT_ENTRY_LIVE(e)) continue;
+        if (!first) lt_buf_put(b, ", ", 2);
+        first = false;
+        d->key->show(b, LT_ENTRY_KEY(e));
+        lt_buf_put(b, ": ", 2);
+        d->value->show(b, LT_ENTRY_VALUE(d, e));
+    }
+    lt_buf_put(b, "}", 1);
+}
+
+const lt_type lt_type_dict = {sizeof(lt_dict *), lt_inc_dict, lt_dec_dict, lt_eq_dict, lt_cmp_dict, NULL, lt_repr_dict, lt_repr_dict, lt_share_dict, lt_show_dict};
 
 /* Sets, as CPython's setobject.c ------------------------------------------------------------ */
 
@@ -814,4 +830,37 @@ static void lt_share_set(void *value) {
     }
 }
 
-const lt_type lt_type_set = {sizeof(lt_set *), lt_inc_set, lt_dec_set, lt_eq_set, lt_cmp_set, NULL, lt_repr_set, lt_repr_set, lt_share_set};
+static int lt_cmp_text(const void *a, const void *b) {
+    return strcmp(*(char *const *)a, *(char *const *)b);
+}
+
+/* A set's elements shown and sorted as text, as the Python target's `show` sorts them. */
+static void lt_show_set(lt_buf *b, const void *a) {
+    const lt_set *s = *(lt_set *const *)a;
+    if (s->used == 0) {
+        lt_buf_puts(b, "set()");
+        return;
+    }
+    char **texts = malloc((size_t)s->used * sizeof(char *));
+    if (texts == NULL) abort();
+    int64_t n = 0;
+    for (int64_t i = 0; i <= s->mask; i++) {
+        char *e = lt_set_slot(s, (uint64_t)i);
+        if (LT_SLOT_STATE(e) != LT_SET_ACTIVE) continue;
+        lt_buf t = LT_BUF;
+        s->type->show(&t, LT_SLOT_KEY(e));
+        lt_buf_put(&t, "", 1);
+        texts[n++] = t.data;
+    }
+    qsort(texts, (size_t)n, sizeof(char *), lt_cmp_text);
+    lt_buf_put(b, "{", 1);
+    for (int64_t i = 0; i < n; i++) {
+        if (i > 0) lt_buf_put(b, ", ", 2);
+        lt_buf_puts(b, texts[i]);
+        free(texts[i]);
+    }
+    free(texts);
+    lt_buf_put(b, "}", 1);
+}
+
+const lt_type lt_type_set = {sizeof(lt_set *), lt_inc_set, lt_dec_set, lt_eq_set, lt_cmp_set, NULL, lt_repr_set, lt_repr_set, lt_share_set, lt_show_set};

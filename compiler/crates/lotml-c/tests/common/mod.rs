@@ -34,10 +34,22 @@ fn finish(out: std::process::Output, c: String) -> Run {
 /// `source` compiled by the C backend, built and run; `counting` builds it reporting the cells
 /// left at exit.
 pub fn run_c_with(name: &str, source: &str, counting: bool) -> Run {
+    build_and_run(name, source, counting, lotml_c::compile)
+}
+
+/// The `test` blocks of `source` compiled by the C backend, built and run: the report is the last
+/// line of standard output.
+pub fn run_c_tests(name: &str, source: &str) -> Run {
+    build_and_run(name, source, false, lotml_c::compile_tests)
+}
+
+type Compile = fn(&str, &Path) -> Result<String, Vec<lotml_diag::Diagnostic>>;
+
+fn build_and_run(name: &str, source: &str, counting: bool, compile: Compile) -> Run {
     let dir = scratch("c-target", name);
     let path = dir.join("prog.lotml");
     std::fs::write(&path, source).unwrap();
-    let c = lotml_c::compile(source, &path).unwrap_or_else(|d| {
+    let c = compile(source, &path).unwrap_or_else(|d| {
         panic!("{source}\ndoes not compile to C: {:#?}", d.iter().map(|d| &d.message).collect::<Vec<_>>())
     });
     let c = if counting { format!("#define LT_COUNT_CELLS 1\n{c}") } else { c };

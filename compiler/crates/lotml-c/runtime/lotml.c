@@ -145,37 +145,236 @@ int32_t lt_atomic_add(int32_t *count, int32_t delta) {
 
 /* Panics ----------------------------------------------------------------------------------- */
 
-/* A panic in a task of `parallel`: kept for the caller, which stops the program with the first
- * one once every task has finished. */
+/* What stopped a task of `parallel` or a test: a panic, a failed `assert` with the values it
+ * compared, or an error `?` passed on. A task's is kept for the caller, which raises the first
+ * once every task has finished; a test's is reported. The texts are the runtime's to free. */
+enum { LT_PANICKED, LT_FAILED, LT_ERRED };
+
 typedef struct lt_failure {
     bool failed;
+    int outcome;
     const char *kind;
     char message[512];
     lt_at at;
+    const char *expression;
+    const char *op;
+    char *left;
+    char *right;
+    char *note;
+    char *error;
 } lt_failure;
 
 static LT_THREAD jmp_buf *lt_task_jump = NULL;
 static LT_THREAD lt_failure *lt_task_failure = NULL;
 
-void lt_panic(lt_at at, const char *kind, const char *message) {
+static void lt_failure_free(lt_failure *f) {
+    free(f->left);
+    free(f->right);
+    free(f->note);
+    free(f->error);
+    f->left = f->right = f->note = f->error = NULL;
+}
+
+/* `f` handed to the task or test being run, or, with none, the program stopped with it. */
+static LT_NORETURN void lt_raise(lt_failure *f) {
     if (lt_task_jump != NULL) {
+        *lt_task_failure = *f;
         lt_task_failure->failed = true;
-        lt_task_failure->kind = kind;
-        snprintf(lt_task_failure->message, sizeof lt_task_failure->message, "%s", message != NULL ? message : "");
-        lt_task_failure->at = at;
         longjmp(*lt_task_jump, 1);
     }
     lt_flush();
-    if (message != NULL && message[0] != '\0') {
-        fprintf(stderr, "panic: %s: %s\n", kind, message);
+    if (f->message[0] != '\0') {
+        fprintf(stderr, "panic: %s: %s\n", f->kind, f->message);
     } else {
-        fprintf(stderr, "panic: %s\n", kind);
+        fprintf(stderr, "panic: %s\n", f->kind);
     }
-    if (at.file != NULL) {
-        fprintf(stderr, "  File \"%s\", line %d, in %s\n", at.file, at.line, at.function);
+    if (f->left != NULL && f->right != NULL) {
+        fprintf(stderr, "  left:  %s\n  right: %s\n", f->left, f->right);
+    }
+    if (f->at.file != NULL) {
+        fprintf(stderr, "  File \"%s\", line %d, in %s\n", f->at.file, f->at.line, f->at.function);
     }
     fflush(stderr);
     exit(101);
+}
+
+void lt_panic(lt_at at, const char *kind, const char *message) {
+    lt_failure f;
+    memset(&f, 0, sizeof f);
+    f.outcome = LT_PANICKED;
+    f.kind = kind;
+    snprintf(f.message, sizeof f.message, "%s", message != NULL ? message : "");
+    f.at = at;
+    lt_raise(&f);
+}
+
+/* The text `show` gives `value` of `type`, in memory of its own. */
+static char *lt_shown(const lt_type *type, const void *value) {
+    lt_buf b = LT_BUF;
+    type->show(&b, value);
+    lt_buf_put(&b, "", 1);
+    return b.data;
+}
+
+void lt_assert_fail(lt_at at, const char *expression, const char *op, const lt_type *lt, const void *l,
+                    const lt_type *rt, const void *r, const lt_type *mt, const void *m) {
+    lt_failure f;
+    memset(&f, 0, sizeof f);
+    f.outcome = LT_FAILED;
+    f.kind = "TestFailure";
+    snprintf(f.message, sizeof f.message, "%s", expression);
+    f.at = at;
+    f.expression = expression;
+    f.op = op;
+    if (op != NULL) {
+        f.left = lt_shown(lt, l);
+        f.right = lt_shown(rt, r);
+    }
+    if (mt != NULL) f.note = lt_shown(mt, m);
+    lt_raise(&f);
+}
+
+/* A failed `assert` as the compiled program reports it: its text and operator as literals, `op`
+ * NULL when it is not one comparison, `mt` NULL when it has no message. */
+void lt_assert_compared(const lt_str *expression, const lt_str *op, const lt_type *lt, const void *l,
+                        const lt_type *rt, const void *r, const lt_type *mt, const void *m, lt_at at) {
+    lt_assert_fail(at, expression->bytes, op != NULL ? op->bytes : NULL, lt, l, rt, r, mt, m);
+}
+
+void lt_test_error(const lt_type *type, const void *error, lt_at at) {
+    lt_failure f;
+    memset(&f, 0, sizeof f);
+    f.outcome = LT_ERRED;
+    f.kind = "Fail";
+    f.at = at;
+    f.error = lt_shown(type, error);
+    snprintf(f.message, sizeof f.message, "%s", f.error);
+    lt_raise(&f);
+}
+
+/* Tests ------------------------------------------------------------------------------------ */
+
+typedef struct lt_test_result {
+    const char *name;
+    const char *function;
+    lt_failure failure;
+} lt_test_result;
+
+static lt_test_result *lt_tests = NULL;
+static int64_t lt_test_count = 0;
+
+void lt_run_test(const char *name, lt_test_fn test) {
+    lt_test_result *grown = realloc(lt_tests, (size_t)(lt_test_count + 1) * sizeof(lt_test_result));
+    if (grown == NULL) abort();
+    lt_tests = grown;
+    lt_test_result *result = &lt_tests[lt_test_count++];
+    memset(result, 0, sizeof *result);
+    result->name = name;
+    jmp_buf here;
+    jmp_buf *outer = lt_task_jump;
+    lt_failure *outer_failure = lt_task_failure;
+    lt_task_jump = &here;
+    lt_task_failure = &result->failure;
+    if (setjmp(here) == 0) test();
+    lt_task_jump = outer;
+    lt_task_failure = outer_failure;
+}
+
+/* `text` as a JSON string, quoted. */
+void lt_buf_json(lt_buf *b, const char *text, size_t length) {
+    lt_buf_put(b, "\"", 1);
+    for (size_t i = 0; i < length; i++) {
+        unsigned char c = (unsigned char)text[i];
+        switch (c) {
+        case '"': lt_buf_put(b, "\\\"", 2); break;
+        case '\\': lt_buf_put(b, "\\\\", 2); break;
+        case '\n': lt_buf_put(b, "\\n", 2); break;
+        case '\r': lt_buf_put(b, "\\r", 2); break;
+        case '\t': lt_buf_put(b, "\\t", 2); break;
+        case '\b': lt_buf_put(b, "\\b", 2); break;
+        case '\f': lt_buf_put(b, "\\f", 2); break;
+        default:
+            if (c < 0x20) {
+                char escaped[8];
+                snprintf(escaped, sizeof escaped, "\\u%04x", c);
+                lt_buf_puts(b, escaped);
+            } else {
+                lt_buf_put(b, (const char *)&c, 1);
+            }
+        }
+    }
+    lt_buf_put(b, "\"", 1);
+}
+
+static void lt_json_field(lt_buf *b, const char *key, const char *text) {
+    lt_buf_puts(b, ", ");
+    lt_buf_json(b, key, strlen(key));
+    lt_buf_puts(b, ": ");
+    lt_buf_json(b, text, strlen(text));
+}
+
+static void lt_json_line(lt_buf *b, int line) {
+    lt_buf_puts(b, ", \"line\": ");
+    if (line > 0) {
+        lt_buf_i64(b, line);
+    } else {
+        lt_buf_puts(b, "null");
+    }
+}
+
+void lt_test_report(void) {
+    lt_flush();
+    lt_buf b = LT_BUF;
+    lt_buf_puts(&b, "\n[");
+    for (int64_t i = 0; i < lt_test_count; i++) {
+        lt_test_result *t = &lt_tests[i];
+        lt_failure *f = &t->failure;
+        if (i > 0) lt_buf_puts(&b, ", ");
+        lt_buf_puts(&b, "{\"name\": ");
+        lt_buf_json(&b, t->name, strlen(t->name));
+        if (!f->failed) {
+            lt_buf_puts(&b, ", \"outcome\": \"pass\"}");
+            continue;
+        }
+        int line = f->at.file != NULL ? f->at.line : 0;
+        if (f->outcome == LT_FAILED) {
+            lt_json_field(&b, "outcome", "fail");
+            lt_json_field(&b, "expression", f->expression);
+            if (f->op != NULL) {
+                lt_json_field(&b, "op", f->op);
+                lt_json_field(&b, "left", f->left);
+                lt_json_field(&b, "right", f->right);
+            }
+            if (f->note != NULL) lt_json_field(&b, "message", f->note);
+            lt_json_line(&b, line);
+        } else if (f->outcome == LT_ERRED) {
+            lt_json_field(&b, "outcome", "error");
+            lt_json_field(&b, "error", f->error);
+            lt_json_line(&b, line);
+        } else {
+            lt_json_field(&b, "outcome", "panic");
+            lt_json_field(&b, "kind", f->kind);
+            lt_json_field(&b, "message", f->message);
+            lt_json_line(&b, line);
+            lt_buf_puts(&b, ", \"trace\": [");
+            if (f->at.file != NULL) {
+                lt_buf_puts(&b, "{\"function\": ");
+                lt_buf_json(&b, f->at.function, strlen(f->at.function));
+                lt_json_line(&b, line);
+                lt_buf_puts(&b, "}");
+            }
+            lt_buf_puts(&b, "]");
+        }
+        lt_buf_puts(&b, "}");
+        lt_failure_free(f);
+    }
+    lt_buf_puts(&b, "]\n");
+    fwrite(b.data, 1, b.len, stdout);
+    fflush(stdout);
+    lt_buf_free(&b);
+    free(lt_tests);
+    lt_tests = NULL;
+    lt_test_count = 0;
 }
 
 void lt_panicf(lt_at at, const char *kind, const char *format, ...) {
@@ -204,7 +403,7 @@ void lt_todo(lt_at at) {
 }
 
 void lt_assert_failed(lt_at at, const char *expression) {
-    lt_panic(at, "TestFailure", expression);
+    lt_assert_fail(at, expression, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 /* Text ------------------------------------------------------------------------------------- */
@@ -539,12 +738,19 @@ lt_list *lt_parallel(const lt_list *tasks, const lt_type *result, lt_task_fn run
     lt_task_jump = outer_jump;
     lt_task_failure = outer_failure;
     results->len = n;
+    int64_t first = -1;
     for (int64_t i = 0; i < n; i++) {
-        if (failures[i].failed) {
-            lt_failure first = failures[i];
-            free(failures);
-            lt_panic(first.at, first.kind, first.message);
+        if (!failures[i].failed) continue;
+        if (first < 0) {
+            first = i;
+        } else {
+            lt_failure_free(&failures[i]);
         }
+    }
+    if (first >= 0) {
+        lt_failure raised = failures[first];
+        free(failures);
+        lt_raise(&raised);
     }
     free(failures);
     return results;

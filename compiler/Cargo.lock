@@ -263,6 +263,7 @@ name = "lotml"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "lotml-c",
  "lotml-check",
  "lotml-db",
  "lotml-diag",
@@ -283,6 +284,7 @@ dependencies = [
  "lotml-diag",
  "lotml-py",
  "lotml-syntax",
+ "serde_json",
 ]
 
 [[package]]

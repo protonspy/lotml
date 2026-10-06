@@ -14,7 +14,8 @@ use crate::mir::{
 };
 use crate::types::Types;
 
-pub fn program(lowered: &Lowered, file: &str) -> String {
+/// The C of the program; with `tests`, its `main` runs the `test` blocks and reports them.
+pub fn program(lowered: &Lowered, file: &str, tests: bool) -> String {
     let file = c_string_text(file.as_bytes());
     let mut literals = BTreeMap::new();
     let mut types = Types::new(&lowered.declared, &lowered.traits);
@@ -74,6 +75,13 @@ pub fn program(lowered: &Lowered, file: &str) -> String {
         .function();
     }
     out.push_str("int main(void) {\n    lt_init();\n");
+    if tests {
+        for (name, function) in &lowered.tests {
+            let _ = writeln!(out, "    lt_run_test(\"{}\", {function});", c_string_text(name.as_bytes()));
+        }
+        out.push_str("    lt_test_report();\n    return lt_exit(0);\n}\n");
+        return out;
+    }
     let main = lowered.functions.iter().find(|f| f.name == function_name("main"));
     if let Some(Ty::Result(_, error)) = main.map(|f| &f.ret) {
         let result = types.c_type(&main.expect("main").ret);

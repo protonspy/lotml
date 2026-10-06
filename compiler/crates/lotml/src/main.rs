@@ -77,7 +77,7 @@ enum Command {
         #[arg(required = true)]
         paths: Vec<PathBuf>,
     },
-    /// Compile files to Python modules, written with the runtime they import.
+    /// Compile files to Python modules, written with the runtime they import, or to executables.
     Build {
         /// Files, or directories searched for `.lotml` files.
         #[arg(required = true)]
@@ -85,11 +85,17 @@ enum Command {
         /// Where to write the modules.
         #[arg(short, long, default_value = "build")]
         out: PathBuf,
+        /// What to compile to.
+        #[arg(long, value_enum, default_value = "python")]
+        target: Target,
     },
     /// Run a program's `fn main()`.
     Run {
         /// The program.
         path: PathBuf,
+        /// What to compile to and run.
+        #[arg(long, value_enum, default_value = "python")]
+        target: Target,
     },
     /// Run the `test` blocks, reporting the values a failed comparison saw.
     Test {
@@ -99,6 +105,9 @@ enum Command {
         /// Report as JSON.
         #[arg(long)]
         json: bool,
+        /// What to compile to and run.
+        #[arg(long, value_enum, default_value = "python")]
+        target: Target,
     },
     /// Write the interface lotml imports a Python module through, from the module's stub.
     Bind {
@@ -119,6 +128,14 @@ enum Command {
         #[arg(long, default_value = ".")]
         root: PathBuf,
     },
+}
+
+/// What a program is compiled to: Python modules run by Python, or C built by a C compiler
+/// (adr:0014).
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum Target {
+    Python,
+    C,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -158,9 +175,9 @@ fn run() -> ExitCode {
             print!("{}", index::digest(&s));
             true
         }),
-        Command::Build { paths, out } => return status(exec::build(&paths, &out)),
-        Command::Run { path } => return status(exec::run(&path)),
-        Command::Test { paths, json } => return status(exec::test(&paths, json)),
+        Command::Build { paths, out, target } => return status(exec::build(&paths, &out, target)),
+        Command::Run { path, target } => return status(exec::run(&path, target)),
+        Command::Test { paths, json, target } => return status(exec::test(&paths, json, target)),
         Command::Bind { module, stub, out } => exec::bind(&module, stub.as_deref(), &out),
         Command::Lsp => return status(lsp::serve()),
         Command::Mcp { root } => return status(mcp::serve(&root)),

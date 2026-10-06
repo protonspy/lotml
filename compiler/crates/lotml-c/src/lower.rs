@@ -32,6 +32,8 @@ pub struct Lowered {
     pub traits: BTreeMap<String, usize>,
     /// The table of each type a `dyn` value was made of, one per trait.
     pub vtables: Vec<VTable>,
+    /// Each `test` block, when they were asked for: its name and its C function.
+    pub tests: Vec<(String, String)>,
 }
 
 /// The table of one type's methods for one trait, a slot per method of the trait in name order:
@@ -200,7 +202,8 @@ pub fn function_name(name: &str) -> String {
     format!("lf_{name}")
 }
 
-pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, Vec<Diagnostic>> {
+/// The module as functions of the intermediate form; with `tests`, its `test` blocks too.
+pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Result<Lowered, Vec<Diagnostic>> {
     let mut cx = Context {
         text,
         checked,
@@ -272,12 +275,19 @@ pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, 
         }
     }
     let mut functions = Vec::new();
+    let mut test_names = Vec::new();
     for item in &module.items {
         match item {
             Item::Fn(f) => {
                 if let Some(function) = cx.function(f) {
                     functions.push(function);
                 }
+            }
+            Item::Test(t) if tests => {
+                let k = test_names.len() + 1;
+                let function = cx.test(t, k);
+                test_names.push((t.name.clone(), function.name.clone()));
+                functions.push(function);
             }
             Item::Impl(imp) => {
                 let ast::TypeKind::Named { name, .. } = &imp.target.kind else {
@@ -330,6 +340,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, 
         fn_refs: std::mem::take(&mut cx.fn_refs),
         traits: checked.traits.iter().map(|(name, methods)| (name.clone(), methods.len())).collect(),
         vtables: std::mem::take(&mut cx.vtables),
+        tests: test_names,
     })
 }
 
@@ -443,6 +454,32 @@ impl<'a> Context<'a> {
         self.vtables.push(VTable { trait_name: trait_name.to_string(), ty: ty.clone(), slots });
         self.vtable_ids.insert(key, index);
         Some(index)
+    }
+
+    /// The `test` block `t`, the `k`th, as a function of no parameters: named in a report's trace
+    /// as the Python target names it.
+    fn test(&mut self, t: &'a ast::TestDef, k: usize) -> Function {
+        let line = self.line(t.span.start);
+        let mut b = Builder {
+            cx: self,
+            function: Function {
+                name: format!("lt_test{k}"),
+                source_name: format!("__test_{k}"),
+                params: Vec::new(),
+                ret: Ty::Unit,
+                locals: Vec::new(),
+                body: Vec::new(),
+                line,
+            },
+            vars: HashMap::new(),
+            blocks: vec![Vec::new()],
+            line,
+            subst: Subst::default(),
+        };
+        b.statements(&t.body.stmts);
+        let mut function = b.function;
+        function.body = b.blocks.pop().unwrap_or_default();
+        function
     }
 
     /// The function `f`, of signature `sig`, as the C function `name`, its expressions' types
@@ -657,12 +694,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 };
                 self.push(StmtKind::Return(value));
             }
-            Ast::Assert { test, .. } => {
-                let ok = self.condition(test);
-                let expression = self.cx.source(test.span).to_string();
-                let fail = self.block(|b| b.push(StmtKind::Panic(Panic::Assert(expression))));
-                self.push(StmtKind::If(ok, Vec::new(), fail));
-            }
+            Ast::Assert { test, message } => self.assert(test, message.as_ref()),
             Ast::Pass => {}
             Ast::Break => self.push(StmtKind::Break),
             Ast::Continue => self.push(StmtKind::Continue),
@@ -689,6 +721,61 @@ impl<'c, 'a> Builder<'c, 'a> {
             }
             Ast::Match { subject, arms } => self.match_stmt(subject, arms),
             Ast::Error => {}
+        }
+    }
+
+    /// `assert test, message`: a failed one reports its text and, for one comparison, each side
+    /// as it was compared, left first, the message evaluated only then — as on the Python target.
+    fn assert(&mut self, test: &ast::Expr, message: Option<&ast::Expr>) {
+        let expression = self.cx.source(test.span).to_string();
+        let text = Operand::Const(Const::Str(expression.clone()));
+        let null = || Arg::Value(Operand::Const(Const::Null));
+        if let ExprKind::Compare { first, rest } = &test.kind
+            && let [(op, _)] = rest.as_slice()
+        {
+            let result = self.temp(Ty::Bool);
+            let mut left_ty = self.ty(first);
+            let mut left = self.value(first);
+            let (seen, seen_ty) = (left.clone(), left_ty.clone());
+            let (right, right_ty) = self.compare_rest(result, &mut left, &mut left_ty, rest);
+            let fail = self.block(|b| {
+                let (md, m) = b.assert_message(message);
+                let args = vec![
+                    Arg::Value(text),
+                    Arg::Value(Operand::Const(Const::Str(op.text().to_string()))),
+                    Arg::Desc(seen_ty.clone()),
+                    Arg::Address(seen, seen_ty),
+                    Arg::Desc(right_ty.clone()),
+                    Arg::Address(right, right_ty),
+                    md,
+                    m,
+                ];
+                b.push(StmtKind::Do(rt_args("lt_assert_compared", args, true)));
+            });
+            self.push(StmtKind::If(Operand::Local(result), Vec::new(), fail));
+            return;
+        }
+        let ok = self.condition(test);
+        let fail = self.block(|b| match message {
+            None => b.push(StmtKind::Panic(Panic::Assert(expression))),
+            Some(_) => {
+                let (md, m) = b.assert_message(message);
+                let args = vec![Arg::Value(text), null(), null(), null(), null(), null(), md, m];
+                b.push(StmtKind::Do(rt_args("lt_assert_compared", args, true)));
+            }
+        });
+        self.push(StmtKind::If(ok, Vec::new(), fail));
+    }
+
+    /// The descriptor and address of an `assert`'s message, or two NULLs when it has none.
+    fn assert_message(&mut self, message: Option<&ast::Expr>) -> (Arg, Arg) {
+        match message {
+            Some(m) => {
+                let ty = self.ty(m);
+                let v = self.value(m);
+                (Arg::Desc(ty.clone()), Arg::Address(v, ty))
+            }
+            None => (Arg::Value(Operand::Const(Const::Null)), Arg::Value(Operand::Const(Const::Null))),
         }
     }
 
@@ -937,7 +1024,10 @@ impl<'c, 'a> Builder<'c, 'a> {
     fn fail_with(&mut self, value: Operand) {
         let ty = self.function.ret.clone();
         let Ty::Result(_, error) = &ty else {
-            self.push(StmtKind::Panic(Panic::Assert("an error outside a function that can fail".into())));
+            // In a `test` block, which returns nothing: the test ends with this error.
+            let error = self.local_ty(&value);
+            let args = vec![Arg::Desc(error.clone()), Arg::Address(value, error)];
+            self.push(StmtKind::Do(rt_args("lt_test_error", args, true)));
             return;
         };
         let value = self.coerce(value, error);
@@ -1821,8 +1911,15 @@ impl<'c, 'a> Builder<'c, 'a> {
         Operand::Local(result)
     }
 
-    fn compare_rest(&mut self, result: Local, left: &mut Operand, left_ty: &mut Ty, rest: &[(ast::CmpOp, ast::Expr)]) {
-        let Some(((op, right), more)) = rest.split_first() else { return };
+    /// The comparisons of `rest` from `left` on, into `result`; the last right side and its type.
+    fn compare_rest(
+        &mut self,
+        result: Local,
+        left: &mut Operand,
+        left_ty: &mut Ty,
+        rest: &[(ast::CmpOp, ast::Expr)],
+    ) -> (Operand, Ty) {
+        let Some(((op, right), more)) = rest.split_first() else { return (left.clone(), left_ty.clone()) };
         let right_ty = self.ty(right);
         let right_value = self.value(right);
         let none_on_right = matches!(right.kind, ExprKind::None);
@@ -1865,12 +1962,14 @@ impl<'c, 'a> Builder<'c, 'a> {
         };
         self.push(StmtKind::Let(result, compared));
         if more.is_empty() {
-            return;
+            return (right_value, right_ty);
         }
         *left = right_value;
-        *left_ty = right_ty;
-        let next = self.block(|b| b.compare_rest(result, left, left_ty, more));
+        *left_ty = right_ty.clone();
+        let mut last = (left.clone(), right_ty);
+        let next = self.block(|b| last = b.compare_rest(result, left, left_ty, more));
         self.push(StmtKind::If(Operand::Local(result), next, Vec::new()));
+        last
     }
 
     fn logical(&mut self, op: BoolOp, operands: &[ast::Expr]) -> Operand {

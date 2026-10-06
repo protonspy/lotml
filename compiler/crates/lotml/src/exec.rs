@@ -1,4 +1,5 @@
-//! `lotml build`, `lotml run` and `lotml test`: programs compiled to Python and run by it.
+//! `lotml build`, `lotml run` and `lotml test`: programs compiled to Python and run by it, or
+//! compiled to C and built by a C compiler (`--target c`, specs/c-backend).
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
@@ -8,7 +9,7 @@ use lotml_check::Interfaces;
 use lotml_diag::Report;
 use serde_json::{Value, json};
 
-use crate::{Failure, files};
+use crate::{Failure, Target, files};
 
 /// A compiled module: the name it is imported by, its source's absolute path, which tracebacks
 /// name, and the path as the user wrote it.
@@ -188,8 +189,12 @@ impl Drop for Scratch {
     }
 }
 
-/// `lotml build`: each file as `<name>_lotml.py`, next to the runtime, in `out`.
-pub fn build(paths: &[PathBuf], out: &Path) -> Result<u8, Failure> {
+/// `lotml build`: each file as `<name>_lotml.py`, next to the runtime, in `out`; for the C target,
+/// as `<name>.c` and the executable built from it.
+pub fn build(paths: &[PathBuf], out: &Path, target: Target) -> Result<u8, Failure> {
+    if target == Target::C {
+        return build_c(paths, out);
+    }
     let Some(modules) = compile_or_report(paths, out)? else { return Ok(1) };
     for module in modules {
         println!("{} -> {}", module.shown, out.join(format!("{}.py", module.name)).display());
@@ -198,9 +203,14 @@ pub fn build(paths: &[PathBuf], out: &Path) -> Result<u8, Failure> {
 }
 
 /// `lotml run`: the program's `fn main()`, with Python's exit status: 1 when it returned an
-/// error, 101 when it panicked.
-pub fn run(path: &Path) -> Result<u8, Failure> {
+/// error, 101 when it panicked; the C target's program exits as Python's does.
+pub fn run(path: &Path, target: Target) -> Result<u8, Failure> {
     let scratch = Scratch::new()?;
+    if target == Target::C {
+        let Some(exe) = c_executable(path, &scratch.0, false)? else { return Ok(1) };
+        let status = Command::new(&exe).status().map_err(|e| Failure(format!("cannot run {}: {e}", exe.display())))?;
+        return Ok(status.code().map_or(101, |c| u8::try_from(c).unwrap_or(1)));
+    }
     let Some(modules) = compile_or_report(&[path.to_path_buf()], &scratch.0)? else { return Ok(1) };
     let name = &modules[0].name;
     let python = python()?;
@@ -217,10 +227,78 @@ pub fn run(path: &Path) -> Result<u8, Failure> {
 }
 
 /// `lotml test`: every `test` block, with the values a failed comparison saw.
-pub fn test(paths: &[PathBuf], as_json: bool) -> Result<u8, Failure> {
-    let (status, report) = test_report(paths, as_json, None)?;
+pub fn test(paths: &[PathBuf], as_json: bool, target: Target) -> Result<u8, Failure> {
+    let (status, report) = match target {
+        Target::Python => test_report(paths, as_json, None)?,
+        Target::C => c_test_report(paths, as_json)?,
+    };
     print!("{report}");
     Ok(status)
+}
+
+/// The C program of `path`, or of its `test` blocks, built into `dir`: the executable, or `None`
+/// once the diagnostics that stop it are printed.
+fn c_executable(path: &Path, dir: &Path, tests: bool) -> Result<Option<PathBuf>, Failure> {
+    let text = files::read(path)?;
+    let absolute = std::path::absolute(path).map_err(|e| Failure(format!("{}: {e}", path.display())))?;
+    let compiled = if tests { lotml_c::compile_tests(&text, &absolute) } else { lotml_c::compile(&text, &absolute) };
+    let c = match compiled {
+        Ok(c) => c,
+        Err(diagnostics) => {
+            let shown = path.display().to_string();
+            let report = Report { file: &shown, text: &text, diagnostics };
+            print!("{}", lotml_diag::text(&[report], Some(lotml_diag::DEFAULT_LIMIT)));
+            return Ok(None);
+        }
+    };
+    let stem =
+        path.file_stem().map_or("program".into(), |s| s.to_string_lossy().replace(|c: char| !c.is_alphanumeric(), "_"));
+    std::fs::create_dir_all(dir).map_err(|e| Failure(format!("cannot create {}: {e}", dir.display())))?;
+    let source = dir.join(format!("{stem}.c"));
+    write(&source, &c)?;
+    lotml_c::write_runtime(dir).map_err(|e| Failure(format!("cannot write the runtime in {}: {e}", dir.display())))?;
+    let exe = dir.join(if cfg!(windows) { format!("{stem}.exe") } else { stem });
+    let compiler = lotml_c::driver::find().map_err(Failure)?;
+    compiler.build(&source, &exe, &[]).map_err(Failure)?;
+    Ok(Some(exe))
+}
+
+/// `lotml build --target c`: each file built into `out`, its C beside it.
+fn build_c(paths: &[PathBuf], out: &Path) -> Result<u8, Failure> {
+    let mut status = 0;
+    for path in files::expand(paths)? {
+        match c_executable(&path, out, false)? {
+            Some(exe) => println!("{} -> {}", path.display(), exe.display()),
+            None => status = 1,
+        }
+    }
+    Ok(status)
+}
+
+/// What `lotml test --target c` prints, and its exit status: each file's tests built and run,
+/// reported as the Python target reports them.
+fn c_test_report(paths: &[PathBuf], as_json: bool) -> Result<(u8, String), Failure> {
+    let scratch = Scratch::new()?;
+    let mut rows = Vec::new();
+    for (k, path) in files::expand(paths)?.into_iter().enumerate() {
+        let dir = scratch.0.join(k.to_string());
+        let Some(exe) = c_executable(&path, &dir, true)? else { return Ok((1, String::new())) };
+        let output = Command::new(&exe)
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|e| Failure(format!("cannot run {}: {e}", exe.display())))?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let tests: Vec<Value> = serde_json::from_str(stdout.lines().last().unwrap_or("")).map_err(|_| {
+            Failure(format!("the tests did not report: {}", String::from_utf8_lossy(&output.stderr).trim()))
+        })?;
+        let shown = path.display().to_string();
+        for t in tests {
+            let mut row = t;
+            row["file"] = shown.clone().into();
+            rows.push(row);
+        }
+    }
+    Ok(report_rows(rows, as_json))
 }
 
 /// What `lotml test` prints, and its exit status; within `limits` when given.
@@ -268,6 +346,11 @@ pub fn test_report(paths: &[PathBuf], as_json: bool, limits: Option<&Limits>) ->
             rows.push(row);
         }
     }
+    Ok(report_rows(rows, as_json))
+}
+
+/// The report of the tests' `rows` and its exit status: 1 when any did not pass.
+fn report_rows(rows: Vec<Value>, as_json: bool) -> (u8, String) {
     let count = |outcome: &str| rows.iter().filter(|r| r["outcome"] == outcome).count();
     let summary =
         json!({"passed": count("pass"), "failed": count("fail"), "errors": count("error"), "panics": count("panic")});
@@ -283,7 +366,7 @@ pub fn test_report(paths: &[PathBuf], as_json: bool, limits: Option<&Limits>) ->
             summary["panics"]
         )
     };
-    Ok((u8::from(rows.iter().any(|r| r["outcome"] != "pass")), report))
+    (u8::from(rows.iter().any(|r| r["outcome"] != "pass")), report)
 }
 
 /// `lotml bind`: the interface of a Python module, read from its stub by Python's own parser

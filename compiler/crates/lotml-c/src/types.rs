@@ -279,7 +279,7 @@ impl<'d> Types<'d> {
                  static bool lt_eq_t{id}(const void *a, const void *b);\n\
                  static int lt_cmp_t{id}(const void *a, const void *b, lt_at at);\n\
                  static int64_t lt_hash_t{id}(const void *p);\nstatic void lt_repr_t{id}(lt_buf *b, const void *p);\n\
-                 static void lt_share_t{id}(void *p);"
+                 static void lt_share_t{id}(void *p);\nstatic void lt_show_t{id}(lt_buf *b, const void *p);"
             );
         }
         for (id, ty) in self.order.iter().enumerate() {
@@ -293,7 +293,7 @@ impl<'d> Types<'d> {
             let _ = writeln!(
                 out,
                 "static const lt_type lt_type_t{id} LT_UNUSED = {{sizeof({c}), lt_inc_t{id}, lt_dec_t{id}, lt_eq_t{id}, \
-                 lt_cmp_t{id}, lt_hash_t{id}, lt_repr_t{id}, {text}, lt_share_t{id}}};"
+                 lt_cmp_t{id}, lt_hash_t{id}, lt_repr_t{id}, {text}, lt_share_t{id}, lt_show_t{id}}};"
             );
         }
         for (id, ty) in self.order.iter().enumerate() {
@@ -377,6 +377,31 @@ impl<'d> Types<'d> {
         repr
     }
 
+    /// A value with these fields as a test report shows it: `Name(…)` when every field is
+    /// positional, `Name(f=…, _1=…)` when any is named, a tuple's `(…,)`.
+    fn show_fields(&self, name: Option<&str>, fields: &[Field], v: &str) -> String {
+        let labelled = name.is_some() && fields.iter().any(|f| f.name.is_some());
+        let mut show = match name {
+            Some(name) => format!(" lt_buf_puts(b, \"{}(\");", c_string_text(name.as_bytes())),
+            None => " lt_buf_put(b, \"(\", 1);".to_string(),
+        };
+        for (i, f) in fields.iter().enumerate() {
+            if i > 0 {
+                show.push_str(" lt_buf_put(b, \", \", 2);");
+            }
+            if labelled {
+                let label = f.name.clone().unwrap_or_else(|| format!("_{i}"));
+                let _ = write!(show, " lt_buf_puts(b, \"{}=\");", c_string_text(label.as_bytes()));
+            }
+            let _ = write!(show, " ({})->show(b, &{v}->f{i});", self.desc(&f.ty));
+        }
+        if name.is_none() && fields.len() == 1 {
+            show.push_str(" lt_buf_put(b, \",\", 1);");
+        }
+        show.push_str(" lt_buf_put(b, \")\", 1);");
+        show
+    }
+
     fn tuple_functions(&self, out: &mut String, id: usize, items: &[Ty]) {
         let _ = writeln!(
             out,
@@ -414,6 +439,11 @@ impl<'d> Types<'d> {
             "static void lt_repr_t{id}(lt_buf *b, const void *p) {{ const lt_t{id} *v = p;{} }}",
             self.repr_fields(None, &fields, "v")
         );
+        let _ = writeln!(
+            out,
+            "static void lt_show_t{id}(lt_buf *b, const void *p) {{ const lt_t{id} *v = p;{} }}",
+            self.show_fields(None, &fields, "v")
+        );
     }
 
     fn optional_functions(&self, out: &mut String, id: usize, t: &Ty) {
@@ -446,6 +476,10 @@ impl<'d> Types<'d> {
             out,
             "static void lt_text_t{id}(lt_buf *b, const void *p) {{ const lt_t{id} *v = p; if (v->some) ({d})->str(b, &v->value); else lt_buf_puts(b, \"None\"); }}"
         );
+        let _ = writeln!(
+            out,
+            "static void lt_show_t{id}(lt_buf *b, const void *p) {{ const lt_t{id} *v = p; if (v->some) ({d})->show(b, &v->value); else lt_buf_puts(b, \"None\"); }}"
+        );
     }
 
     fn result_functions(&self, out: &mut String, id: usize, t: &Ty, e: &Ty) {
@@ -476,6 +510,12 @@ impl<'d> Types<'d> {
             "static void lt_repr_t{id}(lt_buf *b, const void *p) {{ const lt_t{id} *v = p; \
              if (v->ok) {{ lt_buf_puts(b, \"Ok(value=\"); ({dt})->repr(b, &v->value); }} \
              else {{ lt_buf_puts(b, \"Err(error=\"); ({de})->repr(b, &v->error); }} lt_buf_put(b, \")\", 1); }}"
+        );
+        let _ = writeln!(
+            out,
+            "static void lt_show_t{id}(lt_buf *b, const void *p) {{ const lt_t{id} *v = p; \
+             if (v->ok) {{ lt_buf_puts(b, \"Ok(\"); ({dt})->show(b, &v->value); }} \
+             else {{ lt_buf_puts(b, \"Err(\"); ({de})->show(b, &v->error); }} lt_buf_put(b, \")\", 1); }}"
         );
     }
 
@@ -515,6 +555,11 @@ impl<'d> Types<'d> {
             out,
             "static void lt_repr_t{id}(lt_buf *b, const void *p) {{ const lt_t{id} *v = *(lt_t{id} *const *)p;{} }}",
             self.repr_fields(Some(name), fields, "v")
+        );
+        let _ = writeln!(
+            out,
+            "static void lt_show_t{id}(lt_buf *b, const void *p) {{ const lt_t{id} *v = *(lt_t{id} *const *)p;{} }}",
+            self.show_fields(Some(name), fields, "v")
         );
         let _ = writeln!(
             out,
@@ -612,6 +657,21 @@ impl<'d> Types<'d> {
             out,
             "static void lt_repr_t{id}(lt_buf *b, const void *p) {{ const lt_t{id} *v = *(lt_t{id} *const *)p; switch (v->cell.aux) {{{repr} default: break; }} }}"
         );
+        let show: String = variants
+            .iter()
+            .enumerate()
+            .map(|(k, (name, fields))| match fields {
+                Some(fields) => format!(
+                    " case {k}: {{ const lt_t{id}_v{k} *f = (const void *)v;{} break; }}",
+                    self.show_fields(Some(name), fields, "f")
+                ),
+                None => format!(" case {k}: lt_buf_puts(b, \"{}\"); break;", c_string_text(name.as_bytes())),
+            })
+            .collect();
+        let _ = writeln!(
+            out,
+            "static void lt_show_t{id}(lt_buf *b, const void *p) {{ const lt_t{id} *v = *(lt_t{id} *const *)p; switch (v->cell.aux) {{{show} default: break; }} }}"
+        );
         let reuse = cases(&|k, types| {
             format!(
                 "lt_t{id}_v{k} *f = (lt_t{id}_v{k} *)v; (void)f;{} *size = sizeof(lt_t{id}_v{k});",
@@ -652,5 +712,9 @@ fn dyn_functions(out: &mut String, id: usize, name: &str) {
     let _ = writeln!(
         out,
         "static void lt_repr_t{id}(lt_buf *b, const void *p) {{ const lt_t{id} *v = (const lt_t{id} *)p; v->v->type->repr(b, &v->cell); }}"
+    );
+    let _ = writeln!(
+        out,
+        "static void lt_show_t{id}(lt_buf *b, const void *p) {{ const lt_t{id} *v = (const lt_t{id} *)p; v->v->type->show(b, &v->cell); }}"
     );
 }

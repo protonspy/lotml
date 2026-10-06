@@ -35,6 +35,16 @@ pub fn write_runtime(dir: &Path) -> std::io::Result<()> {
 
 /// The C program for `source`, which was read from `path`; or the errors that stop it.
 pub fn compile(source: &str, path: &Path) -> Result<String, Vec<Diagnostic>> {
+    compile_as(source, path, false)
+}
+
+/// The C program running the `test` blocks of `source`, each under a catcher, which ends by
+/// writing what `lotml test` reports as one line of JSON (R1.4).
+pub fn compile_tests(source: &str, path: &Path) -> Result<String, Vec<Diagnostic>> {
+    compile_as(source, path, true)
+}
+
+fn compile_as(source: &str, path: &Path, tests: bool) -> Result<String, Vec<Diagnostic>> {
     let parsed = parse(source);
     let mut errors: Vec<Diagnostic> = parsed.errors.iter().map(lotml_check::syntax).collect();
     let checked = check_resolved(&parsed.module, source);
@@ -42,10 +52,10 @@ pub fn compile(source: &str, path: &Path) -> Result<String, Vec<Diagnostic>> {
     if !errors.is_empty() {
         return Err(errors);
     }
-    let mut lowered = lower::lower(&parsed.module, &checked, source)?;
+    let mut lowered = lower::lower(&parsed.module, &checked, source, tests)?;
     for f in &mut lowered.functions {
         own::insert_counts(f);
         reuse::insert_reuse(f);
     }
-    Ok(emit::program(&lowered, &path.display().to_string()))
+    Ok(emit::program(&lowered, &path.display().to_string(), tests))
 }
