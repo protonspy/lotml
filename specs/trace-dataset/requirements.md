@@ -31,6 +31,7 @@ problem it was trained on (plans/harness-guide.md). Training the model is not pa
 - **R2.1** When the agent calls `check`, the agent harness shall keep in the run's trace the `.lotml` files as they stood before and after the call, symbolic links skipped, and the report `check` gave.
 - **R2.2** The agent harness shall keep in the run's trace the version of the compiler that checked and graded it.
 - **R2.4** The agent harness shall keep in the run's trace the system prompt and memory as the main agent's model received them and the schemas of the tools it was offered.
+- **R2.5** When the agent calls `test`, the agent harness shall keep in the run's trace the `.lotml` files as they stood before and after the call, symbolic links skipped, its arguments, its status and the report `test` gave.
 - **R2.3** When the agent harness writes a row or a report under `harness/results/`, the agent harness shall first replace every key-shaped string and the value, eight characters or longer, of every environment variable whose name ends in `_KEY`, `_TOKEN` or `_SECRET` with a placeholder.
 
 ## R3 · The records
@@ -38,7 +39,8 @@ problem it was trained on (plans/harness-guide.md). Training the model is not pa
 - **R3.1** When a run passed every hidden test, the dataset exporter shall write its trajectory: the system prompt and memory, the tools offered, the task's prompt, the main agent's messages with their tool calls and tool results, and the files at the end, as one chat record.
 - **R3.2** When a `check` reported errors in a file and a later `check` in the same run judged that file and reported none in it, the dataset exporter shall write a repair record: the task's prompt, the file at the failing check, its diagnostics, the file at the clean check, and the lines the repair changed.
 - **R3.3** The dataset exporter shall write a repair record whatever the run's outcome, since a repair that checks is data in a run that failed its tests.
-- **R3.4** If a `check` ended in a tool error, gave a report that is not JSON, or saw its files change between before and after, then the dataset exporter shall use that check neither to open nor to close a repair.
+- **R3.4** If a `check` or a `test` ended in a tool error, gave a report that is not JSON, or saw its files change between before and after, then the dataset exporter shall use that call neither to open nor to close a repair.
+- **R3.9** When a `test` reported a block failing in files that check clean and a later `test` in the same run reported that block passing, the dataset exporter shall write a repair record: the task's prompt, the file at the failing test, the failing block with the values each side of its comparison had, the file at the passing test, and the lines the repair changed.
 - **R3.5** The dataset exporter shall mark every record with its task, source, model, arm, outcome and compiler version.
 - **R3.6** The dataset exporter shall write each identical repair once per task, so a repair repeated across tasks counts in each.
 - **R3.7** If a record holds a key-shaped string, the value of an environment variable as R2.3 names them, or an `assert` line of the task's hidden tests that does not also appear in the task's prompt, then the dataset exporter shall leave the record out and count it by reason in the manifest.

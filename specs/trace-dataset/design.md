@@ -2,7 +2,7 @@
 
 ## What changes
 
-Serves R1.1–R1.7, R2.1–R2.4, R3.1–R3.8, R4.1–R4.6.
+Serves R1.1–R1.7, R2.1–R2.5, R3.1–R3.9, R4.1–R4.6.
 
 A registry `harness/lotml_harness/agent/licences.toml`, a module `harness/lotml_harness/agent/
 dataset.py` run as `python -m lotml_harness.agent.dataset`, the problem split in
@@ -79,7 +79,8 @@ bytes — and keeps both with the parsed report and the call's arguments, taken 
 `inputs` as JSON rather than its stringified `input_str`, and normalised as the MCP wrapper
 normalises them: the leading `/` the file tools show is stripped, so `paths` and snapshot keys are
 both workspace-relative. The trace gains `checks: [{"paths": [...], "before": {...},
-"after": {...}, "report": {...} | null, "status": "success" | "error"}]` in call order.
+"after": {...}, "report": {...} | null, "status": "success" | "error"}]` in call order, and
+`tests` in the same shape for every `test` call (R2.5), whose report is `lotml test --json`'s.
 `lotml --version` is read once per run into the trace and the row. The first call of the main
 agent's model is caught in `on_chat_model_start`: its system message — deepagents' base prompt, the
 harness's, and the memory it injects — and the tool schemas in its invocation parameters are kept
@@ -99,6 +100,15 @@ repair; the next counting check that judged that file and reports no error in it
 the file at both points, the diagnostics, the task's prompt, and the changed line numbers from a
 `difflib` diff of the two. A file still failing at the end of the run gives nothing. Records are
 keyed by task and the SHA-256 of before, diagnostics and after; a key seen before is skipped.
+
+A test repair (R3.9) walks `tests` the same way, with the same counting rule (R3.4). A failing
+block opens one only when the last counting `check` before it found no error in its file, so its
+state is a program that compiles and does the wrong thing — what the harness guide must locate when
+no diagnostic points anywhere (plans/harness-guide.md). The next counting `test` reporting that
+block passing closes it with the file at both points, the block's name and the values each side of
+its comparison had, and the changed lines. A block the agent fixed by editing the block itself is
+kept: an expected value the agent got wrong is a real failure too, and the changed lines say where
+it was.
 
 The record's shape follows the study behind the compiler-embedded model
 (docs/wiki/pages/compiler-embedded-model.md, plans/compiler-embedded-model.md): the (broken code,

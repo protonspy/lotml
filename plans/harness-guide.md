@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: cd2d7d6a12c5843002c6d887ee2f290c0072b5365d9214052b89aaccefbed512
+checksum: e46641cacbfcccd72141d546a94f914e772af1c30f4dc2e6d4b956c1d8c2f375
 ---
 
 # Harness guide
@@ -71,7 +71,7 @@ deepagents and in a second harness — on held-out tasks, and the wiki records w
       held out whole for the guide arms; record it as a delta to specs/trace-dataset/ so
       its manifest carries each record's split, and keep held-out problems out of every
       training set
-- [ ] 1.2 (Unit) Write the spec for the guidance records: from each run's traces, the
+- [x] 1.2 (Unit) Write the spec for the guidance records: from each run's traces, the
       state where the agent failed — code, diagnostics, the failing test's values, the
       task — paired with the edit that got it out, its symbol and lines as where, its
       diff as what, through the licence registry; the failing-test state is a delta to
