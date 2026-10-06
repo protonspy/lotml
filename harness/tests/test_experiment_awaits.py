@@ -16,7 +16,7 @@ def test_the_task_set_has_both_languages_and_tests_from_a_canonical_solution():
     assert task.task.tests, "the hidden tests come from the canonical solution"
 
 
-@pytest.mark.parametrize("task", awaits.tasks()[::7], ids=lambda t: t.id)
+@pytest.mark.parametrize("task", awaits.tasks(), ids=lambda t: t.id)
 def test_each_canonical_solution_passes_in_both_languages(task):
     python = awaits.judge_python(task, task.python_canonical)
     assert python.passed and python.concurrent and python.mistake is None, python
@@ -31,7 +31,10 @@ def first_fetch_task():
 def test_a_coroutine_never_awaited_is_a_forgotten_await():
     task = first_fetch_task()
     helper = task.helper_names[0]
-    forgot = f"async def {task.name}(keys: list[str]) -> list[int]:\n    return [{helper}(k) for k in keys]\n"
+    forgot = (
+        f"async def {task.name}(keys: list[str]) -> list[int]:\n"
+        f"    return [{helper}(k) for k in keys]\n"
+    )
     judged = awaits.judge_python(task, forgot)
     assert not judged.passed and judged.mistake == "forgotten await"
 
@@ -61,7 +64,9 @@ def test_lotml_answers_are_judged_by_the_compiler_and_the_tests():
     task = first_fetch_task()
     helper = task.helper_names[0]
     lotml = Lotml()
-    leaked = f"fn {task.name}(keys: [str]) -> [int]:\n    return [await {helper}(k) for k in keys]\n"
+    leaked = (
+        f"fn {task.name}(keys: [str]) -> [int]:\n    return [await {helper}(k) for k in keys]\n"
+    )
     assert awaits.judge_lotml(task, leaked, lotml).mistake == "async or await"
     misused = f"fn {task.name}(keys: [str]) -> [int]:\n    return parallel({helper}(keys[0]))\n"
     assert awaits.judge_lotml(task, misused, lotml).mistake == "tasks misused"
@@ -71,12 +76,22 @@ def test_lotml_answers_are_judged_by_the_compiler_and_the_tests():
 
 
 def test_the_summary_counts_mistakes_and_pairs_the_languages():
+    def row(task, language, passed, mistake, concurrent):
+        return {
+            "model": "m",
+            "task": task,
+            "language": language,
+            "passed": passed,
+            "mistake": mistake,
+            "concurrent": concurrent,
+        }
+
     rows = [
-        {"model": "m", "task": "a", "language": "python", "passed": False, "mistake": "forgotten await", "concurrent": True},
-        {"model": "m", "task": "a", "language": "lotml", "passed": True, "mistake": None, "concurrent": True},
-        {"model": "m", "task": "b", "language": "python", "passed": True, "mistake": None, "concurrent": False},
-        {"model": "m", "task": "b", "language": "lotml", "passed": True, "mistake": None, "concurrent": True},
-    ]  # fmt: skip
+        row("a", "python", False, "forgotten await", True),
+        row("a", "lotml", True, None, True),
+        row("b", "python", True, None, False),
+        row("b", "lotml", True, None, True),
+    ]
     s = awaits.summarize(rows)["m"]
     assert s["pairs"] == 2
     assert s["mistakes"]["python"] == {"forgotten await": 1}
