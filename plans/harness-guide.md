@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 5f5ab85eefe1de02222ecfc95200c95b68fbd2ee9672065676c3d390f6d3cf88
+checksum: 466bd03baf4a15503d4531e0772a06f634bfbb2020fadc656b04be4c6818f772
 ---
 
 # Harness guide
@@ -111,6 +111,16 @@ deepagents and in a second harness — on held-out tasks, and the wiki records w
 - [x] 1.6 (Unit) Write the spec for MBPP's original as agent tasks, posed untyped the
       way specs/agent-humaneval/ poses HumanEval and as a delta to it, held out whole
       from training for the guide arms
+- [ ] 2.5 (Unit) Record in 2.1's ADR the runtime's first candidate — llama.cpp's
+      `llama-server`, GGUF quantized for the CPU, answers held to the guide's JSON
+      schema — and where training runs: the local GPU, or an on-demand RunPod GPU from a
+      pinned Dockerfile with the Hugging Face stack, checkpoints and the model pushed to
+      private Hugging Face repositories and resumed from there, the token a RunPod
+      secret — with measured time, memory, cost and a budget per run, and record them in
+      `docs/stack.md`
+  _Depends 1.1, 1.3_
+  _Priority 1_
+  _Reason 45093e6 rewrapped 2.1 and cut it after 'the runtime it is served from', losing the runtime candidate and where training runs that ebebb6d added; specs/guide-tool/design.md and Done when still rely on them_
 
 ## Done when
 
