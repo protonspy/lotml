@@ -1,6 +1,8 @@
 ---
 autonomy: auto
 ci: wait
+branch: feat/guide-evaluation
+delivery: in-progress
 ---
 
 # Guide evaluation — requirements

@@ -387,3 +387,28 @@ fn dev_diff_says_where_a_change_falls_and_which_edit_makes_it() {
     assert_eq!(found["edit"]["arguments"]["path"], "src/add.lotml");
     assert_eq!(found["edit"]["arguments"]["symbol"], "add");
 }
+
+#[test]
+fn dev_outline_lists_the_declarations_by_symbol_kind_and_lines() {
+    let program = "type P(x: int)
+
+impl P:
+    fn get(self) -> int:
+        return self.x
+
+fn f() -> int:
+    return 1
+";
+    let dir = scratch("dev-outline", &[("a.lotml", program)]);
+    let out = lotml(&["dev", "outline", "a.lotml"], &dir);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let listed: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    assert_eq!(
+        listed,
+        serde_json::json!([
+            {"symbol": "P", "kind": "record", "lines": [1, 1]},
+            {"symbol": "P.get", "kind": "method", "lines": [4, 5]},
+            {"symbol": "f", "kind": "function", "lines": [7, 8]}
+        ])
+    );
+}

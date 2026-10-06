@@ -164,6 +164,11 @@ enum Guide {
 
 #[derive(Subcommand)]
 enum Dev {
+    /// List a file's declarations by symbol, kind and lines.
+    Outline {
+        /// The file.
+        path: PathBuf,
+    },
     /// Say where a change between two versions of a file falls, and which one edit makes it.
     Diff {
         /// The first version.
@@ -232,6 +237,7 @@ fn run() -> ExitCode {
         Command::Lsp => return status(lsp::serve()),
         Command::Mcp { root } => return status(mcp::serve(&root)),
         Command::Dev(Dev::Mutate { path, json }) => dev::mutate(&path, json),
+        Command::Dev(Dev::Outline { path }) => dev::outline(&path),
         Command::Dev(Dev::Diff { before, after, path, json }) => dev::diff(&before, &after, &path, json),
         Command::Guide(Guide::Render { state }) => guide::render_file(&state),
         Command::Guide(Guide::Ask { root, task, files }) => return status(mcp::ask_guide(&root, task, &files)),
