@@ -30,6 +30,14 @@ same pinned versions.
   the prompt as written, when a local run would take hours. The key is read from
   `OPENROUTER_API_KEY` and never written to the repository.
 
+- **deepagents** 0.7 (group `agent`) — the coding agent loop of the agent harness: planning, file
+  tools confined to a workspace, context management; chosen over writing the loop, which is not
+  what lotml studies (adr:0014-deepagents-over-openrouter-for-the-agent-harness). It brings
+  LangChain and LangGraph.
+- **langchain-openrouter** 0.2 (group `agent`) — the chat model with tool calls deepagents needs,
+  over OpenRouter, with its provider routing; the raw completions above stay on the standard
+  library.
+
 - **tree-sitter CLI** 0.27 (development only, through `npx`) — generates the editor grammar in
   `reference/grammar/tree-sitter/` and parses the corpus with it in the harness tests, which
   skip without `npx`; it compiles the parser with the platform's C compiler.
@@ -40,7 +48,7 @@ A Cargo workspace, Rust 1.97 and edition 2024 (adr:0006-compiler-written-in-rust
 file. Each crate is a stage: `lotml-syntax` (lexer, tolerant parser), `lotml-diag` (diagnostics
 and their codes), `lotml-check` (types, mutability, errors as values), `lotml-db` (the queries),
 `lotml-fmt` (the formatter), `lotml-py` (the Python backend and its runtime), `lotml-c` (the C
-backend and its runtime, adr:0014-c-target-as-monomorphic-c-over-a-counting-runtime), `lotml-ide` (what
+backend and its runtime, adr:0016-c-target-as-monomorphic-c-over-a-counting-runtime), `lotml-ide` (what
 each name refers to, and the workspace an editor or agent queries), `lotml` (the command, with
 its language and MCP servers — JSON-RPC written over `serde_json`, with no protocol library).
 

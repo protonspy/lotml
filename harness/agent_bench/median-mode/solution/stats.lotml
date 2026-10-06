@@ -1,0 +1,31 @@
+fn median(xs: [f64]) -> f64?:
+    """
+    The middle value of `xs` once sorted, or the mean of the two middle values when there is
+    an even number of them; None when `xs` is empty.
+    """
+    if len(xs) == 0:
+        return None
+    var s = xs
+    s.sort()
+    mid = len(s) // 2
+    if len(s) % 2 == 1:
+        return s[mid]
+    return (s[mid - 1] + s[mid]) / 2.0
+
+fn mode(xs: [int]) -> int?:
+    """The value occurring most often in `xs`, the smallest of them on a tie; None when `xs` is empty."""
+    if len(xs) == 0:
+        return None
+    var counts: {int: int} = {}
+    for x in xs:
+        counts[x] = counts.get(x, 0) + 1
+    var best = xs[0]
+    var best_count = 0
+    for v, c in sorted(counts.items()):
+        if c > best_count:
+            best = v
+            best_count = c
+    return best
+
+test "median of three":
+    assert median([3.0, 1.0, 2.0]) == 2.0

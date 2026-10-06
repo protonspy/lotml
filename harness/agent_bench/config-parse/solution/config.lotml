@@ -1,0 +1,30 @@
+type ConfigErr = MissingEquals(line: int) | EmptyKey(line: int) | Duplicate(key: str) | Missing(key: str) | NotInt(key: str)
+
+fn parse_config(text: str) -> {str: str} ! ConfigErr:
+    """
+    Settings from `key = value` lines. Spaces around keys and values are stripped; blank lines
+    and lines starting with `#` are skipped. The value is everything after the first `=`.
+    Errors number lines from 1: a line with no `=` is MissingEquals, one with nothing before
+    `=` is EmptyKey, and a key given twice is Duplicate.
+    """
+    var settings: {str: str} = {}
+    for i, raw in enumerate(text.split("\n")):
+        line = raw.strip()
+        if line == "" or line.startswith("#"):
+            continue
+        key, value = line.split_once("=") ?? fail MissingEquals(i + 1)
+        k = key.strip()
+        if k == "":
+            fail EmptyKey(i + 1)
+        if k in settings:
+            fail Duplicate(k)
+        settings[k] = value.strip()
+    return settings
+
+fn get_int(settings: {str: str}, key: str) -> int ! ConfigErr:
+    """The setting `key` as an integer: Missing when it is absent, NotInt when it is not one."""
+    raw = settings.get(key) ?? fail Missing(key)
+    return raw.to_int() ?? fail NotInt(key)
+
+test "parse":
+    assert parse_config("a = 1") == Ok({"a": "1"})

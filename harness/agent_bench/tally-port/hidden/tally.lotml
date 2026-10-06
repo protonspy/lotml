@@ -1,0 +1,14 @@
+test "hidden: tally":
+    assert tally(["a", "b", "a", ""]) == {"a": 2, "b": 1}
+
+test "hidden: top":
+    assert top({"b": 2, "a": 2, "c": 5}, 2) == ["c", "a"]
+
+test "hidden: normalize in place":
+    var ws = [" Hello", "WORLD "]
+    normalize(&ws)
+    assert ws == ["hello", "world"]
+
+test "hidden: summary":
+    assert summary(["x", "y", "x"]) == "x: 2, y: 1"
+    assert summary([]) == "empty"

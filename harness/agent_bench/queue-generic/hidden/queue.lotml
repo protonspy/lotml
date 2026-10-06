@@ -1,0 +1,23 @@
+test "hidden: first in, first out":
+    var q: Queue[int] = Queue.new()
+    q.push(1)
+    q.push(2)
+    q.push(3)
+    assert q.pop() == 1
+    q.push(4)
+    assert q.pop() == 2
+    assert q.size() == 2
+    assert q.pop() == 3
+    assert q.pop() == 4
+
+test "hidden: pop on empty":
+    var q: Queue[str] = Queue.new()
+    assert q.pop() is None
+    assert q.size() == 0
+
+test "hidden: drain leaves the queue":
+    var q: Queue[int] = Queue.new()
+    q.push(7)
+    q.push(8)
+    assert drain(q) == [7, 8]
+    assert q.size() == 2

@@ -122,7 +122,7 @@ verdict on the hidden tests as the phase 0 transpiler.
 ## The phase 3 backend
 
 `compiler/crates/lotml-c` compiles a checked module to one C11 file over a reference-counting
-runtime (adr:0014-c-target-as-monomorphic-c-over-a-counting-runtime). Lowering gives a typed,
+runtime (adr:0016-c-target-as-monomorphic-c-over-a-counting-runtime). Lowering gives a typed,
 monomorphic form, a generic function compiled once per instantiation and a `dyn` value calling
 through a table; counts follow liveness, a dying value is reused in place when it is unique, and
 `#line` directives make the C compiler, a debugger and a panic name the `.lotml` line. `lotml

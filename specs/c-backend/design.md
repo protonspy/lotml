@@ -6,7 +6,7 @@ Serves R1.1, R1.2, R2.3, R3.1, R5.1.
 
 A new crate, `compiler/crates/lotml-c`, compiles a checked module to one C file, and the `lotml`
 CLI's `run`, `test` and `build` take `--target c` (`python` stays the default). The architecture is
-adr:0014-c-target-as-monomorphic-c-over-a-counting-runtime; this file is how its parts meet.
+adr:0016-c-target-as-monomorphic-c-over-a-counting-runtime; this file is how its parts meet.
 
 ```
 lotml_syntax::Module + lotml_check::Checked

@@ -46,8 +46,13 @@ decision requires and the roadmap's gates.
 2. **Hidden tests for generation.** The pilot's programs pass their own tests; a task-level
    oracle written independently of the model is what pass@1 needs.
 3. **Editing at scale** — built: 192 paired tasks on files of at least 150 lines, three turns
-   with feedback, Claude and two open families ([[editing-robustness]]). Agents with tools editing
-   several files are still missing.
+   with feedback, Claude and two open families ([[editing-robustness]]). Agents with tools: the
+   agent harness (`harness/lotml_harness/agent/`, specs/agent-harness/) runs a deepagents agent
+   over an OpenRouter model with the compiler's MCP tools on eight development tasks — implement,
+   fix, extend, refactor — graded on hidden tests, in two arms: the agent guide `lotml init`
+   writes, or the reference in the prompt. It reports pass@k with the Wilson interval, tokens,
+   cost, tool calls and check loops per run (adr:0014-deepagents-over-openrouter-for-the-agent-harness).
+   Eight tasks exercise the harness; they are far from the sample a gate needs.
 4. **More model families.** Closed ones (Claude, GPT, Gemini) with the spec in the prompt; open
    ones (Qwen, Llama, DeepSeek), which should leak more and which are, with OpenAI, the only ones
    accepting grammar-based [[constrained-decoding]].

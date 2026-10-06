@@ -1,0 +1,21 @@
+test "hidden: triangle area":
+    assert area(Triangle(3.0, 4.0, 5.0)) == 6.0
+
+test "hidden: triangle perimeter":
+    assert perimeter(Triangle(3.0, 4.0, 5.0)) == 12.0
+
+test "hidden: triangle name":
+    assert name(Triangle(1.0, 1.0, 1.0)) == "triangle"
+
+test "hidden: largest with a triangle":
+    assert largest([Rect(1.0, 2.0), Triangle(3.0, 4.0, 5.0), Circle(1.0)]) == Triangle(3.0, 4.0, 5.0)
+
+test "hidden: valid":
+    assert valid(Triangle(3.0, 4.0, 5.0))
+    assert not valid(Triangle(1.0, 1.0, 3.0))
+    assert not valid(Circle(0.0))
+    assert valid(Rect(1.0, 1.0))
+
+test "hidden: the old shapes still work":
+    assert name(Rect(2.0, 2.0)) == "square"
+    assert perimeter(Rect(1.0, 2.0)) == 6.0

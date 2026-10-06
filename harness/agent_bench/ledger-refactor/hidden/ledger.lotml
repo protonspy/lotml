@@ -1,0 +1,32 @@
+test "hidden: apply a deposit":
+    var a = Account("ana", 10)
+    apply(&a, Deposit(5))?
+    assert a.balance == 15
+
+test "hidden: an overdraft leaves the balance":
+    var a = Account("ana", 10)
+    assert apply(&a, Withdraw(15)) == Err(Overdrawn(5))
+    assert a.balance == 10
+
+test "hidden: a non-positive amount":
+    var a = Account("ana", 10)
+    assert apply(&a, Deposit(0)) == Err(NonPositive(0))
+
+test "hidden: replay":
+    start = Account("ana", 0)
+    end = replay(start, [Deposit(10), Withdraw(4)])?
+    assert end.balance == 6
+    assert start.balance == 0
+
+test "hidden: replay stops at the first error":
+    assert replay(Account("ana", 0), [Deposit(1), Withdraw(3)]) == Err(Overdrawn(2))
+
+test "hidden: deposit all":
+    var a = Account("ana", 1)
+    deposit_all(&a, [2, 3])?
+    assert a.balance == 6
+    assert deposit_all(&a, [1, -1]) == Err(NonPositive(-1))
+    assert a.balance == 7
+
+test "hidden: total withdrawn":
+    assert total_withdrawn([Deposit(5), Withdraw(2), Withdraw(3)]) == 5
