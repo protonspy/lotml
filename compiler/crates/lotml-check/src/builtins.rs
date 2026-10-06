@@ -44,6 +44,8 @@ pub const PRELUDE: &[&str] = &[
     "wrapping_mul",
     "isqrt",
     "gcd",
+    // Runs tasks concurrently and waits for them all, in no function marked `async` (R20).
+    "parallel",
 ];
 
 pub fn is_prelude(name: &str) -> bool {
@@ -188,6 +190,22 @@ pub fn call(name: &str, args: &[Ty], keywords: &[(String, Ty)], infer: &mut Infe
                     Ok(Ty::Dict(Box::new(pair[0].clone()), Box::new(pair[1].clone())))
                 }
                 _ => Err("`dict` takes a list of (key, value) pairs".into()),
+            }
+        }
+        "parallel" => {
+            let usage = "`parallel` takes one list of tasks, each a function with no parameters: \
+                         `parallel([lambda: work(a), lambda: work(b)])`";
+            if args.len() != 1 {
+                return Err(usage.into());
+            }
+            match infer.resolve(&args[0]) {
+                Ty::List(task) => match infer.resolve(&task) {
+                    Ty::Func(params, result) if params.is_empty() => Ok(Ty::list(*result)),
+                    Ty::Var(_) | Ty::Error | Ty::Never => Ok(Ty::list(infer.fresh())),
+                    other => Err(format!("{usage}, not a list of `{other}`")),
+                },
+                Ty::Error | Ty::Never => Ok(Ty::list(infer.fresh())),
+                other => Err(format!("{usage}, not a `{other}`")),
             }
         }
         "Heap" => {

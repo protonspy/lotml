@@ -66,7 +66,7 @@ pub fn compile_with(source: &str, path: &Path, interfaces: &Interfaces) -> Resul
         diagnostics.sort_by_key(|d| d.span.start);
         return Err(diagnostics);
     }
-    let module = emit::module(source, &parsed.module, &checked.types, &checked.foreign);
+    let module = emit::module(source, &parsed.module, &checked.types, &checked.foreign, &checked.locals);
     let exports = boundary::exports(&checked);
     let payload = serde_json::json!({"source": source, "module": module, "exports": exports}).to_string();
     let file = path.display().to_string();

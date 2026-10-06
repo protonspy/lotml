@@ -101,6 +101,13 @@ pub const ALL: &[Code] = &[
         write `x += 1`. The fix rewrites each.",
     },
     Code {
+        code: "E0112",
+        title: "`async` or `await`",
+        explanation: "lotml's functions have no colour: none is marked `async`, and none is awaited. A call that \
+        waits blocks only its own task; run tasks at once with `parallel`, which waits for them all:\n\n\
+        ```\npages = parallel([lambda: fetch(a), lambda: fetch(b)])\n```\n\nThe fix removes the keyword.",
+    },
+    Code {
         code: "E0201",
         title: "an unresolved name",
         explanation: "No variable, function, type or variant of this name is in scope. The diagnostic lists the names \

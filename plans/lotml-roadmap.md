@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: 19f7aacb4a732171553e3f06318c9a70bedc3c915c09b4e21150e7cbe0e3bb2b
+checksum: a081260f99b7f51b3a85dad8195eea6f49a7f3c7e038b91a7f59ce96e9707a98
 ---
 
 # lotml roadmap
@@ -107,7 +107,7 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 2.13_
 - [x] 3.4 (Unit) Build the Python→lotml corpus pipeline: rules for the mechanical part, a frontier model with the compiler for the rest, tests to validate (docs/wiki/pages/training-prior.md, docs/wiki/pages/transpilation-strategy.md)
   _Depends 2.13_
-- [ ] 3.5 (Unit) Implement colorless concurrency on the Python target with values marked shared when handed to a task, and blocking calls on dedicated threads (R20; docs/wiki/pages/colorless-concurrency.md)
+- [x] 3.5 (Unit) Implement colorless concurrency on the Python target with values marked shared when handed to a task, and blocking calls on dedicated threads (R20; docs/wiki/pages/colorless-concurrency.md)
   _Depends 2.13_
 - [ ] 3.6 (TDD) Measure in the harness what the literature left open: terse against detailed diagnostics, type masks for open models, and the forgotten-`await` hypothesis (docs/wiki/pages/semantic-compiler.md, docs/wiki/pages/constrained-decoding.md)
   _Depends 3.1_

@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-06 — colorless concurrency built on the Python target: [[colorless-concurrency]] says what `parallel` does and the capture bug it found
 - 2026-10-06 — the Python→lotml corpus built, 509 programs validated by their tests: [[training-prior]] reports it, [[transpilation-strategy]] describes the pipeline
 - 2026-10-06 — Python and lotml calling each other built: [[transpilation-strategy]] describes the checked boundary and the interfaces `lotml bind` writes (adr:0012)
 - 2026-10-06 — symbol-addressed edits and atomic rename built: [[semantic-compiler]] describes them, [[editing-robustness]] marks its design as built

@@ -2121,7 +2121,25 @@ impl<'p> Body<'p> {
             }
             Err(message) => {
                 let code = if message.contains("takes") && message.contains("argument") { "E0203" } else { "E0204" };
-                self.report(Diagnostic::error(code, span, message));
+                let mut d = Diagnostic::error(code, span, message);
+                // Python's habit, `gather(f(a), f(b))`: the calls given where tasks are wanted.
+                let calls: Vec<&Expr> = args
+                    .iter()
+                    .filter_map(|a| match a {
+                        Arg::Positional(e) if matches!(e.kind, ExprKind::Call { .. }) => Some(e),
+                        _ => None,
+                    })
+                    .collect();
+                if name == "parallel" && !calls.is_empty() && calls.len() == args.len() {
+                    let tasks: Vec<String> = calls.iter().map(|e| format!("lambda: {}", self.source(e.span))).collect();
+                    let whole = calls[0].span.to(calls[calls.len() - 1].span);
+                    d = d.fix(
+                        "make each call a task",
+                        Applicability::MaybeIncorrect,
+                        vec![(whole, format!("[{}]", tasks.join(", ")))],
+                    );
+                }
+                self.report(d);
                 Ty::Error
             }
         }

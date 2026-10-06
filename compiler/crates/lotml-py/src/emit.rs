@@ -1,6 +1,6 @@
 //! lotml's syntax tree to Python's, as JSON the runtime turns back into `ast` nodes.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use lotml_check::ty::{IntKind, Ty};
 use lotml_check::{FnSig, Types};
@@ -11,9 +11,11 @@ use serde_json::{Map, Value, json};
 /// The Python modules a lotml module imports through interfaces, each with its functions.
 pub type Foreign = BTreeMap<String, BTreeMap<String, FnSig>>;
 
-/// The Python module for a checked lotml module.
-pub fn module(text: &str, module: &Module, types: &Types, foreign: &Foreign) -> Value {
+/// The Python module for a checked lotml module. `locals` are the checker's: each name that
+/// resolved to a local, with where that local was declared.
+pub fn module(text: &str, module: &Module, types: &Types, foreign: &Foreign, locals: &[(Span, Span)]) -> Value {
     let mut emitter = Emitter::new(text, module, types, foreign);
+    emitter.locals = locals.iter().copied().collect();
     emitter.module(module)
 }
 
@@ -50,6 +52,8 @@ struct Emitter<'a> {
     /// Names of top-level functions.
     functions: HashSet<String>,
     foreign: &'a Foreign,
+    /// Where the local each name resolved to was declared, by the name's span.
+    locals: HashMap<Span, Span>,
     scope: Scope,
     temporaries: usize,
     /// Inside a comprehension's iterable or a default value, where `:=` is not allowed.
@@ -224,6 +228,7 @@ impl<'a> Emitter<'a> {
             enums,
             functions,
             foreign,
+            locals: HashMap::new(),
             scope: Scope::default(),
             temporaries: 0,
             no_walrus: false,
@@ -1090,7 +1095,7 @@ impl<'a> Emitter<'a> {
                 let orelse = self.expr(orelse);
                 node("IfExp", vec![("test", test), ("body", body), ("orelse", orelse)])
             }
-            ExprKind::Lambda { params, body } => self.lambda(params, body),
+            ExprKind::Lambda { params, body } => self.lambda(params, body, e.span),
             ExprKind::Call { func, args } => self.call(func, args, e),
             ExprKind::Index { object, index } => {
                 let o = self.expr(object);
@@ -1209,14 +1214,24 @@ impl<'a> Emitter<'a> {
 
     /// A lambda; the locals it uses that may change after it is made are captured as copies,
     /// through keyword defaults evaluated when the lambda is.
-    fn lambda(&mut self, params: &[Ident], body: &Expr) -> Value {
+    /// A lambda captures a copy of each local it uses that was declared outside it (R05): taken
+    /// when the lambda is made, as a default, since Python would read the variable when the
+    /// lambda is called — after a loop has bound it again.
+    fn lambda(&mut self, params: &[Ident], body: &Expr, whole: Span) -> Value {
         let mut free = Vec::new();
         names_in(body, &mut free);
         let own: HashSet<&str> = params.iter().map(|p| p.name.as_str()).collect();
+        let outside = |declared: &Span| declared.start < whole.start || declared.end > whole.end;
         let mut seen = HashSet::new();
         let captured: Vec<String> = free
             .into_iter()
-            .filter(|n| !own.contains(n.as_str()) && (self.scope.mutable.contains(n) || self.scope.boxed.contains(n)))
+            .filter(|(n, at)| {
+                !own.contains(n.as_str())
+                    && (self.scope.mutable.contains(n)
+                        || self.scope.boxed.contains(n)
+                        || self.locals.get(at).is_some_and(outside))
+            })
+            .map(|(n, _)| n)
             .filter(|n| seen.insert(n.clone()))
             .collect();
         let saved = self.scope.clone();
@@ -1225,7 +1240,17 @@ impl<'a> Emitter<'a> {
             self.scope.boxed.remove(&p.name);
             self.scope.tainted.remove(&p.name);
         }
-        let kw_defaults: Vec<Value> = captured.iter().map(|n| call(rt("copy"), vec![self.place_name(n)])).collect();
+        let kw_defaults: Vec<Value> = captured
+            .iter()
+            .map(|n| {
+                // A value a `var` still holds may change after the lambda is made.
+                if self.scope.mutable.contains(n) || self.scope.boxed.contains(n) || self.scope.tainted.contains(n) {
+                    call(rt("copy"), vec![self.place_name(n)])
+                } else {
+                    name(n)
+                }
+            })
+            .collect();
         for n in &captured {
             self.scope.mutable.remove(n);
             self.scope.boxed.remove(n);
@@ -1458,10 +1483,11 @@ fn irrefutable(p: &Pattern, units: &HashSet<String>) -> bool {
 }
 
 /// Every name an expression reads, in order.
-fn names_in(e: &Expr, out: &mut Vec<String>) {
+/// Every name an expression reads, with where.
+fn names_in(e: &Expr, out: &mut Vec<(String, Span)>) {
     let mut go = |x: &Expr| names_in(x, out);
     match &e.kind {
-        ExprKind::Name(n) => out.push(n.clone()),
+        ExprKind::Name(n) => out.push((n.clone(), e.span)),
         ExprKind::Tuple(items) | ExprKind::List(items) | ExprKind::Set(items) => items.iter().for_each(go),
         ExprKind::Dict(pairs) => pairs.iter().for_each(|(k, v)| {
             names_in(k, out);

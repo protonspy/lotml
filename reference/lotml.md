@@ -322,6 +322,17 @@ pairs = sorted(users, key=lambda u: u.age)
   `a if cond else b`; list, dict, set and generator comprehensions; `lambda x: expr`.
 - **Not Python:** a `lambda` captures copies of the values it uses.
 
+## Concurrency
+
+```
+fn squares(xs: [int]) -> [int]:
+    return parallel([lambda: x * x for x in xs])
+```
+
+- `parallel(tasks)` runs each task — a function with no parameters — at once, waits for them
+  all and returns their results in order. A call that blocks holds up only its own task.
+- **Not Python:** no function is marked `async` and nothing is awaited.
+
 ## Modules and the prelude
 
 ```
@@ -335,18 +346,13 @@ steps = math.floor(d)
 - `from m import a, b` or `import m`; there is no `import *`.
 - The prelude needs no import: `print`, `len`, `range`, `enumerate`, `zip`, `sorted`,
   `reversed`, `sum`, `min`, `max`, `abs`, `any`, `all`, `round`, `int`, `float`, `str`, `bool`,
-  `ord`, `chr`, `set`, `list`, `Heap`, `todo`, `Ok`, `Err`.
+  `ord`, `chr`, `set`, `list`, `Heap`, `todo`, `Ok`, `Err`, `parallel`, `PyError`.
 - `Heap[T]`: `Heap(items)`, `push(v)`, `pop_min() -> T?`, `peek() -> T?`, `len(h)`.
 - `math`: `sqrt`, `floor`, `ceil`, `pow`, `log`, `exp`, `sin`, `cos`, `pi`, `inf`, `gcd`,
   `isqrt`.
-
-```
-from textwrap import dedent    # a Python module, bound in bindings/textwrap.lotmli
-text = dedent(raw)?            # any call into Python can fail: `str ! PyError`
-```
-
 - A Python module is imported once `lotml bind <module>` has written its interface from the
-  module's stub. Each of its functions returns `T ! PyError`; `PyError(kind, message)` is in the
+  module's stub: `from textwrap import dedent`, then `text = dedent(raw)?`. Each of its functions
+  returns `T ! PyError`, since any call into Python can fail; `PyError(kind, message)` is in the
   prelude.
 
 ## Tests

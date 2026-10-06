@@ -348,6 +348,9 @@ impl<'a> Parser<'a> {
     fn item(&mut self) -> Item {
         let start = self.span();
         let before = self.pos;
+        if self.at_keyword_habit("async") {
+            return self.item();
+        }
         let item = match self.peek() {
             T::Fn => Item::Fn(self.fn_def(!self.interface)),
             T::Type => self.type_def(),
@@ -1343,7 +1346,30 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// Python's `async` before a function, or `await` before an expression: reported with the
+    /// keyword removed, and stepped over so what follows is read as lotml.
+    fn at_keyword_habit(&mut self, keyword: &str) -> bool {
+        let follows = matches!(self.peek_at(1), T::Fn | T::Name | T::LParen | T::LBracket);
+        if self.peek() != T::Name || self.text_of(self.token()) != keyword || !follows {
+            return false;
+        }
+        let span = self.span();
+        let next = self.shifted(self.tokens[(self.pos + 1).min(self.tokens.len() - 1)].span);
+        self.report(
+            span,
+            format!("lotml has no `{keyword}`: no function is marked or awaited, and `parallel` runs tasks at once"),
+            vec![],
+            Some((Span { start: span.start, end: next.start }, String::new())),
+            "E0112",
+        );
+        self.bump();
+        true
+    }
+
     fn factor(&mut self) -> Expr {
+        if self.at_keyword_habit("await") {
+            return self.factor();
+        }
         let start = self.span();
         let op = match self.peek() {
             T::Minus => UnaryOp::Neg,

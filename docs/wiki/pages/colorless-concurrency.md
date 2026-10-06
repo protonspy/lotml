@@ -49,6 +49,22 @@ what the spawned closure reaches.
 The Python target ([[transpilation-strategy]]) does not reproduce green threads faithfully; since
 concurrency is v2, mapping tasks to threads and documenting the differences is enough.
 
+## What phase 2 built
+
+On the Python target, concurrency is one prelude function, `parallel(tasks)`: each task, a
+function with no parameters, runs on a thread of its own, and the caller waits for them all and
+gets their results in order — structured, so no task outlives the call that started it. No
+function is marked `async` and nothing is awaited; Python's `async` and `await` are diagnosed
+(E0112) and the fix removes them, and calls given where tasks are wanted, `parallel(f(a), f(b))`,
+are diagnosed with the fix that wraps each in a lambda. A call that blocks — into Python, say —
+holds up only its own thread, which is the dedicated thread the leaks above ask for; a task that
+panics stops the program once the others have finished. Values need no marking on this target:
+a task reaches only immutable values, which it can share, and copies, since a lambda captures a
+copy of each local it uses when it is made. Building it found that the backend did not: Python
+reads a closure's variable when it is called, so lambdas made in a loop all saw its last value;
+each captured local is now a default bound when the lambda is made. With the GIL the threads
+interleave rather than run in parallel; free-threaded CPython runs them at once.
+
 ## Unmeasured hypothesis
 
 No source found measures how often "forgot the `await`" or spreading `async` happens in

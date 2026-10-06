@@ -62,6 +62,10 @@ A_PROSE = [
 ]  # fmt: skip
 """Prose of the reference that variant A says differently, rewritten before the code is."""
 
+A_DROPPED = ["Concurrency"]
+"""Sections written after phase 0 settled the syntax on variant B, which variant A cannot
+express: its lambda takes exactly one parameter, so it has no task to give `parallel`."""
+
 A_CODE = [
     (re.compile(r"^(\s*)case ", re.MULTILINE), r"\1"),
     (re.compile(r"\blambda (\w+): "), r"\1 => "),
@@ -78,6 +82,11 @@ def reference_text(variant: str) -> str:
     text = reference.text()
     if variant == "b":
         return text
+    for section in A_DROPPED:
+        before, heading, rest = text.partition(f"\n## {section}\n")
+        if not heading:
+            raise ValueError(f"the reference has no section {section!r}")
+        text = before + "\n## " + rest.partition("\n## ")[2]
     for old, new in A_PROSE:
         if old not in text:
             raise ValueError(f"the reference no longer says: {old!r}")

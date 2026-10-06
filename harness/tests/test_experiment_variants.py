@@ -27,10 +27,15 @@ def test_variant_a_reference_examples_all_parse_in_variant_a():
 
 
 def test_variant_a_reference_keeps_the_sections_of_variant_b():
+    """All but those written after phase 0, which variant A cannot express."""
+
     def headings(text):
         return [line for line in text.splitlines() if line.startswith("## ")]
 
-    assert headings(variants.reference_text("a")) == headings(variants.reference_text("b"))
+    dropped = {f"## {section}" for section in variants.A_DROPPED}
+    kept = [h for h in headings(variants.reference_text("b")) if h not in dropped]
+    assert headings(variants.reference_text("a")) == kept
+    assert dropped <= set(headings(variants.reference_text("b")))
 
 
 def test_variant_b_reference_is_the_published_one():

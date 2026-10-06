@@ -324,6 +324,32 @@ def python(function, *args, **kwargs):
         return Err(PyError(type(error).__name__, str(error)))
 
 
+TASK_THREADS = 256
+"""The most tasks of one `parallel` that run at once; the rest wait for a thread."""
+
+
+def parallel(tasks):
+    """`parallel([lambda: …, …])` (R20): each task on a thread of its own, so a call that blocks
+    — into Python, say — holds up only its task; the caller waits for them all and gets their
+    results in order. Nothing is marked `async`. A task reaches no value another can change: a
+    lambda captures copies, and every other value is immutable. A task that panicked stops the
+    program once the others have finished."""
+    import concurrent.futures
+
+    tasks = list(tasks)
+    if not tasks:
+        return []
+    workers = min(len(tasks), TASK_THREADS)
+    with concurrent.futures.ThreadPoolExecutor(workers, thread_name_prefix="lotml-task") as pool:
+        futures = [pool.submit(task) for task in tasks]
+        concurrent.futures.wait(futures)
+    for future in futures:
+        error = future.exception()
+        if error is not None:
+            raise error
+    return [future.result() for future in futures]
+
+
 class LotmlError(Exception):
     """What a lotml function returning `T ! E` raises when Python calls it and it fails: the
     lotml error is in `error`."""
@@ -665,6 +691,7 @@ PRELUDE = {
     "wrapping_mul": wrapping_mul,
     "isqrt": math.isqrt,
     "gcd": _math.gcd,
+    "parallel": parallel,
 }
 """The names every program sees without an import (R35)."""
 
