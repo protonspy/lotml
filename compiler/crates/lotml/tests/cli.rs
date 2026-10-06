@@ -3,8 +3,22 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+/// `program` run in `dir` with every `GIT_*` variable removed, blind to any repository a git
+/// hook exported to the suite: under `pre-push` in a worktree `GIT_DIR` is set, and a test's
+/// `git commit` would land there.
+fn isolated(program: &str, dir: &Path) -> Command {
+    let mut command = Command::new(program);
+    command.current_dir(dir);
+    for (name, _) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with("GIT_") {
+            command.env_remove(name);
+        }
+    }
+    command
+}
+
 fn lotml(args: &[&str], dir: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_lotml")).args(args).current_dir(dir).output().expect("the binary runs")
+    isolated(env!("CARGO_BIN_EXE_lotml"), dir).args(args).output().expect("the binary runs")
 }
 
 fn stdout(output: &Output) -> String {
@@ -77,34 +91,16 @@ fn prefix_gives_a_verdict() {
     assert_eq!(json["prefix"][0]["verdict"], "error");
 }
 
-/// The variables that point git at another repository. A pre-push hook sets `GIT_DIR`, and a
-/// test inheriting it would `git init` and commit into the repository being pushed.
-const GIT_LOCATION: &[&str] = &[
-    "GIT_DIR",
-    "GIT_WORK_TREE",
-    "GIT_INDEX_FILE",
-    "GIT_COMMON_DIR",
-    "GIT_OBJECT_DIRECTORY",
-    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-    "GIT_NAMESPACE",
-];
-
-/// `git` in `dir`, for the scratch repository there and no other.
-fn git_in(dir: &Path, args: &[&str]) {
-    let mut command = Command::new("git");
-    for variable in GIT_LOCATION {
-        command.env_remove(variable);
-    }
-    let status = command.args(args).current_dir(dir).output().expect("git runs").status;
-    assert!(status.success(), "git {args:?}");
-}
-
 /// A scratch git repository holding `files`, committed.
 fn repository(name: &str, files: &[(&str, &str)]) -> PathBuf {
     let dir = scratch(name, files);
-    git_in(&dir, &["init", "-q"]);
-    git_in(&dir, &["-c", "user.name=t", "-c", "user.email=t@t", "add", "."]);
-    git_in(&dir, &["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "start"]);
+    let git = |args: &[&str]| {
+        let status = isolated("git", &dir).args(args).output().expect("git runs").status;
+        assert!(status.success(), "git {args:?}");
+    };
+    git(&["init", "-q"]);
+    git(&["-c", "user.name=t", "-c", "user.email=t@t", "add", "."]);
+    git(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "start"]);
     dir
 }
 
@@ -112,9 +108,8 @@ fn repository(name: &str, files: &[(&str, &str)]) -> PathBuf {
 fn since_reads_the_file_s_repository_whatever_git_dir_says() {
     let decoy = repository("since-decoy", &[("a.lotml", "fn f() -> int:\n    return 1\n")]);
     let dir = repository("since-hook", &[("a.lotml", "fn f() -> int:\n    return y\n")]);
-    let out = Command::new(env!("CARGO_BIN_EXE_lotml"))
+    let out = isolated(env!("CARGO_BIN_EXE_lotml"), &dir)
         .args(["check", "--since", "HEAD", "--json", "a.lotml"])
-        .current_dir(&dir)
         .env("GIT_DIR", decoy.join(".git"))
         .output()
         .expect("the binary runs");

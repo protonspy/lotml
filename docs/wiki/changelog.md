@@ -18,6 +18,7 @@ into it`. -->
 - 2026-10-06 — Python and lotml calling each other built: [[transpilation-strategy]] describes the checked boundary and the interfaces `lotml bind` writes (adr:0012)
 - 2026-10-06 — symbol-addressed edits and atomic rename built: [[semantic-compiler]] describes them, [[editing-robustness]] marks its design as built
 - 2026-10-06 — the language server and the MCP server built: [[semantic-compiler]] says what phase 2 adds
+- 2026-10-06 — prior work on a small model inside the compiler surveyed from 25 checked papers: added [[compiler-embedded-model]], linked from [[semantic-compiler]]; [[source-verification]] counts the new sources and quotes
 - 2026-10-06 — phase 2 proceeds past the failed phase 1 gate by adr:0011: [[evaluation-harness]] cites it
 - 2026-10-06 — the phase 1 gate failed on pass@1, so phase 2 has not started: [[evaluation-harness]] records the gate and why, [[lotml-risks]] measures the training-corpus risk
 - 2026-10-06 — the compiler built: [[semantic-compiler]] lists what phase 1 shipped, [[transpilation-strategy]] the Python backend

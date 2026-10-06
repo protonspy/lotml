@@ -40,6 +40,7 @@ fixed documents, not pages, and neither is ever an orphan.
 
 - [[semantic-compiler]] — diagnostics, the repair loop, digest, LSP and MCP
 - [[constrained-decoding]] — grammars for constrained generation and type constraints
+- [[compiler-embedded-model]] — prior work on a small model inside the compiler: repair, explanations, lints
 
 ### Plan
 
