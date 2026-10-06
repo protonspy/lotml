@@ -17,7 +17,7 @@ from pathlib import Path
 
 from lotml_harness.agent import report
 from lotml_harness.agent.bench import AgentTask, tasks
-from lotml_harness.agent.run import ARMS, MODEL, openrouter, run
+from lotml_harness.agent.run import ARMS, MODEL, error_row, openrouter, run
 from lotml_harness.experiments.phase1 import RESULTS
 
 RUNS = RESULTS / "agent"
@@ -48,6 +48,7 @@ def main(argv: list[str] | None = None, runs: Path = RUNS, written: Path = REPOR
     parser.add_argument("--task", action="append", help="only these tasks")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--report-only", action="store_true")
+    parser.add_argument("--live", action="store_true", help="say each model and tool call")
     args = parser.parse_args(argv)
     if not args.report_only:
         found = [t for t in tasks() if not args.task or t.id in args.task]
@@ -60,7 +61,18 @@ def main(argv: list[str] | None = None, runs: Path = RUNS, written: Path = REPOR
 
             def one(job: tuple[AgentTask, int], arm: str = arm, path: Path = path) -> None:
                 task, attempt = job
-                row = run(task, arm, attempt, model, args.model)
+                live = None
+                if args.live:
+
+                    def live(text: str, tag: str = f"[{arm} {task.id} #{attempt}]") -> None:
+                        print(f"{tag} {text}", flush=True)
+
+                try:
+                    row = run(task, arm, attempt, model, args.model, live=live)
+                except Exception as failure:  # noqa: BLE001 - one broken run must not stop the rest (R2.7)
+                    row = error_row(
+                        task, arm, attempt, args.model, f"{type(failure).__name__}: {failure}"
+                    )
                 with lock, path.open("a", encoding="utf-8") as out:
                     out.write(json.dumps(row) + "\n")
                 print(

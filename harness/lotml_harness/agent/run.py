@@ -13,6 +13,7 @@ import tempfile
 import threading
 import time
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
@@ -88,6 +89,12 @@ class Meter(BaseCallbackHandler):
     check_errors: int = 0
     running: dict = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
+    live: Callable[[str], None] | None = None
+    """Where to say each model call and tool call as it happens, for watching a run."""
+
+    def say(self, text: str) -> None:
+        if self.live:
+            self.live(text)
 
     def on_chat_model_start(self, *_: Any, **__: Any) -> None:
         with self.lock:
@@ -113,28 +120,42 @@ class Meter(BaseCallbackHandler):
                     self.cost += float(metadata.get("cost") or 0.0)
                     if metadata.get("provider"):
                         self.providers[metadata["provider"]] += 1
+                    calls, cost = self.model_calls, self.cost
+                self.say(
+                    f"model #{calls}: +{usage.get('input_tokens', 0)} in"
+                    f" +{usage.get('output_tokens', 0)} out, ${cost:.4f} so far"
+                )
 
-    def on_tool_start(self, serialized: dict, *_: Any, run_id: Any = None, **__: Any) -> None:
+    def on_tool_start(
+        self, serialized: dict, input_str: str = "", *_: Any, run_id: Any = None, **__: Any
+    ) -> None:
         name = (serialized or {}).get("name", "?")
         with self.lock:
             self.tools[name] += 1
             self.running[run_id] = name
+        self.say(f"  {name} {' '.join(str(input_str).split())[:100]}")
 
     def on_tool_end(self, output: Any, *, run_id: Any = None, **_: Any) -> None:
         with self.lock:
             name = self.running.pop(run_id, None)
         status = getattr(output, "status", "success")
         content = getattr(output, "content", output)
+        failed_check = name == "check" and reports_errors(str(content))
         with self.lock:
             if status == "error":
                 self.tool_errors += 1
-            if name == "check" and reports_errors(str(content)):
+            if failed_check:
                 self.check_errors += 1
+        if status == "error":
+            self.say(f"    {name} failed: {' '.join(str(content).split())[:100]}")
+        elif failed_check:
+            self.say("    check: errors")
 
     def on_tool_error(self, error: BaseException, *, run_id: Any = None, **_: Any) -> None:
         with self.lock:
-            self.running.pop(run_id, None)
+            name = self.running.pop(run_id, None)
             self.tool_errors += 1
+        self.say(f"    {name} failed: {str(error)[:100]}")
 
 
 def reports_errors(check_output: str) -> bool:
@@ -186,16 +207,17 @@ def run(
     model_name: str,
     lotml: Lotml | None = None,
     traces: Path = TRACES,
+    live: Callable[[str], None] | None = None,
 ) -> dict:
     """Run the task once and return its row; the trace goes to `traces`."""
     from deepagents import create_deep_agent
     from deepagents.backends import FilesystemBackend
 
     lotml = lotml or Lotml()
-    steps = task.steps or STEPS
-    seconds = task.seconds or SECONDS
+    steps = task.steps if task.steps is not None else STEPS
+    seconds = task.seconds if task.seconds is not None else SECONDS
     start = time.monotonic()
-    meter = Meter(steps=steps, deadline=start + seconds)
+    meter = Meter(steps=steps, deadline=start + seconds, live=live)
     stopped, error = "done", None
     messages: list[BaseMessage] = []
     with tempfile.TemporaryDirectory(prefix="lotml-agent-") as scratch:
@@ -222,7 +244,7 @@ def run(
                 if type(failure).__name__ == "GraphRecursionError":
                     stopped = "steps"
                 else:
-                    error = f"{type(failure).__name__}: {str(failure)[:500]}"
+                    stopped, error = "error", f"{type(failure).__name__}: {str(failure)[:500]}"
         seconds_taken = time.monotonic() - start
         after = snapshot(workspace)
         graded = grade(task, workspace, lotml)
@@ -255,3 +277,29 @@ def run(
         encoding="utf-8",
     )
     return row
+
+
+def error_row(task: AgentTask, arm: str, attempt: int, model_name: str, error: str) -> dict:
+    """The row of a run that could not be set up or graded: an error, run again next time."""
+    return {
+        "task": task.id,
+        "kind": task.kind,
+        "model": model_name,
+        "arm": arm,
+        "attempt": attempt,
+        "outcome": "error",
+        "hidden": [0, 0],
+        "checks": False,
+        "stopped": "error",
+        "model_calls": 0,
+        "tools": {},
+        "tool_errors": 0,
+        "check_errors": 0,
+        "tokens": {"input": 0, "output": 0, "reasoning": 0},
+        "cost": 0.0,
+        "providers": {},
+        "seconds": 0.0,
+        "lines_changed": 0,
+        "failures": [],
+        "error": error[:500],
+    }

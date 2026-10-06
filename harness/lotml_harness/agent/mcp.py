@@ -78,8 +78,11 @@ class LotmlMcp:
                     raise McpError(f"`{method}` had no answer in {self.timeout} s") from None
                 if line is None:
                     raise McpError("the server closed its output")
-                message = json.loads(line)
-                if message.get("id") != id_:
+                try:
+                    message = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(message, dict) or message.get("id") != id_:
                     continue
                 if "error" in message:
                     raise McpError(message["error"].get("message", str(message["error"])))

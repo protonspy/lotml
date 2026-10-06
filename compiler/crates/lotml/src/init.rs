@@ -76,7 +76,7 @@ pub fn run(dir: &Path, named: Option<&[Named]>, yes: bool) -> Result<u8, Failure
     };
     let mut status = 0;
     report(GUIDE_FILE, put(&dir.join(GUIDE_FILE), GUIDE)?);
-    report("AGENTS.md", put_block(&dir.join("AGENTS.md"), AGENTS)?);
+    put_block(dir, "AGENTS.md", AGENTS, &mut status)?;
     for (harness, _) in HARNESSES.iter().zip(chosen).filter(|(_, on)| *on) {
         let path = dir.join(harness.config);
         let existing = read(&path)?;
@@ -100,7 +100,7 @@ pub fn run(dir: &Path, named: Option<&[Named]>, yes: bool) -> Result<u8, Failure
             }
         }
         if harness.named == Named::Claude {
-            report("CLAUDE.md", put_block(&dir.join("CLAUDE.md"), "@AGENTS.md\n")?);
+            put_block(dir, "CLAUDE.md", "@AGENTS.md\n", &mut status)?;
         }
     }
     let set_up: Vec<&str> = HARNESSES.iter().zip(chosen).filter(|(_, on)| *on).map(|(h, _)| h.name).collect();
@@ -156,26 +156,41 @@ fn put(path: &Path, text: &str) -> Result<Outcome, Failure> {
     Ok(if existing.is_some() { Outcome::Updated } else { Outcome::Created })
 }
 
-fn put_block(path: &Path, body: &str) -> Result<Outcome, Failure> {
-    let existing = read(path)?.unwrap_or_default();
-    put(path, &with_block(&existing, body))
+/// Write the lotml block into `dir/name`, or, when its markers are broken, leave the file, say why
+/// and set the status to 2.
+fn put_block(dir: &Path, name: &str, body: &str, status: &mut u8) -> Result<(), Failure> {
+    let path = dir.join(name);
+    let existing = read(&path)?.unwrap_or_default();
+    match with_block(&existing, body) {
+        Ok(text) => report(name, put(&path, &text)?),
+        Err(why) => {
+            println!("{name}: {why}; left as it was");
+            *status = 2;
+        }
+    }
+    Ok(())
 }
 
 /// `text` with the lotml block holding `body`: the block replaced where there is one, appended
-/// after a blank line where there is not. Written in the file's own line endings.
-pub fn with_block(text: &str, body: &str) -> String {
+/// after a blank line where there is not. Written in the file's own line endings. A begin marker
+/// with no end after it is refused: replacing up to a later end would take the user's lines too.
+pub fn with_block(text: &str, body: &str) -> Result<String, String> {
     let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
     let block = format!("{BEGIN}\n{}\n{END}", body.trim_end()).replace('\n', newline);
-    if let Some(start) = text.find(BEGIN)
-        && let Some(end) = text[start..].find(END).map(|e| start + e + END.len())
-    {
-        return format!("{}{block}{}", &text[..start], &text[end..]);
+    if let Some(start) = text.find(BEGIN) {
+        let Some(end) = text[start..].find(END).map(|e| start + e + END.len()) else {
+            return Err(format!("`{BEGIN}` has no `{END}` after it"));
+        };
+        if text[end..].contains(BEGIN) {
+            return Err(format!("`{BEGIN}` appears more than once"));
+        }
+        return Ok(format!("{}{block}{}", &text[..start], &text[end..]));
     }
     if text.trim().is_empty() {
-        return format!("{block}{newline}");
+        return Ok(format!("{block}{newline}"));
     }
     let separator = if text.ends_with('\n') { newline } else { &format!("{newline}{newline}") };
-    format!("{text}{separator}{block}{newline}")
+    Ok(format!("{text}{separator}{block}{newline}"))
 }
 
 const NEW_JSON: &str = "{\n  \"mcpServers\": {\n    \"lotml\": {\n      \"command\": \"lotml\",\n      \"args\": [\"mcp\", \"--root\", \".\"]\n    }\n  }\n}\n";
@@ -370,18 +385,25 @@ mod tests {
 
     #[test]
     fn the_block_is_appended_once_then_replaced() {
-        let first = with_block("# Project\n\nRules.\n", "one\n");
+        let first = with_block("# Project\n\nRules.\n", "one\n").unwrap();
         assert_eq!(first, "# Project\n\nRules.\n\n<!-- lotml:begin -->\none\n<!-- lotml:end -->\n");
-        let second = with_block(&first, "two\n");
+        let second = with_block(&first, "two\n").unwrap();
         assert_eq!(second, first.replace("one", "two"));
-        assert_eq!(with_block(&second, "two\n"), second);
-        assert_eq!(with_block("", "x"), "<!-- lotml:begin -->\nx\n<!-- lotml:end -->\n");
+        assert_eq!(with_block(&second, "two\n").unwrap(), second);
+        assert_eq!(with_block("", "x").unwrap(), "<!-- lotml:begin -->\nx\n<!-- lotml:end -->\n");
     }
 
     #[test]
     fn the_block_keeps_what_follows_it() {
         let text = "a\n<!-- lotml:begin -->\nold\n<!-- lotml:end -->\nb\n";
-        assert_eq!(with_block(text, "new"), "a\n<!-- lotml:begin -->\nnew\n<!-- lotml:end -->\nb\n");
+        assert_eq!(with_block(text, "new").unwrap(), "a\n<!-- lotml:begin -->\nnew\n<!-- lotml:end -->\nb\n");
+    }
+
+    #[test]
+    fn broken_markers_are_refused_rather_than_eating_the_user_s_lines() {
+        assert!(with_block("a\n<!-- lotml:begin -->\nmine\n", "new").is_err());
+        let twice = "<!-- lotml:begin -->\nx\n<!-- lotml:end -->\nmine\n<!-- lotml:begin -->\ny\n<!-- lotml:end -->\n";
+        assert!(with_block(twice, "new").is_err());
     }
 
     #[test]

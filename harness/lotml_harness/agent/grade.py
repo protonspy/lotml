@@ -44,7 +44,8 @@ def grade(task: AgentTask, workspace: Path, lotml: Lotml | None = None) -> Grade
             if not source.is_file():
                 failures.append(f"{file} is missing")
                 continue
-            text = source.read_text(encoding="utf-8")
+            # A test the agent named `hidden:` itself is renamed, so only the task's count.
+            text = HIDDEN.sub('test "agent:', source.read_text(encoding="utf-8"))
             source.write_text(text.rstrip("\n") + "\n\n" + hidden, encoding="utf-8")
             ran = lotml.compiler(["test", "--json", file], scratch)
             report = _report(ran.stdout if ran else "")

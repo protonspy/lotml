@@ -97,6 +97,26 @@ def test_the_step_limit_stops_the_run_and_grades_what_is_there(tmp_path: Path):
     assert row["hidden"][0] < row["hidden"][1]
 
 
+def test_the_time_limit_stops_the_run_before_the_next_call(tmp_path: Path):
+    task = dataclasses.replace(TASKS["median-mode"], seconds=0)
+    said_live: list[str] = []
+    model = Scripted(messages=(said(n, ("check", {})) for n in itertools.count()))
+    row = runner.run(task, "agents", 0, model, "scripted", traces=tmp_path, live=said_live.append)
+    assert (row["stopped"], row["model_calls"], row["outcome"]) == ("time", 0, "fail")
+    assert said_live == []
+
+
+def test_live_says_each_model_and_tool_call(tmp_path: Path):
+    said_live: list[str] = []
+    model = scripted(said(1, ("check", {})), said(2, text="Done."))
+    runner.run(
+        TASKS["median-mode"], "agents", 0, model, "scripted", traces=tmp_path, live=said_live.append
+    )
+    assert said_live[0].startswith("model #1: +100 in +10 out, $0.0010")
+    assert said_live[1].startswith("  check")
+    assert said_live[-1].startswith("model #2:")
+
+
 def test_a_check_with_errors_is_counted(tmp_path: Path):
     model = scripted(
         said(
@@ -119,9 +139,36 @@ def test_a_failing_model_records_an_error(tmp_path: Path):
     row = runner.run(
         TASKS["median-mode"], "agents", 1, Broken(messages=iter([])), "scripted", traces=tmp_path
     )
-    assert row["outcome"] == "error"
+    assert (row["outcome"], row["stopped"]) == ("error", "error")
     assert "provider unavailable" in row["error"]
     assert row["attempt"] == 1
+
+
+def test_a_run_that_cannot_start_does_not_stop_the_others(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from lotml_harness.agent import __main__ as cli
+
+    calls = []
+
+    def flaky(task, arm, attempt, *_, **__):
+        calls.append(task.id)
+        if len(calls) == 1:
+            raise RuntimeError("lotml init failed")
+        return runner.error_row(task, arm, attempt, "m/x", "fine") | {
+            "outcome": "fail",
+            "hidden": [0, 1],
+        }
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test")
+    monkeypatch.setattr(cli, "run", flaky)
+    monkeypatch.setattr(cli, "openrouter", lambda name: None)
+    ids = list(TASKS)[:2]
+    argv = ["--model", "m/x", "--arm", "agents", "--workers", "1"]
+    cli.main([*argv, "--task", ids[0], "--task", ids[1]], runs=tmp_path, written=tmp_path / "r.md")
+    rows = cli.read_rows(cli.rows_file(tmp_path, "m/x", "agents"))
+    assert [r["outcome"] for r in rows] == ["error", "fail"]
+    assert "lotml init failed" in rows[0]["error"]
 
 
 def test_the_agent_has_no_shell_and_no_way_out(tmp_path: Path):

@@ -33,6 +33,18 @@ def test_the_starting_workspace_fails_a_hidden_test(task: AgentTask, tmp_path: P
     assert result.outcome != "pass"
 
 
+def test_an_agent_s_own_hidden_tests_do_not_count(tmp_path: Path):
+    task = next(t for t in TASKS if t.id == "median-mode")
+    task.lay(tmp_path)
+    forged = "".join(f'\ntest "hidden: forged {i}":\n    assert True\n' for i in range(9))
+    (tmp_path / "stats.lotml").write_text(
+        (tmp_path / "stats.lotml").read_text(encoding="utf-8") + forged, encoding="utf-8"
+    )
+    result = grade(task, tmp_path)
+    assert result.passed == 0
+    assert result.outcome == "fail"
+
+
 def test_a_missing_graded_file_fails_its_tests(tmp_path: Path):
     task = TASKS[0]
     result = grade(task, tmp_path)

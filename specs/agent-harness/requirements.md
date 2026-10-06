@@ -40,7 +40,7 @@ hidden tests. It measures how often the agent gets lotml right, what it costs, a
 
 - **R4.1** When a run is graded, the agent harness shall append one row: task, kind, model, arm, attempt, outcome, hidden tests passed and total, whether the workspace checks, what stopped the run, model calls, tool calls by tool, tool errors, `check` calls that reported errors, input, output and reasoning tokens, cost, seconds and lines changed.
 - **R4.2** The agent harness shall report, per model and arm, pass@1 with a Wilson 95% interval, pass@k by the unbiased estimator for every k up to the attempts run, the mean share of hidden tests passed, and the tokens, cost and seconds per run; and per task, the passes of each arm.
-- **R4.3** When rows for a task, arm and attempt already exist, the agent harness shall skip that run.
+- **R4.3** When a row for a task, arm and attempt already exists, the agent harness shall skip that run, unless the row records an error, which the agent harness shall run again and count only in the errors column.
 - **R4.4** The agent harness shall keep each run's messages and tool calls in a git-ignored cache, apart from the committed rows.
 
 ## Out of scope
