@@ -3,11 +3,17 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-/// `program` run in `dir`, blind to any repository a git hook exported to the suite: under
-/// `pre-push` in a worktree `GIT_DIR` is set, and a test's `git commit` would land there.
+/// `program` run in `dir` with every `GIT_*` variable removed, blind to any repository a git
+/// hook exported to the suite: under `pre-push` in a worktree `GIT_DIR` is set, and a test's
+/// `git commit` would land there.
 fn isolated(program: &str, dir: &Path) -> Command {
     let mut command = Command::new(program);
-    command.current_dir(dir).env_remove("GIT_DIR").env_remove("GIT_WORK_TREE").env_remove("GIT_INDEX_FILE");
+    command.current_dir(dir);
+    for (name, _) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with("GIT_") {
+            command.env_remove(name);
+        }
+    }
     command
 }
 
