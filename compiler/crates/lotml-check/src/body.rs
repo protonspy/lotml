@@ -1475,7 +1475,7 @@ impl<'p> Body<'p> {
             return local.ty;
         }
         if let Some(sig) = self.program.functions.get(name) {
-            return Ty::Func(sig.params.iter().map(|p| p.ty.clone()).collect(), Box::new(sig.ret.clone()));
+            return function_value(sig);
         }
         if let Some(owner) = self.program.variant_of.get(name).cloned() {
             return self.variant_value(name, &owner, span);
@@ -1826,6 +1826,23 @@ impl<'p> Body<'p> {
                     Ty::Error
                 }
             },
+            Ty::Module(module) if self.program.foreign.contains_key(module) => {
+                match self.program.foreign[module].get(&name.name) {
+                    Some(sig) => function_value(sig),
+                    None => {
+                        let names: Vec<String> = self.program.foreign[module].keys().cloned().collect();
+                        self.report(
+                            Diagnostic::error(
+                                "E0205",
+                                name.span,
+                                format!("`{module}`'s interface has no `{}`", name.name),
+                            )
+                            .alternatives(closest(&name.name, &names)),
+                        );
+                        Ty::Error
+                    }
+                }
+            }
             Ty::Module(module) => builtins::module_member(module, &name.name).unwrap_or_else(|| {
                 self.report(
                     Diagnostic::error("E0205", name.span, format!("`{module}` has no `{}`", name.name)).alternatives(
@@ -2411,6 +2428,19 @@ impl<'p> Body<'p> {
                     }
                 }
             }
+            Ty::Module(module) if self.program.foreign.contains_key(&module) => {
+                if let Some(sig) = self.program.foreign[&module].get(&name.name).cloned() {
+                    return self.call_signature(&sig, &[], &[], args, span, None);
+                }
+                self.arg_types(args, &[]);
+                let names: Vec<String> = self.program.foreign[&module].keys().cloned().collect();
+                self.report(
+                    Diagnostic::error("E0205", name.span, format!("`{module}`'s interface has no `{}`", name.name))
+                        .alternatives(closest(&name.name, &names))
+                        .note("a function the binding could not type is listed in the interface's comments"),
+                );
+                Ty::Error
+            }
             Ty::Module(module) => {
                 let ty = builtins::module_member(&module, &name.name);
                 match ty {
@@ -2724,4 +2754,13 @@ fn assigned(block: &Block) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     walk(block, &mut out);
     out
+}
+
+/// A function used as a value: its parameters and, for one that can fail, its result.
+fn function_value(sig: &FnSig) -> Ty {
+    let ret = match &sig.error {
+        Some(error) => Ty::Result(Box::new(sig.ret.clone()), Box::new(error.clone())),
+        None => sig.ret.clone(),
+    };
+    Ty::Func(sig.params.iter().map(|p| p.ty.clone()).collect(), Box::new(ret))
 }

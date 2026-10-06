@@ -4,16 +4,19 @@
 
 mod body;
 mod builtins;
+mod interface;
 mod prefix;
 mod program;
 pub mod ty;
 
-pub use prefix::{PrefixCheck, Verdict, check_prefix};
+pub use interface::{Interface, Interfaces, interface};
+pub use prefix::{PrefixCheck, Verdict, check_prefix, check_prefix_with};
+pub use program::{FieldSig, FnSig, ParamSig, TypeDef, VariantSig};
 
 /// The names every program sees without an import (R35).
 pub const PRELUDE: &[&str] = builtins::PRELUDE;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use lotml_diag::{Applicability, Diagnostic};
 use lotml_syntax::ast::{FnDef, Item, Module, TypeKind};
@@ -21,14 +24,19 @@ use lotml_syntax::span::Span;
 use lotml_syntax::{SyntaxError, parse};
 
 use crate::body::Body;
-use crate::program::{FnSig, Program};
+use crate::program::Program;
 use crate::ty::Ty;
 
 /// Parse and check one file, returning every diagnostic in source order.
 pub fn check_source(source: &str) -> Vec<Diagnostic> {
+    check_source_with(source, &Interfaces::new())
+}
+
+/// [`check_source`] for a file that may import the Python modules in `interfaces`.
+pub fn check_source_with(source: &str, interfaces: &Interfaces) -> Vec<Diagnostic> {
     let parsed = parse(source);
     let mut diagnostics: Vec<Diagnostic> = parsed.errors.iter().map(syntax).collect();
-    diagnostics.extend(check(&parsed.module, source));
+    diagnostics.extend(check_resolved_with(&parsed.module, source, interfaces).diagnostics);
     diagnostics.sort_by_key(|d| d.span.start);
     diagnostics
 }
@@ -73,6 +81,12 @@ pub struct Checked {
     /// Each name that resolved to a local, parameter or binding, with the span of the name
     /// that declared it; a declaration refers to itself. One span may be listed more than once.
     pub locals: Vec<(Span, Span)>,
+    /// The signature of each top-level function.
+    pub functions: BTreeMap<String, FnSig>,
+    /// The records and sum types the module declares, with their fields.
+    pub declared: BTreeMap<String, TypeDef>,
+    /// The Python modules imported through interfaces, each with its functions.
+    pub foreign: BTreeMap<String, BTreeMap<String, FnSig>>,
 }
 
 impl Checked {
@@ -86,7 +100,12 @@ impl Checked {
 /// Type-check a parsed module, keeping the type of every expression and what each local's name
 /// refers to, for a backend or an editor.
 pub fn check_resolved(module: &Module, text: &str) -> Checked {
-    let mut program = Program::collect(module);
+    check_resolved_with(module, text, &Interfaces::new())
+}
+
+/// [`check_resolved`] for a module that may import the Python modules in `interfaces`.
+pub fn check_resolved_with(module: &Module, text: &str, interfaces: &Interfaces) -> Checked {
+    let mut program = Program::collect(module, &interface::functions(interfaces));
     let mut checked = Checked { diagnostics: std::mem::take(&mut program.diagnostics), ..Checked::default() };
     for item in &module.items {
         match item {
@@ -132,6 +151,19 @@ pub fn check_resolved(module: &Module, text: &str) -> Checked {
             Item::Sum(_) | Item::Import(_) | Item::Error(_) => {}
         }
     }
+    let declared_here = |name: &String| {
+        module.items.iter().any(|item| match item {
+            Item::Fn(f) => f.name.name == *name,
+            Item::Record(r) => r.name.name == *name,
+            Item::Sum(s) => s.name.name == *name,
+            _ => false,
+        })
+    };
+    checked.functions =
+        program.functions.iter().filter(|(n, _)| declared_here(n)).map(|(n, s)| (n.clone(), s.clone())).collect();
+    checked.declared =
+        program.types.iter().filter(|(n, _)| declared_here(n)).map(|(n, t)| (n.clone(), t.clone())).collect();
+    checked.foreign = program.foreign;
     checked
 }
 

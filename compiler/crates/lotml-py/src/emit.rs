@@ -1,16 +1,19 @@
 //! lotml's syntax tree to Python's, as JSON the runtime turns back into `ast` nodes.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
-use lotml_check::Types;
 use lotml_check::ty::{IntKind, Ty};
+use lotml_check::{FnSig, Types};
 use lotml_syntax::ast::*;
 use lotml_syntax::span::Span;
 use serde_json::{Map, Value, json};
 
+/// The Python modules a lotml module imports through interfaces, each with its functions.
+pub type Foreign = BTreeMap<String, BTreeMap<String, FnSig>>;
+
 /// The Python module for a checked lotml module.
-pub fn module(text: &str, module: &Module, types: &Types) -> Value {
-    let mut emitter = Emitter::new(text, module, types);
+pub fn module(text: &str, module: &Module, types: &Types, foreign: &Foreign) -> Value {
+    let mut emitter = Emitter::new(text, module, types, foreign);
     emitter.module(module)
 }
 
@@ -46,6 +49,7 @@ struct Emitter<'a> {
     enums: HashSet<String>,
     /// Names of top-level functions.
     functions: HashSet<String>,
+    foreign: &'a Foreign,
     scope: Scope,
     temporaries: usize,
     /// Inside a comprehension's iterable or a default value, where `:=` is not allowed.
@@ -174,7 +178,7 @@ fn stored_ctx(mut target: Value) -> Value {
     target
 }
 
-fn range_of(kind: IntKind) -> (i128, i128) {
+pub(crate) fn range_of(kind: IntKind) -> (i128, i128) {
     match kind {
         IntKind::I8 => (i8::MIN.into(), i8::MAX.into()),
         IntKind::I16 => (i16::MIN.into(), i16::MAX.into()),
@@ -188,7 +192,7 @@ fn range_of(kind: IntKind) -> (i128, i128) {
 }
 
 impl<'a> Emitter<'a> {
-    fn new(text: &'a str, module: &Module, types: &'a Types) -> Emitter<'a> {
+    fn new(text: &'a str, module: &Module, types: &'a Types, foreign: &'a Foreign) -> Emitter<'a> {
         let mut lines = vec![0];
         lines.extend(text.match_indices('\n').map(|(i, _)| i as u32 + 1));
         let mut units = HashSet::new();
@@ -219,6 +223,7 @@ impl<'a> Emitter<'a> {
             units,
             enums,
             functions,
+            foreign,
             scope: Scope::default(),
             temporaries: 0,
             no_walrus: false,
@@ -538,6 +543,10 @@ impl<'a> Emitter<'a> {
     }
 
     fn import(&mut self, import: &Import) -> Vec<Value> {
+        let path = import.module.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(".");
+        if let Some(functions) = self.foreign.get(&path) {
+            return self.import_python(import, &path, functions);
+        }
         let module = rt("math");
         if import.names.is_empty() {
             let id = import.module.first().map_or("math", |m| m.name.as_str());
@@ -547,6 +556,31 @@ impl<'a> Emitter<'a> {
             .names
             .iter()
             .map(|n| self.at(assign(vec![target(&n.name)], attr(module.clone(), &n.name)), n.span))
+            .collect()
+    }
+
+    /// A Python module's functions, called through the runtime's checked boundary: `import m`
+    /// binds a module of them, `from m import f` each one.
+    fn import_python(&mut self, import: &Import, path: &str, functions: &BTreeMap<String, FnSig>) -> Vec<Value> {
+        let returns = |sig: &FnSig| constant(crate::boundary::descriptor(&sig.ret).to_string().into());
+        let module = constant(path.into());
+        if import.names.is_empty() {
+            let id = import.module.first().map_or(path, |m| m.name.as_str());
+            let keys: Vec<Value> = functions.keys().map(|k| constant(k.clone().into())).collect();
+            let values: Vec<Value> = functions.values().map(returns).collect();
+            let table = node("Dict", vec![("keys", Value::Array(keys)), ("values", Value::Array(values))]);
+            return vec![
+                self.at(assign(vec![target(id)], call(rt("ForeignModule"), vec![module, table])), import.span),
+            ];
+        }
+        import
+            .names
+            .iter()
+            .filter_map(|n| functions.get(&n.name).map(|sig| (n, sig)))
+            .map(|(n, sig)| {
+                let bound = call(rt("foreign"), vec![module.clone(), constant(n.name.clone().into()), returns(sig)]);
+                self.at(assign(vec![target(&n.name)], bound), n.span)
+            })
             .collect()
     }
 

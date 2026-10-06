@@ -85,11 +85,31 @@ impl Workspace {
                 true
             }
             None => {
-                let file = SourceFile::new(&self.db, path.display().to_string(), text);
+                let file = SourceFile::new(&self.db, path.display().to_string(), text, Vec::new());
                 self.files.insert(path.to_path_buf(), file);
                 true
             }
         }
+    }
+
+    /// Give a file the interfaces of the Python modules it may import, each module's name with
+    /// its `.lotmli` text; true when they changed.
+    pub fn set_interfaces(&mut self, path: &Path, interfaces: Vec<(String, String)>) -> bool {
+        match self.files.get(path) {
+            Some(&file) if *file.interfaces(&self.db) != interfaces => {
+                file.set_interfaces(&mut self.db).to(interfaces);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// What `text` would check to as the file at `path`, with the file's interfaces.
+    fn check_as(&self, path: &Path, text: &str) -> (lotml_syntax::Parsed, lotml_check::Checked) {
+        let interfaces = self.files.get(path).map(|&f| lotml_db::interfaces(&self.db, f)).unwrap_or_default();
+        let parsed = lotml_syntax::parse(text);
+        let checked = lotml_check::check_resolved_with(&parsed.module, text, &interfaces);
+        (parsed, checked)
     }
 
     /// Forget a file; true when it was there.
@@ -196,7 +216,11 @@ impl Workspace {
     /// check on every edit, against the state before it.
     pub fn introduced(&self, path: &Path, new: &str) -> Vec<Diagnostic> {
         let old = self.text(path).unwrap_or_default();
-        lotml_diag::introduced(lotml_check::check_source(new), new, self.diagnostics(path), old)
+        let (parsed, checked) = self.check_as(path, new);
+        let mut found: Vec<Diagnostic> = parsed.errors.iter().map(lotml_check::syntax).collect();
+        found.extend(checked.diagnostics);
+        found.sort_by_key(|d| d.span.start);
+        lotml_diag::introduced(found, new, self.diagnostics(path), old)
     }
 
     /// Rename a symbol of a file everywhere it is referred to, or refuse: when the new name is
@@ -231,8 +255,7 @@ impl Workspace {
             }
         };
         // The new text must refer to the renamed symbol at exactly the renamed places.
-        let parsed = lotml_syntax::parse(&renamed_text);
-        let resolved = lotml_check::check_resolved(&parsed.module, &renamed_text);
+        let (parsed, resolved) = self.check_as(path, &renamed_text);
         let found = symbols::occurrences(&parsed.module, &resolved);
         let now: Vec<Span> = found.iter().filter(|o| o.symbol == renamed).map(|o| o.span).collect();
         if now != sites {

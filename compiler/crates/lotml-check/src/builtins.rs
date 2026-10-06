@@ -37,6 +37,8 @@ pub const PRELUDE: &[&str] = &[
     "todo",
     "Ok",
     "Err",
+    // A record: what a call into Python fails with (adr:0012).
+    "PyError",
     "wrapping_add",
     "wrapping_sub",
     "wrapping_mul",

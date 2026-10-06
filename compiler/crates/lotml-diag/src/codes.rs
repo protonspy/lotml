@@ -215,6 +215,15 @@ pub const ALL: &[Code] = &[
         the generated helpers a program must not reach or shadow. Name your own values without the leading `__`.",
     },
     Code {
+        code: "E0221",
+        title: "not allowed in an interface",
+        explanation: "An interface (`bindings/<module>.lotmli`) declares the functions of a Python module, as \
+        `lotml bind` wrote them: one signature per line, no body, no type parameters, over the types every \
+        program has, each returning `T ! PyError` because any call into Python can fail:\n\n    \
+        fn dedent(text: str) -> str ! PyError\n\nRegenerate the file with `lotml bind <module> --stub <file.pyi>` \
+        rather than editing it.",
+    },
+    Code {
         code: "E0301",
         title: "an immutable reassigned",
         explanation: "A local declared with `x = …` cannot be assigned again. Declare it `var x = …` if it changes:\n\n\

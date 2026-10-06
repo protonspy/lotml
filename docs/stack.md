@@ -42,5 +42,8 @@ its language and MCP servers — JSON-RPC written over `serde_json`, with no pro
   cannot drift apart; chosen over hand parsing for its error messages.
 - **cargo-llvm-cov** (development only) — line coverage of the Rust tests for the test gate,
   next to the harness's pytest-cov; it needs the `llvm-tools-preview` component.
+- **typeshed** (read, not linked) — the stubs `lotml bind` writes interfaces from
+  (adr:0012-python-interop-through-checked-boundaries-and-interface-files); found in an installed
+  mypy or jedi when no `--stub` is given, never installed by lotml.
 - **CPython** 3.11 or later — runs what the Python backend writes (`lotml run`, `lotml test`);
   found as `LOTML_PYTHON`, `python3`, `python` or `py -3`. Not a library the compiler links.

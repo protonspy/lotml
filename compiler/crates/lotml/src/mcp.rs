@@ -84,15 +84,18 @@ impl Server {
             self.modified.remove(&path);
             self.workspace.remove(&path);
         }
+        // The interfaces are read again too: a binding regenerated is a change to every file
+        // that imports it, and the engine re-checks only those.
+        let mut interfaces = files::InterfaceCache::default();
         for path in found {
             let stamp = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
-            if self.modified.get(&path).is_some_and(|known| *known == stamp && stamp.is_some()) {
-                continue;
-            }
-            if let Ok(text) = files::read(&path) {
+            if !self.modified.get(&path).is_some_and(|known| *known == stamp && stamp.is_some())
+                && let Ok(text) = files::read(&path)
+            {
                 self.workspace.set(&path, text);
-                self.modified.insert(path, stamp);
+                self.modified.insert(path.clone(), stamp);
             }
+            self.workspace.set_interfaces(&path, interfaces.get(&path));
         }
     }
 

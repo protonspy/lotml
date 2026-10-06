@@ -100,6 +100,17 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Write the interface lotml imports a Python module through, from the module's stub.
+    Bind {
+        /// The Python module: `textwrap`, `os.path`.
+        module: String,
+        /// The stub to read; typeshed's, from an installed mypy or jedi, when absent.
+        #[arg(long)]
+        stub: Option<PathBuf>,
+        /// Where to write `<module>.lotmli`.
+        #[arg(long, default_value = "bindings")]
+        out: PathBuf,
+    },
     /// Serve the Language Server Protocol on standard input and output.
     Lsp,
     /// Serve the compiler's tools to an agent over MCP, on standard input and output.
@@ -150,6 +161,7 @@ fn run() -> ExitCode {
         Command::Build { paths, out } => return status(exec::build(&paths, &out)),
         Command::Run { path } => return status(exec::run(&path)),
         Command::Test { paths, json } => return status(exec::test(&paths, json)),
+        Command::Bind { module, stub, out } => exec::bind(&module, stub.as_deref(), &out),
         Command::Lsp => return status(lsp::serve()),
         Command::Mcp { root } => return status(mcp::serve(&root)),
         Command::Show { symbol, paths } => sources(&paths).map(|s| match index::show(&symbol, &s) {

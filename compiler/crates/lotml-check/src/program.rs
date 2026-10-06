@@ -9,7 +9,7 @@ use lotml_syntax::span::Span;
 
 use crate::ty::Ty;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ParamSig {
     pub name: String,
     pub ty: Ty,
@@ -18,7 +18,7 @@ pub struct ParamSig {
     pub span: Span,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FnSig {
     pub name: String,
     pub type_params: Vec<(String, Option<String>)>,
@@ -28,20 +28,20 @@ pub struct FnSig {
     pub span: Span,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FieldSig {
     pub name: Option<String>,
     pub ty: Ty,
     pub has_default: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct VariantSig {
     pub name: String,
     pub fields: Option<Vec<FieldSig>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TypeDef {
     Record { params: Vec<String>, fields: Vec<FieldSig> },
     Sum { params: Vec<String>, variants: Vec<VariantSig> },
@@ -77,14 +77,20 @@ pub struct Program {
     /// Names imported into scope, each with the module it came from.
     pub imported: HashMap<String, String>,
     pub modules: HashSet<String>,
+    /// The Python modules there are interfaces for, each with its functions (adr:0012).
+    pub available: HashMap<String, BTreeMap<String, FnSig>>,
+    /// The Python modules imported, with their functions.
+    pub foreign: BTreeMap<String, BTreeMap<String, FnSig>>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
 pub const MODULES: &[&str] = &["math"];
 
 impl Program {
-    pub fn collect(module: &ast::Module) -> Program {
-        let mut program = Program::default();
+    /// What a module declares, with the Python modules it may import through `interfaces`.
+    pub fn collect(module: &ast::Module, interfaces: &HashMap<String, BTreeMap<String, FnSig>>) -> Program {
+        let mut program = Program::with_prelude();
+        program.available = interfaces.clone();
         let mut seen: HashMap<String, Span> = HashMap::new();
         let mut declare = |program: &mut Program, name: &ast::Ident| {
             if name.name.is_empty() {
@@ -167,8 +173,13 @@ impl Program {
                     let defaults = t.methods.iter().filter(|m| m.body.is_some()).map(|m| m.name.name.clone()).collect();
                     program.trait_defaults.insert(t.name.name.clone(), defaults);
                 }
-                Item::Import(import) => program.import(import),
                 _ => {}
+            }
+        }
+        // Imports last, so a name imported and declared too is seen as both.
+        for item in &module.items {
+            if let Item::Import(import) = item {
+                program.import(import);
             }
         }
         for item in &module.items {
@@ -190,6 +201,17 @@ impl Program {
         }
     }
 
+    /// The types every program has without declaring them: `PyError`, what a call into Python
+    /// fails with.
+    pub fn with_prelude() -> Program {
+        let mut program = Program::default();
+        let text = |name: &str| FieldSig { name: Some(name.into()), ty: Ty::Str, has_default: false };
+        program
+            .types
+            .insert("PyError".into(), TypeDef::Record { params: vec![], fields: vec![text("kind"), text("message")] });
+        program
+    }
+
     fn import(&mut self, import: &ast::Import) {
         let module: Vec<&str> = import.module.iter().map(|i| i.name.as_str()).collect();
         let path = module.join(".");
@@ -198,10 +220,18 @@ impl Program {
             .first()
             .map_or(import.span, |m| m.span)
             .to(import.module.last().map_or(import.span, |m| m.span));
+        if let Some(functions) = self.available.get(&path).cloned() {
+            self.import_python(import, &path, functions);
+            return;
+        }
         if !MODULES.contains(&path.as_str()) {
+            let known = MODULES.iter().map(ToString::to_string).chain(self.available.keys().cloned());
             let mut d = Diagnostic::error("E0216", span, format!("there is no module `{path}` to import from"))
-                .alternatives(MODULES.iter().map(ToString::to_string))
-                .note("the common names are in the prelude and need no import");
+                .alternatives(known)
+                .note("the common names are in the prelude and need no import")
+                .note(format!(
+                    "a Python module is reached through its interface: `lotml bind {path} --stub <{path}.pyi>` writes bindings/{path}.lotmli"
+                ));
             if matches!(path.as_str(), "typing" | "__future__" | "dataclasses" | "enum" | "collections.abc") {
                 d = d.fix(
                     "remove the import: lotml writes these in its own syntax",
@@ -226,6 +256,36 @@ impl Program {
             }
             self.imported.insert(name.name.clone(), path.clone());
         }
+    }
+
+    /// `import m` or `from m import f` of a Python module with an interface: its functions are
+    /// called like lotml's own, and each returns `T ! PyError`.
+    fn import_python(&mut self, import: &ast::Import, path: &str, functions: BTreeMap<String, FnSig>) {
+        if import.names.is_empty() {
+            self.modules.insert(path.to_string());
+        }
+        for name in &import.names {
+            let Some(sig) = functions.get(&name.name) else {
+                self.diagnostics.push(
+                    Diagnostic::error("E0216", name.span, format!("`{path}`'s interface has no `{}`", name.name))
+                        .alternatives(closest_names(&name.name, functions.keys()))
+                        .note("a function the binding could not type is listed in the interface's comments"),
+                );
+                continue;
+            };
+            if self.functions.contains_key(&name.name) || self.types.contains_key(&name.name) {
+                self.diagnostics.push(
+                    Diagnostic::error("E0210", name.span, format!("`{}` is declared twice", name.name)).note(format!(
+                        "it is imported from `{path}` and declared in this file: import `{path}` and call `{path}.{}`",
+                        name.name
+                    )),
+                );
+                continue;
+            }
+            self.functions.insert(name.name.clone(), sig.clone());
+            self.imported.insert(name.name.clone(), path.to_string());
+        }
+        self.foreign.insert(path.to_string(), functions);
     }
 
     fn implementation(&mut self, imp: &ast::ImplDef) {
@@ -520,4 +580,9 @@ fn reserved_params(diagnostics: &mut Vec<Diagnostic>, type_params: &[ast::TypePa
 
 fn params(type_params: &[ast::TypeParam]) -> Vec<String> {
     type_params.iter().map(|p| p.name.name.clone()).collect()
+}
+
+/// The names closest to `name` among `names`, for an alternative.
+fn closest_names<'a>(name: &str, names: impl Iterator<Item = &'a String>) -> Vec<String> {
+    crate::closest(name, &names.cloned().collect::<Vec<_>>())
 }

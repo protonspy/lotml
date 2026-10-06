@@ -184,7 +184,7 @@ impl Server {
                 };
                 let Some(path) = self.remember(uri) else { return Vec::new() };
                 self.open.insert(path.clone());
-                self.workspace.set(&path, text.to_string());
+                self.store(&path, text.to_string(), &mut files::InterfaceCache::default());
                 vec![self.publish(&path)]
             }
             "textDocument/didChange" => {
@@ -207,11 +207,27 @@ impl Server {
             }
             "workspace/didChangeWatchedFiles" => {
                 let mut out = Vec::new();
+                let mut interfaces_changed = false;
                 for change in params["changes"].as_array().into_iter().flatten() {
                     let Some(uri) = change["uri"].as_str() else { continue };
-                    let Some(path) = self.remember(uri) else { continue };
+                    let Some(path) = path_of(uri) else { continue };
+                    if path.extension().is_some_and(|e| e == "lotmli") {
+                        interfaces_changed = true;
+                        continue;
+                    }
+                    self.remember(uri);
                     if !self.open.contains(&path) {
                         out.extend(self.reload(&path));
+                    }
+                }
+                if interfaces_changed {
+                    // A binding regenerated changes what every file importing it checks to.
+                    let mut cache = files::InterfaceCache::default();
+                    let paths: Vec<PathBuf> = self.workspace.paths().map(Path::to_path_buf).collect();
+                    for path in paths {
+                        if self.workspace.set_interfaces(&path, cache.get(&path)) {
+                            out.push(self.publish(&path));
+                        }
                     }
                 }
                 out
@@ -239,11 +255,12 @@ impl Server {
         {
             folders.push(normalize(PathBuf::from(root)));
         }
+        let mut cache = files::InterfaceCache::default();
         for folder in folders.iter().filter(|f| f.is_dir()) {
             // A folder that cannot be read leaves the workspace with what could.
             for path in files::expand(std::slice::from_ref(folder)).unwrap_or_default() {
                 if let Ok(text) = files::read(&path) {
-                    self.workspace.set(&normalize(path), text);
+                    self.store(&normalize(path), text, &mut cache);
                 }
             }
         }
@@ -265,6 +282,12 @@ impl Server {
         })
     }
 
+    /// Give the workspace a file's text and the interfaces of the Python modules it may import.
+    fn store(&mut self, path: &Path, text: String, interfaces: &mut files::InterfaceCache) {
+        self.workspace.set(path, text);
+        self.workspace.set_interfaces(path, interfaces.get(path));
+    }
+
     /// The path a URI names, remembering how the client spelled it.
     fn remember(&mut self, uri: &str) -> Option<PathBuf> {
         let path = path_of(uri)?;
@@ -278,7 +301,7 @@ impl Server {
         let source = path.extension().is_some_and(|e| e == "lotml");
         match source.then(|| std::fs::read_to_string(path).ok()).flatten() {
             Some(text) => {
-                self.workspace.set(path, text);
+                self.store(path, text, &mut files::InterfaceCache::default());
                 vec![self.publish(path)]
             }
             None => {

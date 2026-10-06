@@ -68,13 +68,14 @@ def load(namespace: dict, path: str, payload: str, prelude: dict | None = None):
 
 
 def stub_arguments(stub: str) -> tuple[str, str]:
-    """The path and the payload a compiled module's stub hands `load`."""
+    """The path and the payload a compiled module's stub hands `load_module` (or, from an older
+    compiler, `load`)."""
     tree = ast.parse(stub)
     for node in ast.walk(tree):
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "load"
+            and node.func.attr in ("load", "load_module")
         ):
             return ast.literal_eval(node.args[1]), ast.literal_eval(node.args[2])
     raise ValueError("not a module compiled by lotml")
@@ -323,6 +324,195 @@ def python(function, *args, **kwargs):
         return Err(PyError(type(error).__name__, str(error)))
 
 
+class LotmlError(Exception):
+    """What a lotml function returning `T ! E` raises when Python calls it and it fails: the
+    lotml error is in `error`."""
+
+    def __init__(self, error):
+        super().__init__(error)
+        self.error = error
+
+
+def accept(value, descriptor, types: dict, classes: dict, where: str):
+    """`value` as the lotml type `descriptor` describes, copied, so the side that gave it never
+    shares it; a `TypeError` or `OverflowError` saying where, when it is not one.
+
+    A descriptor is a list: `["int", low, high, name]`, `["float"]`, `["bool"]`, `["str"]`,
+    `["bytes"]`, `["none"]`, `["list", d]`, `["set", d]`, `["dict", k, v]`, `["tuple", d…]`,
+    `["optional", d]`, `["adt", name]` — a record or sum type described in `types` and built
+    from `classes` — or `["any"]`."""
+    kind = descriptor[0]
+
+    def wrong(expected: str):
+        return TypeError(f"{where}: expected {expected}, got {type(value).__name__}")
+
+    if kind == "any":
+        return _copy.deepcopy(value)
+    if kind == "int":
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise wrong(descriptor[3])
+        if not descriptor[1] <= value <= descriptor[2]:
+            raise OverflowError(f"{where}: {value} does not fit in {descriptor[3]}")
+        return int(value)
+    if kind == "float":
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise wrong("float")
+        return float(value)
+    if kind == "bool":
+        if not isinstance(value, bool):
+            raise wrong("bool")
+        return value
+    if kind == "str":
+        if not isinstance(value, str):
+            raise wrong("str")
+        return str(value)
+    if kind == "bytes":
+        if not isinstance(value, (bytes, bytearray)):
+            raise wrong("bytes")
+        return bytes(value)
+    if kind == "none":
+        if value is not None:
+            raise wrong("None")
+        return None
+    if kind == "optional":
+        return None if value is None else accept(value, descriptor[1], types, classes, where)
+    if kind == "list":
+        if not isinstance(value, list):
+            raise wrong("list")
+        return [
+            accept(v, descriptor[1], types, classes, f"{where}[{i}]") for i, v in enumerate(value)
+        ]
+    if kind == "set":
+        if not isinstance(value, (set, frozenset)):
+            raise wrong("set")
+        return {accept(v, descriptor[1], types, classes, f"{where} element") for v in value}
+    if kind == "dict":
+        if not isinstance(value, dict):
+            raise wrong("dict")
+        return {
+            accept(k, descriptor[1], types, classes, f"{where} key"): accept(
+                v, descriptor[2], types, classes, f"{where}[{k!r}]"
+            )
+            for k, v in value.items()
+        }
+    if kind == "tuple":
+        items = descriptor[1:]
+        if not isinstance(value, tuple) or len(value) != len(items):
+            raise wrong(f"a tuple of {len(items)}")
+        return tuple(
+            accept(v, d, types, classes, f"{where}[{i}]")
+            for i, (v, d) in enumerate(zip(value, items, strict=True))
+        )
+    if kind == "adt":
+        return _accept_adt(value, descriptor[1], types, classes, where)
+    raise TypeError(f"{where}: no lotml type `{kind}`")
+
+
+def _accept_adt(value, name: str, types: dict, classes: dict, where: str):
+    """A record of type `name`, or a variant of the sum type `name`, rebuilt field by field."""
+    shape = types.get(name)
+    if shape is None:
+        return _copy.deepcopy(value)
+    cases = [(name, shape[1])] if shape[0] == "record" else shape[1]
+    for case, fields in cases:
+        cls = classes.get(case)
+        if fields is None:
+            if value is cls:
+                return value
+            continue
+        if isinstance(cls, type) and type(value) is cls:
+            built = {
+                field: accept(getattr(value, field), d, types, classes, f"{where}.{field}")
+                for field, d in fields
+            }
+            return cls(**built)
+    raise TypeError(f"{where}: expected {name}, got {type(value).__name__}")
+
+
+def export(function, name: str, spec: dict, types: dict, classes: dict):
+    """A lotml function as Python calls it: its arguments checked against the lotml signature
+    and copied, and a failure raised as `LotmlError` rather than returned."""
+    params = spec["params"]
+    names = [p[0] for p in params]
+
+    def exported(*args, **kwargs):
+        if spec.get("inout"):
+            raise TypeError(f"{name} changes an argument in place (`inout`): call it from lotml")
+        if len(args) > len(params):
+            raise TypeError(f"{name}() takes {len(params)} arguments, {len(args)} were given")
+        given = dict(zip(names, args, strict=False))
+        for key, value in kwargs.items():
+            if key not in names:
+                raise TypeError(f"{name}() has no parameter `{key}`")
+            if key in given:
+                raise TypeError(f"{name}() was given `{key}` twice")
+            given[key] = value
+        missing = [p[0] for p in params if p[0] not in given and not p[2]]
+        if missing:
+            raise TypeError(f"{name}() is missing {', '.join(missing)}")
+        checked = {
+            p[0]: accept(given[p[0]], p[1], types, classes, f"{name}({p[0]})")
+            for p in params
+            if p[0] in given
+        }
+        result = function(**checked)
+        if spec["error"] is None:
+            return result
+        if isinstance(result, Err):
+            raise LotmlError(result.error)
+        return result.value
+
+    exported.__name__ = exported.__qualname__ = name
+    exported.__doc__ = getattr(function, "__doc__", None)
+    exported.__wrapped__ = function
+    return exported
+
+
+def load_module(namespace: dict, path: str, payload: str):
+    """Load a compiled module as Python imports it: the program runs in a namespace of its own,
+    and the module shows its types as they are and its functions behind the checked boundary
+    of `export` (adr:0012)."""
+    program = {"__name__": namespace.get("__name__", "lotml_program")}
+    code = load(program, path, payload)
+    exports = json.loads(payload).get("exports", {"functions": {}, "types": {}, "names": []})
+    for name in exports["names"]:
+        namespace[name] = program[name]
+    for name, spec in exports["functions"].items():
+        namespace[name] = export(program[name], name, spec, exports["types"], program)
+    namespace.update({"__program": program, "__tests": program["__tests"], "__lotml__": path})
+    return code
+
+
+def foreign(module: str, name: str, returns: str):
+    """A Python function a lotml program calls through its interface: the arguments copied, any
+    exception and any returned value of the wrong type an `Err(PyError)`, the rest `Ok`."""
+    descriptor = json.loads(returns)
+
+    def call(*args, **kwargs):
+        try:
+            import importlib
+
+            function = getattr(importlib.import_module(module), name)
+            value = function(*_copy.deepcopy(args), **_copy.deepcopy(kwargs))
+        except Exception as error:  # noqa: BLE001 - the boundary turns every exception into a value
+            return Err(PyError(type(error).__name__, str(error)))
+        try:
+            return Ok(accept(value, descriptor, {}, {}, f"{module}.{name}() returned"))
+        except (TypeError, OverflowError) as error:
+            return Err(PyError(type(error).__name__, str(error)))
+
+    call.__name__ = call.__qualname__ = name
+    return call
+
+
+class ForeignModule:
+    """`import m` of a Python module with an interface: its functions, through `foreign`."""
+
+    def __init__(self, module: str, functions: dict):
+        for name, returns in functions.items():
+            setattr(self, name, foreign(module, name, returns))
+
+
 # The prelude -------------------------------------------------------------------------------
 
 
@@ -469,6 +659,7 @@ PRELUDE = {
     "todo": todo,
     "Ok": Ok,
     "Err": Err,
+    "PyError": PyError,
     "wrapping_add": wrapping_add,
     "wrapping_sub": wrapping_sub,
     "wrapping_mul": wrapping_mul,
@@ -683,7 +874,7 @@ def main(module_name: str) -> int:
 
     try:
         module = importlib.import_module(module_name)
-        entry = vars(module).get("main")
+        entry = vars(module).get("__program", vars(module)).get("main")
         if entry is None:
             sys.stderr.write("the program has no `fn main()`\n")
             return 2

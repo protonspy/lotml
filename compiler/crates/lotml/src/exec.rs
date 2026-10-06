@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use lotml_check::Interfaces;
 use lotml_diag::Report;
 use serde_json::{Value, json};
 
@@ -16,8 +17,9 @@ struct Module {
     shown: String,
 }
 
-/// The Python modules compiled from `paths`, written into `dir` with the runtime. When a file
-/// does not compile, none is written and the diagnostics come back as text.
+/// The Python modules compiled from `paths`, written into `dir` with the runtime, each with the
+/// `.pyi` that types it for Python. When a file does not compile, none is written and the
+/// diagnostics come back as text.
 fn compile(paths: &[PathBuf], dir: &Path) -> Result<Result<Vec<Module>, String>, Failure> {
     let mut compiled = Vec::new();
     let mut reports = Vec::new();
@@ -25,11 +27,14 @@ fn compile(paths: &[PathBuf], dir: &Path) -> Result<Result<Vec<Module>, String>,
     for path in files::expand(paths)? {
         let text = files::read(&path)?;
         let absolute = std::path::absolute(&path).map_err(|e| Failure(format!("{}: {e}", path.display())))?;
-        texts.push((path.display().to_string(), text.clone(), lotml_py::compile(&text, &absolute), absolute));
+        let interfaces: Interfaces =
+            files::interfaces_for(&path).into_iter().map(|b| (b.module, lotml_check::interface(&b.text).0)).collect();
+        let result = lotml_py::compile_with(&text, &absolute, &interfaces);
+        texts.push((path.display().to_string(), text, result, absolute));
     }
     for (name, text, result, absolute) in &texts {
         match result {
-            Ok(module) => compiled.push((module.clone(), absolute.clone(), name.clone())),
+            Ok(module) => compiled.push((module, absolute.clone(), name.clone())),
             Err(diagnostics) => reports.push(Report { file: name, text, diagnostics: diagnostics.clone() }),
         }
     }
@@ -44,7 +49,8 @@ fn compile(paths: &[PathBuf], dir: &Path) -> Result<Result<Vec<Module>, String>,
             .file_stem()
             .map_or("program".into(), |s| s.to_string_lossy().replace(|c: char| !c.is_alphanumeric(), "_"));
         let name = format!("{stem}_lotml");
-        write(&dir.join(format!("{name}.py")), &module)?;
+        write(&dir.join(format!("{name}.py")), &module.module)?;
+        write(&dir.join(format!("{name}.pyi")), &lotml_py::stub(&shown, &name, &module.checked))?;
         modules.push(Module { name, source, shown });
     }
     Ok(Ok(modules))
@@ -179,6 +185,52 @@ pub fn test_report(paths: &[PathBuf], as_json: bool) -> Result<(u8, String), Fai
         )
     };
     Ok((u8::from(rows.iter().any(|r| r["outcome"] != "pass")), report))
+}
+
+/// `lotml bind`: the interface of a Python module, read from its stub by Python's own parser
+/// and written to `out/<module>.lotmli` (adr:0012).
+pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failure> {
+    // The name becomes a file name: identifiers and dots only, so it cannot leave `out`.
+    let valid = module.split('.').all(|part| {
+        part.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
+            && part.chars().all(|c| c.is_alphanumeric() || c == '_')
+    });
+    if !valid {
+        return Err(Failure(format!("`{module}` is not a Python module name")));
+    }
+    let python = python()?;
+    let output = Command::new(&python[0])
+        .args(&python[1..])
+        .arg("-c")
+        .arg(lotml_py::BIND)
+        .arg(module)
+        .arg(stub.map(|s| s.as_os_str().to_owned()).unwrap_or_default())
+        .env("PYTHONDONTWRITEBYTECODE", "1")
+        .env("PYTHONIOENCODING", "utf-8")
+        .output()
+        .map_err(|e| Failure(format!("cannot run Python: {e}")))?;
+    if !output.status.success() {
+        return Err(Failure(String::from_utf8_lossy(&output.stderr).trim().to_string()));
+    }
+    // Python's text-mode stdout ends lines with `\r\n` on Windows; the file is written one way.
+    let text =
+        String::from_utf8(output.stdout).map_err(|_| Failure("the binding is not UTF-8".into()))?.replace("\r\n", "\n");
+    let (interface, problems) = lotml_check::interface(&text);
+    if let Some(problem) = problems.first() {
+        return Err(Failure(format!("the binding of `{module}` does not check: {} {}", problem.code, problem.message)));
+    }
+    std::fs::create_dir_all(out).map_err(|e| Failure(format!("cannot create {}: {e}", out.display())))?;
+    let path = out.join(format!("{module}.lotmli"));
+    write(&path, &text)?;
+    let bound = interface.names().count();
+    let skipped = text.lines().filter(|l| l.starts_with("#   ")).count();
+    println!(
+        "{}: {bound} function{} bound{}",
+        path.display(),
+        if bound == 1 { "" } else { "s" },
+        if skipped == 0 { String::new() } else { format!(", {skipped} not (the file's comments say why)") }
+    );
+    Ok(true)
 }
 
 fn text(rows: &[Value]) -> String {

@@ -1,6 +1,7 @@
 //! `lotml check`: diagnostics root cause first and bounded, safe fixes applied on request, only
 //! what an edit introduced since a revision, or a verdict on a file still being written.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use lotml_db::{Database, SourceFile, diagnostics};
@@ -25,9 +26,16 @@ pub fn run(options: &Options) -> Result<bool, Failure> {
     let paths = files::expand(&options.paths)?;
     let mut db = Database::default();
     let mut sources = Vec::new();
+    // Every interface a checked file may import, so a broken one is reported once.
+    let mut interfaces: BTreeMap<String, String> = BTreeMap::new();
     for path in &paths {
         let text = files::read(path)?;
-        sources.push(SourceFile::new(&db, path.display().to_string(), text));
+        let bindings = files::interfaces_for(path);
+        for b in &bindings {
+            interfaces.entry(b.path.display().to_string()).or_insert_with(|| b.text.clone());
+        }
+        let bindings = bindings.into_iter().map(|b| (b.module, b.text)).collect();
+        sources.push(SourceFile::new(&db, path.display().to_string(), text, bindings));
     }
     if options.prefix {
         return prefix(&db, &sources, options.format);
@@ -58,11 +66,17 @@ pub fn run(options: &Options) -> Result<bool, Failure> {
             *diagnostics = lotml_diag::introduced(std::mem::take(diagnostics), file.text(&db), &before, &old);
         }
     }
-    let reports: Vec<Report> = sources
+    let mut reports: Vec<Report> = sources
         .iter()
         .zip(found)
         .map(|(&f, diagnostics)| Report { file: f.path(&db), text: f.text(&db), diagnostics })
         .collect();
+    for (file, text) in &interfaces {
+        let problems = lotml_check::interface(text).1;
+        if !problems.is_empty() && options.since.is_none() {
+            reports.push(Report { file, text, diagnostics: problems });
+        }
+    }
     let limit = if options.all { None } else { Some(DEFAULT_LIMIT) };
     match options.format {
         Format::Text => {
@@ -94,7 +108,7 @@ fn prefix(db: &Database, sources: &[SourceFile], format: Format) -> Result<bool,
     let mut rows = Vec::new();
     let mut text = String::new();
     for &file in sources {
-        let found = lotml_check::check_prefix(file.text(db));
+        let found = lotml_check::check_prefix_with(file.text(db), &lotml_db::interfaces(db, file));
         complete &= found.verdict != lotml_check::Verdict::Error;
         let report = Report { file: file.path(db), text: file.text(db), diagnostics: found.errors };
         match format {

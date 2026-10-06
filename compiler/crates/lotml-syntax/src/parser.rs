@@ -28,8 +28,19 @@ pub struct Parsed {
 }
 
 pub fn parse(text: &str) -> Parsed {
+    parse_file(text, false)
+}
+
+/// Parse an interface: a file of declarations whose functions are signatures with no body, as
+/// the bindings `lotml bind` generates for a Python module are (adr:0012).
+pub fn parse_interface(text: &str) -> Parsed {
+    parse_file(text, true)
+}
+
+fn parse_file(text: &str, interface: bool) -> Parsed {
     let lexed = lexer::lex(text);
     let mut parser = Parser::new(text, lexed.tokens, 0);
+    parser.interface = interface;
     for error in lexed.errors {
         let fix = error.fix.map(|f| (error.span, f));
         let code = if fix.is_some() { "E0002" } else { "E0001" };
@@ -67,6 +78,8 @@ struct Parser<'a> {
     /// How deep the recursive descent is, so pathological nesting is refused, not a stack crash.
     depth: u32,
     chain: u32,
+    /// Reading an interface, whose functions are signatures without bodies.
+    interface: bool,
 }
 
 /// The deepest nesting of expressions, types or patterns the parser recurses into. Far beyond
@@ -80,7 +93,7 @@ const MAX_CHAIN: u32 = 1000;
 
 impl<'a> Parser<'a> {
     fn new(text: &'a str, tokens: Vec<Token>, base: u32) -> Parser<'a> {
-        Parser { text, tokens, pos: 0, base, errors: Vec::new(), reported: false, depth: 0, chain: 0 }
+        Parser { text, tokens, pos: 0, base, errors: Vec::new(), reported: false, depth: 0, chain: 0, interface: false }
     }
 
     /// Whether the descent has gone too deep; when it has, report once and let the caller bail
@@ -336,7 +349,7 @@ impl<'a> Parser<'a> {
         let start = self.span();
         let before = self.pos;
         let item = match self.peek() {
-            T::Fn => Item::Fn(self.fn_def(true)),
+            T::Fn => Item::Fn(self.fn_def(!self.interface)),
             T::Type => self.type_def(),
             T::Impl => Item::Impl(self.impl_def()),
             T::Trait => Item::Trait(self.trait_def()),

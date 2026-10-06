@@ -22,3 +22,4 @@ Every avoided synonym is reported wherever it appears as a whole word under `doc
 - **source verification** — checking every number the study quotes against the downloaded paper, by a verbatim quote that `research/literature/verify.py` finds in the converted text.
 - **prefix check** — the semantic compiler judging a partial file while a model writes it: completable, an error here, or not yet decidable; it never rejects a prefix that can still be completed.
 - **symbol-addressed edit** — an edit that names a syntax entity (a function body, a `match` arm, a method) and gives only its new content; the tool re-indents it and rejects it if it breaks the syntax. Avoid: AST edit
+- **interface** — a `.lotmli` file declaring a Python module's functions for lotml, one signature each returning `T ! PyError`, written by `lotml bind` from the module's stub. Avoid: binding file
