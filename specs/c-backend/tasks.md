@@ -18,7 +18,7 @@
   _Depends 2.2_
 - [x] 2.4 (TDD) Reuse a unique value's memory in the `match` arm that takes it apart — R3.4
   _Depends 2.3_
-- [ ] 2.5 (TDD) Compile dicts and sets with CPython's hash and set order — R1.2, R1.3
+- [x] 2.5 (TDD) Compile dicts and sets with CPython's hash and set order — R1.2, R1.3
   _Depends 2.2_
 
 ## 3 · Functions
