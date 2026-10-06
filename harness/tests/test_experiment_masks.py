@@ -1,6 +1,8 @@
 """Type masks for open models, by the line: each line an open model writes is checked as a prefix
 by the compiler, and one the compiler says can no longer complete is drawn again."""
 
+import pytest
+
 from lotml_harness.experiments import masks
 from lotml_harness.experiments.phase1 import Lotml
 
@@ -16,6 +18,34 @@ def test_the_raw_prompt_follows_each_family_s_chat_template():
         "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nSYS<|eot_id|>"
     )
     assert llama.endswith("<|start_header_id|>assistant<|end_header_id|>\n\n```lotml\n")
+    hosted = masks.raw_prompt("meta-llama/llama-3.1-8b-instruct", "SYS", "USER", "```lotml\n")
+    assert hosted == llama, "a model named by its OpenRouter id keeps its family's template"
+
+
+def test_a_model_is_named_and_served_by_its_id():
+    assert masks.label("qwen2.5-coder:7b") == "qwen2.5-coder-7b"
+    assert masks.label("meta-llama/llama-3.1-8b-instruct") == "llama-3.1-8b-instruct"
+    assert masks.served("qwen2.5-coder:7b") == "ollama"
+    assert masks.served("meta-llama/llama-3.1-8b-instruct") == f"openrouter/{masks.PROVIDER}"
+
+
+def test_openrouter_is_asked_for_a_raw_completion_from_one_provider():
+    body = masks.openrouter_body("meta-llama/llama-3.1-8b-instruct", "P", 0.8, 2, ["\n"], 200)
+    assert body == {
+        "model": "meta-llama/llama-3.1-8b-instruct",
+        "prompt": "P",
+        "temperature": 0.8,
+        "seed": 2,
+        "stop": ["\n"],
+        "max_tokens": 200,
+        "provider": {"order": [masks.PROVIDER], "allow_fallbacks": False},
+    }
+
+
+def test_openrouter_without_a_key_is_a_model_error(monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    with pytest.raises(masks.ModelError, match="OPENROUTER_API_KEY"):
+        masks.openrouter("meta-llama/llama-3.1-8b-instruct", "P", 0.0, 0, ["\n"], 10)
 
 
 class Lines:
@@ -98,7 +128,11 @@ def test_the_summary_pairs_the_free_and_the_masked_answer():
         row("b", "free", True, "pass", 0),
         row("b", "masked", True, "pass", 0),
     ]
+    rows[0]["served"] = "openrouter/X"
     s = masks.summarize(rows)["m"]
+    assert s["served"] == "openrouter/X"
+    assert "| m | openrouter/X | 2 |" in masks.markdown({"m": s}, 2)
+    assert masks.summarize(rows[1:2])["m"]["served"] == "ollama", "a run from before the field"
     assert s["pairs"] == 2
     assert s["passed"] == {"free": 1, "masked": 2}
     assert s["refused"] == {"free": 1, "masked": 0}
