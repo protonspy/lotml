@@ -27,7 +27,7 @@
   _Depends 2.5_
 - [x] 3.2 (TDD) Compile methods and the `inout`, `sink` and `var` conventions — R1.2, R3.5
   _Depends 2.3_
-- [ ] 3.3 (TDD) Compile generics, traits and `dyn` by monomorphization and vtables — R1.1, R1.2
+- [x] 3.3 (TDD) Compile generics, traits and `dyn` by monomorphization and vtables — R1.1, R1.2
   _Depends 3.2_
 - [ ] 3.4 (Unit) Compile `Heap`, `math`, sized integers, conversions, the wrapping operations and the rest of the prelude — R1.2, R2.1
   _Depends 2.5_
