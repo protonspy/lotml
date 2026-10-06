@@ -589,6 +589,7 @@ bool lt_str_split_once(const lt_str *s, const lt_str *sep, lt_str **head, lt_str
 bool lt_list_index(const lt_list *l, const void *value, int64_t *out);
 bool lt_list_pop(lt_list **slot, bool has_index, int64_t index, void *out, lt_at at);
 bool lt_list_last(const lt_list *l, void *out);
+void lt_list_unpack(const lt_list *l, int64_t n, lt_at at);
 
 /* `Heap[T]`: a list kept in the order Python's `heapq` keeps it, so ties pop as they do there. */
 extern const lt_type lt_type_heap;

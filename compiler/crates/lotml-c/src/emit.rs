@@ -904,7 +904,15 @@ impl Writer<'_> {
                     _ => format!("(lt_str_compare({a}, {b}) {symbol} 0)"),
                 }
             }
-            Ty::List(_) | Ty::Tuple(_) | Ty::Adt(..) | Ty::Optional(_) | Ty::Result(..) | Ty::Dict(..) | Ty::Set(_) => {
+            Ty::List(_)
+            | Ty::Tuple(_)
+            | Ty::Adt(..)
+            | Ty::Optional(_)
+            | Ty::Result(..)
+            | Ty::Dict(..)
+            | Ty::Set(_)
+            | Ty::Heap(_)
+            | Ty::Dyn(_) => {
                 let desc = self.types.desc(ty);
                 let (a, b) = (self.address(a, ty), self.address(b, ty));
                 match op {

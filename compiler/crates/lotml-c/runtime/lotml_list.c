@@ -495,6 +495,14 @@ bool lt_list_pop(lt_list **slot, bool has_index, int64_t index, void *out, lt_at
     return true;
 }
 
+/* `a, b = xs`: stops unless `xs` holds exactly `n` elements, as Python's unpacking does. */
+void lt_list_unpack(const lt_list *l, int64_t n, lt_at at) {
+    if (l->len > n) lt_panicf(at, "ValueError", "too many values to unpack (expected %lld)", (long long)n);
+    if (l->len < n) {
+        lt_panicf(at, "ValueError", "not enough values to unpack (expected %lld, got %lld)", (long long)n, (long long)l->len);
+    }
+}
+
 /* `xs.last()`: the last element, counted once more. */
 bool lt_list_last(const lt_list *l, void *out) {
     memset(out, 0, l->type->size);

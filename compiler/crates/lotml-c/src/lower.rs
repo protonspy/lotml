@@ -628,6 +628,15 @@ impl<'c, 'a> Builder<'c, 'a> {
         if let Some(&local) = self.vars.get(&span) {
             return local;
         }
+        // A name declared in each branch of an `if` is one local: the checker has the later
+        // declarations refer to the first.
+        if let Some(decl) = self.cx.resolved.get(&span)
+            && *decl != span
+            && let Some(&local) = self.vars.get(decl)
+        {
+            self.vars.insert(span, local);
+            return local;
+        }
         let local = self.new_local(ty, Some(name));
         self.vars.insert(span, local);
         local
@@ -652,7 +661,28 @@ impl<'c, 'a> Builder<'c, 'a> {
     }
 
     fn ty(&self, e: &ast::Expr) -> Ty {
-        self.subst.apply(self.cx.checked.types.get(&e.span).cloned().unwrap_or(Ty::Error))
+        let ty = self.subst.apply(self.cx.checked.types.get(&e.span).cloned().unwrap_or(Ty::Error));
+        if matches!(ty, Ty::Var(_) | Ty::Error) { self.left_to_infer(e).unwrap_or(ty) } else { ty }
+    }
+
+    /// The type of `e` where the checker left it to infer, as for a name unpacked from a list and
+    /// what is computed from it: a name's local's, an operation's from its operands'.
+    fn left_to_infer(&self, e: &ast::Expr) -> Option<Ty> {
+        let ty = match &e.kind {
+            ExprKind::Name(_) => self.function.locals[self.local_of(e.span)?].ty.clone(),
+            ExprKind::Binary { op, left, right } => {
+                let (l, r) = (self.ty(left), self.ty(right));
+                match (op, &l, &r) {
+                    (ast::BinOp::Div, Ty::Int(_), Ty::Int(_)) => F64,
+                    (_, Ty::Int(_), Ty::Float(_)) => r,
+                    _ => l,
+                }
+            }
+            ExprKind::Unary { operand, .. } => self.ty(operand),
+            ExprKind::Compare { .. } | ExprKind::Not(_) => Ty::Bool,
+            _ => return None,
+        };
+        (!matches!(ty, Ty::Var(_) | Ty::Error)).then_some(ty)
     }
 
     fn local_ty(&self, operand: &Operand) -> Ty {
@@ -834,13 +864,9 @@ impl<'c, 'a> Builder<'c, 'a> {
                 self.push(StmtKind::Let(local, Expr::Use(value)));
             }
             ExprKind::Tuple(items) => {
-                let Ty::Tuple(types) = ty else {
-                    self.unsupported(target.span, "unpacking this value");
-                    return;
-                };
-                for (i, (item, t)) in items.iter().zip(types).enumerate() {
-                    let part = self.hold(t.clone(), Expr::TupleGet { tuple: value.clone(), index: i });
-                    self.assign_to(item, part, t);
+                for (part, t) in self.unpack(value, &ty, items.len(), target.span) {
+                    let item = &items[part.0];
+                    self.assign_to(item, part.1, t);
                 }
             }
             ExprKind::Index { object, index } if matches!(self.ty(object), Ty::Dict(..)) => {
@@ -1361,14 +1387,37 @@ impl<'c, 'a> Builder<'c, 'a> {
                 self.push(StmtKind::Let(local, Expr::Use(value)));
             }
             ast::Target::Tuple(items, span) => {
-                let Ty::Tuple(types) = ty else {
-                    self.unsupported(*span, "unpacking this value");
-                    return;
-                };
-                for (i, (item, t)) in items.iter().zip(types).enumerate() {
-                    let part = self.hold(t.clone(), Expr::TupleGet { tuple: value.clone(), index: i });
-                    self.bind(item, part, t);
+                for (part, t) in self.unpack(value, ty, items.len(), *span) {
+                    let item = &items[part.0];
+                    self.bind(item, part.1, &t);
                 }
+            }
+        }
+    }
+
+    /// The `n` parts `value` unpacks into, each with its index and type: a tuple's fields, or a
+    /// list's elements once its length is checked to be `n`, as Python checks it.
+    fn unpack(&mut self, value: Operand, ty: &Ty, n: usize, span: Span) -> Vec<((usize, Operand), Ty)> {
+        match ty {
+            Ty::Tuple(types) => types
+                .iter()
+                .take(n)
+                .enumerate()
+                .map(|(i, t)| ((i, self.hold(t.clone(), Expr::TupleGet { tuple: value.clone(), index: i })), t.clone()))
+                .collect(),
+            Ty::List(elem) => {
+                let elem = (**elem).clone();
+                self.push(StmtKind::Do(rt("lt_list_unpack", vec![value.clone(), int(n as i128)], true)));
+                (0..n)
+                    .map(|i| {
+                        let get = Expr::ListGet { list: value.clone(), index: int(i as i128), elem: elem.clone() };
+                        ((i, self.hold(elem.clone(), get)), elem.clone())
+                    })
+                    .collect()
+            }
+            _ => {
+                self.unsupported(span, "unpacking this value");
+                Vec::new()
             }
         }
     }
@@ -1447,6 +1496,10 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let elem = element(&ty);
                 self.indexed(&[(list, elem)], false, body);
             }
+            Ty::Tuple(ref items) if !items.is_empty() && items.iter().all(|t| *t == items[0]) => {
+                let list = self.materialize(iter);
+                self.indexed(&[(list, items[0].clone())], false, body);
+            }
             Ty::Str => {
                 let over = self.value(iter);
                 let snapshot = self.hold(Ty::Str, Expr::Use(over));
@@ -1516,6 +1569,13 @@ impl<'c, 'a> Builder<'c, 'a> {
 
     fn as_list(&mut self, v: Operand, ty: &Ty) -> Operand {
         match ty {
+            Ty::Tuple(items) if !items.is_empty() && items.iter().all(|t| *t == items[0]) => {
+                let elem = items[0].clone();
+                let parts = (0..items.len())
+                    .map(|index| self.hold(elem.clone(), Expr::TupleGet { tuple: v.clone(), index }))
+                    .collect();
+                self.hold(Ty::list(elem.clone()), Expr::ListNew { elem, items: parts })
+            }
             Ty::Str => self.hold(Ty::list(Ty::Str), rt("lt_str_chars", vec![v], false)),
             Ty::Dict(k, _) => self.hold(Ty::list((**k).clone()), rt("lt_dict_keys", vec![v], false)),
             Ty::Set(t) => self.hold(Ty::list((**t).clone()), rt("lt_set_list", vec![v], false)),
@@ -1843,13 +1903,15 @@ impl<'c, 'a> Builder<'c, 'a> {
             ExprKind::IfExp { test, then, orelse } => {
                 let ty = self.ty(e);
                 let ok = self.condition(test);
-                let t = self.temp(ty);
+                let t = self.temp(ty.clone());
                 let a = self.block(|b| {
                     let v = b.value(then);
+                    let v = b.coerce(v, &ty);
                     b.push(StmtKind::Let(t, Expr::Use(v)));
                 });
                 let c = self.block(|b| {
                     let v = b.value(orelse);
+                    let v = b.coerce(v, &ty);
                     b.push(StmtKind::Let(t, Expr::Use(v)));
                 });
                 self.push(StmtKind::If(ok, a, c));
@@ -1860,12 +1922,20 @@ impl<'c, 'a> Builder<'c, 'a> {
             ExprKind::Index { object, index } => {
                 let ty = self.ty(object);
                 match &ty {
-                    Ty::Tuple(_) => {
-                        let ExprKind::Int(text) = &index.kind else {
+                    Ty::Tuple(items) => {
+                        let at = match &index.kind {
+                            ExprKind::Int(text) => Some(parse_int(text)),
+                            ExprKind::Unary { op: ast::UnaryOp::Neg, operand } => match &operand.kind {
+                                ExprKind::Int(text) => Some(items.len() as i128 - parse_int(text)),
+                                _ => None,
+                            },
+                            _ => None,
+                        };
+                        let Some(at) = at.filter(|&i| i >= 0 && (i as usize) < items.len()) else {
                             return Value::Done(self.unsupported(index.span, "a tuple index that is not a literal"));
                         };
                         let o = self.value(object);
-                        Value::Expr(Expr::TupleGet { tuple: o, index: parse_int(text) as usize })
+                        Value::Expr(Expr::TupleGet { tuple: o, index: at as usize })
                     }
                     Ty::Str => {
                         let o = self.value(object);
@@ -1969,8 +2039,29 @@ impl<'c, 'a> Builder<'c, 'a> {
                 }
             }
             ast::CmpOp::In | ast::CmpOp::NotIn => {
-                let contains =
-                    Expr::Contains { container: right_value.clone(), item: left.clone(), ty: right_ty.clone() };
+                let contains = match &right_ty {
+                    Ty::Str | Ty::List(_) | Ty::Dict(..) | Ty::Set(_) => {
+                        Expr::Contains { container: right_value.clone(), item: left.clone(), ty: right_ty.clone() }
+                    }
+                    Ty::Tuple(items) => {
+                        // Equal to one of the tuple's items, compared in order until one is.
+                        let found = self.temp(Ty::Bool);
+                        self.push(StmtKind::Let(found, Expr::Use(flag(false))));
+                        for (index, t) in items.iter().enumerate() {
+                            let next = self.block(|b| {
+                                let item = b.hold(t.clone(), Expr::TupleGet { tuple: right_value.clone(), index });
+                                let equal = b.compare_values(CmpOp::Eq, left.clone(), left_ty, item, t);
+                                b.push(StmtKind::Let(found, equal));
+                            });
+                            self.push(StmtKind::If(Operand::Local(found), Vec::new(), next));
+                        }
+                        Expr::Use(Operand::Local(found))
+                    }
+                    _ => {
+                        self.unsupported(right.span, "`in` on this value");
+                        Expr::Use(flag(false))
+                    }
+                };
                 if *op == ast::CmpOp::In {
                     contains
                 } else {
@@ -1991,7 +2082,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                         CmpOp::Eq
                     }
                 };
-                Expr::Compare(op, left.clone(), right_value.clone(), left_ty.clone())
+                self.compare_values(op, left.clone(), left_ty, right_value.clone(), &right_ty)
             }
         };
         self.push(StmtKind::Let(result, compared));
@@ -2004,6 +2095,22 @@ impl<'c, 'a> Builder<'c, 'a> {
         let next = self.block(|b| last = b.compare_rest(result, left, left_ty, more));
         self.push(StmtKind::If(Operand::Local(result), next, Vec::new()));
         last
+    }
+
+    /// `left op right`: an optional compared with a plain value compares with the value as an
+    /// optional, as Python compares `None` or the value it holds.
+    fn compare_values(&mut self, op: CmpOp, left: Operand, left_ty: &Ty, right: Operand, right_ty: &Ty) -> Expr {
+        match (left_ty, right_ty) {
+            (Ty::Optional(_), r) if !matches!(r, Ty::Optional(_) | Ty::Unit | Ty::Never | Ty::Error) => {
+                let right = self.coerce(right, left_ty);
+                Expr::Compare(op, left, right, left_ty.clone())
+            }
+            (l, Ty::Optional(_)) if !matches!(l, Ty::Optional(_) | Ty::Unit | Ty::Never | Ty::Error) => {
+                let left = self.coerce(left, right_ty);
+                Expr::Compare(op, left, right, right_ty.clone())
+            }
+            _ => Expr::Compare(op, left, right, left_ty.clone()),
+        }
     }
 
     fn logical(&mut self, op: BoolOp, operands: &[ast::Expr]) -> Operand {
@@ -2682,6 +2789,21 @@ impl<'c, 'a> Builder<'c, 'a> {
                         Ty::Float(lotml_check::ty::FloatKind::F64),
                     ),
                     "abs" => (Expr::Unary(UnOp::Abs, a, t.clone()), t),
+                    "sum" => {
+                        let elem = element(&t);
+                        let list = self.as_list(a, &t);
+                        let total = match &elem {
+                            Ty::Float(_) => rt("lt_sum_f64", vec![list], false),
+                            Ty::Int(IntKind::U64) => rt("lt_sum_u64", vec![list], true),
+                            _ => rt("lt_sum_i64", vec![list], true),
+                        };
+                        (total, elem)
+                    }
+                    "sorted" => {
+                        let elem = element(&t);
+                        let list = self.as_list(a, &t);
+                        (rt("lt_list_sorted", vec![list, flag(false)], true), Ty::list(elem))
+                    }
                     "ord" => (rt("lt_str_ord", vec![a], true), INT),
                     "chr" => (rt("lt_str_chr", vec![a], true), Ty::Str),
                     _ => return (self.unsupported(func.span, &format!("`{name}` as a value here")), Ty::Error),
@@ -2741,6 +2863,8 @@ impl<'c, 'a> Builder<'c, 'a> {
                 }
                 match name.as_str() {
                     "len" | "ord" | "int" => INT,
+                    "sum" => element(arg),
+                    "sorted" => Ty::list(element(arg)),
                     "str" | "chr" => Ty::Str,
                     "float" => Ty::Float(lotml_check::ty::FloatKind::F64),
                     _ => arg.clone(),
@@ -3021,6 +3145,29 @@ impl<'c, 'a> Builder<'c, 'a> {
         positional: &[&ast::Expr],
         keywords: &[(&str, &ast::Expr)],
     ) -> Value {
+        if name == "split" && !keywords.is_empty() {
+            // `sep` and `maxsplit` by name too, as Python's `split` takes them, each left out
+            // taking its default; Python's other `str` methods take their arguments by position.
+            let mut sep = positional.first().copied();
+            let mut maxsplit = positional.get(1).copied();
+            for (key, e) in keywords {
+                match *key {
+                    "sep" if sep.is_none() => sep = Some(e),
+                    "maxsplit" if maxsplit.is_none() => maxsplit = Some(e),
+                    _ => return Value::Done(self.unsupported(whole.span, "this keyword argument of `split`")),
+                }
+            }
+            let receiver = self.value(object);
+            let sep = match sep {
+                Some(e) => self.value(e),
+                None => Operand::Const(Const::Null),
+            };
+            let maxsplit = match maxsplit {
+                Some(e) => self.value(e),
+                None => int(-1),
+            };
+            return Value::Expr(rt("lt_str_split", vec![receiver, sep, maxsplit], true));
+        }
         if !keywords.is_empty() {
             return Value::Done(self.unsupported(whole.span, &format!("keyword arguments of `{name}`")));
         }
