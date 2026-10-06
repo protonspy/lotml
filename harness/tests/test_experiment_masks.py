@@ -12,7 +12,9 @@ def test_the_raw_prompt_follows_each_family_s_chat_template():
         "<|im_start|>assistant\n```lotml\n"
     )
     llama = masks.raw_prompt("llama3.1:8b", "SYS", "USER", "```lotml\n")
-    assert llama.startswith("<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nSYS<|eot_id|>")
+    assert llama.startswith(
+        "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nSYS<|eot_id|>"
+    )
     assert llama.endswith("<|start_header_id|>assistant<|end_header_id|>\n\n```lotml\n")
 
 
@@ -61,24 +63,41 @@ def test_a_line_refused_every_time_is_kept_and_the_decoding_goes_on():
 
 def test_decoding_stops_at_the_fence_at_two_blank_lines_or_at_the_cap():
     blank = Lines({0: ["fn f():"], 1: ["    pass"], 2: [""], 3: [""]})
-    assert masks.masked("qwen2.5-coder:7b", "s", "u", blank, verdicts(set())).code == "fn f():\n    pass\n"
+    assert (
+        masks.masked("qwen2.5-coder:7b", "s", "u", blank, verdicts(set())).code
+        == "fn f():\n    pass\n"
+    )
     endless = Lines({i: ["x"] for i in range(masks.MAX_LINES + 5)})
-    assert masks.masked("qwen2.5-coder:7b", "s", "u", endless, verdicts(set())).code.count("\n") == masks.MAX_LINES
+    assert (
+        masks.masked("qwen2.5-coder:7b", "s", "u", endless, verdicts(set())).code.count("\n")
+        == masks.MAX_LINES
+    )
 
 
 def test_the_compiler_says_whether_a_prefix_can_still_complete():
     check = masks.prefix_checker(Lotml())
     assert check('fn f() -> int:\n    return "a"\n') == "error"
-    assert check("fn f(x: int) -> int:\n    y = x +\n") != "error"
+    assert check("fn f(x: int) -> int:\n    y = x + 1\n") != "error", "a body not yet returning"
+    assert check("fn f(x: int) -> int:\n    y = (x +\n") != "error", "a bracket still open"
 
 
 def test_the_summary_pairs_the_free_and_the_masked_answer():
+    def row(task, arm, passed, outcome, rejected):
+        return {
+            "model": "m",
+            "task": task,
+            "arm": arm,
+            "passed": passed,
+            "outcome": outcome,
+            "rejected": rejected,
+        }
+
     rows = [
-        {"model": "m", "task": "a", "arm": "free", "passed": False, "outcome": "does not check", "rejected": 0},
-        {"model": "m", "task": "a", "arm": "masked", "passed": True, "outcome": "pass", "rejected": 2},
-        {"model": "m", "task": "b", "arm": "free", "passed": True, "outcome": "pass", "rejected": 0},
-        {"model": "m", "task": "b", "arm": "masked", "passed": True, "outcome": "pass", "rejected": 0},
-    ]  # fmt: skip
+        row("a", "free", False, "does not check", 0),
+        row("a", "masked", True, "pass", 2),
+        row("b", "free", True, "pass", 0),
+        row("b", "masked", True, "pass", 0),
+    ]
     s = masks.summarize(rows)["m"]
     assert s["pairs"] == 2
     assert s["passed"] == {"free": 1, "masked": 2}

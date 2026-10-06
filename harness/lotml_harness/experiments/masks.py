@@ -1,0 +1,270 @@
+"""Type masks for open models, by the line (docs/wiki/pages/constrained-decoding.md): does
+checking what an open model writes, while it writes, raise how often its first answer passes?
+
+Type-constrained decoding masks each token the type checker rules out; Ollama does not let a
+caller mask tokens, so here the mask is applied a line at a time. The model writes its answer
+one line per call, through Ollama's raw mode and its own chat template, greedily. Each line is
+checked with what came before it by `lotml check --prefix`; a line after which the program can no
+longer be completed is drawn again at a higher temperature, up to `RETRIES` times, and kept if
+every draw is refused. The free arm is the same model, prompt and template, answering in one
+greedy call. Both answers run on the hidden tests of the phase 1 sample, and the arms are
+compared per task by the exact McNemar test.
+
+    python -m lotml_harness.experiments.masks --model qwen2.5-coder:7b --model llama3.1:8b
+"""
+
+import argparse
+import json
+import sys
+import tempfile
+import urllib.error
+import urllib.request
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from pathlib import Path
+
+from lotml_harness.experiments import variants
+from lotml_harness.experiments.models import ModelError
+from lotml_harness.experiments.phase1 import RESULTS, Lotml
+from lotml_harness.tasks import Task, build
+
+RUNS = RESULTS / "masks"
+REPORT = RESULTS / "masks.md"
+ARMS = ("free", "masked")
+OPEN = "```lotml\n"
+RETRIES = 3
+"""Draws of a refused line after the greedy one."""
+TEMPERATURE = 0.8
+MAX_LINES = 80
+"""Lines an answer may have before its decoding is cut off."""
+HOST = "http://localhost:11434"
+
+Generate = Callable[[str, float, int], str]
+"""A raw prompt, a temperature and a seed, to the next line the model writes."""
+
+
+def raw_prompt(model: str, system: str, user: str, partial: str) -> str:
+    """The prompt as the model's chat template lays it out, its answer begun with `partial`."""
+    if model.startswith("llama"):
+        return (
+            "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
+            f"{system}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{user}<|eot_id|>"
+            f"<|start_header_id|>assistant<|end_header_id|>\n\n{partial}"
+        )
+    return (
+        f"<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n"
+        f"<|im_start|>assistant\n{partial}"
+    )
+
+
+@dataclass
+class Decoded:
+    code: str
+    rejected: int = 0
+    calls: int = 0
+
+
+def fence(line: str) -> bool:
+    return line.strip().startswith("```")
+
+
+def masked(
+    model: str, system: str, user: str, generate: Generate, check: Callable[[str], str]
+) -> Decoded:
+    """An answer written a line at a time, each line the compiler refuses drawn again."""
+    lines: list[str] = []
+    rejected = calls = blanks = 0
+    for _ in range(MAX_LINES):
+        prompt = raw_prompt(model, system, user, OPEN + "".join(f"{line}\n" for line in lines))
+        line = generate(prompt, 0.0, 0)
+        calls += 1
+        tries = 0
+        while (
+            not fence(line)
+            and tries < RETRIES
+            and check("\n".join([*lines, line]) + "\n") == "error"
+        ):
+            tries += 1
+            rejected += 1
+            line = generate(prompt, TEMPERATURE, tries)
+            calls += 1
+        if fence(line):
+            break
+        blanks = blanks + 1 if not line.strip() else 0
+        if blanks == 2:
+            break
+        lines.append(line)
+    return Decoded("\n".join(lines).rstrip("\n") + "\n", rejected, calls)
+
+
+def free(model: str, system: str, user: str, complete: Callable[[str], str]) -> Decoded:
+    """The same answer written in one greedy call, up to its closing fence."""
+    text = complete(raw_prompt(model, system, user, OPEN))
+    return Decoded(text.split("```", 1)[0].rstrip("\n") + "\n", 0, 1)
+
+
+def prefix_checker(lotml: Lotml) -> Callable[[str], str]:
+    """`lotml check --prefix` on a partial answer: completable, error or unknown."""
+
+    def check(code: str) -> str:
+        with tempfile.TemporaryDirectory(prefix="lotml-masks-") as directory:
+            Path(directory, "solution.lotml").write_text(code, encoding="utf-8")
+            result = lotml.compiler(["check", "--prefix", "--json", "solution.lotml"], directory)
+        if result is None:
+            return "unknown"
+        try:
+            return json.loads(result.stdout)["prefix"][0]["verdict"]
+        except (json.JSONDecodeError, KeyError, IndexError):
+            return "unknown"
+
+    return check
+
+
+def ollama(
+    model: str, prompt: str, temperature: float, seed: int, stop: list[str], limit: int
+) -> str:
+    body = {
+        "model": model,
+        "prompt": prompt,
+        "raw": True,
+        "stream": False,
+        "options": {
+            "temperature": temperature,
+            "seed": seed,
+            "stop": stop,
+            "num_predict": limit,
+            "num_ctx": 16384,
+        },
+    }
+    request = urllib.request.Request(  # noqa: S310
+        f"{HOST}/api/generate",
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=900) as response:  # noqa: S310
+            return json.loads(response.read()).get("response", "")
+    except (OSError, urllib.error.URLError, json.JSONDecodeError) as error:
+        raise ModelError(f"ollama did not answer: {error}") from None
+
+
+def answer(model: str, task: Task, arm: str, lotml: Lotml) -> dict:
+    record = {"model": model.replace(":", "-"), "task": task.id, "arm": arm}
+    system, user = variants.prompt(task, "b")
+    try:
+        if arm == "free":
+            decoded = free(model, system, user, lambda p: ollama(model, p, 0.0, 0, ["```"], 2048))
+        else:
+            decoded = masked(
+                model,
+                system,
+                user,
+                lambda p, t, s: ollama(model, p, t, s, ["\n"], 200),
+                prefix_checker(lotml),
+            )
+    except ModelError as error:
+        return record | {"error": str(error)}
+    verdict = lotml.judge(task, decoded.code)
+    return record | {
+        "error": None,
+        "code": decoded.code,
+        "passed": verdict.passed,
+        "outcome": verdict.outcome,
+        "rejected": decoded.rejected,
+        "calls": decoded.calls,
+    }
+
+
+def run(model: str, tasks: list[Task], path: Path, workers: int = 1) -> list[dict]:
+    lotml = Lotml()
+    done = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            record = json.loads(line)
+            if record.get("error") is None:
+                done[(record["task"], record["arm"])] = record
+    todo = [(t, arm) for t in tasks for arm in ARMS if (t.id, arm) not in done]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for record in pool.map(lambda job: answer(model, job[0], job[1], lotml), todo):
+            with path.open("a", encoding="utf-8") as out:
+                out.write(json.dumps(record, ensure_ascii=False) + "\n")
+            if record.get("error") is None:
+                done[(record["task"], record["arm"])] = record
+    return list(done.values())
+
+
+def summarize(rows: list[dict]) -> dict[str, dict]:
+    by_model: dict[str, dict[tuple[str, str], dict]] = {}
+    for r in rows:
+        if r.get("error") is None:
+            by_model.setdefault(r["model"], {})[(r["task"], r["arm"])] = r
+    summary = {}
+    for model, records in sorted(by_model.items()):
+        paired = sorted({t for t, _ in records if all((t, arm) in records for arm in ARMS)})
+        passed = {arm: {t for t in paired if records[(t, arm)]["passed"]} for arm in ARMS}
+        only_free = len(passed["free"] - passed["masked"])
+        only_masked = len(passed["masked"] - passed["free"])
+        summary[model] = {
+            "pairs": len(paired),
+            "passed": {arm: len(passed[arm]) for arm in ARMS},
+            "refused": {
+                arm: sum(records[(t, arm)]["outcome"] == "does not check" for t in paired)
+                for arm in ARMS
+            },
+            "only_free": only_free,
+            "only_masked": only_masked,
+            "p": variants.mcnemar(only_free, only_masked),
+            "rejected": sum(records[(t, "masked")]["rejected"] for t in paired),
+        }
+    return summary
+
+
+def markdown(summary: dict[str, dict]) -> str:
+    lines = [
+        "# Type masks for open models, by the line",
+        "",
+        "Generated by `python -m lotml_harness.experiments.masks`. Each open model wrote the",
+        "phase 1 sample's tasks twice through Ollama's raw mode and its own chat template: free,",
+        "in one greedy call; and masked, one line per call, each line checked with what came",
+        "before it by `lotml check --prefix`, and a line that left the program impossible to",
+        f"complete drawn again at temperature {TEMPERATURE}, up to {RETRIES} times. Ollama cannot",
+        "mask tokens, so this is a coarse mask: a line, not a token, is the unit refused.",
+        "",
+        "| model | tasks | pass@1, free | pass@1, masked | refused, free | refused, masked |"
+        " only free | only masked | McNemar p | lines redrawn |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for model, s in summary.items():
+        n = max(1, s["pairs"])
+        lines.append(
+            f"| {model} | {s['pairs']} | {s['passed']['free'] / n:.1%} |"
+            f" {s['passed']['masked'] / n:.1%} |"
+            f" {s['refused']['free']} | {s['refused']['masked']} | {s['only_free']} |"
+            f" {s['only_masked']} | {s['p']:.3f} | {s['rejected']} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--model", action="append", default=[], help="qwen2.5-coder:7b")
+    parser.add_argument("--workers", type=int, default=1)
+    args = parser.parse_args()
+    tasks = variants.sample(build.load(), variants.SAMPLE)
+    for model in args.model:
+        run(model, tasks, RUNS / f"{model.replace(':', '-')}.jsonl", workers=args.workers)
+    rows = [
+        json.loads(line)
+        for path in sorted(RUNS.glob("*.jsonl"))
+        for line in path.read_text(encoding="utf-8").splitlines()
+    ]
+    report = markdown(summarize(rows))
+    REPORT.write_text(report, encoding="utf-8")
+    sys.stdout.buffer.write(report.encode("utf-8"))
+
+
+if __name__ == "__main__":
+    main()
