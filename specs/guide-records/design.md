@@ -52,8 +52,8 @@ removes it.
 A record with a task is written twice, with and without it (R2.4), since an agent may call the tool
 without saying what it is doing; a HumanEval docstring or a failing block still carries the intent.
 The context budget (R2.6) is counted with the base model's own tokenizer, which the ADR of
-plans/harness-guide.md 2.1 names with the budget; the builder takes both from the guide's
-configuration and refuses to run without them. A held-out record cannot arrive — the export writes
+plans/harness-guide.md 2.1 names with the budget; records are built before the guide exists, so
+the builder takes both as arguments and refuses to run without them. A held-out record cannot arrive — the export writes
 none — and one that did would stop the build rather than be skipped (R2.5).
 
 ## Alternatives considered

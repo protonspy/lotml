@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 30217bc5b9271cc54df176736021c5fa2677425f794d2bb6d68a804028a260f5
+checksum: 8b270a8713dd1210ff97060367ed272af9c348ffbe947e55ac295eb76de2d01e
 ---
 
 # Harness guide
@@ -84,7 +84,7 @@ deepagents and in a second harness — on held-out tasks, and the wiki records w
       phase 1 gate's refused answers to held-out problems included — with a minimum
       count of them fixed so top-1's 95% interval is no wider than ±10 points, and
       held-out runs on local models added until it is met
-- [ ] 1.5 (Unit) Write the spec for the guide's tool: one MCP call taking the agent's state and answering with a location, a kind of change and at most one patch that `check` accepts, or nothing below the threshold, reachable from every harness `lotml init` registers
+- [x] 1.5 (Unit) Write the spec for the guide's tool: one MCP call taking the agent's state and answering with a location, a kind of change and at most one patch that `check` accepts, or nothing below the threshold, reachable from every harness `lotml init` registers
 - [ ] 2.1 (Unit) Decide in an ADR, from a pilot, the base model and size, the runtime it
       is served from
   _Depends 1.1, 1.3_
