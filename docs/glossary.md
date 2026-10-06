@@ -25,5 +25,6 @@ Every avoided synonym is reported wherever it appears as a whole word under `doc
 - **symbol-addressed edit** — an edit that names a syntax entity (a function body, a `match` arm, a method) and gives only its new content; the tool re-indents it and rejects it if it breaks the syntax. Avoid: AST edit
 - **agent guide** — what `lotml init` writes for coding agents: the lotml block in `AGENTS.md` and `lotml.guide.lotml`, the language taught as code that checks and passes its tests.
 - **agent harness** — `harness/lotml_harness/agent/`: a coding agent run on the agent benchmark's development tasks with the compiler's MCP tools, graded on hidden tests.
+- **bug locator** — the compiler-embedded model planned to run on the CPU inside `lotml check`, pointing at the lines most likely wrong in code that checks, shown only above a calibrated confidence; it points and never repairs.
 - **trace dataset** — the training data exported from the agent harness's traces: trajectories of runs that passed and repairs that made `check` clean, taken only from sources and models the licence registry permits.
 - **interface** — a `.lotmli` file declaring the functions of a Python module, written by `lotml bind` from its stub with each returning `T ! PyError`, or of a C library, named `c.<library>` and written by hand. Avoid: binding file
