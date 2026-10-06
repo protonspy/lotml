@@ -1,0 +1,41 @@
+type Item(name: str, qty: int)
+
+type StockErr = Unknown(name: str) | Short(name: str, missing: int)
+
+fn add(inout items: [Item], name: str, qty: int):
+    """Add `qty` of `name`, as a new item when there is none."""
+    for i, it in enumerate(items):
+        if it.name == name:
+            items[i].qty += qty
+            return
+    items.append(Item(name, qty))
+
+fn count(items: [Item], name: str) -> int:
+    """How many of `name` there are; 0 when there is no such item."""
+    for it in items:
+        if it.name == name:
+            return it.qty
+    return 0
+
+fn take(inout items: [Item], name: str, qty: int) -> None ! StockErr:
+    """Remove `qty` of `name`; nothing changes on an error."""
+    for i, it in enumerate(items):
+        if it.name == name:
+            if it.qty < qty:
+                fail Short(name, qty - it.qty)
+            items[i].qty -= qty
+            return
+    fail Unknown(name)
+
+fn take_all(inout items: [Item], orders: [(str, int)]) -> None ! StockErr:
+    """Take every order, or none of them."""
+    var trial = items
+    for name, qty in orders:
+        take(&trial, name, qty)?
+    items = trial
+
+test "add":
+    var items: [Item] = []
+    add(&items, "bolt", 3)
+    add(&items, "bolt", 2)
+    assert count(items, "bolt") == 5

@@ -1,0 +1,28 @@
+test "hidden: take":
+    var items = [Item("bolt", 5)]
+    take(&items, "bolt", 2)?
+    assert count(items, "bolt") == 3
+
+test "hidden: take everything":
+    var items = [Item("bolt", 2)]
+    take(&items, "bolt", 2)?
+    assert count(items, "bolt") == 0
+
+test "hidden: take unknown":
+    var items = [Item("bolt", 5)]
+    assert take(&items, "nut", 1) == Err(Unknown("nut"))
+
+test "hidden: take short leaves the stock":
+    var items = [Item("bolt", 2)]
+    assert take(&items, "bolt", 5) == Err(Short("bolt", 3))
+    assert count(items, "bolt") == 2
+
+test "hidden: take all":
+    var items = [Item("bolt", 5), Item("nut", 1)]
+    take_all(&items, [("bolt", 1), ("nut", 1)])?
+    assert count(items, "bolt") == 4 and count(items, "nut") == 0
+
+test "hidden: take all or nothing":
+    var items = [Item("bolt", 5), Item("nut", 1)]
+    assert take_all(&items, [("bolt", 1), ("nut", 2)]) == Err(Short("nut", 1))
+    assert count(items, "bolt") == 5

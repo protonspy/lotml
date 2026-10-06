@@ -1,0 +1,25 @@
+fn tally(words: [str]) -> {str: int}:
+    """How often each non-empty word occurs."""
+    var counts: {str: int} = {}
+    for w in words:
+        if w == "":
+            continue
+        counts[w] = counts.get(w, 0) + 1
+    return counts
+
+fn top(counts: {str: int}, n: int) -> [str]:
+    """The `n` most frequent words, most frequent first, ties in alphabetical order."""
+    ranked = sorted(counts.keys(), key=lambda w: (-counts[w], w))
+    return ranked[:n]
+
+fn normalize(inout words: [str]):
+    """Strip the spaces around every word and lower-case it, in the caller's list."""
+    for i in range(len(words)):
+        words[i] = words[i].strip().lower()
+
+fn summary(words: [str]) -> str:
+    """`word: count` for the three most frequent words, comma-separated; `empty` when there are none."""
+    counts = tally(words)
+    if len(counts) == 0:
+        return "empty"
+    return ", ".join([f"{w}: {counts[w]}" for w in top(counts, 3)])

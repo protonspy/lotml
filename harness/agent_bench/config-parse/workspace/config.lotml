@@ -1,0 +1,14 @@
+type ConfigErr = MissingEquals(line: int) | EmptyKey(line: int) | Duplicate(key: str) | Missing(key: str) | NotInt(key: str)
+
+fn parse_config(text: str) -> {str: str} ! ConfigErr:
+    """
+    Settings from `key = value` lines. Spaces around keys and values are stripped; blank lines
+    and lines starting with `#` are skipped. The value is everything after the first `=`.
+    Errors number lines from 1: a line with no `=` is MissingEquals, one with nothing before
+    `=` is EmptyKey, and a key given twice is Duplicate.
+    """
+    return todo()
+
+fn get_int(settings: {str: str}, key: str) -> int ! ConfigErr:
+    """The setting `key` as an integer: Missing when it is absent, NotInt when it is not one."""
+    return todo()

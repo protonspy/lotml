@@ -1,0 +1,22 @@
+type Item(name: str, qty: int)
+
+fn add(inout items: [Item], name: str, qty: int):
+    """Add `qty` of `name`, as a new item when there is none."""
+    for i, it in enumerate(items):
+        if it.name == name:
+            items[i].qty += qty
+            return
+    items.append(Item(name, qty))
+
+fn count(items: [Item], name: str) -> int:
+    """How many of `name` there are; 0 when there is no such item."""
+    for it in items:
+        if it.name == name:
+            return it.qty
+    return 0
+
+test "add":
+    var items: [Item] = []
+    add(&items, "bolt", 3)
+    add(&items, "bolt", 2)
+    assert count(items, "bolt") == 5

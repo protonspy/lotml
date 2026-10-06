@@ -1,0 +1,23 @@
+type SizeErr = BadSize(size: int)
+
+fn chunks(xs: [int], size: int) -> [[int]] ! SizeErr:
+    """
+    `xs` split into consecutive lists of `size` items, in order; the last one holds what is
+    left and may be shorter. No lists for an empty `xs`.
+    """
+    if size < 1:
+        fail BadSize(size)
+    var out: [[int]] = []
+    var i = 0
+    while i < len(xs):
+        out.append(xs[i:i + size])
+        i += size
+    return out
+
+fn batch_sums(xs: [int], size: int) -> [int] ! SizeErr:
+    """The sum of each chunk of `xs`."""
+    cs = chunks(xs, size)?
+    return [sum(c) for c in cs]
+
+test "chunks of two":
+    assert chunks([1, 2, 3, 4], 2) == Ok([[1, 2], [3, 4]])

@@ -2,9 +2,9 @@
 
 ## 1 · Dependencies and the benchmark
 
-- [ ] 1.1 (Unit) Add deepagents and langchain-openrouter to the harness, with the ADR and the stack entries — R2.1
-- [ ] 1.2 (Unit) Load benchmark tasks and grade a workspace: check, hidden tests appended per graded file — R1.1, R3.1, R3.2
-- [ ] 1.3 (Unit) Write eight benchmark tasks with reference solutions, and a test that every solution passes and every starting workspace fails — R1.1, R1.2, R1.3
+- [x] 1.1 (Unit) Add deepagents and langchain-openrouter to the harness, with the ADR and the stack entries — R2.1
+- [x] 1.2 (Unit) Load benchmark tasks and grade a workspace: check, hidden tests appended per graded file — R1.1, R3.1, R3.2
+- [x] 1.3 (Unit) Write eight benchmark tasks with reference solutions, and a test that every solution passes and every starting workspace fails — R1.1, R1.2, R1.3
   _Depends 1.2_
 
 ## 2 · The agent

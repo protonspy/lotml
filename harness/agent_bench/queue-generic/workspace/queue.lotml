@@ -1,0 +1,22 @@
+type Queue[T](front: [T], back: [T])
+
+impl Queue[T]:
+    fn new() -> Queue[T]:
+        """An empty queue."""
+        return todo()
+
+    fn push(inout self, item: T):
+        """Add `item` at the back."""
+        todo()
+
+    fn pop(inout self) -> T?:
+        """Take the item at the front, the oldest; None when the queue is empty."""
+        return todo()
+
+    fn size(self) -> int:
+        """How many items the queue holds."""
+        return todo()
+
+fn drain[T](q: Queue[T]) -> [T]:
+    """Every item of `q`, oldest first, leaving the caller's queue as it was."""
+    return todo()
