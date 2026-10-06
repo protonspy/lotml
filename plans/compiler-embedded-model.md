@@ -47,6 +47,8 @@ and what it leaves open.
   _Depends 1.2_
 - [x] 1.4 (Unit) Update the source-verification counts and add the glossary term
   _Depends 1.3_
+- [x] 1.5 (Unit) Keep the CLI test's git calls off any repository a hook exports, so
+      pushing from a worktree cannot commit to it
 
 ## Done when
 
