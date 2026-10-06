@@ -77,13 +77,13 @@ def test_each_mode_answers_the_refused_answer_with_its_own_report():
     model = Scripted(FIXED)
     record = diagnostics.ask(model, TASK, REFUSED, "terse", diagnostics.Compiler())
     assert record["passed"] and record["outcome"] == "pass"
-    (user, previous, feedback), = model.seen
+    ((user, previous, feedback),) = model.seen
     assert "```lotml\nfn double(n: int) -> int:\n" in user
     assert REFUSED in previous
-    assert "error[E0301]" in feedback and "note:" not in feedback
+    assert "error[E0301]" in feedback and "fix:" not in feedback
     model = Scripted(FIXED)
     record = diagnostics.ask(model, TASK, REFUSED, "detailed", diagnostics.Compiler())
-    assert "note:" in model.seen[0][2] and "E0301: " in model.seen[0][2]
+    assert "fix:" in model.seen[0][2] and "E0301: " in model.seen[0][2]
 
 
 def test_an_answer_the_compiler_now_accepts_is_not_asked_about():
