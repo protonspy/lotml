@@ -105,6 +105,61 @@ fn concrete(ty: &Ty) -> bool {
     }
 }
 
+/// The record and sum types named anywhere in `ty`, with their type arguments.
+fn named_types<'t>(ty: &'t Ty, found: &mut Vec<(&'t str, &'t [Ty])>) {
+    match ty {
+        Ty::Adt(name, args) => {
+            found.push((name, args));
+            args.iter().for_each(|t| named_types(t, found));
+        }
+        Ty::List(t) | Ty::Set(t) | Ty::Heap(t) | Ty::Optional(t) => named_types(t, found),
+        Ty::Dict(a, b) | Ty::Result(a, b) => {
+            named_types(a, found);
+            named_types(b, found);
+        }
+        Ty::Tuple(items) => items.iter().for_each(|t| named_types(t, found)),
+        Ty::Func(params, ret) => {
+            params.iter().for_each(|t| named_types(t, found));
+            named_types(ret, found);
+        }
+        _ => {}
+    }
+}
+
+/// The declared types whose recursion grows a type argument, `Deep(Nest[(T, T)])` inside
+/// `Nest[T]`: each instance's fields name a larger instance, so the C types of one use never end.
+/// A type its own fields lead back to may be given its parameters or closed types, nothing else.
+fn growing_types(declared: &BTreeMap<String, TypeDef>) -> BTreeSet<String> {
+    let mut named: HashMap<&str, Vec<(&str, &[Ty])>> = HashMap::new();
+    for (name, def) in declared {
+        let fields: Vec<&FieldSig> = match def {
+            TypeDef::Record { fields, .. } => fields.iter().collect(),
+            TypeDef::Sum { variants, .. } => variants.iter().flat_map(|v| v.fields.iter().flatten()).collect(),
+        };
+        let found = named.entry(name).or_default();
+        fields.iter().for_each(|f| named_types(&f.ty, found));
+    }
+    let reaches = |from: &str, to: &str| {
+        let mut seen = HashSet::new();
+        let mut next = vec![from];
+        while let Some(n) = next.pop() {
+            if n == to {
+                return true;
+            }
+            if seen.insert(n) {
+                next.extend(named.get(n).into_iter().flatten().map(|&(m, _)| m));
+            }
+        }
+        false
+    };
+    let grows = |args: &[Ty]| args.iter().any(|a| !matches!(a, Ty::Param(_)) && !concrete(a));
+    named
+        .iter()
+        .filter(|(name, found)| found.iter().any(|&(other, args)| grows(args) && reaches(other, name)))
+        .map(|(name, _)| name.to_string())
+        .collect()
+}
+
 /// Whether `ty` mentions the type parameter `name`.
 fn mentions(ty: &Ty, name: &str) -> bool {
     match ty {
@@ -302,6 +357,17 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
                 }
             }
             _ => {}
+        }
+    }
+    let growing = growing_types(&checked.declared);
+    for item in &module.items {
+        let name = match item {
+            Item::Record(r) => &r.name,
+            Item::Sum(s) => &s.name,
+            _ => continue,
+        };
+        if growing.contains(&name.name) {
+            cx.unsupported(name.span, "a type whose recursion grows its type arguments");
         }
     }
     // A trait's default method is the method of each type implementing it without its own.
@@ -1536,7 +1602,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let lists: Vec<(Operand, Ty)> = positional
                     .iter()
                     .map(|a| {
-                        let list = self.materialize(a);
+                        let list = self.walked(a);
                         let elem = element(&self.local_ty(&list));
                         (list, elem)
                     })
@@ -1545,7 +1611,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 return;
             }
             if self.is_prelude(func, "reversed") && positional.len() == 1 {
-                let list = self.materialize(positional[0]);
+                let list = self.walked(positional[0]);
                 let elem = element(&self.local_ty(&list));
                 self.indexed(&[(list, elem)], true, body);
                 return;
@@ -1554,8 +1620,7 @@ impl<'c, 'a> Builder<'c, 'a> {
         let ty = self.ty(iter);
         match ty {
             Ty::List(_) => {
-                let over = self.value(iter);
-                let snapshot = self.hold(ty.clone(), Expr::Use(over));
+                let snapshot = self.walked(iter);
                 let elem = element(&ty);
                 self.indexed(&[(snapshot, elem)], false, body);
             }
@@ -1630,6 +1695,18 @@ impl<'c, 'a> Builder<'c, 'a> {
         });
         self.line = line;
         self.push(StmtKind::Loop(inner));
+    }
+
+    /// `e` as the list a loop walks by index: a list is held, so the loop's body can neither
+    /// shrink nor free what it reads unchecked, as the Python target walks a copy; any other
+    /// iterable is made into a new list.
+    fn walked(&mut self, e: &ast::Expr) -> Operand {
+        let ty = self.ty(e);
+        if !matches!(ty, Ty::List(_)) {
+            return self.materialize(e);
+        }
+        let v = self.value(e);
+        self.hold(ty, Expr::Use(v))
     }
 
     /// `e` as a list: a list as it is, a string as its characters, a dict as its keys, a set as

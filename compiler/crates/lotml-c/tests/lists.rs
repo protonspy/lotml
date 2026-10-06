@@ -2,7 +2,7 @@
 
 mod common;
 
-use common::parity;
+use common::{parity, run_c_with};
 
 #[test]
 fn lists_index_slice_sort_and_print_as_python() {
@@ -69,4 +69,20 @@ fn list_mistakes_stop_the_program() {
         let run = parity(&format!("list-panic-{name}"), &source);
         assert_eq!(run.code, Some(101), "{name}");
     }
+}
+
+#[test]
+fn a_loop_body_that_changes_its_list_cannot_free_what_the_loop_reads() {
+    let source = "fn main():\n    var xs = [\"a\" + str(1), \"a\" + str(2), \"a\" + str(3)]\n    \
+                  for x in reversed(xs):\n        xs.clear()\n        print(x)\n    \
+                  var zs = [1, 2, 3]\n    for z in reversed(zs):\n        zs = [9]\n        print(z)\n    \
+                  var ws = [\"w\" + str(1), \"w\" + str(2)]\n    for i, w in enumerate(reversed(ws)):\n        \
+                  ws.clear()\n        print(i, w)\n    \
+                  var ps = [1, 2, 3]\n    var qs = [\"q\" + str(1), \"q\" + str(2), \"q\" + str(3)]\n    \
+                  for p, q in zip(ps, qs):\n        qs.clear()\n        ps = []\n        print(p, q)\n    \
+                  print(xs, zs, ws, ps, qs)\n";
+    let run = parity("loop-changes-its-list", source);
+    assert!(run.stdout.starts_with("a3\na2\na1\n3\n2\n1\n0 w2\n1 w1\n1 q1\n"), "{}", run.stdout);
+    let counted = run_c_with("loop-changes-its-list-free", source, true);
+    assert!(counted.stderr.contains("lotml: 0 cells live at exit"), "{}", counted.stderr);
 }

@@ -439,11 +439,14 @@ impl Pass {
             let stored = uses.stored.iter().filter(|&&s| s == l).count();
             let read = uses.read.iter().filter(|&&r| r == l).count();
             let alive = live_out.contains(l) && target != Some(l);
-            let incs = if alive { stored } else { stored.saturating_sub(1) };
+            // A local the statement both stores and reads, `f(xs, &xs)`, cannot give its own count
+            // away: the callee may drop the stored one while it still reads the cell through the
+            // other. It keeps it, and drops it after the statement.
+            let incs = if alive || read > 0 { stored } else { stored.saturating_sub(1) };
             for _ in 0..incs {
                 out.push(at(StmtKind::Inc(l)));
             }
-            if !alive && stored == 0 && read > 0 {
+            if !alive && read > 0 {
                 dying.push(l);
             }
         }

@@ -17,7 +17,7 @@ benchmarks.
 
 ## R1 · Same semantics as the Python target
 
-- **R1.1** The C backend shall compile every program the checker accepts, except those R5.3 excludes, to C that a C11 compiler builds without diagnostics.
+- **R1.1** The C backend shall compile every program the checker accepts, except those R5.3 and R5.5 exclude, to C that a C11 compiler builds without diagnostics.
 - **R1.2** When a compiled program runs, the C backend's program shall write to standard output exactly what the Python target's program writes for the same input, and exit with the same status.
 - **R1.3** When a value is turned into text by `print`, `str` or an f-string, the C backend shall render it as the Python target does: Python's `repr` of floats and strings, records and variants as their dataclass, sets in CPython's iteration order under `PYTHONHASHSEED=0`.
 - **R1.4** When the `test` blocks of a module run on the C target, the C backend shall report each one's name and outcome — pass, fail with the compared values, error, panic — in the JSON `lotml test` writes for the Python target.
@@ -47,6 +47,7 @@ benchmarks.
 - **R5.2** If no C compiler is found, then the C backend shall stop with a message naming what it looked for.
 - **R5.3** If a program imports a Python module, then the C backend shall refuse it with a diagnostic at the import, since the C target has no Python to call.
 - **R5.4** Where a program imports a C library through its `c.<library>` interface, the C backend shall call the library's functions directly and link the library.
+- **R5.5** If a generic function or type would need C instances without end, then the C backend shall refuse it with a diagnostic at its declaration: a type whose recursion grows its type arguments, or a function past 64 instances or 256 type nodes in one instance's arguments, since monomorphic C has one definition per instance and compiling them all would exhaust memory.
 
 ## Out of scope
 
