@@ -202,6 +202,28 @@ fn is_math(import: &ast::Import) -> bool {
     matches!(import.module.as_slice(), [m] if m.name == "math")
 }
 
+/// The most instances one generic function or method is given.
+const INSTANCE_LIMIT: usize = 64;
+
+/// The most nodes the type arguments of one instance may have between them.
+const INSTANCE_TYPE_LIMIT: usize = 256;
+
+/// Whether `ty` has more than `*budget` nodes, spending the budget on those it counts: it stops at
+/// the first node past it, so a type too large to walk is never walked.
+fn exceeds(ty: &Ty, budget: &mut usize) -> bool {
+    if *budget == 0 {
+        return true;
+    }
+    *budget -= 1;
+    match ty {
+        Ty::List(t) | Ty::Set(t) | Ty::Heap(t) | Ty::Optional(t) => exceeds(t, budget),
+        Ty::Dict(a, b) | Ty::Result(a, b) => exceeds(a, budget) || exceeds(b, budget),
+        Ty::Tuple(items) | Ty::Adt(_, items) => items.iter().any(|t| exceeds(t, budget)),
+        Ty::Func(params, ret) => params.iter().any(|t| exceeds(t, budget)) || exceeds(ret, budget),
+        _ => false,
+    }
+}
+
 /// The C name of the instance `index` of the generic function or method `base`.
 fn instance_name(base: &str, index: usize) -> String {
     format!("li{index}_{base}")
@@ -238,6 +260,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
         trait_fns: HashMap::new(),
         instances: HashMap::new(),
         pending: Vec::new(),
+        instance_counts: HashMap::new(),
         vtables: Vec::new(),
         vtable_ids: HashMap::new(),
         math_names: HashSet::new(),
@@ -390,6 +413,8 @@ struct Context<'a> {
     instances: HashMap<(String, Vec<Ty>), String>,
     /// The instances named and not yet lowered.
     pending: Vec<Pending<'a>>,
+    /// How many instances each generic function or method has been given.
+    instance_counts: HashMap<String, usize>,
     vtables: Vec<VTable>,
     vtable_ids: HashMap<(String, Ty), usize>,
     /// The names `from math import …` brought into scope.
@@ -435,6 +460,26 @@ impl<'a> Context<'a> {
         if let Some(name) = self.instances.get(&key) {
             return name.clone();
         }
+        // Recursion that grows its type argument asks for instances without end: `f([x])` inside
+        // `f[T]` adds a node per instance, and `f((x, x))` doubles the type, so a bound on the
+        // count alone still builds types of 2^64 nodes. Past either bound the function is refused,
+        // once, and no instance it refused is lowered to grow a larger type.
+        let mut budget = INSTANCE_TYPE_LIMIT;
+        let too_large = key.1.iter().any(|ty| exceeds(ty, &mut budget));
+        let count = self.instance_counts.entry(key.0.clone()).or_default();
+        if too_large || *count >= INSTANCE_LIMIT {
+            if *count <= INSTANCE_LIMIT {
+                *count = INSTANCE_LIMIT + 1;
+                let what = if too_large {
+                    "a generic function instantiated for a type this large"
+                } else {
+                    "a generic function instantiated for this many types"
+                };
+                self.unsupported(def.name.span, what);
+            }
+            return key.0;
+        }
+        *count += 1;
         let name = instance_name(&key.0, self.instances.len());
         self.instances.insert(key, name.clone());
         self.pending.push(Pending { def, sig: subst.sig(sig), name: name.clone(), subst });

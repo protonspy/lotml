@@ -19,3 +19,20 @@ fn generics_free_what_they_take() {
     let run = run_c_with("generics-free", GENERICS, true);
     assert!(run.stderr.contains("lotml: 0 cells live at exit"), "{}", run.stderr);
 }
+
+#[test]
+fn recursion_that_grows_its_type_argument_is_refused_not_compiled_forever() {
+    for (grown, what) in [("(x, x)", "a type this large"), ("[x]", "this many types")] {
+        let source = format!(
+            "fn nest[T](x: T, n: int) -> int:\n    if n == 0:\n        return 0\n    return 1 + nest({grown}, n - 1)\n\n\
+             fn main():\n    print(nest(1, 3))\n"
+        );
+        let Err(errors) = lotml_c::compile(&source, std::path::Path::new("nest.lotml")) else {
+            panic!("{grown}: an instance per depth, without end");
+        };
+        let messages: Vec<_> = errors.iter().map(|d| &d.message).collect();
+        assert_eq!(errors.len(), 1, "{grown}: {messages:?}");
+        assert_eq!(errors[0].code, "E0402", "{grown}: {messages:?}");
+        assert!(errors[0].message.contains(what), "{grown}: {messages:?}");
+    }
+}
