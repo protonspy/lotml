@@ -296,6 +296,17 @@ fn augmented_assignment_traps_on_fields_and_elements() {
 }
 
 #[test]
+fn a_format_field_reaches_an_argument_s_items_but_never_its_attributes() {
+    // A field like `{0.x}` reads an attribute inside `str.format`, out of the checker's sight; an
+    // attribute without underscores still walks the interpreter's objects, so none is allowed.
+    let source = "fn items(xs: [int]) -> str:\n    return \"{0[1]} {0}\".format(xs)\n\nfn attribute(n: int) -> str:\n    return \"{0.real}\".format(n)\n";
+    assert_eq!(prints("format_items", source, "print(m.items([4, 5]))"), "5 [4, 5]");
+    let out = run("format_attribute", source, "print(m.attribute(3))");
+    assert!(!out.status.success(), "an attribute field ran: {}", String::from_utf8_lossy(&out.stdout));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("format field"));
+}
+
+#[test]
 fn the_emitter_never_lets_a_dunder_attribute_reach_python() {
     // The module JSON a `__` attribute would compile to is a call to the runtime, which raises,
     // not a live attribute access — defence in depth below the checker.

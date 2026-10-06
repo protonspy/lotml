@@ -31,6 +31,21 @@ fn a_method_of_an_unknown_type_is_reported() {
 }
 
 #[test]
+fn a_member_of_a_value_derived_from_an_unknown_type_is_reported() {
+    // Calling or indexing a value of unknown type gives another value of unknown type; its
+    // members are just as unknowable as the first one's.
+    assert_eq!(codes("fn f() -> int:\n    g = lambda k: k().anything\n    return 0\n"), vec!["E0205"]);
+    assert_eq!(codes("fn f() -> int:\n    g = lambda k: k().anything()\n    return 0\n"), vec!["E0205"]);
+    assert_eq!(codes("fn f() -> int:\n    g = lambda k: k[0].anything\n    return 0\n"), vec!["E0205"]);
+    assert_eq!(codes("fn f() -> int:\n    g = lambda k: k[0].anything()\n    return 0\n"), vec!["E0205"]);
+}
+
+#[test]
+fn a_member_of_a_prelude_function_s_result_called_as_a_value_is_reported() {
+    assert_eq!(codes("fn f() -> int:\n    g = print\n    h = g().anything\n    return 0\n"), vec!["E0205"]);
+}
+
+#[test]
 fn a_lambda_whose_type_is_known_still_reaches_its_fields() {
     clean("type P(x: int)\n\nfn f(ps: [P]) -> [int]:\n    return sorted([p.x for p in ps])\n");
     clean("fn f(xs: [str]) -> [str]:\n    return sorted(xs, key=lambda s: s.lower())\n");
@@ -48,6 +63,18 @@ fn a_name_reserved_for_the_compiler_cannot_be_declared() {
     assert_eq!(codes("fn f() -> int:\n    __x = 1\n    return __x\n"), vec!["E0220"]);
     assert_eq!(codes("type __Secret(x: int)\n\nfn f() -> int:\n    return 1\n"), vec!["E0220"]);
     assert_eq!(codes("fn f(__p: int) -> int:\n    return __p\n"), vec!["E0220"]);
+}
+
+#[test]
+fn a_method_cannot_take_a_name_reserved_for_the_compiler() {
+    // An `impl` method is attached to the Python class under its own name, so `__eq__` would
+    // replace the record's equality.
+    assert_eq!(
+        codes("type P(x: int)\n\nimpl P:\n    fn __eq__(self, o: P) -> bool:\n        return True\n"),
+        vec!["E0220"]
+    );
+    assert_eq!(codes("trait T:\n    fn __hash__(self) -> int\n"), vec!["E0220"]);
+    assert_eq!(codes("fn first[__T](xs: [__T]) -> int:\n    return 0\n"), vec!["E0220"]);
 }
 
 #[test]

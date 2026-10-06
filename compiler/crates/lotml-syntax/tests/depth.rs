@@ -37,3 +37,32 @@ fn deeply_nested_blocks_do_not_crash() {
 fn deeply_nested_types_do_not_crash() {
     refuses_deep_nesting(format!("fn f(x: {}int{}) -> int:\n    return 1\n", "[".repeat(2_000), "]".repeat(2_000)));
 }
+
+/// A long chain of operators builds a tree as deep as the chain, which every later pass recurses
+/// over, so its length is bounded like nesting is.
+fn refuses_a_long_chain(expression: String) {
+    let errors = parsed_errors(format!("fn f(x: int) -> int:\n    return {expression}\n"));
+    assert!(errors.iter().any(|m| m.contains("too long")), "{expression:.40}…: {errors:?}");
+}
+
+#[test]
+fn long_operator_chains_do_not_crash() {
+    refuses_a_long_chain(format!("{}x", "-".repeat(2_000)));
+    refuses_a_long_chain(format!("{}x", "not ".repeat(2_000)));
+    refuses_a_long_chain(format!("x{}", " ** x".repeat(2_000)));
+    refuses_a_long_chain(format!("x{}", " + x".repeat(2_000)));
+    refuses_a_long_chain(format!("x{}", " ?? x".repeat(2_000)));
+}
+
+#[test]
+fn long_postfix_chains_do_not_crash() {
+    refuses_a_long_chain(format!("x{}", ".y".repeat(2_000)));
+    refuses_a_long_chain(format!("x{}", "()".repeat(2_000)));
+    refuses_a_long_chain(format!("x{}", "[0]".repeat(2_000)));
+}
+
+#[test]
+fn an_ordinary_chain_is_fine() {
+    let errors = parsed_errors(format!("fn f(x: int) -> int:\n    return x{}\n", " + x".repeat(200)));
+    assert!(errors.is_empty(), "{errors:?}");
+}
