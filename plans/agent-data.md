@@ -36,6 +36,7 @@ only sources and models whose terms allow training, each with its evidence.
 - `plans/compiler-embedded-model.md` — the study of small repair models these runs are data for
 - `docs/wiki/pages/compiler-embedded-model.md` — what that study concluded: the compiler as critic and source of data, repair over authoring
 - adr:0014-deepagents-over-openrouter-for-the-agent-harness
+- adr:0015-infer-humaneval-types-from-its-own-tests — 30 of the original's 164 functions are typed; the rest are inferred
 - `harness/results/NOTICE.md` — why the task set's MultiPL-E HumanEval may not be trained on
 
 ## Out of scope
@@ -52,13 +53,18 @@ only sources and models whose terms allow training, each with its evidence.
 ## Tasks
 
 - [ ] 1.1 (Unit) Record in the registry whether Z.ai's and the serving providers' terms allow training on `z-ai/glm-5.3-flash`'s outputs, with the link to each
-- [ ] 2.1 (Unit) Run every kept HumanEval task in both arms on `z-ai/glm-5.3-flash`, and commit the rows and the report
-- [ ] 2.2 (Unit) Export the dataset from the HumanEval run and the agent benchmark's, and record in the manifest how many trajectories and repairs each source gave
-  _Depends 1.1, 2.1_
+- [ ] 1.2 (Unit) Record in this plan's `## Why` how many HumanEval tasks the inference and the translator kept, as `harness/results/agent-humaneval.md` reports it
+- [ ] 2.1 (Unit) Run every kept HumanEval task in both arms on `z-ai/glm-5.3-flash`, with traces carrying the check snapshots, and commit the rows and the report
+  _Depends 1.2_
+- [ ] 2.2 (Unit) Run the agent benchmark again in both arms, so its traces carry the check snapshots, the system message and the compiler version the export needs
+- [ ] 2.3 (Unit) Export the dataset from the HumanEval and benchmark runs with the exporter, and record in the manifest how many trajectories and repairs each source gave
+  _Depends 1.1, 2.1, 2.2_
 
 ## Done when
 
 - `harness/results/agent.md` reports both arms on every HumanEval task the translator keeps,
   with McNemar's comparison.
 - `harness/results/dataset.md` lists only sources and models the registry permits, each with its
-  evidence and notice, and `scc validate` reports no findings.
+  evidence and notice. If the model's terms forbid training or cannot be established, a manifest
+  that exports nothing and says why is the finished result, and the next model is a new plan.
+- `scc validate` reports no findings.
