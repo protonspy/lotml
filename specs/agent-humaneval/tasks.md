@@ -2,10 +2,10 @@
 
 ## 1 · HumanEval's tasks
 
-- [ ] 1.1 (TDD) Download the original `HumanEval.jsonl.gz` at a pinned commit, its SHA-256 checked before the rename and on every cached read, a differing file removed — R1.1, R2.2
-- [ ] 1.2 (Unit) Record a problem's cases by running its `check` against the canonical solution in a child process, seeded, arguments copied, duplicates dropped, at most 50 — R1.2
+- [x] 1.1 (TDD) Download the original `HumanEval.jsonl.gz` at a pinned commit, its SHA-256 checked before the rename and on every cached read, a differing file removed — R1.1, R2.2
+- [x] 1.2 (Unit) Record a problem's cases by running its `check` against the canonical solution in a child process, seeded, arguments copied, duplicates dropped, at most 50 — R1.2
   _Depends 1.1_
-- [ ] 1.3 (TDD) Render recorded values as lotml literals by their Python types, refusing what has no lotml form, and compare floats within the tolerance — R1.5, R1.6
+- [x] 1.3 (TDD) Render recorded values as lotml literals by their Python types, refusing what has no lotml form, and compare floats within the tolerance — R1.5, R1.6
 - [ ] 1.4 (TDD) Derive a witness signature from the recorded values and refuse a task whose hidden blocks do not check against it — R1.6
   _Depends 1.3_
 - [ ] 1.5 (TDD) Give `AgentTask` its files as data, read from a directory as now, and lay them by writing them, refusing absolute, `..` and escaping names — R1.3, R1.7

@@ -1,4 +1,5 @@
 import json
+from hashlib import sha256
 
 import pytest
 
@@ -50,6 +51,60 @@ def test_download_saves_once_and_reuses_the_file(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="larger than 3 bytes"):
         sources.download("https://x/c.txt", tmp_path / "c.txt", limit=3)
     assert not (tmp_path / "c.txt").exists()
+
+
+class Body:
+    """A response whose body reads in pieces of at most `size` bytes, then ends."""
+
+    def __init__(self, body: bytes):
+        self.left = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def read(self, size=-1):
+        piece = self.left if size < 0 else self.left[:size]
+        self.left = self.left[len(piece) :]
+        return piece
+
+
+def serve(monkeypatch, body: bytes) -> list[str]:
+    calls = []
+
+    def urlopen(url, timeout):
+        calls.append(url)
+        return Body(body)
+
+    monkeypatch.setattr(sources.urllib.request, "urlopen", urlopen)
+    return calls
+
+
+def test_download_checks_a_pinned_digest_before_the_file_is_moved_into_place(tmp_path, monkeypatch):
+    serve(monkeypatch, b"data")
+    target = tmp_path / "pinned.bin"
+    with pytest.raises(sources.DigestMismatch, match=r"pinned\.bin"):
+        sources.download("https://x/pinned.bin", target, digest=sha256(b"other").hexdigest())
+    assert list(tmp_path.iterdir()) == []
+    good = sha256(b"data").hexdigest()
+    assert sources.download("https://x/pinned.bin", target, digest=good).read_bytes() == b"data"
+
+
+def test_pinned_checks_the_cached_file_on_every_read_and_removes_one_that_differs(
+    tmp_path, monkeypatch
+):
+    calls = serve(monkeypatch, b"data")
+    target = tmp_path / "pinned.bin"
+    good = sha256(b"data").hexdigest()
+    assert sources.pinned("https://x/pinned.bin", target, good) == b"data"
+    assert sources.pinned("https://x/pinned.bin", target, good) == b"data"
+    assert len(calls) == 1
+    target.write_bytes(b"tampered")
+    with pytest.raises(sources.DigestMismatch):
+        sources.pinned("https://x/pinned.bin", target, good)
+    assert not target.exists()
 
 
 def test_multipl_e_reads_one_dataset_by_task_id(tmp_path, monkeypatch):
