@@ -1,6 +1,10 @@
 """Type masks for open models, by the line: each line an open model writes is checked as a prefix
 by the compiler, and one the compiler says can no longer complete is drawn again."""
 
+import io
+import json
+import urllib.error
+
 import pytest
 
 from lotml_harness.experiments import masks
@@ -48,6 +52,63 @@ def test_openrouter_is_asked_for_a_raw_completion_from_one_provider():
         "max_tokens": 200,
         "provider": {"order": ["Parasail"], "allow_fallbacks": False},
     }
+
+
+class Replies:
+    """OpenRouter answering from a script: a body to read, or an HTTP status to fail with."""
+
+    def __init__(self, *replies):
+        self.replies = list(replies)
+        self.calls = 0
+
+    def open(self, request, timeout):
+        self.calls += 1
+        reply = self.replies.pop(0)
+        if isinstance(reply, int):
+            raise urllib.error.HTTPError(request.full_url, reply, "status", {}, None)
+        return io.BytesIO(json.dumps({"choices": [reply]}).encode())
+
+
+@pytest.fixture
+def hosted(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(masks.time, "sleep", lambda seconds: None)
+
+    def serve(*replies):
+        replies = Replies(*replies)
+        monkeypatch.setattr(masks, "OPENER", replies)
+        return replies
+
+    return serve
+
+
+def ask():
+    return masks.openrouter("z-ai/glm-5.3-flash", "P", 0.0, 0, ["\n"], 10)
+
+
+def test_openrouter_retries_a_rate_limit_and_a_server_error(hosted):
+    replies = hosted(429, 503, {"text": "    return 1\n"})
+    assert ask() == "    return 1\n"
+    assert replies.calls == 3
+
+
+def test_openrouter_fails_at_once_on_a_refused_request(hosted):
+    replies = hosted(401, {"text": "never read"})
+    with pytest.raises(masks.ModelError, match="401"):
+        ask()
+    assert replies.calls == 1
+
+
+def test_a_reply_carrying_reasoning_means_the_prompt_was_not_taken_raw(hosted):
+    replies = hosted({"text": "", "reasoning": "Simple."}, {"text": "never read"})
+    with pytest.raises(masks.ModelError, match="wrapped the raw prompt"):
+        ask()
+    assert replies.calls == 1
+
+
+def test_the_key_never_follows_a_redirect():
+    handler = masks.NoRedirect()
+    assert handler.redirect_request(None, None, 302, "Found", {}, "https://elsewhere/") is None
 
 
 def test_openrouter_without_a_key_is_a_model_error(monkeypatch):
