@@ -1,0 +1,23 @@
+fn work(n: int) -> int:
+    var total = 0
+    for i in range(n):
+        total += i % 7
+    return total
+
+fn label(i: int, names: [str]) -> str:
+    return f"task {i} {names[i % 2]}"
+
+fn main():
+    data = [1, 2, 3, 4, 5]
+    names = ["ab", "cd"]
+    results = parallel([lambda: work(100000) + len(data), lambda: sum(data), lambda: len(names[0] + "x")])
+    print(results)
+    var tasks = [lambda: label(0, names)]
+    for k in range(1, 300):
+        tasks.append(lambda: label(k, names))
+    texts = parallel(tasks)
+    print(len(texts), texts[0], texts[1], texts[299])
+    nested = parallel([lambda: parallel([lambda: work(10), lambda: work(20)]), lambda: [len(data)]])
+    print(nested, data, names)
+    grown = parallel([lambda: data + [6], lambda: data])
+    print(grown, data)

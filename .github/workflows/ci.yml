@@ -28,6 +28,9 @@ jobs:
         run: cargo clippy --manifest-path compiler/Cargo.toml --locked --all-targets -- -D warnings
       - name: Test
         run: cargo test --manifest-path compiler/Cargo.toml --locked
+        env:
+          # The C target's programs run under AddressSanitizer and UndefinedBehaviorSanitizer.
+          LOTML_SANITIZE: "1"
 
   harness:
     runs-on: ubuntu-latest

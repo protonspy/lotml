@@ -1,0 +1,20 @@
+[package]
+name = "lotml-c"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lotml-syntax = { path = "../lotml-syntax" }
+lotml-diag = { path = "../lotml-diag" }
+lotml-check = { path = "../lotml-check" }
+
+[target.'cfg(windows)'.dependencies]
+find-msvc-tools = "0.1.14"
+
+[dev-dependencies]
+lotml-py = { path = "../lotml-py" }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

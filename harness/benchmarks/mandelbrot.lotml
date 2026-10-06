@@ -1,0 +1,20 @@
+fn mandelbrot(size: int, limit: int) -> int:
+    var inside = 0
+    for y in range(size):
+        ci = 2.0 * float(y) / float(size) - 1.0
+        for x in range(size):
+            cr = 2.0 * float(x) / float(size) - 1.5
+            var zr = 0.0
+            var zi = 0.0
+            var i = 0
+            while i < limit and zr * zr + zi * zi <= 4.0:
+                t = zr * zr - zi * zi + cr
+                zi = 2.0 * zr * zi + ci
+                zr = t
+                i += 1
+            if i == limit:
+                inside += 1
+    return inside
+
+fn main():
+    print(mandelbrot(800, 300))

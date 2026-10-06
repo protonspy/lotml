@@ -1,0 +1,80 @@
+type Point(x: f64, y: f64)
+type User(name: str, age: int, email: str? = None)
+type Shape = Circle(r: f64) | Rect(w: f64, h: f64) | Empty
+type Expr = Num(int) | Add(Expr, Expr) | Neg(Expr)
+type ParseErr = Blank | NotNumber(text: str) | Negative(value: int)
+
+fn area(s: Shape) -> f64:
+    match s:
+        case Circle(r):
+            return 3.0 * r * r
+        case Rect(w, h):
+            return w * h
+        case Empty:
+            return 0.0
+
+fn eval(e: Expr) -> int:
+    match e:
+        case Num(n):
+            return n
+        case Add(a, b):
+            return eval(a) + eval(b)
+        case Neg(inner):
+            return -eval(inner)
+
+fn find_email(users: [User], name: str) -> str?:
+    for u in users:
+        if u.name == name:
+            return u.email
+    return None
+
+fn parse(s: str) -> int ! ParseErr:
+    if s == "":
+        fail Blank
+    n = s.to_int() ?? fail NotNumber(s)
+    if n < 0:
+        fail Negative(n)
+    return n
+
+fn double(s: str) -> int ! ParseErr:
+    n = parse(s)?
+    return n * 2
+
+fn describe(s: str) -> str:
+    match parse(s):
+        case Ok(n):
+            return f"number {n}"
+        case Err(NotNumber(text)):
+            return f"not a number: {text}"
+        case Err(_):
+            return "invalid"
+
+fn label(n: int?) -> str:
+    match n:
+        case None:
+            return "nothing"
+        case 0:
+            return "zero"
+        case v:
+            return f"value {v}"
+
+fn main():
+    p = Point(1.0, 2.5)
+    var q = p
+    q.x = 5.0
+    print(p, q, p.x + q.y, p == Point(1.0, 2.5), p != q)
+    shapes = [Circle(1.0), Rect(2.0, 3.0), Empty]
+    print(shapes, [area(s) for s in shapes], Num(3), Empty)
+    print(eval(Add(Num(2), Neg(Add(Num(1), Num(4))))))
+    users = [User("ana", 30, "a@x"), User(name="bo", age=4)]
+    print(users[1], find_email(users, "ana"), find_email(users, "bo"), find_email(users, "zz"))
+    email = find_email(users, "ana")
+    if email is not None:
+        print(email.upper())
+    shown = find_email(users, "bo") ?? "no email"
+    print(shown, find_email(users, "x") is None)
+    print(parse("42"), parse(""), parse("x1"), parse("-3"), double("21"), double("q"))
+    print(describe("7"), describe("abc"), describe(""))
+    print(label(None), label(0), label(5), parse("5") == Ok(5), parse("") == Err(Blank))
+    t: (int, str?) = (1, None)
+    print(t, (2, "s"))

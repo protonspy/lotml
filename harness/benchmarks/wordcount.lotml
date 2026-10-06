@@ -1,0 +1,10 @@
+fn main():
+    var counts: {str: int} = {}
+    for i in range(2000000):
+        word = f"w{i * 7919 % 5003}"
+        counts[word] = (counts.get(word) ?? 0) + 1
+    var best = 0
+    for c in counts.values():
+        if c > best:
+            best = c
+    print(len(counts), best)

@@ -1,0 +1,103 @@
+trait Show:
+    fn show(self) -> str
+
+    fn shout(self) -> str:
+        return self.show().upper() + "!"
+
+type Dog(name: str)
+type Car(model: str, year: int)
+
+impl Show for Dog:
+    fn show(self) -> str:
+        return f"dog {self.name}"
+
+impl Show for Car:
+    fn show(self) -> str:
+        return f"{self.model} {self.year}"
+
+    fn shout(self) -> str:
+        return "VROOM " + self.model
+
+type Stack[T](items: [T])
+
+impl Stack[T]:
+    fn empty() -> Stack[T]:
+        return Stack([])
+
+    fn push(inout self, item: T):
+        self.items.append(item)
+
+    fn top(self) -> T?:
+        if len(self.items) == 0:
+            return None
+        return self.items[-1]
+
+    fn size(self) -> int:
+        return len(self.items)
+
+type Tree[T] = Leaf | Node(Tree[T], T, Tree[T])
+
+fn insert[T: Ord](t: Tree[T], x: T) -> Tree[T]:
+    match t:
+        case Leaf:
+            return Node(Leaf, x, Leaf)
+        case Node(l, v, r):
+            if x < v:
+                return Node(insert(l, x), v, r)
+            return Node(l, v, insert(r, x))
+
+fn walk[T](t: Tree[T], out: [T]) -> [T]:
+    match t:
+        case Leaf:
+            return out
+        case Node(l, v, r):
+            var acc = walk(l, out)
+            acc.append(v)
+            return walk(r, acc)
+
+fn first[T](xs: [T]) -> T?:
+    if len(xs) == 0:
+        return None
+    return xs[0]
+
+fn swap[A, B](p: (A, B)) -> (B, A):
+    return (p[1], p[0])
+
+fn largest[T: Ord](xs: [T]) -> T:
+    var best = xs[0]
+    for x in xs:
+        if x > best:
+            best = x
+    return best
+
+fn all_shown[T: Show](items: [T]) -> str:
+    return ", ".join([i.show() for i in items])
+
+fn mixed(items: [dyn Show]) -> str:
+    return ", ".join([i.shout() for i in items])
+
+fn loudest(x: dyn Show) -> str:
+    return x.shout()
+
+fn main():
+    print(first([1, 2]), first(["a", "b"]), first([2.5]))
+    print(swap((1, "x")), swap(("y", [1.5])))
+    print(largest([3, 9, 2]), largest(["pear", "apple"]))
+    var ints = Stack.empty()
+    ints.push(1)
+    ints.push(2)
+    var words = Stack(["a"])
+    words.push("b")
+    print(ints.top(), ints.size(), words.top(), words, ints)
+    var t = Leaf
+    for x in [5, 2, 8, 1, 9, 3]:
+        t = insert(t, x)
+    print(walk(t, []))
+    var s = Leaf
+    for w in ["kiwi", "fig", "plum"]:
+        s = insert(s, w)
+    print(walk(s, []), s)
+    print(all_shown([Dog("rex"), Dog("ace")]), all_shown([Car("T", 1908)]))
+    shows: [dyn Show] = [Dog("rex"), Car("T", 1908)]
+    print(mixed(shows), loudest(Dog("fido")), loudest(shows[1]))
+    print(mixed([Dog("a"), Dog("b")]), shows)
