@@ -243,4 +243,7 @@ fn bind_refuses_a_device_s_name() {
         assert_eq!(out.status.code(), Some(2), "{name}");
         assert!(String::from_utf8_lossy(&out.stderr).contains("device"), "{name}");
     }
+    let out = lotml(&["bind", "com\u{b9}", "--stub", "x.pyi"], &dir);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("not a Python module name"));
 }

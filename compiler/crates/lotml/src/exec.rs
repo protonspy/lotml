@@ -291,8 +291,8 @@ pub fn test_report(paths: &[PathBuf], as_json: bool, limits: Option<&Limits>) ->
 pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failure> {
     // The name becomes a file name: identifiers and dots only, so it cannot leave `out`.
     let valid = module.split('.').all(|part| {
-        part.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
-            && part.chars().all(|c| c.is_alphanumeric() || c == '_')
+        part.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
     });
     if !valid {
         return Err(Failure(format!("`{module}` is not a Python module name")));
