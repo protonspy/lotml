@@ -14,7 +14,7 @@
   _Depends 1.3_
 - [x] 2.2 (TDD) Insert counts: owned parameters, moves at the last use, decrements where a value dies, copy before changing a value that is not unique, and a leak report in test builds — R3.1, R3.2, R3.5, R3.6
   _Depends 2.1_
-- [ ] 2.3 (TDD) Compile records, sum types, `match`, optionals and results with `?`, `fail` and `??` — R1.2, R1.3
+- [x] 2.3 (TDD) Compile records, sum types, `match`, optionals and results with `?`, `fail` and `??` — R1.2, R1.3
   _Depends 2.2_
 - [ ] 2.4 (TDD) Reuse a unique value's memory in the `match` arm that takes it apart — R3.4
   _Depends 2.3_
