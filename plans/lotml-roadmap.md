@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: ebbf9172c251d68ed394cf1b4f01f61c2fe586a4386683e2c61f8887de32a74b
+checksum: fcccd56e561dcf2f59ea9aafe8757c65404f4955e6fe5951c60cd5092c435b87
 ---
 
 # lotml roadmap
@@ -109,13 +109,13 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 2.13_
 - [x] 3.5 (Unit) Implement colorless concurrency on the Python target with values marked shared when handed to a task, and blocking calls on dedicated threads (R20; docs/wiki/pages/colorless-concurrency.md)
   _Depends 2.13_
-- [ ] 3.6 (TDD) Measure in the harness what the literature left open: terse against detailed diagnostics, type masks for open models, and the forgotten-`await` hypothesis (docs/wiki/pages/semantic-compiler.md, docs/wiki/pages/constrained-decoding.md)
+- [x] 3.6 (TDD) Measure in the harness what the literature left open: terse against detailed diagnostics, type masks for open models, and the forgotten-`await` hypothesis (docs/wiki/pages/semantic-compiler.md, docs/wiki/pages/constrained-decoding.md)
   _Depends 3.1_
 - [x] 3.8 (Unit) Add the FFI with C, handing blocking calls to dedicated threads (R17; docs/wiki/pages/colorless-concurrency.md)
   _Depends 3.5_
 - [x] 3.9 (Unit) Generate the tree-sitter grammar for editors from the parser's single source (docs/wiki/pages/requirements-and-roadmap.md)
   _Depends 1.6_
-- [ ] 3.7 (Unit) Review the phase 2 gate — incremental adoption from Python working, corpus validated by tests
+- [x] 3.7 (Unit) Review the phase 2 gate — incremental adoption from Python working, corpus validated by tests
   _Depends 3.2, 3.3, 3.4, 3.5, 3.6, 3.8, 3.9_
 - [ ] 4.1 (TDD) Write the C backend: reference counting with Perceus-style reuse, non-atomic counts, checked arithmetic and `#line` directives (R18, R19; docs/wiki/pages/memory-model.md, docs/wiki/pages/transpilation-strategy.md)
   _Depends 3.7_
