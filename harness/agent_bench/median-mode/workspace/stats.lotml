@@ -1,0 +1,13 @@
+fn median(xs: [f64]) -> f64?:
+    """
+    The middle value of `xs` once sorted, or the mean of the two middle values when there is
+    an even number of them; None when `xs` is empty.
+    """
+    return todo()
+
+fn mode(xs: [int]) -> int?:
+    """The value occurring most often in `xs`, the smallest of them on a tie; None when `xs` is empty."""
+    return todo()
+
+test "median of three":
+    assert median([3.0, 1.0, 2.0]) == 2.0

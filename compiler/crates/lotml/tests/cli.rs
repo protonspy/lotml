@@ -287,3 +287,66 @@ fn test_runs_hundreds_of_files_at_once() {
     let json: serde_json::Value = serde_json::from_str(stdout(&out).trim()).expect("JSON");
     assert_eq!(json["summary"]["passed"], 400);
 }
+
+#[test]
+fn init_writes_the_guide_and_the_block_then_changes_nothing() {
+    let dir = scratch("init-fresh", &[("AGENTS.md", "# Our rules\n\nBe kind.\n")]);
+    let out = lotml(&["init", "--harness", "none"], &dir);
+    assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
+    let said = stdout(&out);
+    assert!(said.contains("lotml.guide.lotml: created") && said.contains("AGENTS.md: updated"), "{said}");
+    let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
+    assert!(agents.starts_with("# Our rules\n\nBe kind.\n\n<!-- lotml:begin -->\n## lotml\n"), "{agents}");
+    assert!(agents.ends_with("<!-- lotml:end -->\n"));
+    assert!(!dir.join(".mcp.json").exists());
+    let again = stdout(&lotml(&["init", "--harness", "none"], &dir));
+    assert!(again.contains("lotml.guide.lotml: unchanged") && again.contains("AGENTS.md: unchanged"), "{again}");
+    assert_eq!(std::fs::read_to_string(dir.join("AGENTS.md")).unwrap(), agents);
+}
+
+#[test]
+fn the_guide_checks_and_its_tests_pass() {
+    let dir = scratch("init-guide", &[]);
+    lotml(&["init", "--harness", "none"], &dir);
+    let check = lotml(&["check", "lotml.guide.lotml"], &dir);
+    assert_eq!(check.status.code(), Some(0), "{}", stdout(&check));
+    let test = lotml(&["test", "--json", "lotml.guide.lotml"], &dir);
+    assert_eq!(test.status.code(), Some(0), "{}{}", stdout(&test), String::from_utf8_lossy(&test.stderr));
+    let json: serde_json::Value = serde_json::from_str(stdout(&test).trim()).expect("JSON");
+    assert!(json["summary"]["passed"].as_u64().unwrap() >= 14, "{json}");
+    assert_eq!(lotml(&["fmt", "--check", "lotml.guide.lotml"], &dir).status.code(), Some(0));
+}
+
+#[test]
+fn init_sets_up_the_harnesses_it_finds() {
+    let dir = scratch(
+        "init-found",
+        &[(".mcp.json", "{\n  \"mcpServers\": {\n    \"other\": {\"command\": \"x\"}\n  }\n}\n")],
+    );
+    std::fs::create_dir_all(dir.join(".claude")).unwrap();
+    std::fs::create_dir_all(dir.join(".cursor")).unwrap();
+    let out = lotml(&["init"], &dir);
+    assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+    assert!(stdout(&out).contains("harnesses: Claude Code, Cursor"), "{}", stdout(&out));
+    let claude: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join(".mcp.json")).unwrap()).unwrap();
+    assert_eq!(claude["mcpServers"]["lotml"]["args"], serde_json::json!(["mcp", "--root", "."]));
+    assert_eq!(claude["mcpServers"]["other"]["command"], "x");
+    let cursor: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join(".cursor/mcp.json")).unwrap()).unwrap();
+    assert_eq!(cursor["mcpServers"]["lotml"]["command"], "lotml");
+    assert!(std::fs::read_to_string(dir.join("CLAUDE.md")).unwrap().contains("@AGENTS.md"));
+    assert!(!dir.join(".codex").exists());
+}
+
+#[test]
+fn init_sets_up_the_harnesses_named_and_survives_a_broken_configuration() {
+    let dir = scratch("init-named", &[(".mcp.json", "{ not json")]);
+    let out = lotml(&["init", "--harness", "claude,codex"], &dir);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(stdout(&out).contains(".mcp.json: not valid JSON"), "{}", stdout(&out));
+    assert_eq!(std::fs::read_to_string(dir.join(".mcp.json")).unwrap(), "{ not json");
+    let codex = std::fs::read_to_string(dir.join(".codex/config.toml")).unwrap();
+    assert!(codex.contains("[mcp_servers.lotml]\ncommand = \"lotml\""), "{codex}");
+    assert!(dir.join("CLAUDE.md").exists() && dir.join("AGENTS.md").exists());
+}

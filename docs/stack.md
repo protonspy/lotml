@@ -30,6 +30,14 @@ same pinned versions.
   the prompt as written, when a local run would take hours. The key is read from
   `OPENROUTER_API_KEY` and never written to the repository.
 
+- **deepagents** 0.7 (group `agent`) — the coding agent loop of the agent harness: planning, file
+  tools confined to a workspace, context management; chosen over writing the loop, which is not
+  what lotml studies (adr:0014-deepagents-over-openrouter-for-the-agent-harness). It brings
+  LangChain and LangGraph.
+- **langchain-openrouter** 0.2 (group `agent`) — the chat model with tool calls deepagents needs,
+  over OpenRouter, with its provider routing; the raw completions above stay on the standard
+  library.
+
 - **tree-sitter CLI** 0.27 (development only, through `npx`) — generates the editor grammar in
   `reference/grammar/tree-sitter/` and parses the corpus with it in the harness tests, which
   skip without `npx`; it compiles the parser with the platform's C compiler.

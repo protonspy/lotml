@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-06 — `lotml init` and the agent harness: [[semantic-compiler]] describes the agent guide, [[evaluation-harness]] the agent benchmark and its arms (adr:0014)
 - 2026-10-06 — type masks by the line measured on three open models: [[constrained-decoding]] reports that they helped only the weakest
 - 2026-10-06 — terse against detailed diagnostics and the forgotten-`await` hypothesis measured: [[semantic-compiler]] and [[colorless-concurrency]] report them
 - 2026-10-06 — the tree-sitter grammar for editors generated from the parser's source: [[constrained-decoding]] describes it, [[requirements-and-roadmap]] marks it built

@@ -257,6 +257,13 @@ library — JSON-RPC over `serde_json`:
   mode did. Every edit that would add a syntax error is refused with the errors, the attempted
   text and the original; one that is made is written whole or not at all and answered with the
   diagnostics it introduced against the text before it, or "no errors introduced".
+- **`lotml init`** sets a project up for coding agents: a lotml block in `AGENTS.md` teaching the
+  loop above (digest, edit by symbol, `check` after every edit, its fixes, `test`),
+  `lotml.guide.lotml` — the reference rewritten as code that checks, with a `test` block per
+  section, so an agent reads the language the way it will write it and the guide cannot drift
+  from the compiler — and the MCP server registered for the harnesses found in the project:
+  Claude Code (`.mcp.json`, and `CLAUDE.md` importing `AGENTS.md`), Codex and Cursor, chosen on
+  a checklist with the detected ones checked (specs/agent-guide/).
 - **Rename is atomic.** It changes every reference or nothing: a new name that would make any
   name resolve elsewhere — a local captured by another, a method colliding with its sibling —
   or that would add an error is refused. The places the old name is still written that no

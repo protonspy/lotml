@@ -1,0 +1,37 @@
+from math import pi
+
+type Shape = Circle(r: f64) | Rect(w: f64, h: f64)
+
+fn area(s: Shape) -> f64:
+    match s:
+        case Circle(r):
+            return pi * r * r
+        case Rect(w, h):
+            return w * h
+
+fn perimeter(s: Shape) -> f64:
+    match s:
+        case Circle(r):
+            return 2.0 * pi * r
+        case Rect(w, h):
+            return 2.0 * (w + h)
+
+fn name(s: Shape) -> str:
+    match s:
+        case Circle(_):
+            return "circle"
+        case Rect(w, h):
+            return "square" if w == h else "rectangle"
+
+fn largest(shapes: [Shape]) -> Shape?:
+    """The shape of greatest area, the first of them on a tie; None for no shapes."""
+    if len(shapes) == 0:
+        return None
+    var best = shapes[0]
+    for s in shapes:
+        if area(s) > area(best):
+            best = s
+    return best
+
+test "rect":
+    assert area(Rect(2.0, 3.0)) == 6.0

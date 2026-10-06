@@ -1,0 +1,26 @@
+test "hidden: parse":
+    assert parse_config("a = 1\nname=lotml") == Ok({"a": "1", "name": "lotml"})
+
+test "hidden: comments and blanks":
+    assert parse_config("# top\n\n  x = y  \n") == Ok({"x": "y"})
+
+test "hidden: the value keeps later equals signs":
+    assert parse_config("url = a=b") == Ok({"url": "a=b"})
+
+test "hidden: missing equals":
+    assert parse_config("a = 1\n\noops") == Err(MissingEquals(3))
+
+test "hidden: empty key":
+    assert parse_config(" = 4") == Err(EmptyKey(1))
+
+test "hidden: duplicate":
+    assert parse_config("a=1\na=2") == Err(Duplicate("a"))
+
+test "hidden: get int":
+    s = parse_config("n = 42\nw = x")?
+    assert get_int(s, "n") == Ok(42)
+    assert get_int(s, "w") == Err(NotInt("w"))
+    assert get_int(s, "z") == Err(Missing("z"))
+
+test "hidden: empty text":
+    assert len(parse_config("")?) == 0

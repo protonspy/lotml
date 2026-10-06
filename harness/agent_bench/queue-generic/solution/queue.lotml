@@ -1,0 +1,33 @@
+type Queue[T](front: [T], back: [T])
+
+impl Queue[T]:
+    fn new() -> Queue[T]:
+        """An empty queue."""
+        return Queue([], [])
+
+    fn push(inout self, item: T):
+        """Add `item` at the back."""
+        self.back.append(item)
+
+    fn pop(inout self) -> T?:
+        """Take the item at the front, the oldest; None when the queue is empty."""
+        if len(self.front) == 0:
+            var moved = self.back
+            moved.reverse()
+            self.front = moved
+            self.back = []
+        return self.front.pop()
+
+    fn size(self) -> int:
+        """How many items the queue holds."""
+        return len(self.front) + len(self.back)
+
+fn drain[T](q: Queue[T]) -> [T]:
+    """Every item of `q`, oldest first, leaving the caller's queue as it was."""
+    var copy = q
+    var out: [T] = []
+    while copy.size() > 0:
+        item = copy.pop()
+        if item is not None:
+            out.append(item)
+    return out

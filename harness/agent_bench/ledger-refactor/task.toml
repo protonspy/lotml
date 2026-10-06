@@ -1,0 +1,2 @@
+kind = "refactor"
+graded = ["ledger.lotml"]

@@ -1,0 +1,31 @@
+type Account(owner: str, balance: int)
+type Tx = Deposit(amount: int) | Withdraw(amount: int)
+type TxErr = Overdrawn(needed: int) | NonPositive(amount: int)
+
+fn deposit_all(inout acct: Account, amounts: [int]) -> None ! TxErr:
+    """Deposit each amount in turn, stopping at the first that is not positive."""
+    for a in amounts:
+        if a <= 0:
+            fail NonPositive(a)
+        acct.balance += a
+
+fn replay(start: Account, txs: [Tx]) -> Account ! TxErr:
+    """The account after every transaction, or the first transaction's error."""
+    var acct = start
+    for tx in txs:
+        match tx:
+            case Deposit(a):
+                if a <= 0:
+                    fail NonPositive(a)
+                acct.balance += a
+            case Withdraw(a):
+                if a <= 0:
+                    fail NonPositive(a)
+                if a > acct.balance:
+                    fail Overdrawn(a - acct.balance)
+                acct.balance -= a
+    return acct
+
+test "replay":
+    end = replay(Account("ana", 5), [Withdraw(2)])?
+    assert end.balance == 3

@@ -1,0 +1,18 @@
+test "hidden: chunks keep the remainder":
+    assert chunks([1, 2, 3, 4, 5], 2) == Ok([[1, 2], [3, 4], [5]])
+
+test "hidden: chunks exact":
+    assert chunks([1, 2, 3], 3) == Ok([[1, 2, 3]])
+
+test "hidden: chunks empty":
+    assert len(chunks([], 2)?) == 0
+
+test "hidden: chunks bigger than the list":
+    assert chunks([7], 5) == Ok([[7]])
+
+test "hidden: chunks bad size":
+    assert chunks([1], 0) == Err(BadSize(0))
+
+test "hidden: batch sums":
+    assert batch_sums([1, 2, 3, 4, 5], 2) == Ok([3, 7, 5])
+    assert batch_sums([1], -1) == Err(BadSize(-1))
