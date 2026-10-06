@@ -8,7 +8,27 @@ on:
 permissions:
   contents: read
 
+env:
+  RUST_TOOLCHAIN: "1.97"
+
 jobs:
+  compiler:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Toolchain
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt,clippy
+          rustup default "$RUST_TOOLCHAIN"
+      - name: Build
+        run: cargo build --manifest-path compiler/Cargo.toml --locked --all-targets
+      - name: Format
+        run: cargo fmt --manifest-path compiler/Cargo.toml --check
+      - name: Lint
+        run: cargo clippy --manifest-path compiler/Cargo.toml --locked --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --manifest-path compiler/Cargo.toml --locked
+
   harness:
     runs-on: ubuntu-latest
     steps:
@@ -16,15 +36,21 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           python-version: "3.13"
+      - name: Toolchain
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
       - name: Build
-        run: uv --directory harness sync --locked
+        run: |
+          uv --directory harness sync --locked
+          cargo build --manifest-path compiler/Cargo.toml --locked --release -p lotml
       - name: Format
         run: |
           uv --directory harness run ruff format --check .
-          uv --directory harness run ruff format --check ../research
+          uv --directory harness run ruff format --check ../research ../compiler/crates/lotml-py/runtime
       - name: Lint
         run: |
           uv --directory harness run ruff check .
-          uv --directory harness run ruff check ../research
+          uv --directory harness run ruff check ../research ../compiler/crates/lotml-py/runtime
       - name: Test
-        run: uv --directory harness run python scripts/test_gate.py
+        run: uv --directory harness run pytest -q
