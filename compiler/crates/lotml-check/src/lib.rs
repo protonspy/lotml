@@ -78,6 +78,8 @@ pub fn check_typed(module: &Module, text: &str) -> (Vec<Diagnostic>, Types) {
 pub struct Checked {
     pub diagnostics: Vec<Diagnostic>,
     pub types: Types,
+    /// How many type nodes `types` holds, up to [`MODULE_TYPES`].
+    stored: usize,
     /// Each name that resolved to a local, parameter or binding, with the span of the name
     /// that declared it; a declaration refers to itself. One span may be listed more than once.
     pub locals: Vec<(Span, Span)>,
@@ -87,8 +89,6 @@ pub struct Checked {
     pub declared: BTreeMap<String, TypeDef>,
     /// The Python modules imported through interfaces, each with its functions.
     pub foreign: BTreeMap<String, BTreeMap<String, FnSig>>,
-    /// How many type nodes `types` holds, up to [`MODULE_TYPES`].
-    stored: usize,
 }
 
 /// The most type nodes a module keeps for its expressions, in all: a long-lived editor or MCP
