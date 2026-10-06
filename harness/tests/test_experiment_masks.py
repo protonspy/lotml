@@ -20,25 +20,33 @@ def test_the_raw_prompt_follows_each_family_s_chat_template():
     assert llama.endswith("<|start_header_id|>assistant<|end_header_id|>\n\n```lotml\n")
     hosted = masks.raw_prompt("meta-llama/llama-3.1-8b-instruct", "SYS", "USER", "```lotml\n")
     assert hosted == llama, "a model named by its OpenRouter id keeps its family's template"
+    glm = masks.raw_prompt("z-ai/glm-5.3-flash", "SYS", "USER", "```lotml\n")
+    assert glm == (
+        "[gMASK]<sop><|system|>Reasoning Effort: Low<|system|>SYS<|user|>USER"
+        "<|assistant|><think></think>```lotml\n"
+    ), "GLM answers with its thinking already closed, as in a past turn without reasoning"
 
 
 def test_a_model_is_named_and_served_by_its_id():
     assert masks.label("qwen2.5-coder:7b") == "qwen2.5-coder-7b"
     assert masks.label("meta-llama/llama-3.1-8b-instruct") == "llama-3.1-8b-instruct"
     assert masks.served("qwen2.5-coder:7b") == "ollama"
-    assert masks.served("meta-llama/llama-3.1-8b-instruct") == f"openrouter/{masks.PROVIDER}"
+    assert masks.served("meta-llama/llama-3.1-8b-instruct") == "openrouter/DeepInfra"
+    assert masks.served("z-ai/glm-5.3-flash") == "openrouter/AtlasCloud"
+    with pytest.raises(ValueError, match="no provider"):
+        masks.served("someone/unchecked-model")
 
 
 def test_openrouter_is_asked_for_a_raw_completion_from_one_provider():
-    body = masks.openrouter_body("meta-llama/llama-3.1-8b-instruct", "P", 0.8, 2, ["\n"], 200)
+    body = masks.openrouter_body("z-ai/glm-5.3-flash", "P", 0.8, 2, ["\n"], 200)
     assert body == {
-        "model": "meta-llama/llama-3.1-8b-instruct",
+        "model": "z-ai/glm-5.3-flash",
         "prompt": "P",
         "temperature": 0.8,
         "seed": 2,
         "stop": ["\n"],
         "max_tokens": 200,
-        "provider": {"order": [masks.PROVIDER], "allow_fallbacks": False},
+        "provider": {"order": ["AtlasCloud"], "allow_fallbacks": False},
     }
 
 
