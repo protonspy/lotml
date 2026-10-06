@@ -1,7 +1,6 @@
 //! `lotml check`: diagnostics root cause first and bounded, safe fixes applied on request, only
 //! what an edit introduced since a revision, or a verdict on a file still being written.
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use lotml_db::{Database, SourceFile, diagnostics};
@@ -56,7 +55,7 @@ pub fn run(options: &Options) -> Result<bool, Failure> {
         for ((path, &file), diagnostics) in paths.iter().zip(&sources).zip(found.iter_mut()) {
             let old = files::at_revision(rev, path)?;
             let before = lotml_check::check_source(&old);
-            *diagnostics = introduced(std::mem::take(diagnostics), file.text(&db), &before, &old);
+            *diagnostics = lotml_diag::introduced(std::mem::take(diagnostics), file.text(&db), &before, &old);
         }
     }
     let reports: Vec<Report> = sources
@@ -90,31 +89,6 @@ pub fn run(options: &Options) -> Result<bool, Failure> {
     Ok(reports.iter().all(|r| r.diagnostics.iter().all(|d| d.severity != Severity::Error)))
 }
 
-/// The diagnostics of `after` that `before` did not have. A diagnostic is matched by its code,
-/// its message and the text of its line, so moving code does not make it new.
-fn introduced(after: Vec<Diagnostic>, after_text: &str, before: &[Diagnostic], before_text: &str) -> Vec<Diagnostic> {
-    let key = |d: &Diagnostic, text: &str| {
-        let start = (d.span.start as usize).min(text.len());
-        let line_start = text[..start].rfind('\n').map_or(0, |i| i + 1);
-        let line_end = text[start..].find('\n').map_or(text.len(), |i| start + i);
-        (d.code, d.message.clone(), text[line_start..line_end].trim().to_string())
-    };
-    let mut old: HashMap<_, usize> = HashMap::new();
-    for d in before {
-        *old.entry(key(d, before_text)).or_default() += 1;
-    }
-    after
-        .into_iter()
-        .filter(|d| match old.get_mut(&key(d, after_text)) {
-            Some(n) if *n > 0 => {
-                *n -= 1;
-                false
-            }
-            _ => true,
-        })
-        .collect()
-}
-
 fn prefix(db: &Database, sources: &[SourceFile], format: Format) -> Result<bool, Failure> {
     let mut complete = true;
     let mut rows = Vec::new();
@@ -144,24 +118,4 @@ fn prefix(db: &Database, sources: &[SourceFile], format: Format) -> Result<bool,
         _ => println!("{}", serde_json::json!({"version": 1, "prefix": rows})),
     }
     Ok(complete)
-}
-
-#[cfg(test)]
-mod tests {
-    use lotml_syntax::span::Span;
-
-    use super::*;
-
-    #[test]
-    fn only_new_diagnostics_are_introduced() {
-        let before_text = "a\nb\n";
-        let after_text = "z\na\nb\nc\n";
-        let old = vec![Diagnostic::error("E0201", Span::new(0, 1), "`a` is not defined")];
-        let new = vec![
-            Diagnostic::error("E0201", Span::new(2, 3), "`a` is not defined"),
-            Diagnostic::error("E0201", Span::new(6, 7), "`c` is not defined"),
-        ];
-        let kept = introduced(new, after_text, &old, before_text);
-        assert_eq!(kept.iter().map(|d| d.message.as_str()).collect::<Vec<_>>(), vec!["`c` is not defined"]);
-    }
 }

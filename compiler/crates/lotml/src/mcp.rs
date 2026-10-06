@@ -1,5 +1,8 @@
 //! `lotml mcp`: the compiler as MCP tools for an agent — check, digest, show, references,
-//! definition, hover, explain and test — over the same incremental engine as the language server.
+//! definition, hover, explain and test, and the edits: replace, add and remove addressed to
+//! symbols, search and replace by whole lines, and rename — over the same incremental engine as
+//! the language server. Every edit is refused when it breaks the syntax, written whole or not at
+//! all, and answered with the errors it introduced against the text before it.
 //!
 //! Every `.lotml` file under the root is loaded and checked at start, so the first call is
 //! answered from a warm index; before each call the files whose modification time changed are
@@ -15,8 +18,9 @@ use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
 
 use lotml_diag::{DEFAULT_LIMIT, Report};
+use lotml_ide::edit::{self, Changed, Part};
 use lotml_ide::lines::{Encoding, Lines};
-use lotml_ide::{Symbol, Workspace};
+use lotml_ide::{Refused, Symbol, Workspace};
 use lotml_syntax::span::{Span, line_column};
 use serde_json::{Value, json};
 
@@ -29,7 +33,7 @@ const UNSUPPORTED_VERSION: i64 = -32022;
 /// How many lines around each reference a result shows.
 const AROUND: usize = 2;
 
-const INSTRUCTIONS: &str = "lotml's compiler. Run `check` after every edit: diagnostics come root cause first, with the alternatives in scope and fixes. `digest` is the project's index of signatures; `show` gives a symbol's body; `references` lists every use with the lines around it; `explain` gives an error code's page; `test` runs the test blocks.";
+const INSTRUCTIONS: &str = "lotml's compiler. Run `check` after every edit: diagnostics come root cause first, with the alternatives in scope and fixes. `digest` is the project's index of signatures; `show` gives a symbol's body; `references` lists every use with the lines around it; `explain` gives an error code's page; `test` runs the test blocks. Edit with `replace` (a definition, a body or a match arm, addressed by symbol, re-indented for you), `add`, `remove`, `edit` (whole lines) and `rename` (every reference at once); each says which errors it introduced.";
 
 /// Serve on standard input and output until the input ends.
 pub fn serve(root: &Path) -> Result<u8, Failure> {
@@ -162,7 +166,13 @@ impl Server {
                 let code = args["code"].as_str().unwrap_or("");
                 crate::explanation(code).map_err(|Failure(why)| ToolError(why))
             }
-            _ => self.test(args),
+            "test" => self.test(args),
+            "replace" => self.replace(args),
+            "add" => self.add(args),
+            "remove" => self.remove(args),
+            "edit" => self.edit(args),
+            "rename" => self.rename(args),
+            _ => Err(ToolError(format!("Unknown tool: {name}"))),
         };
         let (text, failed) = match outcome {
             Ok(text) => (text, false),
@@ -340,6 +350,155 @@ impl Server {
         let (_, report) = exec::test_report(&paths, true).map_err(|Failure(why)| ToolError(why))?;
         Ok(report)
     }
+
+    /// The file an edit applies to: the one `path` names, or else the only one declaring
+    /// `symbol`.
+    fn file_of(&self, args: &Value, symbol: Option<&str>) -> Result<PathBuf, ToolError> {
+        if let Some(named) = args["path"].as_str() {
+            let path = self.inside(named)?;
+            return if self.workspace.contains(&path) {
+                Ok(path)
+            } else {
+                Err(ToolError(format!("no .lotml file at `{named}`")))
+            };
+        }
+        let symbol = symbol.ok_or_else(|| ToolError("give the `path` of the file".into()))?;
+        let mut found: Vec<PathBuf> = self.workspace.find(symbol).into_iter().map(|(p, _)| p).collect();
+        found.dedup();
+        match found.len() {
+            1 => Ok(found.remove(0)),
+            0 => Err(ToolError(format!("nothing in the project declares `{symbol}`; give the `path` of its file"))),
+            _ => {
+                let files: Vec<String> = found.iter().map(|p| self.shown(p)).collect();
+                Err(ToolError(format!("`{symbol}` is declared in {}: give the `path`", files.join(", "))))
+            }
+        }
+    }
+
+    fn text_arg<'a>(args: &'a Value, name: &str, tool: &str) -> Result<&'a str, ToolError> {
+        args[name].as_str().ok_or_else(|| ToolError(format!("`{tool}` needs `{name}`")))
+    }
+
+    fn replace(&mut self, args: &Value) -> Result<String, ToolError> {
+        let symbol = Self::text_arg(args, "symbol", "replace")?;
+        let new = Self::text_arg(args, "text", "replace")?;
+        let part = match args["part"].as_str().unwrap_or("definition") {
+            "definition" => Part::Definition,
+            "body" => Part::Body,
+            "arm" => Part::Arm(Self::text_arg(args, "arm", "replace")?.to_string()),
+            other => return Err(ToolError(format!("`part` is definition, body or arm, not `{other}`"))),
+        };
+        let path = self.file_of(args, Some(symbol))?;
+        let text = self.workspace.text(&path).unwrap_or_default();
+        let changed = edit::replace(text, symbol, &part, new).map_err(|Refused(why)| ToolError(why))?;
+        let what = match &part {
+            Part::Definition => format!("replaced `{symbol}`"),
+            Part::Body => format!("replaced the body of `{symbol}`"),
+            Part::Arm(arm) => format!("replaced the `{arm}` arm of `{symbol}`"),
+        };
+        self.write(&path, &changed, &what)
+    }
+
+    fn add(&mut self, args: &Value) -> Result<String, ToolError> {
+        let new = Self::text_arg(args, "text", "add")?;
+        let after = args["after"].as_str();
+        let path = self.file_of(args, after)?;
+        let text = self.workspace.text(&path).unwrap_or_default();
+        let changed = edit::add(text, after, new).map_err(|Refused(why)| ToolError(why))?;
+        let what =
+            after.map_or("added a declaration at the end".to_string(), |a| format!("added a declaration after `{a}`"));
+        self.write(&path, &changed, &what)
+    }
+
+    fn remove(&mut self, args: &Value) -> Result<String, ToolError> {
+        let symbol = Self::text_arg(args, "symbol", "remove")?;
+        let path = self.file_of(args, Some(symbol))?;
+        let text = self.workspace.text(&path).unwrap_or_default();
+        let changed = edit::remove(text, symbol).map_err(|Refused(why)| ToolError(why))?;
+        self.write(&path, &changed, &format!("removed `{symbol}`"))
+    }
+
+    fn edit(&mut self, args: &Value) -> Result<String, ToolError> {
+        let search = Self::text_arg(args, "search", "edit")?;
+        let replacement = Self::text_arg(args, "replace", "edit")?;
+        let path = self.file_of(args, None)?;
+        let text = self.workspace.text(&path).unwrap_or_default();
+        let changed = edit::search_replace(text, search, replacement).map_err(|Refused(why)| ToolError(why))?;
+        self.write(&path, &changed, "replaced the lines")
+    }
+
+    fn rename(&mut self, args: &Value) -> Result<String, ToolError> {
+        let new_name = Self::text_arg(args, "new_name", "rename")?;
+        let mut targets = self.target(args)?;
+        if targets.len() > 1 {
+            let files: Vec<String> = targets.iter().map(|(p, _)| self.shown(p)).collect();
+            return Err(ToolError(format!(
+                "that name is declared in {}: point at one with path, line and column",
+                files.join(", ")
+            )));
+        }
+        let (path, symbol) = targets.remove(0);
+        let text = self.workspace.text(&path).unwrap_or_default();
+        let old_name = match &symbol {
+            Symbol::Item(name) | Symbol::Variant(name) | Symbol::Member(_, name) => name.clone(),
+            Symbol::Local(declared) => text[declared.range()].to_string(),
+        };
+        let renamed = self.workspace.rename(&path, &symbol, new_name).map_err(|Refused(why)| ToolError(why))?;
+        save(&path, &renamed.text)?;
+        self.workspace.set(&path, renamed.text.clone());
+        self.modified.insert(path.clone(), stamp(&path));
+        let count = renamed.sites.len();
+        let mut out = format!(
+            "renamed `{old_name}` to `{new_name}` at {count} place{} in {}\n",
+            if count == 1 { "" } else { "s" },
+            self.shown(&path)
+        );
+        if !renamed.mentions.is_empty() {
+            out += &format!(
+                "`{old_name}` is still written at {} place{} no reference resolves to — comments, strings, other files; change them if they mean the renamed symbol:\n\n",
+                renamed.mentions.len(),
+                if renamed.mentions.len() == 1 { "" } else { "s" }
+            );
+            for (file, span) in &renamed.mentions {
+                out += &self.site(file, *span, "");
+            }
+        }
+        out += "no errors introduced";
+        Ok(out)
+    }
+
+    /// Write an edit's text to its file; then say where it went and what it introduced.
+    fn write(&mut self, path: &Path, changed: &Changed, what: &str) -> Result<String, ToolError> {
+        let introduced = self.workspace.introduced(path, &changed.text);
+        save(path, &changed.text)?;
+        self.workspace.set(path, changed.text.clone());
+        self.modified.insert(path.to_path_buf(), stamp(path));
+        let (first, _) = line_column(&changed.text, changed.span.start);
+        let (last, _) = line_column(&changed.text, changed.span.end.saturating_sub(1).max(changed.span.start));
+        let lines = if first == last { format!("line {first}") } else { format!("lines {first}–{last}") };
+        let mut out = format!("{what} in {}, {lines}\n", self.shown(path));
+        if introduced.is_empty() {
+            out += "no errors introduced";
+        } else {
+            let name = self.shown(path);
+            let report = Report { file: &name, text: &changed.text, diagnostics: introduced };
+            out += &format!("the edit introduced:\n{}", lotml_diag::text(&[report], Some(DEFAULT_LIMIT)));
+        }
+        Ok(out)
+    }
+}
+
+fn stamp(path: &Path) -> Option<SystemTime> {
+    std::fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
+/// Write a file whole or not at all: to a file beside it, then moved over it.
+fn save(path: &Path, text: &str) -> Result<(), ToolError> {
+    let partial = path.with_extension("lotml.partial");
+    std::fs::write(&partial, text).and_then(|()| std::fs::rename(&partial, path)).map_err(|e| {
+        let _ = std::fs::remove_file(&partial);
+        ToolError(format!("cannot write {}: {e}", path.display()))
+    })
 }
 
 fn supported() -> Vec<&'static str> {
@@ -413,6 +572,63 @@ fn tools() -> Vec<Value> {
             "name": "test",
             "description": "Run the `test` blocks and report each as JSON: pass, or fail with the values each side of the comparison had.",
             "inputSchema": {"type": "object", "properties": {"paths": paths}}
+        }),
+        json!({
+            "name": "replace",
+            "description": "Replace a symbol's definition, its body, or one `match` arm in it, giving only the new code: the indentation is taken from what it replaces. Refused if it breaks the syntax; reports the errors it introduced, or `no errors introduced`.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "`area`, `Shape`, or `Counter.get` for a method."},
+                    "part": {"type": "string", "enum": ["definition", "body", "arm"], "description": "What to replace; `definition` when absent."},
+                    "arm": {"type": "string", "description": "With `arm`: the arm's pattern, `Circle(r)`, or its variant, `Circle`."},
+                    "text": {"type": "string", "description": "The new code, at any indentation."},
+                    "path": {"type": "string", "description": "The file, when more than one declares the symbol."}
+                },
+                "required": ["symbol", "text"]
+            }
+        }),
+        json!({
+            "name": "add",
+            "description": "Add a declaration after another — a method after a method, inside its impl — or at the end of the file. Indented for where it goes; refused if it breaks the syntax.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "after": {"type": "string", "description": "`area`, or `Counter.get` to add a method to Counter's impl."},
+                    "path": {"type": "string", "description": "The file; needed when `after` is absent."}
+                },
+                "required": ["text"]
+            }
+        }),
+        json!({
+            "name": "remove",
+            "description": "Remove a declaration — a function, type, trait or method — and report what it breaks.",
+            "inputSchema": {"type": "object", "properties": {"symbol": {"type": "string"}, "path": {"type": "string"}}, "required": ["symbol"]}
+        }),
+        json!({
+            "name": "edit",
+            "description": "Replace whole lines found by their text. The search must occur once; written at another indentation, it still matches and the replacement moves with it. Refused if it breaks the syntax.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"path": {"type": "string"}, "search": {"type": "string"}, "replace": {"type": "string"}},
+                "required": ["path", "search", "replace"]
+            }
+        }),
+        json!({
+            "name": "rename",
+            "description": "Rename a symbol at every reference at once, or refuse if the new name would change what any name refers to or add an error. Lists the places the old name is still written — comments, strings, other files — which no reference resolves to.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "new_name": {"type": "string"},
+                    "symbol": {"type": "string", "description": "A function, type, trait or variant, or `Type.member`."},
+                    "path": {"type": "string"},
+                    "line": {"type": "integer", "minimum": 1},
+                    "column": {"type": "integer", "minimum": 1}
+                },
+                "required": ["new_name"]
+            }
         }),
     ]
 }

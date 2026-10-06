@@ -1,14 +1,16 @@
 //! The compiler as an editor and an agent query it: a workspace of files kept in the incremental
 //! engine, and the questions asked of it — diagnostics, where a name is declared, every place it
-//! is used, its type, and a file's outline. The language server and the MCP server are two
-//! transports over these.
+//! is used, its type, and a file's outline — with the edits made through it: symbol-addressed
+//! replacements and atomic renames. The language server and the MCP server are two transports
+//! over these.
 //!
 //! Every file is a module of its own, so a name refers to something declared in the same file.
 
+pub mod edit;
 pub mod lines;
 pub mod symbols;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use lotml_db::{Database, SourceFile, checked, diagnostics, parse};
@@ -17,7 +19,18 @@ use lotml_syntax::ast::{FnDef, Item, Module};
 use lotml_syntax::span::Span;
 use salsa::Setter;
 
+pub use crate::edit::Refused;
 pub use crate::symbols::{Occurrence, Symbol};
+
+/// A rename worked out but not yet written: the file's new text, where the new name stands, and
+/// the places the old name is still written that no reference resolves to — comments, strings,
+/// other files — which a rename is a textual operation for, and a person or agent decides on.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Renamed {
+    pub text: String,
+    pub sites: Vec<Span>,
+    pub mentions: Vec<(PathBuf, Span)>,
+}
 
 /// Every name in a file and what it refers to, in source order.
 #[salsa::tracked(returns(ref))]
@@ -179,6 +192,87 @@ impl Workspace {
         Some((occurrence.span, shown))
     }
 
+    /// The diagnostics a file would have with the text `new` that it does not have now: the
+    /// check on every edit, against the state before it.
+    pub fn introduced(&self, path: &Path, new: &str) -> Vec<Diagnostic> {
+        let old = self.text(path).unwrap_or_default();
+        lotml_diag::introduced(lotml_check::check_source(new), new, self.diagnostics(path), old)
+    }
+
+    /// Rename a symbol of a file everywhere it is referred to, or refuse: when the new name is
+    /// not a name, when it would make a reference resolve to something else, or when it would
+    /// add an error. Nothing is written; the caller writes `text`.
+    pub fn rename(&self, path: &Path, symbol: &Symbol, new_name: &str) -> Result<Renamed, Refused> {
+        edit::valid_name(new_name)?;
+        let text = self.text(path).ok_or_else(|| Refused(format!("{} is not in the workspace", path.display())))?;
+        let old = self.references(path, symbol, true);
+        let Some(first) = old.first() else { return Err(Refused("nothing here can be renamed".into())) };
+        let old_name = &text[first.range()];
+        if old_name == new_name {
+            return Err(Refused(format!("it is already called `{new_name}`")));
+        }
+        let mut renamed_text = String::with_capacity(text.len());
+        let mut sites = Vec::with_capacity(old.len());
+        let mut at = 0;
+        for span in &old {
+            renamed_text += &text[at..span.start as usize];
+            let start = renamed_text.len();
+            renamed_text += new_name;
+            sites.push(Span::new(start, renamed_text.len()));
+            at = span.end as usize;
+        }
+        renamed_text += &text[at..];
+        let renamed = match symbol {
+            Symbol::Item(_) => Symbol::Item(new_name.to_string()),
+            Symbol::Variant(_) => Symbol::Variant(new_name.to_string()),
+            Symbol::Member(owner, _) => Symbol::Member(owner.clone(), new_name.to_string()),
+            Symbol::Local(declared) => {
+                Symbol::Local(old.iter().position(|s| s == declared).map_or(*declared, |i| sites[i]))
+            }
+        };
+        // The new text must refer to the renamed symbol at exactly the renamed places.
+        let parsed = lotml_syntax::parse(&renamed_text);
+        let resolved = lotml_check::check_resolved(&parsed.module, &renamed_text);
+        let found = symbols::occurrences(&parsed.module, &resolved);
+        let now: Vec<Span> = found.iter().filter(|o| o.symbol == renamed).map(|o| o.span).collect();
+        if now != sites {
+            let moved: Vec<String> = now
+                .iter()
+                .filter(|s| !sites.contains(s))
+                .chain(sites.iter().filter(|s| !now.contains(s)))
+                .map(|s| lotml_syntax::span::line_column(&renamed_text, s.start).0.to_string())
+                .collect();
+            return Err(Refused(format!(
+                "renaming `{old_name}` to `{new_name}` would change what the names at lines {} refer to",
+                moved.join(", ")
+            )));
+        }
+        let mut errors = parsed.errors.iter().map(lotml_check::syntax).collect::<Vec<_>>();
+        errors.extend(resolved.diagnostics);
+        let counts = |ds: &[Diagnostic]| {
+            let mut by_code: HashMap<&str, usize> = HashMap::new();
+            for d in ds {
+                *by_code.entry(d.code).or_default() += 1;
+            }
+            by_code
+        };
+        let (before, after) = (counts(self.diagnostics(path)), counts(&errors));
+        if let Some((code, _)) = after.iter().find(|(code, n)| before.get(*code).is_none_or(|b| *n > b)) {
+            let d = errors.iter().find(|d| d.code == *code).expect("a diagnostic of that code");
+            return Err(Refused(format!(
+                "renaming `{old_name}` to `{new_name}` would add an error: {} {}",
+                d.code, d.message
+            )));
+        }
+        let mut textual: Vec<(PathBuf, Span)> =
+            mentions(&renamed_text, &found, old_name).into_iter().map(|s| (path.to_path_buf(), s)).collect();
+        for other in self.files.keys().filter(|p| p.as_path() != path) {
+            let text = self.text(other).unwrap_or_default();
+            textual.extend(mentions(text, self.occurrences(other), old_name).into_iter().map(|s| (other.clone(), s)));
+        }
+        Ok(Renamed { text: renamed_text, sites, mentions: textual })
+    }
+
     /// The type the checker gave a local, from any of the places it is used.
     fn local_type(&self, path: &Path, symbol: &Symbol) -> Option<String> {
         let file = *self.files.get(path)?;
@@ -252,6 +346,21 @@ impl Workspace {
         }
         out
     }
+}
+
+/// The whole-word occurrences of `name` in `text` that are no reference to anything: in a
+/// comment or a string, or a name nothing declares.
+fn mentions(text: &str, occurrences: &[Occurrence], name: &str) -> Vec<Span> {
+    let referenced: HashSet<u32> = occurrences.iter().map(|o| o.span.start).collect();
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    text.match_indices(name)
+        .filter(|(i, _)| {
+            !text[..*i].chars().next_back().is_some_and(is_word)
+                && !text[i + name.len()..].chars().next().is_some_and(is_word)
+        })
+        .map(|(i, _)| Span::new(i, i + name.len()))
+        .filter(|s| !referenced.contains(&s.start))
+        .collect()
 }
 
 /// A parameter as written, `n: int`, when `declared` is the name of one.

@@ -238,3 +238,19 @@ library — JSON-RPC over `serde_json`:
   ([arXiv 2608.13568](https://arxiv.org/abs/2608.13568)). Files changed on the disk are read
   again before each call and only they are checked again. It speaks both eras of the protocol:
   the `initialize` handshake and the stateless requests of the 2026-07-28 revision.
+- **Edits through the compiler** ([[editing-robustness]]). The MCP tools `replace` (a
+  definition, a body — the comments opening it included — or one `match` arm, found by its
+  pattern or its variant), `add` (after a declaration, a method inside its `impl`) and `remove`
+  are addressed to symbols and take their indentation from the target, so a body written flush
+  lands at the depth of the one it replaces. `edit` replaces whole lines found by their text,
+  matching up to one indentation offset common to all of them, as the editing pilot's tolerant
+  mode did. Every edit that would add a syntax error is refused with the errors, the attempted
+  text and the original; one that is made is written whole or not at all and answered with the
+  diagnostics it introduced against the text before it, or "no errors introduced".
+- **Rename is atomic.** It changes every reference or nothing: a new name that would make any
+  name resolve elsewhere — a local captured by another, a method colliding with its sibling —
+  or that would add an error is refused. The places the old name is still written that no
+  reference resolves to — comments, strings, other files — are listed with their lines rather
+  than changed, since a rename is a textual operation semantic references cannot complete
+  ([arXiv 2608.13568](https://arxiv.org/abs/2608.13568)). The language server offers the same
+  rename.

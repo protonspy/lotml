@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use lotml_diag::{Applicability, Diagnostic, Severity};
 use lotml_ide::lines::{Encoding, Lines};
-use lotml_ide::{Kind as OutlineKind, Outline, Workspace};
+use lotml_ide::{Kind as OutlineKind, Outline, Refused, Workspace};
 use lotml_syntax::span::Span;
 use serde_json::{Value, json};
 
@@ -18,6 +18,7 @@ use crate::{Failure, files};
 
 /// The server's own error codes, from the protocol.
 const SERVER_NOT_INITIALIZED: i64 = -32002;
+const REQUEST_FAILED: i64 = -32803;
 
 /// Serve on standard input and output until the client says `exit`: 0 after a `shutdown`
 /// request, 1 without one, as the protocol asks.
@@ -141,6 +142,27 @@ impl Server {
                 let range = self.span_of(&path, &params["range"]).ok_or_else(|| invalid("a range"))?;
                 Ok(self.code_actions(&path, range))
             }
+            "textDocument/prepareRename" => {
+                let (path, offset) = self.position(params)?;
+                let Some(found) = self.workspace.at(&path, offset) else { return Ok(Value::Null) };
+                let text = self.workspace.text(&path).unwrap_or_default();
+                Ok(json!({"range": self.range(&path, found.span), "placeholder": &text[found.span.range()]}))
+            }
+            "textDocument/rename" => {
+                let (path, offset) = self.position(params)?;
+                let new_name = params["newName"].as_str().ok_or_else(|| invalid("a newName"))?;
+                let found = self
+                    .workspace
+                    .at(&path, offset)
+                    .ok_or_else(|| Refusal(REQUEST_FAILED, "there is no name here to rename".into()))?;
+                let sites = self.workspace.references(&path, &found.symbol, true);
+                self.workspace
+                    .rename(&path, &found.symbol, new_name)
+                    .map_err(|Refused(why)| Refusal(REQUEST_FAILED, why))?;
+                let edits: Vec<Value> =
+                    sites.into_iter().map(|s| json!({"range": self.range(&path, s), "newText": new_name})).collect();
+                Ok(json!({"changes": {self.uri(&path): edits}}))
+            }
             _ => Err(Refusal(rpc::METHOD_NOT_FOUND, format!("`{method}` is not supported"))),
         }
     }
@@ -237,6 +259,7 @@ impl Server {
                 "workspaceSymbolProvider": true,
                 "documentFormattingProvider": true,
                 "codeActionProvider": {"codeActionKinds": ["quickfix"]},
+                "renameProvider": {"prepareProvider": true},
             },
             "serverInfo": {"name": "lotml", "version": env!("CARGO_PKG_VERSION")},
         })

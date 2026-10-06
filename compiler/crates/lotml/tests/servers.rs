@@ -256,7 +256,24 @@ fn the_mcp_server_serves_the_compilers_tools() {
     let (list, _) = mcp.request(2, "tools/list", json!({}));
     let names: Vec<&str> =
         list["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
-    assert_eq!(names, vec!["check", "digest", "show", "references", "definition", "hover", "explain", "test"]);
+    assert_eq!(
+        names,
+        vec![
+            "check",
+            "digest",
+            "show",
+            "references",
+            "definition",
+            "hover",
+            "explain",
+            "test",
+            "replace",
+            "add",
+            "remove",
+            "edit",
+            "rename"
+        ]
+    );
 
     let (clean, failed) = call(&mut mcp, 3, "check", json!({}));
     assert!(!failed);
@@ -311,4 +328,83 @@ fn the_mcp_server_speaks_the_stateless_protocol_too() {
     let (bare, _) =
         mcp.request(4, "tools/list", json!({"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28"}}));
     assert_eq!(bare["error"]["code"], -32602, "a modern request names its client's capabilities");
+}
+
+#[test]
+fn the_mcp_server_edits_by_symbol_and_reports_what_an_edit_introduced() {
+    let dir = scratch("mcp-edit", &[("shapes.lotml", SHAPES)]);
+    let file = dir.join("shapes.lotml");
+    let mut mcp = Client::start(&["mcp", "--root", dir.to_str().unwrap()], false);
+    mcp.request(1, "initialize", json!({"protocolVersion": "2025-11-25", "capabilities": {}}));
+
+    let (replaced, failed) =
+        call(&mut mcp, 2, "replace", json!({"symbol": "twice", "part": "body", "text": "return 2.0 * area(s)"}));
+    assert!(!failed, "{replaced}");
+    assert_eq!(replaced, "replaced the body of `twice` in shapes.lotml, line 11\nno errors introduced");
+    assert!(
+        std::fs::read_to_string(&file).unwrap().ends_with("fn twice(s: Shape) -> f64:\n    return 2.0 * area(s)\n")
+    );
+
+    let (broken, failed) =
+        call(&mut mcp, 3, "replace", json!({"symbol": "twice", "part": "body", "text": "return (2.0"}));
+    assert!(failed && broken.contains("breaks the syntax"), "{broken}");
+    assert!(std::fs::read_to_string(&file).unwrap().contains("return 2.0 * area(s)"), "a refused edit writes nothing");
+
+    let (arm, _) = call(
+        &mut mcp,
+        4,
+        "replace",
+        json!({"symbol": "area", "part": "arm", "arm": "Empty", "text": "case Empty:\n    return \"none\""}),
+    );
+    assert!(arm.contains("the edit introduced:") && arm.contains("E0204"), "{arm}");
+
+    let (added, failed) = call(
+        &mut mcp,
+        5,
+        "add",
+        json!({"after": "area", "text": "fn half(s: Shape) -> f64:\n    return area(s) / 2.0"}),
+    );
+    assert!(!failed && added.starts_with("added a declaration after `area` in shapes.lotml, lines"), "{added}");
+
+    let (renamed, failed) = call(&mut mcp, 6, "rename", json!({"symbol": "area", "new_name": "surface"}));
+    assert!(!failed, "{renamed}");
+    assert!(renamed.starts_with("renamed `area` to `surface` at 3 places in shapes.lotml\n"), "{renamed}");
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(!text.contains("area(") && text.contains("fn surface(s: Shape)"));
+
+    let (edited, failed) = call(
+        &mut mcp,
+        7,
+        "edit",
+        json!({"path": "shapes.lotml", "search": "    return 2.0 * surface(s)\n", "replace": "    return surface(s) + surface(s)\n"}),
+    );
+    assert!(!failed, "{edited}");
+
+    let (removed, _) = call(&mut mcp, 8, "remove", json!({"symbol": "half"}));
+    assert!(removed.starts_with("removed `half` in shapes.lotml"), "{removed}");
+    let (removed, _) = call(&mut mcp, 9, "remove", json!({"symbol": "surface"}));
+    assert!(removed.contains("the edit introduced:") && removed.contains("E0201"), "callers lose it: {removed}");
+    assert!(!dir.join("shapes.lotml.partial").exists());
+}
+
+#[test]
+fn the_language_server_renames_every_reference() {
+    let dir = scratch("lsp-rename", &[("shapes.lotml", SHAPES)]);
+    let file = uri(&dir.join("shapes.lotml"));
+    let mut lsp = Client::start(&["lsp"], true);
+    lsp.request(1, "initialize", json!({"rootUri": uri(&dir), "capabilities": {}}));
+    let at = json!({"textDocument": {"uri": file}, "position": position(SHAPES, "area", 1)});
+
+    let (prepared, _) = lsp.request(2, "textDocument/prepareRename", at.clone());
+    assert_eq!(prepared["result"]["placeholder"], "area");
+
+    let mut rename = at.clone();
+    rename["newName"] = json!("surface");
+    let (renamed, _) = lsp.request(3, "textDocument/rename", rename);
+    assert_eq!(renamed["result"]["changes"][file.as_str()].as_array().unwrap().len(), 3);
+
+    let mut keyword = at;
+    keyword["newName"] = json!("match");
+    let (refused, _) = lsp.request(4, "textDocument/rename", keyword);
+    assert_eq!(refused["error"]["code"], -32803);
 }

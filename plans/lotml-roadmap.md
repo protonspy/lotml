@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: 34be7b507b6b803a026f4d6e7c7ff1adaec070d4bf841c280a36893144bcfa6b
+checksum: 2f6a98d8f16d1e03139313ba85aac083cf6661eedf43f1816122bf7cb3410fcb
 ---
 
 # lotml roadmap
@@ -101,7 +101,7 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 2.6, 2.7, 2.9, 2.10, 2.11, 2.12_
 - [x] 3.1 (Unit) Serve LSP and MCP from the incremental engine, with a warm index and references that carry their surrounding lines (R16; docs/wiki/pages/semantic-compiler.md)
   _Depends 2.13_
-- [ ] 3.2 (Unit) Offer symbol-addressed edits and atomic refactorings, rename listing textual mentions too (R32; docs/wiki/pages/editing-robustness.md)
+- [x] 3.2 (Unit) Offer symbol-addressed edits and atomic refactorings, rename listing textual mentions too (R32; docs/wiki/pages/editing-robustness.md)
   _Depends 3.1_
 - [ ] 3.3 (Unit) Make lotml callable from Python and generate typed bindings from typeshed's `.pyi` stubs, every call into Python returning `T ! PyError` (R14, R27; docs/wiki/pages/transpilation-strategy.md)
   _Depends 2.13_
