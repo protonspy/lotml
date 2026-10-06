@@ -110,10 +110,10 @@ pub fn ask(
         endpoint.port,
         body.len()
     );
-    let mut stream = TcpStream::connect_timeout(&endpoint.address, left(deadline)?).map_err(silence)?;
-    stream.set_write_timeout(Some(left(deadline)?)).map_err(silence)?;
-    stream.write_all(request.as_bytes()).map_err(silence)?;
-    let mut reader = BufReader::new(Timed { stream, deadline });
+    let stream = TcpStream::connect_timeout(&endpoint.address, left(deadline)?).map_err(silence)?;
+    let mut timed = Timed { stream, deadline };
+    timed.write_all(request.as_bytes()).map_err(silence)?;
+    let mut reader = BufReader::new(timed);
     let (status, headers) = head(&mut reader)?;
     if status != 200 {
         let mut refusal = Vec::new();
@@ -142,11 +142,26 @@ pub fn ask(
     serde_json::from_slice(&body).map_err(|_| Silence::ServerError)
 }
 
-/// A stream whose every read waits only for what is left of the deadline, so a server sending a
-/// byte at a time still stops there.
+/// A stream whose every read and write waits only for what is left of the deadline, so a server
+/// sending or taking a byte at a time still stops there.
 struct Timed {
     stream: TcpStream,
     deadline: Instant,
+}
+
+impl Write for Timed {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let left = self.deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(io::Error::new(io::ErrorKind::TimedOut, "the deadline passed"));
+        }
+        self.stream.set_write_timeout(Some(left))?;
+        self.stream.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.stream.flush()
+    }
 }
 
 impl Read for Timed {
@@ -229,7 +244,7 @@ fn chunked(reader: &mut BufReader<Timed>) -> Result<Vec<u8>, Silence> {
         if size == 0 {
             return Ok(body);
         }
-        if body.len() + size > BODY_LIMIT {
+        if size > BODY_LIMIT - body.len() {
             return Err(Silence::ServerError);
         }
         let start = body.len();
@@ -389,6 +404,31 @@ mod tests {
             let _ = write!(stream, "HTTP/1.1 200 OK\r\nX-Long: {}\r\n", "x".repeat(HEADER_BYTES));
         });
         assert_eq!(ask(&endpoint, "m", &messages(), 64, soon()).unwrap_err(), Silence::ServerError);
+    }
+
+    #[test]
+    fn a_chunk_size_that_would_overflow_the_cap_is_refused_not_a_crash() {
+        let (endpoint, _) = serve(|stream| {
+            let _ =
+                write!(stream, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nA\r\nffffffffffffffff\r\n");
+        });
+        assert_eq!(ask(&endpoint, "m", &messages(), 64, soon()).unwrap_err(), Silence::ServerError);
+    }
+
+    #[test]
+    fn a_server_that_never_reads_the_request_stops_at_the_deadline() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let (_stream, _) = listener.accept().unwrap();
+            thread::sleep(Duration::from_secs(10));
+        });
+        let endpoint = Endpoint { host: "127.0.0.1".into(), port: address.port(), address };
+        let large = json!([{"role": "user", "content": "x".repeat(PROMPT_LIMIT - 1000)}]);
+        let started = Instant::now();
+        let answer = ask(&endpoint, "m", &large, 64, started + Duration::from_millis(800));
+        assert_eq!(answer.unwrap_err(), Silence::Deadline);
+        assert!(started.elapsed() < Duration::from_secs(3), "{:?}", started.elapsed());
     }
 
     #[test]

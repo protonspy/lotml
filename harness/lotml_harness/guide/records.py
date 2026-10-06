@@ -1,8 +1,8 @@
 """Guidance records: every repair — real ones from the trace dataset's export and the seeded
 failures — as a chat example the guide is trained on (specs/guide-records/).
 
-    python -m lotml_harness.guide.records --tokenizer Qwen/Qwen2.5-Coder-0.5B-Instruct \\
-        --context 8192 --answer 512
+    uv run --group guide python -m lotml_harness.guide.records \\
+        --tokenizer Qwen/Qwen2.5-Coder-0.5B-Instruct --context 8192 --answer 512
 
 The state is rendered by `lotml guide render`, the code the guide tool runs at inference, so the
 prompt trained on is the prompt served; the target is where `lotml dev diff` says the fix falls,

@@ -58,14 +58,16 @@ pub fn configured(env: &dyn Fn(&str) -> Option<String>) -> Result<Option<Config>
 }
 
 fn read(path: &Path) -> Result<String, String> {
+    read_within(path, CONFIG_LIMIT)
+}
+
+fn read_within(path: &Path, limit: u64) -> Result<String, String> {
     use std::io::Read;
     let file = std::fs::File::open(path).map_err(|e| format!("{} cannot be read: {e}", path.display()))?;
     let mut text = String::new();
-    file.take(CONFIG_LIMIT + 1)
-        .read_to_string(&mut text)
-        .map_err(|e| format!("{} cannot be read: {e}", path.display()))?;
-    if text.len() as u64 > CONFIG_LIMIT {
-        return Err(format!("{} is larger than {CONFIG_LIMIT} bytes", path.display()));
+    file.take(limit + 1).read_to_string(&mut text).map_err(|e| format!("{} cannot be read: {e}", path.display()))?;
+    if text.len() as u64 > limit {
+        return Err(format!("{} is larger than {limit} bytes", path.display()));
     }
     Ok(text)
 }
@@ -294,7 +296,7 @@ impl State {
 
 /// `lotml guide render`: the messages for the state in `path`, and the renderer's version.
 pub fn render_file(path: &Path) -> Result<bool, crate::Failure> {
-    let text = read(path).map_err(crate::Failure)?;
+    let text = read_within(path, client::PROMPT_LIMIT as u64).map_err(crate::Failure)?;
     let value: serde_json::Value =
         serde_json::from_str(&text).map_err(|e| crate::Failure(format!("{}: not JSON: {e}", path.display())))?;
     let state = State::from_json(&value).map_err(|why| crate::Failure(format!("{}: {why}", path.display())))?;

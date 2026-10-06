@@ -24,7 +24,7 @@ dev = [
 
 [tool.uv]
 package = false
-default-groups = ["dev", "agent", "guide"]
+default-groups = ["dev", "agent"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
