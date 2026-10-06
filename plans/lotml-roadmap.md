@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: aa23e2bf82f6fc6d91e70549c16637778a449b33ea658543273e89be2824896c
+checksum: 3a0a3c6f1c85ea590dfdb65109a05bb68442ddec00ced4173d161e4e296def59
 ---
 
 # lotml roadmap
@@ -121,7 +121,7 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 3.7_
 - [x] 4.2 (TDD) Run the same suite on the Python and C targets and require identical results (R18; docs/wiki/pages/transpilation-strategy.md)
   _Depends 4.1_
-- [ ] 4.3 (Unit) Benchmark numeric, allocation-heavy and sharing-heavy programs separately against C (docs/wiki/pages/memory-model.md)
+- [x] 4.3 (Unit) Benchmark numeric, allocation-heavy and sharing-heavy programs separately against C (docs/wiki/pages/memory-model.md)
   _Depends 4.1_
 - [ ] 4.4 (Unit) Review the phase 3 gate — the suite green on both targets, ≤ 2× C on numeric benchmarks
   _Depends 4.2, 4.3_
