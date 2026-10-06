@@ -1,6 +1,8 @@
 ---
 autonomy: auto
 ci: wait
+branch: feat/agent-harness
+delivery: in-progress
 ---
 
 # Agent guide — requirements
