@@ -36,7 +36,7 @@
 
 - [x] 4.1 (TDD) Run `parallel` on a thread per task, marking what each task captures shared — R4.1, R3.2, R3.3
   _Depends 3.1_
-- [ ] 4.2 (Unit) Give `lotml run`, `test` and `build` the `--target c` option, with the Python target's test report — R1.4, R5.1
+- [x] 4.2 (Unit) Give `lotml run`, `test` and `build` the `--target c` option, with the Python target's test report — R1.4, R5.1
   _Depends 1.3_
 - [ ] 4.3 (Unit) Call C libraries directly and link them, and refuse a Python import at the import — R5.3, R5.4
   _Depends 4.2_
