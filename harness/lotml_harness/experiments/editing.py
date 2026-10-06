@@ -481,6 +481,7 @@ def solve(model: Model, task: EditTask, form: str) -> dict:
             "outcome": strict.outcome,
             "input_tokens": completion.input_tokens,
             "output_tokens": completion.output_tokens,
+            "seconds": round(completion.seconds, 2),
             **strict.details,
         }
         if turn == 1:
