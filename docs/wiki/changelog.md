@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-06 — prior work on a small model inside the compiler surveyed from 25 checked papers: added [[compiler-embedded-model]], linked from [[semantic-compiler]]; [[source-verification]] counts the new sources and quotes
 - 2026-10-06 — phase 2 proceeds past the failed phase 1 gate by adr:0011: [[evaluation-harness]] cites it
 - 2026-10-06 — the phase 1 gate failed on pass@1, so phase 2 has not started: [[evaluation-harness]] records the gate and why, [[lotml-risks]] measures the training-corpus risk
 - 2026-10-06 — the compiler built: [[semantic-compiler]] lists what phase 1 shipped, [[transpilation-strategy]] the Python backend

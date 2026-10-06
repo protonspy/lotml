@@ -95,6 +95,8 @@ request — not "every error at once" by default, as the first survey concluded.
 Requirements: apply `MachineApplicable` fixes without spending a model round (`check --fix`); give
 the agent a budget of two rounds per error group, extended only when the compiler has something new
 to say; and route assertion failures to tests and resampling rather than to more diagnostics.
+A small model inside the compiler that repairs or explains before the agent's round is not part
+of this design; what has been tried elsewhere, and where it held up, is in [[compiler-embedded-model]].
 
 ## The fix format matters as much as the diagnostic
 

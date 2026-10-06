@@ -7332,5 +7332,2565 @@
     "claim": "GPT-4o dropped sharply after its cutoff in Java and Scala but stayed low and flat in OCaml and Haskell, so part of the paradigm gap reflects training-data frequency and contamination rather than the functional style itself.",
     "quote": "GPT-4o show show a substantial post-cutoff performance drop in Java and Scala, i.e., from 52.0% to 32.8% in Java and from 35.8% to 21.6% in Scala.",
     "bears_on": "Confound in reading the functional-language gap as a cost of immutability."
+  },
+  {
+    "id": "2511-19422-qwen-0-5b-rl-fixer",
+    "kind": "claim",
+    "source": "2511.19422",
+    "claim": "SLMFix's error fixer is Qwen2.5-Coder 0.5B, trained with reinforcement learning (verl and vLLM, 70 epochs, batch size 64).",
+    "quote": "For reinforcement learning approaches, we use verl (Sheng et al., 2024) and vLLM (Kwon et al., 2023) to perform training with 70 total epochs and batch size of 64 on the Qwen-2.5-Coder 0.5B model.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2511-19422-validator-gated-repair",
+    "kind": "claim",
+    "source": "2511.19422",
+    "claim": "At inference SLMFix calls the small model only when the static validator reports errors, giving it the program, the original prompt and the validator's error messages.",
+    "quote": "If there are no errors the program is output and otherwise the program, the original prompt, and the error messages from the validator are provided to the SLM which generates a revised program as the final output.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2511-19422-reward-validator-plus-ast",
+    "kind": "claim",
+    "source": "2511.19422",
+    "claim": "SLMFix's GRPO reward is a weighted average of a boolean static-validator signal and a 0-to-1 semantic (AST-similarity) score against the ground-truth program.",
+    "quote": "The static validator generates a boolean signal indicating if the given program contains syntactic errors, while the semantic metric will output a score between 0 and 1 representing how well the program aligns with the input query. The reward of the program is then a weighted average between these two signals",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2511-19422-twenty-seed-examples",
+    "kind": "claim",
+    "source": "2511.19422",
+    "claim": "SLMFix's training data starts from 20 hand-written query/ground-truth pairs per language, each sampled 10 times from five strong code LLMs to produce erroneous programs to repair.",
+    "quote": "From each language-specific dataset, we manually constructed a subset of 20 diverse natural language queries along with corresponding ground truth code implementations as the example set. With this small set of curated examples, we generate 10 sample programs for each example from five strong code LLMs",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2511-19422-low-resource-plus-40",
+    "kind": "claim",
+    "source": "2511.19422",
+    "claim": "On the low-resource DSLs Ansible and Lean, SLMFix raised the static-check pass rate over the base LLM's output by an average of over 40%, averaged across the base LLMs tested.",
+    "quote": "For Ansible and Lean, which are low-resource languages, SLMFix is able to improve the pass rate of static checking by an average of over 40%, which is higher than most baselines we compared against.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2511-19422-qwen7b-pass-vs-sft",
+    "kind": "claim",
+    "source": "2511.19422",
+    "claim": "With Qwen2.5-Coder 7B as generator, SLMFix reached 96.92% (Ansible) and 75.48% (Lean) validator pass rates against 59.56% and 15.96% for the base model and 73.83% and 7.31% for LoRA SFT of the 7B model, while Lean CodeBERTScore fell from 0.7320 (base) to 0.6598.",
+    "quote": "| Base | 0.8198 | 59.56% | 0.3097 | 0.8692 | 98.46% | 0.4948 | 0.9082 | 95.74% | 0.5650 | 0.7320 | 15.96% | 0.0881 | | SFT | 0.8392 | 73.83% | 0.3704 | 0.8923 | 99.32% | 0.5566 | 0.9531 | 94.29% | 0.6473 | 0.7878 | 7.31% | 0.0988 | | ICL | 0.8385 | 65.94% | 0.3455 | 0.8751 | 99.83% | 0.5152 | 0.9418 | 96.71% | 0.6318 | 0.7734 | 54.23% | 0.1001 | | Self-correction | 0.8205 | 60.74% | 0.3136 | 0.8693 | 98.63% | 0.4961 | 0.9072 | 97.20% | 0.5657 | 0.7340 | 16.54% | 0.0885 | | Self-Edit | 0.7399 | 75.84% | 0.2958 | 0.7502 | 99.83% | 0.4987 | 0.8363 | 96.52% | 0.5648 | 0.7253 | 23.27% | 0.0503 | | SLMFix (Ours) | 0.8398 | 96.92% | 0.3382 | 0.8492 | 99.83% | 0.4984 | 0.8830 | 97.45% | 0.5682 | 0.6598 | 75.48% | 0.0640 |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2511-19422-sql-test-suite-flat",
+    "kind": "claim",
+    "source": "2511.19422",
+    "claim": "On the Spider SQL test suites (functional correctness), SLMFix left Qwen2.5-Coder 7B's score essentially unchanged at 0.702 versus 0.699 for the base model, below SFT and ICL at 0.716.",
+    "quote": "| Qwen-2.5-Coder 7B | 0.699 | 0.716 | 0.716 | 0.704 | 0.699 | 0.702 |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2511-19422-latency-7ms-per-sample",
+    "kind": "claim",
+    "source": "2511.19422",
+    "claim": "SLMFix added on average 7.35 ms per sample on the 596-example Ansible evaluation set, with latency counted as base generation plus fixing.",
+    "quote": "Latency is measured as total generation time in seconds for the evaluation dataset of size 596. For program repair methods, the latency is calculated as sum of generation (Base) and fixing. SLMFix brings little additional inference latency (7.35 milliseconds per sample on average).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2511-19422-direct-generation-fails",
+    "kind": "claim",
+    "source": "2511.19422",
+    "claim": "Trained with the same RL recipe to generate Ansible directly rather than repair it, the 0.5B model reached a 48.83% validator pass rate versus 94.30% as a fixer (Ansible ablation).",
+    "quote": "| RL for code generation | 0.3856 | 0.8101 | 48.83% | 0.2792 | | Qwen-2.5 0.5B SLMFix | 0.3913 | 0.8274 | 94.30% | 0.3455 |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2511-19422-needs-static-checker",
+    "kind": "claim",
+    "source": "2511.19422",
+    "claim": "The authors list as a limitation that SLMFix depends on an efficient syntactic checker for the target language, which for Ansible had to be built by hand.",
+    "quote": "Third, our method relies on an efficient syntactic checker for the target language. Although this is generally available for most languages, manually implementing such a checker might be needed for certain languages like Ansible, which limits the usability of our pipeline.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2301-13779-60m-t5-small",
+    "kind": "claim",
+    "source": "2301.13779",
+    "claim": "FLAME is a T5-small-based model with 60 million parameters, trained only on Excel formulas and compared against models of up to 175B parameters on repair and completion.",
+    "quote": "FLAME is based on T5-small (Raffel et al. 2020) and has only 60 million parameters, yet it can compete with much larger models (up to 175B parameters) on last-mile formula repair and formula completion.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2301-13779-sketch-dedup-corpus",
+    "kind": "claim",
+    "source": "2301.13779",
+    "claim": "FLAME's pre-training corpus was cut from 927M formulas to 6.1M by syntax-based (sketch) deduplication of formulas that differ only in cell inputs.",
+    "quote": "To create a small but varied pre-training corpus, we reduced a corpus of 927M formulas down to 6.1M by comparing formulas based on syntax, removing near-duplicate formulas, which only vary in terms of cell inputs",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2301-13779-global-dedup-hurts",
+    "kind": "claim",
+    "source": "2301.13779",
+    "claim": "Deduplicating globally instead of per workbook left 591K formulas and gave a worse model, e.g. -8 points on fine-tuned repair and -19 points on exact-match completion.",
+    "quote": "This results in a pre-training set of 591K formulas. Table 4 shows that training on this smaller corpus results in a worse model (e.g., -8pp on fine-tuned repair, -19pp on exact match completion).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2301-13779-synthetic-repair-data",
+    "kind": "claim",
+    "source": "2301.13779",
+    "claim": "Repair fine-tuning used no human-labelled repairs: 200K well-formed help-forum formulas were corrupted with FLAME's user-inspired noise operators to make broken/fixed pairs.",
+    "quote": "We create a fine-tuning dataset for all systems by taking 200K well-formed formulas from Excel help forums 3 and randomly applying our user-inspired noise operators to generate broken formulas.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2301-13779-10-of-14-settings",
+    "kind": "claim",
+    "source": "2301.13779",
+    "claim": "Across 14 repair and completion settings, FLAME (60M) outperformed Codex-Davinci (175B), Codex-Cushman (12B) and CodeT5 (220M) in 10.",
+    "quote": "FLAME can outperform much larger models, such as the Davinci (175B) and Cushman (12B) variants of Codex and CodeT5 (220M), in 10 of 14 evaluation settings for the repair and completion tasks.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2301-13779-forum-repair-table",
+    "kind": "claim",
+    "source": "2301.13779",
+    "claim": "On the Forum repair benchmark (273 real user formulas), fine-tuned FLAME scored 0.76 top-1 and 0.89 top-5, tying few-shot Davinci and trailing fine-tuned Cushman at top-1 (0.79); on the Synthetic benchmark Cushman led (0.87 vs 0.83 top-1).",
+    "quote": "| Cushman | 0.79 | 0.88 | 0.87 | 0.93 | | Davinci (FS) | 0.76 | 0.89 | 0.54 | 0.77 | | CodeT5-base | 0.70 | 0.84 | 0.84 | 0.90 | | CodeT5-small | 0.72 | 0.83 | 0.82 | 0.89 | | FLAME | 0.76 | 0.89 | 0.83 | 0.91 |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2301-13779-cpu-latency-lowest",
+    "kind": "claim",
+    "source": "2301.13779",
+    "claim": "Measured on a CPU to emulate client-side deployment, FLAME and CodeT5 had the lowest and comparable repair latency on the Forum set, with FLAME repairing substantially more; the latency values themselves appear only in a figure.",
+    "quote": "We carry out all measurements on a CPU to emulate client-side deployment, where a GPU may not be available. Figure 5 shows each model's last-mile repair rate (with a top5 cutoff) and the average latency (seconds) to generate repair candidates for the Forum dataset. Cushman and Davinci results include network time as they are only available through an API. Davinci is used in a few-shot setting, and all other models are fine-tuned. CodeT5 (60M) and FLAME have the lowest, and comparable, latency. However, FLAME achieves a substantially higher repair rate compared to CodeT5.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2301-13779-16m-variant",
+    "kind": "claim",
+    "source": "2301.13779",
+    "claim": "A 16M-parameter FLAME trained the same way scored 0.68 zero-shot and 0.73 fine-tuned top-1 on Forum repair, versus 0.71 and 0.76 for the 60M model.",
+    "quote": "| FLAME (60M) | 0.71 | 0.74 | 0.34 | 0.70 | 0.55 | 0.84 | 0.76 | 0.83 | | FLAME (16M) | 0.68 | 0.64 | 0.24 | 0.59 | 0.54 | 0.76 | 0.73 | 0.78 |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2301-13779-natural-but-mismatched",
+    "kind": "claim",
+    "source": "2301.13779",
+    "claim": "The authors note that exact-match scoring misses some FLAME fixes that look more natural but differ from the user's ground-truth repair.",
+    "quote": "We note that in some cases, FLAME's fixes appear to be more natural, but fail to match the user's ground truth repair.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2301-13779-aaai-2024",
+    "kind": "claim",
+    "source": "2301.13779",
+    "claim": "The FLAME paper carries an AAAI 2024 copyright line.",
+    "quote": "Copyright © 2024, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2404-12534-ffi-native-inference",
+    "kind": "claim",
+    "source": "2404.12534",
+    "claim": "Lean Copilot runs model inference inside Lean by wrapping it in a C++ function called through Lean's FFI, either locally via CTranslate2 or on a server.",
+    "quote": "Lean Copilot makes the model runnable in Lean by wrapping its inference into a C++ function operating on strings, which can be called in Lean through FFI. As in Fig. 1, we can run the model either locally via CTranslate2 or on a server.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2404-12534-reprover-byt5-default",
+    "kind": "claim",
+    "source": "2404.12534",
+    "claim": "Lean Copilot's default model is LeanDojo's pretrained ReProver, a ByT5 encoder-decoder chosen because it does both tactic generation and premise retrieval; no parameter count is given in this paper.",
+    "quote": "By default, we adopt the pretrained ReProver model from LeanDojo (Yang et al., 2023) for its multi-faceted capability in not only tactic generation but also premise retrieval. ReProver is based on an encoder-decoder Transformer, ByT5 (Xue et al., 2022), that maps an input string to an output string.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2404-12534-no-gpu-requirement",
+    "kind": "claim",
+    "source": "2404.12534",
+    "claim": "Running efficiently on most hardware without GPUs is stated as a design requirement, because Lean users prove theorems on laptops without GPUs; it is a goal, not a measured result.",
+    "quote": "Additionally, theorem proving in Lean can work well on a user's local laptop without GPUs. Lean Copilot needs to avoid adding extra hardware constraints, so it should be able to run efficiently on most hardware even without GPUs.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2404-12534-drop-erroring-tactics",
+    "kind": "claim",
+    "source": "2404.12534",
+    "claim": "Each model-suggested tactic is first run by a Lean meta-program against the current goals, and candidates that raise errors are dropped before the user sees them.",
+    "quote": "Instead of blindly returning all of them to users, we further check each tactic candidate via a meta-program in Lean that simulates running the tactic candidate on the current proof goals. There are three possible results. If the tactic candidate leads to errors, we drop them from the list.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2404-12534-human-tactics-2-08",
+    "kind": "claim",
+    "source": "2404.12534",
+    "claim": "On the Mathematics in Lean theorems, SEARCH_PROOF needed on average 2.08 human-entered tactics versus 3.86 for AESOP and 3.11 for SUGGEST_TACTICS (Table 1 prints 3.10).",
+    "quote": "When used to assist humans, SEARCH_PROOF only requires an average of 2.08 manually-entered tactics, which compares favorably to AESOP (3.86) and SUGGEST_TACTICS (3.11).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2404-12534-steps-automated-74",
+    "kind": "claim",
+    "source": "2404.12534",
+    "claim": "Averaged per theorem, SEARCH_PROOF automated 74.2% of proof steps versus 58.4% for SUGGEST_TACTICS and 40.1% for AESOP (Table 1 prints 58.3% for SUGGEST_TACTICS).",
+    "quote": "Averaging the percentage over all tested theorems, we find that SEARCH_PROOF can automate about 74.2%of the proof steps in a theorem, significantly more helpful than SUGGEST_TACTICS (58.4%) and AESOP (40.1%).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2404-12534-table1-autonomous",
+    "kind": "claim",
+    "source": "2404.12534",
+    "claim": "Proving the 168 tactic-style textbook theorems with no human input, AESOP succeeded on 24.4%, SUGGEST_TACTICS on 45.2% and SEARCH_PROOF on 63.7%.",
+    "quote": "| AESOP | 3.86 | 24.4% | 40.1% | | SUGGEST_TACTICS | 3.10 | 45.2% | 58.3% | | SEARCH_PROOFS | 2.08 | 63.7% | 74.2% |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2404-12534-simulated-human-eval",
+    "kind": "claim",
+    "source": "2404.12534",
+    "claim": "The human-assistance numbers come from replaying each theorem's ground-truth tactics one at a time and calling the tools after each, not from a user study, and the AESOP baseline ran with no configured rule set.",
+    "quote": "To mimic a human user, we enter the ground truth tactics one by one. After each tactic, we try to prove the remaining goals using each of the automated tools: SEARCH_PROOF, AESOP, and SUGGEST_TACTICS. For AESOP, we use it out of the box, without manually configuring the rule set.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2404-12534-static-model-goes-stale",
+    "kind": "claim",
+    "source": "2404.12534",
+    "claim": "The authors warn that a copilot backed by a static model soon becomes less helpful in a fast-moving project that keeps adding premises, unless the model is updated.",
+    "quote": "Especially in fast-developing formalization projects, new premises can appear frequently. If the knowledge base of the LLM behind the proof automation tools is static, it would require the LLM to be updated once in a while. Otherwise it soon becomes less helpful.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2404-12534-neus-2025-reviewers",
+    "kind": "claim",
+    "source": "2404.12534",
+    "claim": "The paper thanks the anonymous reviewers at NeuS 2025; it has an editors line but no explicit proceedings or copyright line.",
+    "quote": "We appreciate the valuable feedback from members of the Anima AI+Science Lab on an initial version of this paper, from the Lean community on the releases of our tool, and from the anonymous reviewers at NeuS 2025.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-08704-100m-int4-llama",
+    "kind": "claim",
+    "source": "2405.08704",
+    "claim": "JetBrains' Full Line Code Completion ships INT4-quantized LLaMA-like models of 100M parameters with a modified BPE tokenizer.",
+    "quote": "In summary, for Full Line Code Completion, INT4-quantized LLaMA-like models with 100M parameters were used. The models utilize a modified BPE tokenizer implemented on top of the YouTokenToMe library.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-08704-python-data-50gb",
+    "kind": "claim",
+    "source": "2405.08704",
+    "claim": "The Python model's data totalled slightly more than 50 GB, split 80%/5%/15% into train, validation and test sets.",
+    "quote": "For the training of the Python model, the corresponding proportions of the train-validation-test sets of the data were 80%-5%-15%, adding up to slightly more than 50 GB of data.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-08704-int4-size-and-speed",
+    "kind": "claim",
+    "source": "2405.08704",
+    "claim": "INT4 quantization in llama.cpp shrank the model from almost 400 MB to slightly over 100 MB and made CPU inference 2x faster on an M2 Mac and 4x faster on an Intel i9 Linux machine.",
+    "quote": "Firstly, the size of the model decreased from almost 400 MB to slightly more than 100 MB, which fits within the desired restrictions. Secondly, llama.cpp allows us to shorten the CPU inference time due to more efficient usage of the registers for INT4 data: e.g., the quantized model runs 2 times faster compared to full precision model on M2 CPU on MacOS and 4 times faster on Intel i9 CPU on Linux.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-08704-memory-budget",
+    "kind": "claim",
+    "source": "2405.08704",
+    "claim": "The IDE teams set the feature's memory budget at an upper bound of about 20-40% of the IDE's own memory footprint.",
+    "quote": "Insights from the IDE development teams give us a general upper bound of about 20-40% of the IDE memory footprint (might differ between products).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-08704-time-to-show-150ms",
+    "kind": "claim",
+    "source": "2405.08704",
+    "claim": "Measured online, the average CPU time from invoking completion to showing a suggestion was 150 ms including cache initialisation, and the cache was reused in over 90% of completion events.",
+    "quote": "The average time to show for FLCC is 150 ms, which is perfect for the user's visual perception [67]. The result includes cache initialization events, as well as cache reusing. According to our observation, the cache is used in over 90% of completion events, which makes a typical time to show even lower.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-08704-rocc-1-3x-python",
+    "kind": "claim",
+    "source": "2405.08704",
+    "claim": "In A/B tests on early-access users, Python users with the feature wrote 1.3 times as much code through completion (22% vs 17% of written code) as users with standard completion only.",
+    "quote": "For Python, the metric bumped 1.3 times (from 17% to 22%) for users with FLCC enabled compared to users with standard code completion only.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-08704-acceptance-38",
+    "kind": "claim",
+    "source": "2405.08704",
+    "claim": "The Python acceptance rate was about 38% (standard completion about 27%), which the authors say cannot be compared directly because suggestion lengths differ.",
+    "quote": "The acceptance rate for Full Line Code Completion for Python was about 38%. For standard completion, the value is about 27%, however, no conclusions can be made from this comparison due to significantly different lengths of suggestions.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-08704-filter-incorrect-code",
+    "kind": "claim",
+    "source": "2405.08704",
+    "claim": "Filtering out suggestions that fail the IDE's code inspections cost only 1% of valuable suggestions in the 2023.3 PyCharm Pro study, and lets the feature show only valid code.",
+    "quote": "Our research for the 2023.3 PyCharm Pro release showed that FLCC benefits from filtering out incorrect code. Only 1% of valuable suggestions are lost, and as a trade-off for such a negligible loss, we establish the distinguishing feature of Full Line Code Completion - suggesting only valid code.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-08704-no-distillation-gain",
+    "kind": "claim",
+    "source": "2405.08704",
+    "claim": "At their model sizes the authors found knowledge distillation gave no quality improvement, so they did not use it.",
+    "quote": "Unlike in many similar circumstances, we do not employ knowledge distillation [56], because we discovered that for our sizes of the models, this technique does not provide any quality improvement.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-08704-eap-sample-bias",
+    "kind": "claim",
+    "source": "2405.08704",
+    "claim": "The online results come only from early-access (EAP) users, who the authors say may not represent the broader IDE user base.",
+    "quote": "Although the results were statistically significant, they may not fully represent the broader user base of IntelliJ-based IDEs, as EAP participants typically have a deeper understanding and engagement with the IDE's features",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2305-02783-350m-for-throughput",
+    "kind": "claim",
+    "source": "2305.02783",
+    "claim": "Ansible Wisdom uses the CodeGen architecture at 350M parameters, chosen for throughput: on a single GPU the 350M model generated about 1.9x faster than the 2.7B one.",
+    "quote": "We tested the architecture of CODEGEN 350M and CODEGEN 2.7B. We benchmarked the generation throughput on single GPU for both models and found that the 350M model was ∼ 1.9× faster than than the 2.7B.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2305-02783-yaml-dataset-size",
+    "kind": "claim",
+    "source": "2305.02783",
+    "claim": "The curated pre-training data held about 1.1M Ansible task and playbook YAML files and about 2.2M generic YAML files.",
+    "quote": "Our curated dataset contains ∼1.1M Ansible task and playbook YAMLs, and ∼2.2M other generic YAML files.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2305-02783-1-1b-yaml-tokens",
+    "kind": "claim",
+    "source": "2305.02783",
+    "claim": "WISDOM-ANSIBLE-MULTI and WISDOM-YAML-MULTI continue pre-training from a CodeGen checkpoint on Ansible and generic YAML amounting to about 1.1 billion tokens.",
+    "quote": "The Ansible-YAML and generic YAML files account for about 1.1 billion training tokens in total.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2305-02783-name-field-prompt",
+    "kind": "claim",
+    "source": "2305.02783",
+    "claim": "Recasting NL-to-Ansible generation as completion after the task's own name field beat a prefix-style prompt by about 10% BLEU, 26% Schema Correct and 16% exact match (fine-tuned CodeGen, 1024-token window).",
+    "quote": "According to the results shown in Table IV, under the window size 1024, CODEGEN with the proposed prompt format largely outperforms CODEGEN-prefix, for example, 10% percent higher on BLEU, 26% percent higher on SCHEMA CORRECT, and 16% percent higher on EM.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2305-02783-finetuned-vs-fewshot-codex",
+    "kind": "claim",
+    "source": "2305.02783",
+    "claim": "The fine-tuned 350M Ansible model reached BLEU 66.67 against 50.4 for Codex-Davinci-002, but Codex was evaluated few-shot rather than fine-tuned.",
+    "quote": "We also show that after finetuning, our Ansible specific model (BLEU: 66.67) can outperform a much larger CodexDavinci-002 (BLEU: 50.4) model, which was evaluated in few shot settings.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2305-02783-domain-pretrain-small-gain",
+    "kind": "claim",
+    "source": "2305.02783",
+    "claim": "After fine-tuning, Ansible-YAML pre-training added only about 1 point over plain CodeGen-Multi at the same 350M size and 1024 window (BLEU 66.67 vs 66.03 in Table IV).",
+    "quote": "By comparing the fine-tuned CODEGEN-MULTI and WISDOM-ANSIBLE-MULTI (both with window size 1024 and model size 350M) in Table IV, it shows pre-training on Ansible data can help the large language model better understand the syntax and structure of Ansible. Specifically, WISDOM-ANSIBLE-MULTI has gained 1% increase regarding Schema Correct, EM and Ansible Aware.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2305-02783-fewshot-codex-still-ahead",
+    "kind": "claim",
+    "source": "2305.02783",
+    "claim": "In the few-shot setting, Codex-Davinci-002 (175B) still beat WISDOM-ANSIBLE-MULTI 350M on BLEU (50.40 vs 46.58), exact match (13.66 vs 7.35) and Ansible Aware (55.01 vs 54.51), losing only on Schema Correct (88.82 vs 96.56).",
+    "quote": "| Codex-Davinci-002 | 175B | 2048 | 88.82 | 13.66 | 50.40 | 55.01 | | WISDOM-ANSIBLE-MULTI | 350M | 1024 | 96.56 | 7.35 | 46.58 | 54.51 |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2305-02783-whole-playbooks-weak",
+    "kind": "claim",
+    "source": "2305.02783",
+    "claim": "Generating a whole playbook from NL alone was weak: on 550 NL-to-playbook test samples fine-tuned CodeGen-Multi scored 0.0 exact match and 22.76 BLEU, versus 66.03 BLEU over all 50,580 samples.",
+    "quote": "| ALL | 50580 | 98.06 | 28.64 | 66.03 | 69.77 | | NL→PB | 550 | 93.09 | 0.0 | 22.76 | 23.16 |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2305-02783-no-execution-eval",
+    "kind": "claim",
+    "source": "2305.02783",
+    "claim": "All Ansible results are similarity metrics against a reference, since executing generated tasks that depend on external resources was judged impractical.",
+    "quote": "Since the generated ansible task or a small playbook always has high dependency on external resources, it is not practical to evaluate the correctness of a task by executing it. For example it would be impractical to evaluate a task that installs a package on a number of remote hosts by executing it with Ansible and checking that the result is as expected. Thus, our evaluation metrics are based on the similarity between the generated ansible tasks or playbooks and the ground-truth.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2305-02783-2-7b-no-better",
+    "kind": "claim",
+    "source": "2305.02783",
+    "claim": "After fine-tuning, CodeGen-Multi 2.7B (BLEU 65.25) did no better than the 350M model (66.03) at a 1024-token window, and a 2048 window gave no gain over 1024 (66.12).",
+    "quote": "| CODEGEN-MULTI | 350M | 1024 | 98.06 | 28.64 | 66.03 | 69.77 | | CODEGEN-MULTI | 350M | 2048 | 98.02 | 27.14 | 66.12 | 69.69 | | CODEGEN-MULTI | 2.7B | 1024 | 98.36 | 28.03 | 65.25 | 69.41 |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2207-11765-symbolic-candidates-neural-ranking",
+    "kind": "claim",
+    "source": "2207.11765",
+    "claim": "LaMirage generates a repair engine from a grammar plus domain-specific rules in which symbolic code produces every candidate repair, while neural models are used only to localize errors and rank the candidates.",
+    "quote": "To tackle the challenges of localizing the errors and ranking the candidate repairs, LaMirage leverages neural techniques, whereas it relies on symbolic methods to generate candidate repairs.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2207-11765-excel-top1-174-of-200",
+    "kind": "claim",
+    "source": "2207.11765",
+    "claim": "On the 200-formula Excel benchmark (real forum formulas, manually annotated ground truth), LaMirage's top-1 candidate matched the ground truth for 174 formulas versus 147 for the next best system, Codex-Edit.",
+    "quote": "In Excel, LaMirage's top repair candidate matched the ground truth repair in 174 out of 200 formulas, compared to 147 for the next best system, Codex-Edit.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2207-11765-powerfx-top1-170-of-200",
+    "kind": "claim",
+    "source": "2207.11765",
+    "claim": "On the 200-formula Power Fx benchmark (100 forum and 100 telemetry formulas), LaMirage's top-1 candidate matched the ground truth for 170 formulas versus 106 for Codex-Edit, the next best system.",
+    "quote": "170 out of 200 formulas, compared to 106 for Codex-Edit. We also motivate our design with ablation studies.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2207-11765-smaller-drop-scarce-data",
+    "kind": "claim",
+    "source": "2207.11765",
+    "claim": "Moving from Excel to Power Fx, whose public corpus the authors note is much smaller, LaMirage repaired 4 fewer formulas at top-1 while Codex-Edit repaired 41 fewer.",
+    "quote": "LaMirage, which combines symbolic and neural benefits, experienced the smallest drop in performance (4 fewer formulas repaired at top-1 cutoff) compared to the next best approach (Codex-Edit, which repaired 41 fewer at top-1 cutoff).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2207-11765-median-time-32ms",
+    "kind": "claim",
+    "source": "2207.11765",
+    "claim": "Median time to produce all repair candidates per formula was 32.1 ms (Excel) and 134.4 ms (Power Fx) for LaMirage against 5806.6 ms and 6417.6 ms for Codex-Edit, whose times include OpenAI API network time.",
+    "quote": "Codex-Edit | Neural | 147 | 163 | 165 | 5806.6 | 106 | 137 | 140 | 6417.6 | | LaMirage | NeuroSymbolic | 174 | 182 | 182 | 32.1 | 170 | 177 | 177 | 134.4",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2207-11765-ablation-dss-and-ranker",
+    "kind": "claim",
+    "source": "2207.11765",
+    "claim": "In the top-1 ablation (full system 174 Excel, 170 Power Fx, of 200 each), removing the domain-specific strategies dropped Excel to 138 and Power Fx to 153, while removing the neural ranker left Excel at 173.9 but dropped Power Fx to 150.9.",
+    "quote": "DSS | No DSS | 138 | 145 | 145 | 153 | 164 | 165 | | Neural | No Neural Ranker | 173.9 | 182.2 | 182.6 | 150.9 | 167.8 | 169",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2207-11765-neural-enumeration-worse",
+    "kind": "claim",
+    "source": "2207.11765",
+    "claim": "Replacing the symbolic candidate enumerator with neural enumeration lowered top-1 repairs to 135 (Excel) and 125 (Power Fx) with CodeBERT and to 128 and 112 with Codex, versus 174 and 170 for full LaMirage.",
+    "quote": "Enumeration | CodeBERT | 135 | 137 | 137 | 125 | 130 | 131 | | | Codex | 128 | 128 | 128 | 112 | 121 | 121",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2207-11765-ranker-needs-tens-of-thousands",
+    "kind": "claim",
+    "source": "2207.11765",
+    "claim": "The authors advise that training the neural ranker requires a corpus of at least tens of thousands of well-formed programs in the target language; without it the engine falls back to purely symbolic ranking.",
+    "quote": "To train the ranker successfully, the language developer's corpus should contain at least 10s of thousands of well-formed programs.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2207-11765-localizer-synthetic-pairs",
+    "kind": "claim",
+    "source": "2207.11765",
+    "claim": "The pointer-network error localizer was trained only on synthetic corruptions of well-formed formulas: 480,572 well-formed/buggy pairs for Excel and 60,802 for Power Fx.",
+    "quote": "We train pointer network independently for Excel with 480572 synthetically generated well formedbuggy formula pairs and Powerfx with 60802 synthetically generated well formed-buggy formula pairs.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2207-11765-one-time-grammar-cost",
+    "kind": "claim",
+    "source": "2207.11765",
+    "claim": "The price of LaMirage's speed and low compute is a one-time manual cost: the language developer must supply an annotated grammar (which tokens are unreliable) and the domain-specific strategies.",
+    "quote": "LaMirage can quickly (and cheaply, in terms of compute resources) produce effective repairs, but at the one-time cost of the language developer providing an annotated CFG and DSS.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2208-11640-venue-aaai-2023",
+    "kind": "claim",
+    "source": "2208.11640",
+    "claim": "The RING paper carries a 2023 copyright line of the Association for the Advancement of Artificial Intelligence (AAAI).",
+    "quote": "Copyright © 2023, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2208-11640-three-stage-prompting",
+    "kind": "claim",
+    "source": "2208.11640",
+    "claim": "RING uses Codex with no training at all, splitting repair into three prompted stages: fault localization (a compiler or analyzer message in the prompt), code transformation (few-shot examples retrieved by error similarity) and candidate ranking (mean token log-probability).",
+    "quote": "To do this effectively, we break down program repair into the same three phases as symbolic automated program repair systems: fault localization, code transformation, and candidate ranking",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2208-11640-excel-273-tasks",
+    "kind": "claim",
+    "source": "2208.11640",
+    "claim": "RING's Excel benchmark is 273 tasks: LaMirage's 200 forum formulas plus 73 newly collected formulas that each contain at least one type error.",
+    "quote": "We also collect a set of 73 tasks where the Excel formula contains at least one type error and annotated each such formula with a ground truth repair. The final collection consists of 273 Excel repair tasks.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2208-11640-excel-082-vs-lamirage-071",
+    "kind": "claim",
+    "source": "2208.11640",
+    "claim": "On the 273 Excel tasks, RING (davinci-code-002 at temperature 0.7, abstracted error message, error-vector shot selection) reached exact-match pass@1 0.82 against 0.71 for LaMirage.",
+    "quote": "Excel | RING (Abstracted Message, Error Vector) | 0.82 | 0.89 | 0.92 | Exact Match | 26 ±14 | | | LaMirage (Bavishi et al. 2022) | 0.71 | 0.76 | - | Exact Match | 26 ±14",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2208-11640-powerfx-lamirage-wins",
+    "kind": "claim",
+    "source": "2208.11640",
+    "claim": "On the 200 Power Fx tasks, LaMirage beat RING at exact-match pass@1 (0.85 vs 0.71); RING's pass@3 of 0.85 only matched LaMirage's pass@1.",
+    "quote": "Power Fx | RING (Compiler Message, Message Embedding) | 0.71 | 0.85 | 0.87 | Exact Match | 29 ±19 | | Power Fx | LaMirage (Bavishi et al. 2022) | 0.85 | 0.88 | - | Exact Match | 29 ±19",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2208-11640-wins-three-of-six",
+    "kind": "claim",
+    "source": "2208.11640",
+    "claim": "Of RING's 6 languages, it beat the language-specific engine at pass@1 in 3 (Excel, Python, C); for Power Fx only its pass@3 was comparable to LaMirage's pass@1.",
+    "quote": "RING outperforms the state-of-the-art repair engines in pass@1 for Excel, Python, and C. For Power Fx, we find that RING's pass@3 rate is comparable to the pass@1 rate for LaMirage.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2208-11640-javascript-tfix-higher",
+    "kind": "claim",
+    "source": "2208.11640",
+    "claim": "On 200 JavaScript ESLint tasks, TFix on its original windowed snippets beat RING at exact-match pass@1 (0.59 vs 0.46), though TFix fell to 0.09 on the extended whole-function snippets that RING was given.",
+    "quote": "Javascript | RING (Compiler Message, Error Vector) | 0.46 | 0.59 | 0.64 | Exact Match | 163 ±106 | | Javascript | TFix (extended code snippets) (Berabi et al. 2021) | 0.09 | - | - | Exact Match | 163 ±106 | | Javascript | TFix (original dataset) (Berabi et al. 2021) | 0.59",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2208-11640-powershell-scarce-data",
+    "kind": "claim",
+    "source": "2208.11640",
+    "claim": "On the new PowerShell benchmark (208 StackOverflow task pairs, no prior engine), RING reached only 0.10 exact-match pass@1 against 0.06 for zero-shot Codex, which the authors attribute to presumed scarcity of PowerShell in Codex's training data.",
+    "quote": "Powershell | RING (Compiler Message, Message Embedding) | 0.10 | 0.19 | 0.27 | Exact Match | 24 ±30 | | Powershell | Codex (Chen et al. 2021) | 0.06",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2208-11640-compiler-message-alone",
+    "kind": "claim",
+    "source": "2208.11640",
+    "claim": "In the JavaScript configuration study, adding only the compiler/linter error message to the zero-shot prompt raised exact-match pass@1 from 0.19 to 0.35 before any few-shot examples were added.",
+    "quote": "None | None | 0.19 | 0.28 | 0.39 | | Compiler | None | 0.35 | 0.45 | 0.52",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2208-11640-powerfx-imprecise-diagnostics",
+    "kind": "claim",
+    "source": "2208.11640",
+    "claim": "Error-similarity shot selection raised pass@1 over fixed shots from 0.76 to 0.82 in Excel but only from 0.70 to 0.71 in Power Fx, which the authors attribute to imprecise Power Fx compiler messages adding noise to retrieval.",
+    "quote": "Excel | 0.76 | 0.82 | 0.08 | | Power Fx | 0.70 | 0.71 | 0.01",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2311-16543-venue-dac-2024",
+    "kind": "claim",
+    "source": "2311.16543",
+    "claim": "RTLFixer was published at the 61st ACM/IEEE Design Automation Conference (DAC 2024).",
+    "quote": "In 61st ACM/IEEE Design Automation Conference (DAC '24), June 23-27, 2024, San Francisco, CA, USA.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2311-16543-syntax-errors-55-percent",
+    "kind": "claim",
+    "source": "2311.16543",
+    "claim": "On VerilogEval-Human, syntax errors made up 55% of the errors in GPT-3.5-generated Verilog, more than simulation (functional) errors.",
+    "quote": "The VerilogEval-Human benchmark statistics show that syntax errors constitute a significant 55% of errors in GPT-3.5 generated Verilog code, surpassing simulation errors.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2311-16543-agent-setup-no-training",
+    "kind": "claim",
+    "source": "2311.16543",
+    "claim": "RTLFixer uses an off-the-shelf gpt-3.5-turbo-16k-0613 with no fine-tuning, after a rule-based pre-fixer, as a ReAct agent limited to 10 Thought-Action-Observation iterations at temperature 0.4, where actions can call the compiler.",
+    "quote": "We specifically used gpt-3.5-turbo-16k-0613. A simple rulebased syntax fixer is applied to every LLM-generated verilog code, which avoids simple errors such as misplaced timescale derivatives. In all experiments, we set the sampling temperature to 0.4. For ReAct prompting, we restrict the LLM to a maximum of 10 iterations of Thought-Action-Observation, where Action might involve interactions with the compiler.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2311-16543-fix-rate-98-5-quartus",
+    "kind": "claim",
+    "source": "2311.16543",
+    "claim": "On the 212-implementation VerilogEval-syntax set with GPT-3.5 and Quartus compiler messages, the compile-error fix rate was 98.5% with ReAct plus RAG versus 79.9% for ReAct alone, and 89.9% versus 58.7% for one-shot prompting with and without RAG (mean of 10 runs).",
+    "quote": "The results with Quartus compiler in Table 1 show that RAG improves the fix rate by 31.2% (58.7% to 89.9% ) for One-shot and 18.6% (79.9% to 98.5%) when using ReAct.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2311-16543-diagnostic-quality-matters",
+    "kind": "claim",
+    "source": "2311.16543",
+    "claim": "With GPT-3.5 and ReAct, the fix rate was 73.1% (no RAG) and 82.0% (RAG) with the terse open-source iverilog messages versus 79.9% and 98.5% with the more informative commercial Quartus messages; GPT-4 with Quartus reached 92% and 99%.",
+    "quote": "ReAct | w/o | 0.671 | 0.731 | 0.799 | 0.92 | | ReAct | w/ | - | 0.820 | 0.985 | 0.99",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2311-16543-machine-pass1-0467-to-0799",
+    "kind": "claim",
+    "source": "2311.16543",
+    "claim": "Fixing only syntax errors raised VerilogEval-Machine simulation pass@1 from 0.467 to 0.799 (pass@5 from 0.691 to 0.891), an absolute gain of 33.2 points by the table although the paper reports it as 32.3%.",
+    "quote": "Machine | All | 0.467 | 0.799 | 0.691 | 0.891",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2311-16543-human-pass1-267-to-368",
+    "kind": "claim",
+    "source": "2311.16543",
+    "claim": "On VerilogEval-Human, fixing only syntax errors raised simulation pass@1 from 26.7% to 36.8%, i.e. the reported 10.1% gain is in absolute percentage points.",
+    "quote": "With just addressing syntax errors using our approach (shown in the inner circle), the pass rate increases from 26.7% to 36.8%.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2311-16543-hand-written-guidance-db",
+    "kind": "claim",
+    "source": "2311.16543",
+    "claim": "The RAG database is hand-written human expert guidance keyed by compiler error tags and retrieved by exact match: 7 error categories with 30 entries for iverilog and 11 categories with 45 entries for Quartus.",
+    "quote": "We collected 7 common error categories with 30 entries for iverilog and 11 common error categories with 45 entries for Qaurtus in total.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2311-16543-gpt4-react-adds-1-percent",
+    "kind": "claim",
+    "source": "2311.16543",
+    "claim": "With GPT-4 and Quartus feedback, ReAct improved on one-shot prompting by only about 1%, which the authors read as GPT-4 fixing syntax errors without needing reasoning, planning or iteration.",
+    "quote": "When comparing the results of GPT-4 between One-shot and ReAct, we observe minor improvements of approximately 1%, suggesting that GPT-4 is already a robust agent proficient in fixing syntax errors without the need for reasoning, action planning, and iterative refinement.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2311-16543-rtllm-syntax-vs-function",
+    "kind": "claim",
+    "source": "2311.16543",
+    "claim": "On RTLLM, with no new guidance entries, RTLFixer raised GPT-3.5's syntax success rate from 73% to 93% but simulation pass@1 only from 11% to 16%.",
+    "quote": "GPT-3.5 | 73% | 11% | | GPT-3.5 + RTLFixer | 93% | 16%",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-11671-venue-kdd-2024",
+    "kind": "claim",
+    "source": "2403.11671",
+    "claim": "HDLdebugger's ACM reference format places it in the proceedings of KDD 2024 (13 pages).",
+    "quote": "2024. HDLdebugger: Streamlining HDL debugging with Large Language Models. In Proceedings of (KDD'24). ACM, New York, NY, USA, 13 pages.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-11671-mutation-data-no-labels",
+    "kind": "claim",
+    "source": "2403.11671",
+    "claim": "Training pairs are synthesized by applying LLM-derived modification functions to clean industrial HDL and compiling the results to capture real error messages, so the faults and fixes are known by construction and no manual diagnosis is needed.",
+    "quote": "Given that our instructions systematically brought the errors, we can employ reverse engineering to identify the faults and produce solutions directly. This bypasses the need for manual error diagnosis",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-11671-92143-instances-8-2-split",
+    "kind": "claim",
+    "source": "2403.11671",
+    "claim": "The data are 92,143 generated (buggy code, compiler error messages, correct code) instances from Huawei HDL files, split 8:2 into train and test, so the test set comes from the same mutation generator as the training set.",
+    "quote": "Based on these HDL code files, we use the data generation in Sec. 2.1 to generate 92,143 distinct HDL training code instances. Each HDL training code instance consists of the buggy HDL code, error messages, and the correct HDL code. Specifically, in the experiments, we split the data into training and testing sets at a ratio of 8:2, respectively.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-11671-codellama-13b-base",
+    "kind": "claim",
+    "source": "2403.11671",
+    "claim": "HDLdebugger fine-tunes CodeLlama-13b, a size the authors chose to balance training and deployment cost against performance.",
+    "quote": "Specifically, we selected CodeLlama-13b as our base model from the available code LLMs.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-11671-pass-rate-8193",
+    "kind": "claim",
+    "source": "2403.11671",
+    "claim": "On the held-out synthetic Huawei test split, HDLdebugger reached an 81.93% pass rate versus 71.57% for the strongest of its 13 baselines, WizardCoder fine-tuned on the same data.",
+    "quote": "WizardCoder w/ SFT | 71.57% | 1.04 | 1.06 | | HDLdebugger(ours) | 81.93% | 1.00 | 1.00",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-11671-gpt-baselines-redacted",
+    "kind": "claim",
+    "source": "2403.11671",
+    "claim": "The ChatGPT and GPT-4 baselines (3.01% and 6.35% pass rate) were run with certain code specifications omitted for privacy, so they did not see the same inputs as the other systems.",
+    "quote": "Due to privacy concerns, certain code specifications have been omitted for testing purposes when using ChatGPT or GPT4.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-11671-ablation-sft-dominates",
+    "kind": "claim",
+    "source": "2403.11671",
+    "claim": "In the CodeLlama ablation on the same test split, direct prompting scored 4.01%, adding RAG 15.05%, SFT 70.56% and SFT with generated thoughts 74.91%, versus 81.93% for the full RAG plus SFT-with-thoughts system.",
+    "quote": "Direct(CodeLlama) | 4.01% | 2.26 | 35.51 | | + RAG | 15.05% | 2.20 | 5.34 | | + SFT | 70.56% | 1.19 | 1.19 | | + SFT w/ th | 74.91% | 1.09 | 1.13",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-11671-verigen-needs-sft",
+    "kind": "claim",
+    "source": "2403.11671",
+    "claim": "The Verilog-specialized VeriGen scored under 1% raw and 1.34% with RAG on Huawei's HDL, but 67.55% after supervised fine-tuning on the synthetic pairs.",
+    "quote": "VeriGen | <1% | 2.46 | 49.16 | | VeriGen w/ RAG | 1.34% | 2.56 | 37.12 | | VeriGen w/ SFT | 67.55% | 1.35 | 1.38",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-11671-thoughts-from-known-fix",
+    "kind": "claim",
+    "source": "2403.11671",
+    "claim": "The explanatory thoughts used as fine-tuning targets are written by an LLM shown both the buggy and the corrected code, sampled several times, and the one whose resulting fix has the smallest edit distance to the ground truth is kept.",
+    "quote": "The core principle of our approach involves submitting both the buggy code and its corrected version to the LLM, subsequently prompting the model to generate instructive guidance.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-11671-compiling-is-not-enough",
+    "kind": "claim",
+    "source": "2403.11671",
+    "claim": "In deployment the authors found compile-passing fixes insufficient, since compiling code may still hurt chip performance and engineers often want hints rather than exact rewrites, for which they have no metric.",
+    "quote": "Code that successfully compiles may not necessarily optimize chip design performance. Additionally, exact solutions are not always required; engineers often benefit from suggestive \"hints\" that inspire solutions to complex issues.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2406-14867-teacher-gpt35-students-7b",
+    "kind": "claim",
+    "source": "2406.14867",
+    "claim": "The study distills code repair from a GPT-3.5-Turbo teacher into three 7B students (CodeLlama-7b-Instruct, CodeLlama-7b, Mistral-7b), fine-tuned with LoRA.",
+    "quote": "Our teacher model is GPT-3.5-Turbo (Ouyang et al., 2022; OpenAI, 2022), while our student models are CodeLlama7b-Instruct (Rozière et al., 2024), CodeLlama-7b (Rozière et al., 2024), and Mistral-7b (Jiang et al., 2023).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2406-14867-about-400-examples",
+    "kind": "claim",
+    "source": "2406.14867",
+    "claim": "Each per-language fine-tuning set has only about 400 examples, from an 800-question MBXP split, each pairing a student's failing answer and its test-execution error with a teacher repair that passed the tests, with no human labeling.",
+    "quote": "Although the original train split starts with 800 examples, our construction pipeline results in fine-tuning datasets with around 400 examples.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2406-14867-relative-gain-vs-initial",
+    "kind": "claim",
+    "source": "2406.14867",
+    "claim": "Relative to the initial generation without any repair, four rounds of distilled repair raised CodeLlama-7b-Instruct's mean HumanEval pass@1 by 99.5% for Perl, 112.8% for Golang and 144.5% for Swift.",
+    "quote": "We see a relative increase in the average pass@1 of CodeLlama-7b-Instruct by 99.5% for Perl, 112.8% for Golang, and 144.5% for Swift after four rounds of repair on HumanEval.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2406-14867-perl-vs-rationale-only",
+    "kind": "claim",
+    "source": "2406.14867",
+    "claim": "Against rationale-only distillation (teacher rationale in context), rationale-plus-code distillation raised CodeLlama-7b-Instruct's Perl HumanEval pass@1 from 0.360 to 0.439 (+21.9% relative; initial generation 0.220).",
+    "quote": "Perl | 0.220 | 0.360 | 0.439 | ↑21.9%",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2406-14867-no-gain-high-resource",
+    "kind": "claim",
+    "source": "2406.14867",
+    "claim": "On high-resource languages the benefit of distilling code vanished: CodeLlama-7b-Instruct's HumanEval pass@1 went from 0.499 to 0.495 for JavaScript and from 0.464 to 0.457 for Java (rationale-only to rationale-plus-code).",
+    "quote": "Javascript | 0.342 | 0.499 | 0.495 | ↓0.80% | | Java | 0.306 | 0.464 | 0.457 | ↓1.50%",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2406-14867-good-rationale-bad-code",
+    "kind": "claim",
+    "source": "2406.14867",
+    "claim": "On low-resource languages, rationale-only repair models produced a rationale judged correct (by GPT-4) 91.1% of the time but correct code only 10.0% of the time.",
+    "quote": "On LRPLs, rationale-only repair models generate a correct rationale 91.1% of the time, but only generate correct code 10.0% of the time, exposing a weak correlation between rationale correctness and code correctness.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2406-14867-gpt4-judge-not-humans",
+    "kind": "claim",
+    "source": "2406.14867",
+    "claim": "Rationale quality in the 91.1%/10.0% analysis was judged by GPT-4 rather than people, because recruiting programmers fluent in Perl and Swift proved hard.",
+    "quote": "Although human evaluation would be preferred, crowdsourcing participants well-versed in programming languages like Perl and Swift and capable of solving the coding problems found in HumanEval is challenging.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2406-14867-syntax-errors-16-9-vs-30-9",
+    "kind": "claim",
+    "source": "2406.14867",
+    "claim": "Averaged over Perl, Golang and Swift, CodeLlama-7b-Instruct repair runs ended with 16.9 syntax errors for rationale-plus-code models versus 30.9 for rationale-only models.",
+    "quote": "Averaging over the 3 LRPLs, rationale-plus-code models finish with 16.9 errors, while rationale-only models finish with 30.9 errors.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2406-14867-beats-independent-pass5",
+    "kind": "claim",
+    "source": "2406.14867",
+    "claim": "Across all 6 languages, four rounds of distilled repair (5 inference calls in total) outperformed the initial generation's pass@5 from independent sampling.",
+    "quote": "Across all languages, four rounds of distilled code repair outperforms the initial pass@5.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2406-14867-low-resource-still-pretrained",
+    "kind": "claim",
+    "source": "2406.14867",
+    "claim": "The study's low-resource languages still appear in pretraining data: Perl and Golang are 0.1% and 0.32% of DeepSeek-Coder's corpus, against 15.12% and 18.63% for Python and Java.",
+    "quote": "containing high-resource languages like Python and Java at rates of 15.12% an 18.63%, while other languages like Perl and Golang are at much lesser rates of 0.1% and 0.32%.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2106-06600-bifi-venue-icml-2021",
+    "kind": "claim",
+    "source": "2106.06600",
+    "claim": "Break-It-Fix-It (Yasunaga and Liang) was published at ICML 2021 (PMLR 139).",
+    "quote": "Proceedings of the 38 th International Conference on Machine Learning, PMLR 139, 2021.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2106-06600-critic-verifies-learned-breaker",
+    "kind": "claim",
+    "source": "2106.06600",
+    "claim": "BIFI learns a fixer from unpaired code plus a critic (the Python AST parser or the C compiler) by keeping only fixer outputs on real bad code that the critic accepts, and by training a breaker on those real pairs to generate realistic bad code, instead of relying only on heuristic corruption.",
+    "quote": "(i) we use the critic to check a fixer's output on real bad inputs and add good (fixed) outputs to the training data, and (ii) we train a breaker to generate realistic bad code from good code.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2106-06600-headline-github-python-deepfix",
+    "kind": "claim",
+    "source": "2106.06600",
+    "claim": "Without any labelled data, BIFI reaches 90.5% repair accuracy on GitHub-Python (+28.5 points absolute over its initial fixer trained on random perturbations, 62.0%) and 71.7% on DeepFix (+5.6 points over DrRepair, 66.1%, on BIFI's 20% held-out split).",
+    "quote": "BIFI outperforms state-of-the-art methods, obtaining 90.5% repair accuracy on GitHubPython (+28.5%) and 71.7% on DeepFix (+5.6%). Notably, BIFI does not require any labeled data",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2106-06600-github-python-dataset-split",
+    "kind": "claim",
+    "source": "2106.06600",
+    "claim": "GitHub-Python is 3M Python 3 snippets of 10-128 tokens labelled only by the AST parser as critic: 38K are bad, of which 15K real bad snippets are the test set and the remaining 23K are the only real bad examples BIFI trains on.",
+    "quote": "Using this critic, we obtain 38K snippets of bad code and 3M snippets of good code. From the 38K bad examples, we holdout 15K as the final test set, and make the remaining 23K bad examples available for BIFI.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2106-06600-success-metric-edit-distance",
+    "kind": "claim",
+    "source": "2106.06600",
+    "claim": "On GitHub-Python a repair counts as successful when the output parses and lies within a Levenshtein distance of under 5 tokens from the input; the authors note that semantic preservation is not checked automatically, so the edit-distance bound stands in for it.",
+    "quote": "We acknowledge that while we want f(x) to be semantics-preserving, it is nontrivial to ensure this automatically, so we rely on the edit distance.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2106-06600-model-4-layer-transformer",
+    "kind": "claim",
+    "source": "2106.06600",
+    "claim": "On GitHub-Python the BIFI fixer and breaker are each a small encoder-decoder Transformer with 4 layers, 8 attention heads and hidden size 256, trained on one GTX Titan X GPU; the paper gives no parameter count or inference speed.",
+    "quote": "(Vaswani et al., 2017) with 4 layers, 8 attention heads, and hidden states of size 256. The model parameters are optimized by Adam",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2106-06600-initial-fixer-random-noise",
+    "kind": "claim",
+    "source": "2106.06600",
+    "claim": "BIFI's initial GitHub-Python fixer is trained purely on synthetic corruption: 1-3 tokens dropped, inserted or replaced uniformly, applied 8 times to each of 2.6M good snippets.",
+    "quote": "which drops, inserts, or replaces 1-3 tokens in code with uniform distribution. We apply bsynthetic 8 times to each of the 2.6M good code snippets to prepare the initial training data Psynthetic.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2106-06600-synthetic-only-ceiling",
+    "kind": "claim",
+    "source": "2106.06600",
+    "claim": "Training the initial fixer for as many extra rounds on synthetic perturbations only gave no improvement (62.7% versus 62.0% on GitHub-Python), which the authors read as a performance ceiling for synthetic-only training.",
+    "quote": "however, this did not provide an improvement, suggesting that there is a performance ceiling if we only train on synthetic data.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2106-06600-few-real-errors-suffice",
+    "kind": "claim",
+    "source": "2106.06600",
+    "claim": "With only 10% of the 23K real bad GitHub-Python examples available, critic-verified self-training (FixerOnly) still reaches 78.5% against 62.7% for continued synthetic-only training.",
+    "quote": "making FixerOnly perform better than using synthetic data alone (i.e., 78.5% vs 62.7%).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2106-06600-critic-ablation-backtranslation",
+    "kind": "claim",
+    "source": "2106.06600",
+    "claim": "On GitHub-Python, removing the critic's verification drops BIFI round 2 from 90.5% to 84.0%, and removing both the critic and training on real bad code (plain backtranslation) drops it to 80.1%.",
+    "quote": "| - critic | Round-2 | 84.0% | | - both (backtranslation) | Round-2 | 80.1% |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2106-06600-indentation-errors-39-to-85",
+    "kind": "claim",
+    "source": "2106.06600",
+    "claim": "Error categories that random perturbation rarely produces are where synthetic training fails: on GitHub-Python indentation errors the initial fixer repairs about 39%, rising to about 85% after BIFI rounds 1-2.",
+    "quote": "but it achieves significantly higher performance in round 1, 2 (e.g., 39%→85% for indentation errors).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2005-10636-drrepair-venue-icml-2020",
+    "kind": "claim",
+    "source": "2005.10636",
+    "claim": "DrRepair (Yasunaga and Liang, graph-based self-supervised repair from diagnostic feedback) was published at ICML 2020 (PMLR 119).",
+    "quote": "Proceedings of the 37 th International Conference on Machine Learning, Vienna, Austria, PMLR 119, 2020.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2005-10636-headline-deepfix-spoc",
+    "kind": "claim",
+    "source": "2005.10636",
+    "claim": "DrRepair reports a 68.2% full repair rate on the DeepFix raw test set (+22.9 points over the prior best, SampleFix at 45.3%) and a 48.4% synthesis success rate on SPoC (+3.7 points), although the SPoC table in this version does not list a 48.4% entry for DrRepair.",
+    "quote": "68.2% full repair rate on DeepFix (+22.9% over the prior best), and 48.4% synthesis success rate on SPoC (+3.7% over the prior best).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2005-10636-program-feedback-graph",
+    "kind": "claim",
+    "source": "2005.10636",
+    "claim": "DrRepair's program-feedback graph takes every identifier in the code and every symbol quoted in the compiler message as nodes and links identical symbols, so graph attention can jump from the message to the declaration that caused it.",
+    "quote": "it takes all identifiers (e.g. a, b) in the source code and any symbols in the diagnostic arguments (e.g. a, char) as nodes, and connects instances of the same symbols with edges to encode the semantic correspondence",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2005-10636-lstm-graph-model-size",
+    "kind": "claim",
+    "source": "2005.10636",
+    "claim": "DrRepair is a small LSTM-plus-graph-attention model (bidirectional LSTM encoders, 2 graph-attention layers, a pointer-generator decoder) with state size 200 and 200-dimensional token embeddings, trained on one GTX Titan X; no parameter count or inference speed is given.",
+    "quote": "We set the dimension of input token embeddings and position embeddings to be 200 and 100. The LSTMs and graph attention networks have a state size of 200.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2005-10636-first-message-line-mismatch",
+    "kind": "claim",
+    "source": "2005.10636",
+    "claim": "DrRepair conditions on only the first compiler message and must predict which line to edit itself, because the line the compiler reports is often not the line that needs the fix.",
+    "quote": "If the compiler returns multiple error messages, we use only the first one.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2005-10636-pretraining-data-310k-programs",
+    "kind": "claim",
+    "source": "2005.10636",
+    "claim": "For self-supervised pre-training, DrRepair corrupts 310K compiling Codeforces C++ programs about 50 times each and keeps the variants that fail to compile, yielding about 1.5M (broken code, compiler feedback, fix) examples with no human labels.",
+    "quote": "For each program, we then create roughly 50 corrupted versions by applying DrPerturb and keeping ones that fail to compile. This yields ∼1.5M extra training examples",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2005-10636-drperturb-heuristic-modules",
+    "kind": "claim",
+    "source": "2005.10636",
+    "claim": "The corruption is not random token noise but DrPerturb: 1-5 heuristic edits from four modules (syntax, identifier type, identifier typo, keyword), sampled with probabilities 0.3/0.5/0.15/0.05 to match compiler-error statistics.",
+    "quote": "samples 1-5 modules fromM (with replacement) and applies them to an input program sequentially. We sample each module with probability 0.3, 0.5, 0.15, 0.05, respectively, motivated by the distribution of errors found in our analysis (Table 1).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2005-10636-compiler-message-crucial",
+    "kind": "claim",
+    "source": "2005.10636",
+    "claim": "Without the compiler message as input, the base model scores about the same on synthetic dev data but only 34.0% full repair on the real DeepFix test set, against 62.5% with the message: it learns superficial patterns of the synthetic data.",
+    "quote": "We find that while it attains comparable scores to \"our base\" on the synthetic dev, the performance drops a lot on the raw test set: 34.0% acc., similar to the prior work (30-40% acc.).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2005-10636-drperturb-beats-random-noise",
+    "kind": "claim",
+    "source": "2005.10636",
+    "claim": "The same base model trained on DrPerturb data repairs 62.5% of the DeepFix test set, against 49.4% when trained on random token dropout, although random dropout produces more distinct compiler-error types (170 versus 156).",
+    "quote": "while Random produces more distinct types of compiler errors than DrPerturb in terms of the number (170 vs 156), models trained by DrPerturb outperform Random by more than 10%",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2005-10636-graph-pretrain-ablation",
+    "kind": "claim",
+    "source": "2005.10636",
+    "claim": "On DeepFix full repair, the program-feedback graph adds about 3 points (62.5% to 66.4%) and self-supervised pre-training about 2 more (to 68.2%).",
+    "quote": "provides a 3% boost over \"base\" in full repair rate, and self-supervised pre-training (\"base + graph + pre-train\") provides a further improvement of 2%",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2005-10636-pretrain-hurts-request-member",
+    "kind": "claim",
+    "source": "2005.10636",
+    "claim": "Pre-training is not uniformly positive: on SPoC dev the 'request for member' error class falls from 56.9% with the graph model to 48.4% after pre-training, while the rare 'expected initializer' class (2.1% of training data) rises from 50.1% to 93.0%.",
+    "quote": "| request for member '@@@' in '@@@', ... (e.g. Figure 1) | 2.9 % | 37.9 | 56.9 | 48.4 | | expected initializer before '@@@' | 2.1 % | 48.8 | 50.1 | 93.0 |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2104-14671-pipeline-javac-locates-line",
+    "kind": "claim",
+    "source": "2104.14671",
+    "claim": "SynShine (the arXiv 2104.14671 version) is a three-model pipeline for Java syntax errors: BLOCKFIX repairs brace nesting, javac then localises the faulty line, LINEFIX edits that line given the javac message, and UNKFIX fills identifiers with a masked language model.",
+    "quote": "The second stage (LINEFIX) in SYNSHINE uses the line-location of the error, as detected by the standard javac compiler, together with the actual error message, and generates relevant fixes for delimiters, operators, and keywords",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2104-14671-roberta-base-size",
+    "kind": "claim",
+    "source": "2104.14671",
+    "claim": "LINEFIX and UNKFIX build on a RoBERTa-base-sized model: 12 layers, hidden size 768, 12 heads, with a byte-level BPE vocabulary capped at 25K subtokens.",
+    "quote": "Our RoBERTa architecture consists of 12 attention layers, 768 hidden dimensions, and 12 self-attention heads in each layer. We applied Byte Level BPE (Byte Pair Encoding) tokenizer [23] limiting the subtoken vocabulary size to 25K.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2104-14671-pretraining-1-2b-java-tokens",
+    "kind": "claim",
+    "source": "2104.14671",
+    "claim": "SynShine's masked-language-model pre-training uses 1.2 billion tokens from the 5000 most-starred Java projects on GitHub.",
+    "quote": "we collected 5000 most starred Java projects from GitHub (since our end-goal is to correct Java syntax errors). We tokenized the files, yielding 1.2 billion tokens for the pre-training.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2104-14671-finetune-real-novice-pairs",
+    "kind": "claim",
+    "source": "2104.14671",
+    "claim": "Fine-tuning is supervised on real novice error/fix pairs from the Blackbox dataset (1.7M pairs in total); after holding out 100K test samples and dropping brace-imbalanced programs, about 540K examples train LINEFIX.",
+    "quote": "We discarded the programs with imbalanced curly braces from the training set, and after tokenization, we found around 540K examples to train the model.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2104-14671-multilabel-154-edit-commands",
+    "kind": "claim",
+    "source": "2104.14671",
+    "claim": "Instead of autoregressive generation, LINEFIX classifies: one multi-label head picks token positions and another picks among 154 edit commands (insert, delete or substitute a delimiter, keyword, operator or the placeholder unk).",
+    "quote": "LINEFIX outputs one of 154 possible editing commands, to insert/delete/substitute delimiters, keywords, operators, or identifiers. We limit its output vocabulary to 154.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2104-14671-headline-74-89-vs-56-91",
+    "kind": "claim",
+    "source": "2104.14671",
+    "claim": "On a random sample of 100,000 Blackbox single-token-error programs up to 1000 tokens, scored by top-1 exact match with the human fix, SynShine reaches 74.89% against 56.91% for BF+FF, 63.25% for DeepFix (short) and 56.89% for SequenceR.",
+    "quote": "| 46.00% | 63.25% | 62.14% | 56.89% | 56.91% | 74.89% |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2104-14671-multi-edit-29-14",
+    "kind": "claim",
+    "source": "2104.14671",
+    "claim": "On programs needing 2 or 3 edits, SynShine's accuracy falls to 29.4% and 14.4% (single-token errors are 57% of Blackbox).",
+    "quote": "We also applied our model on files that required 2 and 3 edits to fix the program and observed 29.4% and 14.4% accuracy, which is much higher than the reported accuracy by Ahmed et al. (19% and 9%).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2104-14671-compiler-message-ablation",
+    "kind": "claim",
+    "source": "2104.14671",
+    "claim": "On 10,000 javac-flagged lines, adding the javac message to LINEFIX's input raises complete correction from 86.71% to 89.39% and localisation F-score from 90.75% to 93.58%; the authors stress that javac's line localisation, not the message, is the large win.",
+    "quote": "| No | 90.75% | 92.41% | 86.71% | | Yes | 93.58% | 93.18% | 89.39% |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2104-14671-javac-message-often-unhelpful",
+    "kind": "claim",
+    "source": "2104.14671",
+    "claim": "In a sample of 50 programs, the javac message alone was not that helpful in roughly 60% of cases, and the model learned to ignore or reinterpret misleading messages rather than translate them into fixes.",
+    "quote": "We observed that in roughly 60% cases, the javac warning is not that helpful, and the model learns to respond in fairly nuanced ways to address the error.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2104-14671-cpu-latency-0-88s",
+    "kind": "claim",
+    "source": "2104.14671",
+    "claim": "Integrated into VS Code as a CPU-only local correction server, SynShine answered 200 randomly chosen erroneous programs in 0.88 s on average (standard deviation 0.49 s, maximum 2.2 s).",
+    "quote": "The average response time is 0.88 seconds (standard deviation 0.49s, maximum 2.2s).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2104-14671-server-memory-1-765gb",
+    "kind": "claim",
+    "source": "2104.14671",
+    "claim": "The SynShine correction server ran on an AMD Ryzen 7 2700X CPU and occupied 1.765 GB of memory.",
+    "quote": "The CPU we used for the experiment is \"AMD Ryzen 7 2700X\". The code correction server occupies 1.765 GB of the memory.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2104-14671-exact-match-undercounts",
+    "kind": "claim",
+    "source": "2104.14671",
+    "claim": "Exact match with the human fix undercounts: 13% to 45% of SynShine's failures (depending on program length) still compile, but in a manual sample of 50 such cases only about 18% were semantically correct.",
+    "quote": "We randomly collect 50 cases where the model generates a compilable fix, that fails to match the user fix recorded in Blackbox. We found that about 18% of programs are semantically correct.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2104-14671-accuracy-falls-with-length",
+    "kind": "claim",
+    "source": "2104.14671",
+    "claim": "SynShine's accuracy falls with program length, from 82% for 1-100 tokens to 55% for 901-1000 tokens, and on the shortest programs DeepFix (short) at 77% is close behind.",
+    "quote": "Our overall accuracy ranges between 55% to 82%, and always outperforms DeepFix long (18%-74%), and short (9%-77%), SequenceR (54%-59%) and BF+FF (29%-65%).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1805-11683-seeded-bugs-binary-classifier",
+    "kind": "claim",
+    "source": "1805.11683",
+    "claim": "DeepBugs frames name-based bug detection as binary classification and needs no human-labelled bugs: negative examples come from simple AST transformations (swapping arguments, replacing an operator or an operand) applied to presumed-correct code.",
+    "quote": "To address the challenge that effectively learning a bug detector requires examples of both correct and incorrect code, we create likely incorrect code examples from an existing corpus of code through simple code transformations.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1805-11683-tiny-feedforward-classifier",
+    "kind": "claim",
+    "source": "1805.11683",
+    "claim": "Each DeepBugs detector is a tiny feedforward network with a single hidden layer of 200 units over concatenated Word2Vec (CBOW, 200-dimensional) identifier embeddings.",
+    "quote": "a single hidden layer of size 200, and an output layer with a single element that represents the probability computed by D.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1805-11683-corpus-150k-js-files",
+    "kind": "claim",
+    "source": "1805.11683",
+    "claim": "DeepBugs trains on 100,000 deduplicated JavaScript files and evaluates on another 50,000 (68.6 million lines of code in total).",
+    "quote": "In total, the corpus contains 68.6 million lines of code. We use 100,000 files for training and the remaining 50,000 files for validation.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1805-11683-accuracy-on-seeded-bugs",
+    "kind": "claim",
+    "source": "1805.11683",
+    "claim": "The 89.06%-94.70% accuracy figures for DeepBugs' three detectors are measured on artificially seeded bugs in the 50,000 validation files, not on real bugs.",
+    "quote": "The accuracy ranges between 89.06% and 94.70%, i.e., all bug detectors are highly effective at distinguishing correct from incorrect code examples.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1805-11683-real-warnings-68-percent",
+    "kind": "claim",
+    "source": "1805.11683",
+    "claim": "On real code, the authors manually inspected the top 50 warnings of each of the three detectors: 95 of the 150 were bugs and 7 code-quality problems, so 68% pointed to a real problem.",
+    "quote": "Out of the 150 inspected warnings, 95 warnings point to bugs and 7 warnings point to a code quality problem, i.e., 68% of all warnings point to an actual problem.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1805-11683-swapped-args-27-fp",
+    "kind": "claim",
+    "source": "1805.11683",
+    "claim": "Precision on real code varies a lot by detector: the swapped-arguments detector's top 50 warnings held 23 bugs and 27 false positives.",
+    "quote": "| Swapped arguments | 50 | 23 | 0 | 27 |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1805-11683-under-20ms-per-file",
+    "kind": "claim",
+    "source": "1805.11683",
+    "claim": "A trained DeepBugs detector takes on average under 20 ms per JavaScript file to predict, and training plus prediction over all 150,000 files takes 36-73 minutes per detector.",
+    "quote": "Running both training and prediction on all 150,000 files takes between 36 minutes and 73 minutes per bug detector. The average prediction time per JavaScript file is below 20 milliseconds.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1805-11683-random-embeddings-baseline",
+    "kind": "claim",
+    "source": "1805.11683",
+    "claim": "Learned embeddings add only modestly over random identifier vectors: accuracy on seeded bugs goes from 93.88% to 94.70% (swapped arguments), 89.15% to 92.21% (binary operator) and 84.79% to 89.06% (binary operand).",
+    "quote": "| Swapped arguments | 93.88% | 94.70% | | Wrong binary operator | 89.15% | 92.21% | | Wrong binary operand | 84.79% | 89.06% |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1805-11683-warning-volume-threshold-0-5",
+    "kind": "claim",
+    "source": "1805.11683",
+    "claim": "At the default probability threshold of 0.5 the three detectors emit 116,941 warnings on the validation files, about one per 196 lines, so in practice only top-ranked warnings are usable.",
+    "quote": "For a threshold of t = 0.5, the three bug detectors report a total of 116,941 warnings, which corresponds to roughly one warning per 196 lines of code.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1805-11683-names-limitation",
+    "kind": "claim",
+    "source": "1805.11683",
+    "claim": "The authors name an inherent limitation: name-based detection fails when developers use unconventional names, which is the main source of DeepBugs' false positives.",
+    "quote": "These false positives illustrate an inherent limitation of name-based bug detection: Because the approach relies in reasonable names that are in line with common practice, it may fail when developers choose to diverge from the norm.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1506-01159-corpus-8296-bugfix-commits",
+    "kind": "claim",
+    "source": "1506.01159",
+    "claim": "Ray et al. study 266 snapshots of 10 Java projects (202.6M non-comment lines, 38,003 commits), of which 8,296 commits are classified as bug fixes.",
+    "quote": "These snapshots contain 38,003 distinct commits, of which 8,296 were marked as bug fixing changes",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1506-01159-bugfix-by-commit-keywords",
+    "kind": "claim",
+    "source": "1506.01159",
+    "claim": "Bug-fix commits, and therefore buggy lines, are labelled automatically from commit-message keywords rather than by humans, which the authors list as a source of false positives and false negatives.",
+    "quote": "We mark a commit as bugfix, if the corresponding commit log contains at least one of the error related keywords",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1506-01159-cache-ngram-model",
+    "kind": "claim",
+    "source": "1506.01159",
+    "claim": "The model is a cache n-gram language model: a global n-gram model interpolated with a cache built on the current file, with maximum n-gram order 10 and minimum back-off order 4, scoring each line's average token cross-entropy.",
+    "quote": "We follow Tu et al. [36] to set the maximum order of cache ngrams to 10.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1506-01159-buggy-lines-more-entropic",
+    "kind": "claim",
+    "source": "1506.01159",
+    "claim": "Buggy lines are more entropic than non-buggy lines, but the effect shrinks with fix size: 1.67-1.80 bits higher (Cohen's d 0.56) for commits deleting at most 2 lines, and only 0.80-0.84 bits (d 0.26) at up to 30 deleted lines.",
+    "quote": "for a max\\_delete size of 2, the entropies of buggy lines are on average 1.67 to 1.80 bits higher, with a high effect size of 0.56.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1506-01159-entropy-drops-after-fix",
+    "kind": "claim",
+    "source": "1506.01159",
+    "claim": "For commits deleting at most 5 lines, the entropy of buggy code drops by 1.19-1.26 bits once it is fixed (95% confidence).",
+    "quote": "On average, entropy of the buggy lines drop after the bugfixes, with a drop of 1.19 to 1.26 bit, with 95% confidence.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1506-01159-raw-entropy-marginal-at-5pct",
+    "kind": "claim",
+    "source": "1506.01159",
+    "claim": "Raw cache-LM entropy is a weak line ranker at small inspection budgets: only 17% better than random at 5% of lines inspected; it needs a syntax-type normalisation and a bug-history weight ($gram+wType) to exceed twice random.",
+    "quote": "Indeed, average performance of $gramwas significantly better than random at 20% (nearly twice as good) but only marginally so at 5% (17% better than random).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1506-01159-comparable-to-pmd-findbugs",
+    "kind": "claim",
+    "source": "1506.01159",
+    "claim": "On Rahman et al.'s Apache release data, the entropy-based finder and the static bug finders PMD and FindBugs perform comparably; the slight edge for entropy vanishes under full credit or without the bug-size threshold.",
+    "quote": "SBF and NBF performed comparably; NBF performed slightly better when using both partial credit and the specified threshold for bug-sizes, but when dropping the threshold, and/or with full credit, no significant difference remains between NBF and SBF.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1506-01159-entropy-reorders-sbf-warnings",
+    "kind": "claim",
+    "source": "1506.01159",
+    "claim": "Ordering static-bug-finder warnings by tool priority and then by entropy gives the most cost-effective inspection order the paper tests.",
+    "quote": "Result 5: Ordering SBF warnings by priority and entropy significantly improves SBF performance.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1506-01159-copy-paste-bug-low-entropy",
+    "kind": "claim",
+    "source": "1506.01159",
+    "claim": "Naturalness misses bugs that look familiar: a copy-paste error reusing an existing statement had low entropy, and its correct fix raised entropy by 5.75 bits.",
+    "quote": "Since, the statement related to maxChunkSize was already present in the existing corpus, the line was not surprising. Hence, its entropy was low although it was a bug.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1506-01159-entropy-less-informative-than-warning",
+    "kind": "claim",
+    "source": "1506.01159",
+    "claim": "The authors concede that a surprising line is less informative than a static-analysis warning, since entropy only flags a line as surprising while a static bug finder says what is wrong.",
+    "quote": "NBF just marks a line as \"surprising\", whereas SBF provides specific warnings.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "1506-01159-generalises-to-c-cpp",
+    "kind": "claim",
+    "source": "1506.01159",
+    "claim": "As a sanity check on 3 C/C++ projects (2,518 bug-fix commits), buggy lines were 0.87-1.16 bits more entropic than non-buggy lines at a 15-line threshold.",
+    "quote": "we found that buggy lines were between 0.87 and 1.16 bits more entropic than non-buggy llines when using a threshold of 15 lines",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2308-11873-gpt35-inside-dcc",
+    "kind": "claim",
+    "source": "2308.11873",
+    "claim": "dcc --help wires gpt-3.5-turbo-0301 (via the OpenAI API) into the Debugging C Compiler, at both compile time and run time, consuming source code, error messages and error locations to produce novice-facing explanations.",
+    "quote": "We introduce a new toolflow whereby DCC uses the OpenAI ChatGPT 3.5 API (model: gpt-3.5-turbo-0301) at compile- and run-time to consume source code, error messages, and locations",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2308-11873-prompt-contents",
+    "kind": "claim",
+    "source": "2308.11873",
+    "claim": "The hidden dcc --help prompt contains a base prompt, the program source, DCC's enhanced error message (not the raw compiler message), the error line number, and, for run-time errors only, the GDB stack-frame values.",
+    "quote": "Program source code, - DCC enhanced error message, - Error line number, and, - Values in the stack frame at error time (run-time only).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2308-11873-deployment-scale",
+    "kind": "claim",
+    "source": "2308.11873",
+    "claim": "Deployed in CS1 and CS2 courses at UNSW, dcc --help was used by 2,565 students over 64,000 times in ten weeks.",
+    "quote": "dcc --help was deployed to our CS1 and CS2 courses, with 2,565 students using the tool over 64,000 times in ten weeks.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2308-11873-conceptual-accuracy",
+    "kind": "claim",
+    "source": "2308.11873",
+    "claim": "On a random sample of 400 logged error/explanation pairs rated by four teaching reviewers, gpt-3.5-turbo's explanations were conceptually accurate in 90% of the 200 compile-time cases but only 75% of the 200 run-time cases.",
+    "quote": "At compile-time, 90% conceptual accuracy was observed, as compared to 75% at run-time.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2308-11873-inaccuracy-rates",
+    "kind": "claim",
+    "source": "2308.11873",
+    "claim": "Only 78% of sampled compile-time explanations and 53% of run-time explanations were free of any inaccuracy, as judged by the four reviewers.",
+    "quote": "No inaccuracy was present in the generative explanation for compile-time errors in 78% of cases. Lower inaccuracy was observed at run-time, with only 53% of explanations having no inaccuracy.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2308-11873-correctness-completeness",
+    "kind": "claim",
+    "source": "2308.11873",
+    "claim": "Guidance was technically correct in 93% of sampled compile-time cases versus 66% of run-time cases, and complete in 72% versus 39%.",
+    "quote": "specifically noting 93% correctness at compile-time as compared to 66% at run-time. Generative explanations were consistently deemed relevant to the error, with 92% relevancy at compile-time and a reduced 75% at run-time. There is a large difference in how complete the explanations are between compile-time explanations at 72%, as compared to run-time, reduced 39%.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2308-11873-code-despite-instruction",
+    "kind": "claim",
+    "source": "2308.11873",
+    "claim": "Despite a prompt forbidding code, 48% of sampled compile-time and 49% of run-time explanations contained code blocks that reviewers considered too much help.",
+    "quote": "Despite the prompt instructing that no code be given out with the explanation, 48% of the explanations at compile-time and 49% of run-time explanations contained blocks of code that reviewers considered too much help.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2308-11873-no-output-validation",
+    "kind": "claim",
+    "source": "2308.11873",
+    "claim": "dcc --help does not validate the model's output before showing it; its safeguards are a warning that the explanation may be wrong, a rate-limit warning, and removal from the exam environment.",
+    "quote": "dcc --help warns students that AI-generated explanations may not be correct. The tool also detects if a student is generating many dcc --help explanations in a short amount of time",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2308-11873-no-efficacy-measured",
+    "kind": "claim",
+    "source": "2308.11873",
+    "claim": "The paper's quality numbers are reviewer judgements only: it did not measure whether the explanations actually helped students understand or fix their errors.",
+    "quote": "Currently, we have not assessed students' interpretations of generative explanations, nor the tool's efficacy in assisting students to understand and solve errors.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2308-11873-venue-sigcse24",
+    "kind": "claim",
+    "source": "2308.11873",
+    "claim": "The paper identifies itself as a preprint of a SIGCSE'24 paper (March 20-25, 2024, Portland, OR).",
+    "quote": "Preprint - SIGCSE'24, March 20-25, 2024, Portland, OR",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2507-05305-distilled-training-set",
+    "kind": "claim",
+    "source": "2507.05305",
+    "claim": "The SFT training set is 40,000 DCC Help examples from the first two teaching sessions, with target explanations written by gpt-4.1-2025-04-14 at temperature 0 (distillation, not human-written targets).",
+    "quote": "Using this prompt strategy, we generate responses for the 40,000 examples using gpt-4.1-2025-04-14, via OpenAI's batch completions API, with a temperature of 0.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2507-05305-three-models-qlora",
+    "kind": "claim",
+    "source": "2507.05305",
+    "claim": "Qwen3-32B, Llama-3.1-8B and Qwen3-4B were each fine-tuned with QLoRA (4-bit quantised base plus adapters) for one epoch on a single 80GB A100.",
+    "quote": "We train all our models using QLoRa [4], a Parameter-Efficient Fine-Tuning technique (PEFT) that quantises a language model to 4-bit and adds on top a set of trainable parameters called adapters, while the base model remains frozen.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2507-05305-evaluation-set-64k",
+    "kind": "claim",
+    "source": "2507.05305",
+    "claim": "The automated evaluation set is about 8,000 examples (about 5,600 compile-time and 2,400 run-time) with eight model responses each, 64,000 responses in total, though Section 3.7 describes the same set as 32,000 responses.",
+    "quote": "This produced an evaluation set of approximately 5,600 compile- and 2,400 run-time examples, each of which contains the student code and error context, and eight model responses (total evaluation responses: 64,000).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2507-05305-judge-ensemble-unanimity",
+    "kind": "claim",
+    "source": "2507.05305",
+    "claim": "The 8,000-example set was labelled by a three-judge LLM ensemble (GPT-4.1, Gemini-2.5-Flash, Qwen3-32B) under a strict unanimity rule, two of which are also candidate models or the training-data generator.",
+    "quote": "Rather than relying on a single judge, we use a panel of three strong LLMs: GPT-4.1, Gemini-2.5-Flash, and Qwen3-32B.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2507-05305-base-qwen4b-row",
+    "kind": "claim",
+    "source": "2507.05305",
+    "claim": "Before fine-tuning, base Qwen3-4B scored 0.74 expert-judged and 0.70 LLM-judged Correctness, and 0.61 / 0.65 Selectivity.",
+    "quote": "| Qwen-4B | 0.74 / 0.70 | 0.61 / 0.65 | 0.59 / 0.23 | 0.59 / 0.81 | 0.65 / 0.81 | 0.86 / 0.89 | 0.86 / 0.83 | 0.50 / 0.15 | 0.12 / 0.07 | 0.10 / 0.03 |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2507-05305-sft-qwen4b-row",
+    "kind": "claim",
+    "source": "2507.05305",
+    "claim": "After SFT, Qwen3-4B scored 0.89 expert-judged and 0.86 LLM-judged Correctness, but satisfied all eight criteria in only 0.24 (expert) of compile-time and 0.30 of run-time responses.",
+    "quote": "| Qwen-4B | 0.89 / 0.86 | 0.84 / 0.83 | 0.77 / 0.28 | 0.76 / 0.93 | 0.82 / 0.95 | 0.84 / 0.96 | 0.92 / 0.94 | 0.65 / 0.28 | 0.24 / 0.13 | 0.30 / 0.09 |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2507-05305-within-010-of-gpt41",
+    "kind": "claim",
+    "source": "2507.05305",
+    "claim": "On the 100 expert-annotated examples, SFT-Qwen3-4B stayed within 0.10 of GPT-4.1 on every expert-judged metric, with a mean rank 1.03 worse.",
+    "quote": "When compared to GPT-4.1, SFT-Qwen-4B performs within a margin of 0.10 in all expert-judged metrics, and achieves a mean ranks score worse by only 1.03.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2507-05305-loses-head-to-head",
+    "kind": "claim",
+    "source": "2507.05305",
+    "claim": "In expert rankings (n = 100), SFT-Qwen3-4B beat GPT-4.1 in only 0.34 of compile-time and 0.36 of run-time comparisons, while beating the original DCC Help responses in 0.68 / 0.78.",
+    "quote": "| SFT-Qwen-4B | 0.68 / 0.78 | 0.34 / 0.36 | 0.68 / 0.78 | 0.48 / 0.40 | 0.70 / 0.58 |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2507-05305-beats-deployed-tool",
+    "kind": "claim",
+    "source": "2507.05305",
+    "claim": "Every fine-tuned model beat the deployed DCC Help responses on almost all metrics, with gains of at least 20% in Clarity and No Overhelp and higher expert rankings in 68%-82% of cases.",
+    "quote": "Additionally, each of the fine-tuned models exceed the performance of DCC Help on almost all metrics, demonstrating gains of ≥20% in Clarity and No Overhelp, and with responses ranked higher in 68%-82% of cases.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2507-05305-teacher-bias-limitation",
+    "kind": "claim",
+    "source": "2507.05305",
+    "claim": "The authors note that because the training targets came from GPT-4.1, results are bounded by GPT-4.1's quality, style and biases, and using GPT-4.1 as a judge may reward imitation.",
+    "quote": "Our SFT training dataset was generated using GPT-4.1, therefore our results are inherently bounded by the quality, style and biases of GPT-4.1.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2210-11630-81-generations",
+    "kind": "claim",
+    "source": "2210.11630",
+    "claim": "Leinonen et al. evaluated 81 Codex (code-davinci-002) generations: 9 Python 3.6 error messages, 3 author-written programs each, and 3 outputs per program (one at temperature 0, two at 0.7).",
+    "quote": "This led to a total of 9 × 3 × 3 = 81 unique combinations of programming error message, program category, and temperature value, which we subsequently evaluated.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2210-11630-explanations-48-percent",
+    "kind": "claim",
+    "source": "2210.11630",
+    "claim": "Across 81 Codex outputs rated by two researchers (162 ratings, Cohen's kappa 0.83), outputs were comprehensible 88% of the time and contained an explanation for 84% of inputs, but only 57% of those explanations were correct, 48% of all inputs.",
+    "quote": "Overall, the explanations created by Codex were quite comprehensible (88%). Codex produced an output with an explanation to 84% of the provided codes and error messages, but only about half (57%) of these explanations were deemed correct (48% of all inputs).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2210-11630-fixes-33-percent",
+    "kind": "claim",
+    "source": "2210.11630",
+    "claim": "70% of Codex outputs proposed a fix, but only 47% of those fixes were correct, 33% of all inputs.",
+    "quote": "Although 70% of the outputs had a proposed fix, a little less than half (47%) of those were deemed correct (33% of all inputs).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2210-11630-per-message-spread",
+    "kind": "claim",
+    "source": "2210.11630",
+    "claim": "Explanation correctness varied by error message from 11% (\"unexpected EOF while parsing\") to 83% (\"can't assign to function call\").",
+    "quote": "The range of correct explanations ranged from 11% for \"unexpected EOF while parsing\" to 83% for \"can't assign to function call\".",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2210-11630-temperature-zero-better",
+    "kind": "claim",
+    "source": "2210.11630",
+    "claim": "Temperature 0 did markedly better: outputs were judged an improvement over the original message in over 70% of cases at temperature 0 versus at most 50% at 0.7 (54% overall).",
+    "quote": "For example, the output was considered an improvement in over 70% of the cases with a temperature value of 0, while only up to 50% of the cases with a temperature value of 0.7.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2210-11630-temp0-fixes-still-half",
+    "kind": "claim",
+    "source": "2210.11630",
+    "claim": "Even at temperature 0, proposed fixes were correct in only 42%, 56% and 61% of cases for function-with-strings, simple and library programs respectively.",
+    "quote": "they were still correct in only around half of the cases - 42%, 56%, and 61% of the cases for functions with strings, simple programs, and library related programs respectively.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2210-11630-confident-wrong-indentation",
+    "kind": "claim",
+    "source": "2210.11630",
+    "claim": "Wrong Codex outputs sounded as confident as right ones, and a common failure was blaming indentation for errors actually caused by incomplete code or miscapitalised keywords.",
+    "quote": "seem similarly confident in their tone, which could potentially mislead students. In both of the examples where the output is incorrect, Codex suggests that the issue is related to indentation.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2210-11630-not-production-ready",
+    "kind": "claim",
+    "source": "2210.11630",
+    "claim": "The authors conclude that LLM-generated error explanations and fixes were not yet ready for production use in introductory programming classes.",
+    "quote": "The key implications of this work are that programming error message explanations and suggested fixes generated by LLMs are not yet ready for production use in introductory programming classes",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2210-11630-two-step-routing",
+    "kind": "claim",
+    "source": "2210.11630",
+    "claim": "The authors propose a two-step system that inspects the error message and code complexity before deciding whether to use the LLM or a traditional support mechanism.",
+    "quote": "highlighted a potential way around this by having a two-step system that would look into the error message and the complexity of the source code before deciding whether to use LLMs or other more traditional support mechanisms.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2210-11630-author-code-limitation",
+    "kind": "claim",
+    "source": "2210.11630",
+    "claim": "All evaluated programs were short, single-error snippets written by the authors rather than student code, and the prompt was zero-shot.",
+    "quote": "Regarding the code snippets used in the analysis, they were created by the authors and were not student code.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2302-04662-three-stage-pipeline",
+    "kind": "claim",
+    "source": "2302.04662",
+    "claim": "PyFiXV uses Codex in three stages: Codex-Edit (code-davinci-edit-001) produces the fixed program, Codex-Complete (code-davinci-002) writes the explanation, and Codex-Edit then validates the (fix, explanation) pair before anything is shown.",
+    "quote": "(1) generating a fixed program Pf by editing Pb using Codex-Edit; (2) generating natural language explanation X using Codex-Complete; (3) validating feedback (Pf,X) using Codex-Edit to decide whether the generated feedback is suitable for sharing.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2302-04662-fix-selection",
+    "kind": "claim",
+    "source": "2302.04662",
+    "claim": "Stage 1 samples 10 candidate fixes at temperature 0.5 and keeps the syntactically correct one with the smallest token-level edit distance to the buggy program.",
+    "quote": "PyFiXV selects Pf as the program that is syntactically correct and has the smallest edit-distance to Pb.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2302-04662-few-shot-by-error-type",
+    "kind": "claim",
+    "source": "2302.04662",
+    "claim": "The explanation prompt includes the buggy program, the fix as a line diff, and three expert-annotated few-shot examples chosen first by matching the parser's error type.",
+    "quote": "The primary criterion is to pick examples where the error type of buggy program in the example is same as that of Pbthe underlying parser/compiler provides error types",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2302-04662-simulated-student-validation",
+    "kind": "claim",
+    "source": "2302.04662",
+    "claim": "Validation feeds the generated explanation to Codex-Edit as a simulated student and accepts the feedback only if enough of n3 samples reproduce the fix exactly (AST-normalised, syntax-error-free).",
+    "quote": "Then, out of n3 generated programs, PyFiXV counts the number of programs that don't have syntax errors and have an exact-match with Pf.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2302-04662-datasets",
+    "kind": "claim",
+    "source": "2302.04662",
+    "claim": "Evaluation used 240 Python 2 student programs from TigerJython and 240 Python 3 programs from Codeforces, all with syntax errors and the Codeforces ones submitted after Codex's training cut-off.",
+    "quote": "As our second dataset, namely Codeforces, we curated 240 distinct Python 3 programs from the Codeforces website using their public APIs [13]",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2302-04662-single-expert-ratings",
+    "kind": "claim",
+    "source": "2302.04662",
+    "claim": "Feedback quality was rated by a single expert after two experts reached Cohen's kappa 0.72 on 100 calibration instances.",
+    "quote": "we obtained Cohen's kappa reliability value 0.72 indicating substantial agreement between experts [37]. Afterward, one expert (with experience in tutoring Python programming classes) did these feedback ratings for the evaluation results.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2302-04662-stock-message-baseline",
+    "kind": "claim",
+    "source": "2302.04662",
+    "claim": "Pairing the generated fix with the stock Python error message as the explanation gave only 5.0 precision on TigerJython (Python 2.7 messages) and 35.0 on Codeforces (Python 3.12 messages).",
+    "quote": "For our baseline PyFi-PEM, we see a big jump in precision from 5.0 for TigerJython (Python 2) to 35.0 for Codeforces",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2302-04662-no-validation-precision",
+    "kind": "claim",
+    "source": "2302.04662",
+    "claim": "Without validation, PyFiXV's generator (selected few-shots) reached only 38.9 precision at 92.5 coverage on TigerJython and 55.2 precision at 98.8 coverage on Codeforces.",
+    "quote": "| PyFiXshot:Sel | 38.9 (3.5) | 92.5 (1.6) | 55.2 (3.9) | 98.8 (0.8) |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2302-04662-validated-p70",
+    "kind": "claim",
+    "source": "2302.04662",
+    "claim": "Calibrated for precision of at least 70, PyFiXV achieved 76.0 precision at 31.2 coverage on TigerJython and 72.4 precision at 64.2 coverage on Codeforces.",
+    "quote": "| PyFiXVP≥70 | 76.0 (4.0) | 31.2 (4.0) | 72.4 (6.2) | 64.2 (6.3) |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2302-04662-oracle-coverage-ceiling",
+    "kind": "claim",
+    "source": "2302.04662",
+    "claim": "An oracle validator with access to expert ratings could reach only 47.1 coverage on TigerJython and 75.0 on Codeforces at PyFiXV's precision, the ceiling for the generated feedback.",
+    "quote": "the coverage numbers (47.1 for TigerJython and 75.0 for Codeforces) indicate the maximum possible achievable coverage.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2409-18661-study-design",
+    "kind": "claim",
+    "source": "2409.18661",
+    "claim": "Santos and Becker ran a within-subjects study with n = 106 second-semester CS1 students, each fixing six buggy C programs that produce compile-time errors only, under stock GCC, expert-handwritten or GPT-4 messages.",
+    "quote": "We ran a within-subjects study with 𝑛 = 106 participants in which students were tasked to fix six buggy C programs.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2409-18661-gpt4-prompt",
+    "kind": "claim",
+    "source": "2409.18661",
+    "claim": "GPT-4 (gpt-4-0613, temperature 0) explanations were pre-generated from a prompt containing the verbatim GCC error message and the full source of the buggy program.",
+    "quote": "The prompt used was identical to that in Santos et al. [39], providing both the error message verbatim from GCC as well as the full source code of the buggy program.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2409-18661-full-correct-code-given",
+    "kind": "claim",
+    "source": "2409.18661",
+    "claim": "Every GPT-4 response reproduced the full corrected source code, the fix was equivalent to the expert's in all six tasks, and there were no major inaccuracies or hallucinations, so the null result is not explained by wrong output.",
+    "quote": "every response consistently had a line saying something similar to \"here ' s the corrected code: \" followed by a full reproduction of the source code with the problem resolved. In all six problems, GPT-4 generated a solution equivalent to the one suggested in the handwritten explanations. In addition, GPT-4' s error message explanations were devoid of any major technical inaccuracies or \"hallucinations \" [18].",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2409-18661-one-of-six-tasks",
+    "kind": "claim",
+    "source": "2409.18661",
+    "claim": "Measured by students' time-to-fix, GPT-4 explanations beat stock compiler messages in only 1 of the 6 tasks.",
+    "quote": "we found that GPT-4 generated error messages outperformed conventional compiler error messages in only 1 of the 6 tasks, measured by students ' time-to-fix each problem.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2409-18661-slower-with-gpt4",
+    "kind": "claim",
+    "source": "2409.18661",
+    "claim": "On the missing-parameter task, students were slower with GPT-4's explanation than with the stock GCC message.",
+    "quote": "In fact, in one of the tasks (\" missing parameter \"), students were slower when using GPT-4' s explanation.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2409-18661-handwritten-wins",
+    "kind": "claim",
+    "source": "2409.18661",
+    "claim": "The conclusion reports expert-handwritten messages more effective than stock messages in four of six tasks and more effective than GPT-4 in five of six tasks.",
+    "quote": "Handwritten error messages were more effective than the control in four of six tasks, and more effective than GPT-4' s error message explanations in five of six tasks.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2409-18661-handwritten-vs-gpt4-missing-param",
+    "kind": "claim",
+    "source": "2409.18661",
+    "claim": "Table 1 shows no significant handwritten-vs-GPT-4 difference on the missing-parameter task (p = 0.157), so the per-task tests support handwritten beating GPT-4 in four tasks, not the five stated in the conclusion.",
+    "quote": "| | Handwritten | GPT-4 | -15.61s | 0.157 |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2409-18661-preference-vs-performance",
+    "kind": "claim",
+    "source": "2409.18661",
+    "claim": "Students still rated GPT-4 messages above stock GCC messages (+0.69 points on a -2 to 2 scale) and handwritten messages higher still (+1.27), both p < 0.001.",
+    "quote": "Using a handwritten message results in a 1.27 point increase in opinion compared to traditional compiler error messages (𝑝 &lt; 0.001); whereas using a GPT-4 generated message results in a 0.69 point increase in opinion compared to the control (𝑝 &lt; 0.001).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2409-18661-rust-style-handwritten",
+    "kind": "claim",
+    "source": "2409.18661",
+    "claim": "The winning handwritten messages followed a structured Error/Help/Note layout with source excerpts modelled on the Rust compiler's diagnostics, and were written so that a real compiler could plausibly generate them.",
+    "quote": "The structure of the messages was greatly inspired by the diagnostics emitted by the Rust compiler, with source code excerpts mimicking the structure of Rust' s \"diagnostic windows \" [38]. The handwritten explanations were written in such a way that they can plausibly be generated by an actual compiler, given sufficient context.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2409-18661-venue-ukicer",
+    "kind": "claim",
+    "source": "2409.18661",
+    "claim": "The paper appeared at UKICER 2024 (United Kingdom and Ireland Computing Education Research), September 5-6, 2024, Manchester.",
+    "quote": "United Kingdom and Ireland Computing Education Research (UKICER 2024), September 5-6, 2024, Manchester, United Kingdom.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-12737-venue-iticse-2024",
+    "kind": "claim",
+    "source": "2403.12737",
+    "claim": "Pankiewicz and Baker's study of GPT-4 hints for compiler errors was published at ITiCSE 2024 (Milan).",
+    "quote": "In Proceedings of the 29th annual ACM conference on Innovation and Technology in Computer Science Education (ITiCSE'24), July 8-10, 2024, Milan, Italy.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-12737-novice-groups-gpt4-0613",
+    "kind": "claim",
+    "source": "2403.12737",
+    "claim": "The experiment compared 48 control and 49 experimental self-reported novices in a first-semester C# course (pre-test medians 24% vs 21%, no significant difference), with the experimental group receiving hints from gpt-4-0613.",
+    "quote": "a control group (N=48), and an experimental group (N=49). No significant difference was identified between the median pre-test score of the experimental group (Mdn=21%) and the control group (Mdn=24%) for a nonparametric Mann-Whitney U test (W=1181.5. p=0.971). In the experimental condition, GPT hints (GPT-4 model: gpt-4-0613)",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-12737-hint-latency-popup",
+    "kind": "claim",
+    "source": "2403.12737",
+    "claim": "Each GPT-4 hint was generated once per submission that failed to compile, took about 15-20 seconds, and was shown directly to the student as a pop-up, with no verification step described between generation and display.",
+    "quote": "The hint was generated immediately after the submission (it took approximately 15-20 seconds to generate it) and was presented as a pop-up.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-12737-usefulness-56-vs-20",
+    "kind": "claim",
+    "source": "2403.12737",
+    "claim": "Among the 25 experimental-group students who answered the usefulness survey (213 responses), 56% gave hints a median rating of very or extremely useful, while 20% rated them not useful at all or only slightly useful.",
+    "quote": "The majority of students (56%) generally rated the hints as very or extremely useful - this shows a generally positive reception of the GPT hints feature by students. However, 20% of students generally rated hints as not useful at all or slightly useful.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-12737-focus-marginal-only",
+    "kind": "claim",
+    "source": "2403.12737",
+    "claim": "The higher focus after a hinted compiler error (median 0.9 vs 0.25, 15 vs 13 students) had p=0.0152 against a Benjamini-Hochberg adjusted alpha of 0.0125, so the paper itself reports it only as marginally significant, despite the abstract's 'significantly higher'.",
+    "quote": "For focused, students in the experimental group (N=15) reported marginally higher rates (Mdn=0.9) than those in the control group (Mdn=0.25, N=13), (W=153, adjusted α=0.0125, p=0.0152",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-12737-confrustion-lower",
+    "kind": "claim",
+    "source": "2403.12737",
+    "claim": "Confrustion (confusion plus frustration) reported right after a hinted compiler error was lower in the experimental group (median 0 vs 0.0167, p=0.0157 against an adjusted alpha of 0.025).",
+    "quote": "For confrustion (described in section 2), students in the experimental group reported lower rates (Mdn=0) than those in the control group (Mdn=0.0167), (W=48, adjusted α=0.025, p=0.0157",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-12737-mixed-while-hints-on",
+    "kind": "claim",
+    "source": "2403.12737",
+    "claim": "While GPT-4 hints were available, the hinted group did not consistently make fewer compiler errors than the control group on the six most frequent C# errors, and did worse on several of them.",
+    "quote": "The results of the student performance analysis for different compiler errors were mixed, indicating that the availability of GPT hints did not consistently lead to improved performance across tasks with GPT hints enabled. Contrary to our expectations, we observed lower performance in the experimental condition for several error types.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-12737-five-of-six-after-removal",
+    "kind": "claim",
+    "source": "2403.12737",
+    "claim": "On the harder second-half tasks where hints were switched off, the previously hinted group had a lower cumulative compiler-error fraction over the first five attempts than control for 5 of the 6 most frequent errors, a descriptive comparison of charts without a reported significance test.",
+    "quote": "However, for more challenging tasks in the second half of each module where GPT hints were disabled, the performance of the experimental group was consistently higher for 5 out of 6 analyzed errors",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-12737-cs0266-type-errors",
+    "kind": "claim",
+    "source": "2403.12737",
+    "claim": "The one exception was CS0266 (implicit type conversion), the only conceptual type error among the six, where GPT-4 hints did not appear to help students learn to resolve it.",
+    "quote": "However, addressing the CS0266 error, which necessitates a more profound comprehension of data types, did not follow this trend. It appears that the provided GPT assistance, may not have been helpful to students in learning to resolve more complex errors.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2403-12737-limitations-single-course",
+    "kind": "claim",
+    "source": "2403.12737",
+    "claim": "The authors limit their findings to three months of one C# course at one Polish university, with a small number of participants.",
+    "quote": "The limited number of participants in this study, and its focus on a single university and course, also represents a limitation to the robustness and external validity of the findings.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2608-20896-llama-8b-self-hosted",
+    "kind": "claim",
+    "source": "2608.20896",
+    "claim": "Moraru et al. generated every error-message rewrite participants saw with a small self-hosted model, llama-3.1-8B-Instruct.",
+    "quote": "All participant-facing rewritten messages were generated using llama-3.1-8B-Instruct. The model was selected because it could be self-hosted",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2608-20896-zero-shot-beat-few-shot",
+    "kind": "claim",
+    "source": "2608.20896",
+    "claim": "The rewrites used zero-shot prompting at temperature 0, because one-shot and few-shot prompts biased outputs toward the examples in pilot testing.",
+    "quote": "We used zero-shot prompting and set temperature to 0. This setting was chosen to improve consistency and reproducibility across generated messages. In pilot testing, one-shot and few-shot prompts biased outputs toward the examples and reduced generality.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2608-20896-n103-allocation",
+    "kind": "claim",
+    "source": "2608.20896",
+    "claim": "The main Prolific experiment had 103 valid participants (35 standard, 35 pragmatic, 33 contingent messages; 38 lower and 65 higher assessed proficiency), each fixing one of four short buggy Python snippets.",
+    "quote": "35 participants were assigned to the standard condition, 35 to the pragmatic condition, and 33 to the contingent condition. The sample included 38 participants in the lower assessed proficiency group and 65 in the higher assessed proficiency group.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2608-20896-no-objective-gain",
+    "kind": "claim",
+    "source": "2608.20896",
+    "claim": "With 103 participants, LLM-rewritten Python error messages were rated clearer and less cognitively demanding than the interpreter's own, but produced no statistically significant improvement in fix rate, attempts or time-to-fix.",
+    "quote": "Our results show that while LLM-rewritten messages significantly improved subjective evaluations, with pragmatic messages rated as clearer and less cognitively demanding, these perceived gains did not translate into statistically significant improvements in objective debugging performance.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2608-20896-fix-rates-by-group",
+    "kind": "claim",
+    "source": "2608.20896",
+    "claim": "Fix rates within three attempts, pooled over snippets, were 46% / 54% / 42% (standard / pragmatic / contingent) for the 38 novices and 68% / 82% / 90% for the 65 experts, so the scaffolded contingent style scored below the plain interpreter message for novices.",
+    "quote": "| Novice (n = 38) | 46% | 54% | 42% | | Expert (n = 65) | 68% | 82% | 90% |",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2608-20896-time-to-fix-not-significant",
+    "kind": "claim",
+    "source": "2608.20896",
+    "claim": "Novice time-to-fix favoured LLM messages descriptively, but only 6, 7 and 5 novices succeeded per condition and statistical tests found no significant effect; for experts results were inconclusive.",
+    "quote": "statistical tests found no significant effects, though the current pattern seems to favor LLM explanations. As for experts, results remain inconclusive.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2608-20896-snippet-a-wrong-line",
+    "kind": "claim",
+    "source": "2608.20896",
+    "claim": "The clearest LLM benefit came on snippet A, an unterminated string whose interpreter message points to a non-offending line (53% overall fix rate, the lowest): rewrites that named the right line and cause generally raised fix rates, except the pragmatic style for novices.",
+    "quote": "For snippet A, LLMenhanced PEMs, which do correctly identify the offending line and root cause, generally increase fix rates, with the pragmatic style among novices as the main exception. However, across snippets, style effects vary widely, so we refrain from making any conclusions.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2608-20896-pragmatic-lower-load",
+    "kind": "claim",
+    "source": "2608.20896",
+    "claim": "On Likert ratings (Kruskal-Wallis with Holm-adjusted Dunn tests), experts rated the concise pragmatic rewrites lighter in cognitive load, less authoritative and more useful than the standard interpreter message.",
+    "quote": "Overall, adaptive style, especially Pragmatic, are consistently rated by experts as lighter in cognitive load, less authoritative, and more useful than the Standard baseline.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2608-20896-contingent-verbosity-cost",
+    "kind": "claim",
+    "source": "2608.20896",
+    "claim": "The longer scaffolded (contingent) explanations did not consistently help lower-proficiency participants; the authors attribute this to the reading cost of their verbosity in short repair tasks.",
+    "quote": "Contingent messages provided additional explanatory context, but their greater verbosity may have reduced their usefulness in short repair tasks, particularly for lower assessed proficiency participants.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2608-20896-limitations-synthetic-snippets",
+    "kind": "claim",
+    "source": "2608.20896",
+    "claim": "The evidence rests on four short synthetic single-fault Python snippets in a web editor, which the authors say limits ecological validity for real IDE debugging.",
+    "quote": "The four Python snippets were short, synthetic, and designed to contain a single primary fault. This made the study feasible and controlled, but it limits ecological validity.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2309-12938-proposer-ranker-models",
+    "kind": "claim",
+    "source": "2309.12938",
+    "claim": "CORE pairs GPT-3.5-Turbo as the proposer that writes code revisions with GPT-4 as the ranker that scores them.",
+    "quote": "We obtain promising results that bear witness to practical utility of CORE using GPT-3.5Turbo [41] as the proposer LLM and GPT-4 [40] as the ranker LLM.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2309-12938-zero-shot-no-finetuning",
+    "kind": "claim",
+    "source": "2309.12938",
+    "claim": "CORE uses no training or fine-tuning: the proposer is prompted zero-shot with the static checker's own documentation and fix recommendation, the warning location and message, and the flagged code.",
+    "quote": "We use an instruction-based LLM in zero-shot setting (i.e., no ⟨before code, after code⟩ examples needed) without finetuning.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2309-12938-static-check-filter",
+    "kind": "claim",
+    "source": "2309.12938",
+    "claim": "Of 10 sampled candidate revisions per file, CORE re-runs the static check and drops any candidate that still has a violation or a syntax error, before the ranker sees the rest.",
+    "quote": "We run the static analysis check (that CORE is configured with in 1 ) against the candidate revisions and filter out the ones where the code quality issue continues to persist (i.e., non-zero violations detected). In this process, we de-duplicate identical code revision suggestions as well as ensure the syntactic validity of code revisions, and reject the ones with syntax errors.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2309-12938-proposer-8157-pass-static",
+    "kind": "claim",
+    "source": "2309.12938",
+    "claim": "On 765 Python files flagged by 52 CodeQL checks (CQPy), 81.57% had at least one GPT-3.5-Turbo revision that passed the static checker with zero violations, judged by the tool alone.",
+    "quote": "First, we observe that 81.57% of the flagged files get fixed entirely as validated by the static analysis tool, i.e., they have at least one revision that completely passes the static checker with zero issues flagged.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2309-12938-humans-reject-5511-percent",
+    "kind": "claim",
+    "source": "2309.12938",
+    "claim": "Passing the static checker was far from sufficient: in the user study, reviewers rejected 1321 of 2397 CodeQL-passing revisions (55.11%) as incorrect or carrying unintended changes.",
+    "quote": "However, from the last column, we see that this high acceptance rate comes at a high cost of 1321 false positives, i.e., 55.11% of the revisions that CodeQL passed were rejected by users.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2309-12938-reviewers-one-label-each",
+    "kind": "claim",
+    "source": "2309.12938",
+    "claim": "Human acceptance in CORE was judged only on the CQPyUS subset (10 files per check) by 15 intermediate Python developers with 1-3 years of experience, with one label per revision.",
+    "quote": "Our user group consists of 15 Python developers (intermediate level, with 1-3 years of software engineering experience). Each revision was labeled by only one user",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2309-12938-headline-592-percent",
+    "kind": "claim",
+    "source": "2309.12938",
+    "claim": "CORE's headline is 59.2% of Python files across 52 CodeQL checks revised to pass both the tool and a human reviewer; this equals (298+10)/520 files of the CQPyUS user-study subset with a ranker-accepted revision that the reviewer accepted, not a result on all 765 files.",
+    "quote": "CORE could revise 59.2% Python files (across 52 quality checks) so that they pass scrutiny by both a tool and a human reviewer.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2309-12938-ranker-fp-arithmetic",
+    "kind": "claim",
+    "source": "2309.12938",
+    "claim": "Keeping only GPT-4 strong-accept revisions cut the human rejection rate from 55.11% to 47.55% (1321 to 835 rejections, a 36.8% cut that the text calls 'close to 25%'); the abstract's 25.8% matches dropping only the 341 rejections among ranker-rejected revisions.",
+    "quote": "if we surface only the candidates strongly accepted by the Ranker LLM, the rejection rate drops to 47.55%. In an absolute sense, the number of rejections drops to 835 from 1321, which is close to 25% reduction.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2309-12938-ranker-rejects-reliable",
+    "kind": "claim",
+    "source": "2309.12938",
+    "claim": "The ranker's rejections agreed with humans: for the 26 files where GPT-4 accepted no revision, reviewers also rejected 82.57% of those revisions.",
+    "quote": "if we consider only the files for which no revision was (strong- or weak-) accepted by Ranker LLM, the users also rejected over 82% of those revisions",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2309-12938-java-768-vs-sorald",
+    "kind": "claim",
+    "source": "2309.12938",
+    "claim": "On 483 Java files with 10 SonarQube checks, CORE fixed 76.8% of files (passing SonarQube and accepted by the GPT-4 ranker, with no human review) against 78.3% for the hand-built rule-based Sorald, configured in under a week with fewer than 100 changed lines.",
+    "quote": "CORE produced revisions that passed the static analysis tool in 76.8% Java files (across 10 quality checks) comparable to 78.3% of a specialized program repair tool, with significantly much less engineering efforts.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-13565-venue-aiware-2024",
+    "kind": "claim",
+    "source": "2405.13565",
+    "claim": "AutoCommenter (Google) was published at the 1st ACM International Conference on AI-Powered Software, AIware 2024.",
+    "quote": "In Proceedings of the 1st ACM International Conference on AI-Powered Software (AIware '24), July 15-16, 2024, Porto de Galinhas, Brazil.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-13565-t5x-multitask-training",
+    "kind": "claim",
+    "source": "2405.13565",
+    "claim": "AutoCommenter is one task of a multi-task T5X model (size not disclosed, 2048-token context) trained on over 3 billion examples, of which about 800k are best-practice comments mined from human code reviews that cite a style-guide URL.",
+    "quote": "The training corpus consists of over 3 billion examples, of which the best practice analysis dataset contributes about 800k examples.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-13565-per-url-thresholds",
+    "kind": "claim",
+    "source": "2405.13565",
+    "claim": "A single confidence threshold of 0.98 suppressed many correct predictions (about 80% of several hundred sampled below-threshold predictions were correct), and per-language thresholds also failed, so AutoCommenter moved to per-URL thresholds set from validation data.",
+    "quote": "We manually sampled several hundred results and observed that around 80% of predictions below the threshold were still correct-that is, the false-negative rate was very high at t = 0.98. Additionally, we observed that predictions in Python showed a significantly different distribution of confidence scores, which were disproportionately impacted by thresholding. We conjecture that the training dataset composition (number of distinct URLs and URL frequencies) and specificity of the best practice documents are reasons, but leave a deeper investigation to future work. An attempt to deploy per-language thresholds proved ineffective as a single threshold per language still did not adequately capture the model's ability to correctly predict hundreds of diverse best practices. This led to a lack of diversity in predicted URLs as the model tended to produce higher scores for some URLs vs. others, irrespective of correctness. These observations led to the first major change to AutoCommenter: per-URL thresholds computed based on the intrinsic evaluation on the validation dataset.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-13565-beam-review-greedy-ide",
+    "kind": "claim",
+    "source": "2405.13565",
+    "claim": "Beam search (n=4) tripled posting frequency but had a 2-second median latency, too slow for the IDE, so AutoCommenter uses beam search in code review and greedy decoding for sub-second IDE diagnostics.",
+    "quote": "While beam search increased the posting frequency and diversity, inference became noticeably slower (median latency of 2 seconds). Given that this latency is prohibitive for interactive use in the IDE, we ultimately decided to use beam search for the code review system and greedy search for the IDE.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-13565-useful-ratio-54-plateau",
+    "kind": "claim",
+    "source": "2405.13565",
+    "claim": "After several months with about 3 thousand early adopters the developer-feedback useful ratio plateaued at 54%, and 15 independent raters scored the same ~370 comments 60% useful, both below the 80% target set for wider deployment.",
+    "quote": "The useful ratio from the rater evaluation was 60%, slightly higher than the 54% from the developer feedback on the same comments, but well below our target of 80% for wider deployment.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-13565-suppression-reached-80",
+    "kind": "claim",
+    "source": "2405.13565",
+    "claim": "The useful ratio reached the 80% target not through thresholds but by suppressing 17 (then 5 more) non-actionable best-practice URLs, which raised it from 54% to 66% on historical developer feedback, and by manually rewriting the summaries of frequently posted URLs.",
+    "quote": "First, the rater study identified 17 non-actionable URLs, whose suppression increased the historical useful ratio from 54% to 66% on developer feedback, and from 60% to 74% on rater feedback. We further analyzed comments linked to similar, unrated URLs and suppressed an additional 5. Second, we reviewed and manually updated summaries for all frequently posted URLs. Together, these changes were sufficient to reach our target useful ratio of 80% for the next stage of deployment.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-13565-outdated-practices-regex",
+    "kind": "claim",
+    "source": "2405.13565",
+    "claim": "When a Python import best practice changed in 2022 but the training data predated it, the model kept posting outdated advice, and AutoCommenter suppressed those predictions with regular-expression filters rather than wait for a retrain.",
+    "quote": "We opted for suppression of specific best-practice predictions, using conditional filtering (matching regular expressions on the source code) for two reasons. First, it can be dynamically deployed and immediately applied.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-13565-ab-no-review-speedup",
+    "kind": "claim",
+    "source": "2405.13565",
+    "claim": "In a July 2023 A/B experiment over about half of Google's developers, AutoCommenter produced no statistically significant change in code-review duration, active review time or review iterations, only a slight coding-speed improvement.",
+    "quote": "We did not detect any statistically significant change in any of the following: total duration of code reviews, time developers actively spent on the code review, the number of comment-response iterations between the author and the reviewer.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-13565-resolution-about-40",
+    "kind": "claim",
+    "source": "2405.13565",
+    "claim": "About 40% of AutoCommenter comments are estimated to be resolved: the comment disappeared in 50% of 6000 snapshot pairs, and in a manual sample of 40 such pairs 80% were direct fixes by the author.",
+    "quote": "We found that in 80% of cases, a change made by the author directly resolved the issue described by the posted comment. Therefore, we estimate that the commentresolution rate is about 40%",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2405-13565-beyond-linters-33-of-50",
+    "kind": "claim",
+    "source": "2405.13565",
+    "claim": "Of the 50 most frequently predicted best-practice URLs, three of the authors judged 33 (66%) beyond what a traditional linter detects or could easily be built to detect.",
+    "quote": "For 33/50 (66%) of these best practices, violation detection is beyond the scope of traditional static analysis.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2609-03086-low-resource-eiffel",
+    "kind": "claim",
+    "source": "2609.03086",
+    "claim": "Eiffel-tools targets Eiffel as a low-resource language with little public code but a built-in specification language and a static verifier, AutoProof.",
+    "quote": "Eiffel is a low-resource language; it has a first-class support for specifications and a static verifier AutoProof, but the low amount of public code makes LLM code generation more challenging.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2609-03086-verifier-reverts-output",
+    "kind": "claim",
+    "source": "2609.03086",
+    "claim": "Eiffel-tools, an LSP language server, runs AutoProof with timeouts on every LLM suggestion and reverts LLM-generated code to its last stable state when verification fails.",
+    "quote": "Eiffel-tools uses AutoProof to verify existing code or LLM-generated suggestions. Because AutoProof may not terminate on some inputs, Eiffel-tools runs it with timeouts: any verification exceeding a time limit is killed, and if the code was LLM-generated, the tool reverts it to its previous stable state upon failure.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2609-03086-only-verified-applied",
+    "kind": "claim",
+    "source": "2609.03086",
+    "claim": "The interactive fix-feature-body code action loops LLM candidate, AutoProof, retry, and applies no edit to the user's code unless a candidate verifies.",
+    "quote": "If a candidate body passes verification, Eiffel-tools copies that body into the original feature; otherwise, the loop continues until a candidate passes or a maximum number of attempts is reached. Unless a candidate succeeds, no changes are applied to the original feature.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2609-03086-contract-filters",
+    "kind": "claim",
+    "source": "2609.03086",
+    "claim": "For LLM-suggested contracts, the server parses each candidate and drops contracts that are redundant, not usable by the verifier, reference invalid identifiers, or call with the wrong number of arguments, before inserting the rest.",
+    "quote": "Are redundant - Are not model-based, and thus unusable by AutoProof - Contain invalid top-level identifiers - Contain calls with the wrong number of arguments",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2609-03086-539-bugs-10-attempts",
+    "kind": "claim",
+    "source": "2609.03086",
+    "claim": "The bug-fixing evaluation used 539 bugs (513 from buggy-java-jml-eiffel, 26 from maple-recursive-eiffel) with correct contracts, three LLMs (GPT-5 Nano, Claude Sonnet 4.6, Poolside Laguna XS) and two prompt ablations, allowing at most 10 attempts per feature.",
+    "quote": "In total, the experiment used 539 bugs to be fixed by 3 LLMs using 2 prompt ablations. At most 10 attempts were allowed per feature.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2609-03086-success-76-to-95",
+    "kind": "claim",
+    "source": "2609.03086",
+    "claim": "Measured as passing AutoProof within 10 attempts, Sonnet 4.6 fixed 95% (full prompt) and 90% (minimal), Laguna XS 85% and 76%, and GPT-5 Nano 82% and 77%, which is the source of the 76-95% range.",
+    "quote": "Sonnet 4.6 solved the most tasks in both ablations (95% full, 90% minimal). Laguna XS was better than GPT-5 nano in \"full\" (85% vs. 82%) while GPT was better than Lagune in \"minimal\" (77% GPT vs. 76% Laguna).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2609-03086-full-prompt-plus-6-4pp",
+    "kind": "claim",
+    "source": "2609.03086",
+    "claim": "The tool-built 'full' prompt (syntax guide, feature template, available identifiers, verifier error) raised success by 6.4 percentage points on average over the 'minimal' prompt, and by 8.9 points for the small open-weights Laguna XS.",
+    "quote": "Using \"full\" gives 6.4 pp improvement on average. Extended prompts helped Laguna to improve the most (8.9 pp).",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2609-03086-minimal-omits-error",
+    "kind": "claim",
+    "source": "2609.03086",
+    "claim": "The 'minimal' ablation that still reached 76-90% withholds the verifier's error message and the identifier list from the model, so models fixed most bugs from the code and its contracts alone, with the verifier acting as the accept/reject gate; the diagnostic context added only the 6.4-point average gain.",
+    "quote": "User message omits the list of available variables and the error itself. Model is only told in the system message that there is a problem, but the exact problem is not specified in the user message.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2609-03086-first-attempt-majority",
+    "kind": "claim",
+    "source": "2609.03086",
+    "claim": "Among bugs eventually fixed, 67.9% (Laguna, minimal) to 83.5% (Sonnet, minimal) were fixed on the first attempt, with diminishing returns from each further retry.",
+    "quote": "The majority of fixes happen on the first attempt (from 67.9% for Laguna \"minimal\" to 83.5% for Sonnet \"minimal\"). Every next attempt increases the success rate less and less.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
+  },
+  {
+    "id": "2609-03086-benchmark-leakage-threat",
+    "kind": "claim",
+    "source": "2609.03086",
+    "claim": "The only stated threat to validity is that both public benchmarks exist in other languages and may have leaked into the models' training data, so models might reproduce known fixes rather than repair the bug.",
+    "quote": "It is possible that those benchmarks leaked in the training data of some LLMs and the models could reproduce the solution they were trained on instead of \"fixing\" the bug.",
+    "wiki": [
+      "compiler-embedded-model"
+    ]
   }
 ]
