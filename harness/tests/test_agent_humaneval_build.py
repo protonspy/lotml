@@ -13,7 +13,9 @@ ADD = {
     "entry_point": "add",
     "prompt": 'def add(a, b):\n    """ Add two numbers.\n    >>> add(1, 2)\n    3\n    """\n',
     "canonical_solution": "    return a + b\n",
-    "test": "def check(candidate):\n    assert candidate(1, 2) == 3\n    assert candidate(-4, 4) == 0\n",
+    "test": (
+        "def check(candidate):\n    assert candidate(1, 2) == 3\n    assert candidate(-4, 4) == 0\n"
+    ),
 }
 
 
