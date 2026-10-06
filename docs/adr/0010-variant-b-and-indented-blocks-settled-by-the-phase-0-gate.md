@@ -14,7 +14,8 @@ a braces form. The phase 0 gate (`harness/results/gate-0.md`) measured both, wit
 Sonnet through `claude -p` and two open families through Ollama (Qwen 2.5 Coder 7B, Llama 3.1 8B),
 on 200 paired tasks from MultiPL-E's typed HumanEval and MBPP for the variants and on 192 paired
 editing tasks. "Not worse" was read as: no model significantly worse (exact McNemar, two-sided, 5%)
-and the pooled discordant pairs not favouring the alternative.
+and the pooled discordant pairs not favouring the alternative — an absence of evidence of harm,
+not a showing that the forms are equivalent; the pooled counts are a direction check, not a test.
 
 - **Variant B against variant A** ([[lotml-syntax]]): no model did significantly worse in B; Sonnet
   (21 tasks solved only in B, 1 only in A, p < 0.001) and Qwen (19 against 5, p = 0.007) did
