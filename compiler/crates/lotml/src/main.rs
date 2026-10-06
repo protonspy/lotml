@@ -115,8 +115,12 @@ pub struct Failure(pub String);
 const STACK: usize = 256 * 1024 * 1024;
 
 fn main() -> ExitCode {
-    let worker = std::thread::Builder::new().stack_size(STACK).spawn(run).expect("a worker thread");
-    worker.join().unwrap_or(ExitCode::from(2))
+    // Where the stack cannot be reserved (a tightly limited container), run on this thread: the
+    // depth guard still bounds the recursion, only less of it fits.
+    match std::thread::Builder::new().stack_size(STACK).spawn(run) {
+        Ok(worker) => worker.join().unwrap_or(ExitCode::from(2)),
+        Err(_) => run(),
+    }
 }
 
 fn run() -> ExitCode {

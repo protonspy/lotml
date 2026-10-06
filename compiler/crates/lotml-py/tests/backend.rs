@@ -313,6 +313,11 @@ fn the_emitter_never_lets_a_dunder_attribute_reach_python() {
     let source = "fn f(n: int) -> int:\n    return n.__class__\n";
     // The checker refuses it, so `compile` returns an error.
     assert!(compile(source, std::path::Path::new("f.lotml")).is_err());
-    // And the runtime has the guard the emitter routes such a name to.
-    assert!(RUNTIME.contains("def forbidden("));
+    // And the guard the emitter routes such a name to raises rather than reading anything.
+    let script =
+        "import lotml_rt\ntry:\n    lotml_rt.forbidden('__class__')\nexcept lotml_rt.Panic as e:\n    print(e)";
+    assert_eq!(
+        prints("forbidden", "fn f() -> int:\n    return 1\n", script),
+        "the attribute `__class__` is not reachable from lotml"
+    );
 }

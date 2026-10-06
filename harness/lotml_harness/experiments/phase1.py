@@ -370,7 +370,9 @@ def markdown(summary: dict[str, dict], criteria: list[Criterion]) -> str:
         f"both languages, with up to {ROUNDS} answers: the first, and the rest after feedback —",
         "`lotml check`'s diagnostics, the failing hidden tests with the value returned, or the",
         "error that stopped the program. Pass@1 is the first answer's; program tokens count the",
-        "passing programs with `o200k_base`, as a ratio of lotml to Python per task.",
+        "passing programs with `o200k_base`, as a ratio of lotml to Python per task. A",
+        "conversation that a model call broke off stays in the log with its error and is not",
+        "counted; the task is asked again on the next run.",
         "",
         "| model | family | pairs | lotml pass@1 | Python pass@1 | lotml solved | Python solved |"
         " only lotml | only Python | McNemar p | median rounds | tokens, lotml/Python |",
