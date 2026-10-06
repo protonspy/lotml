@@ -1,0 +1,14 @@
+[package]
+name = "lotml-db"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+salsa = { workspace = true }
+lotml-syntax = { path = "../lotml-syntax" }
+lotml-diag = { path = "../lotml-diag" }
+lotml-check = { path = "../lotml-check" }
+
+[lints]
+workspace = true

@@ -1,8 +1,203 @@
-//! The type checker.
+//! The type checker: signatures first, so a body is checked against the declarations of the
+//! whole file and a function may be used before it is declared; then each body, with
+//! bidirectional inference of its locals.
 
-use lotml_diag::Diagnostic;
+mod body;
+mod builtins;
+mod prefix;
+mod program;
+pub mod ty;
+
+pub use prefix::{PrefixCheck, Verdict, check_prefix};
+
+/// The names every program sees without an import (R35).
+pub const PRELUDE: &[&str] = builtins::PRELUDE;
+
+use std::collections::HashMap;
+
+use lotml_diag::{Applicability, Diagnostic};
+use lotml_syntax::ast::{FnDef, Item, Module, TypeKind};
+use lotml_syntax::span::Span;
+use lotml_syntax::{SyntaxError, parse};
+
+use crate::body::Body;
+use crate::program::{FnSig, Program};
+use crate::ty::Ty;
 
 /// Parse and check one file, returning every diagnostic in source order.
-pub fn check_source(_source: &str) -> Vec<Diagnostic> {
-    unimplemented!("the type checker")
+pub fn check_source(source: &str) -> Vec<Diagnostic> {
+    let parsed = parse(source);
+    let mut diagnostics: Vec<Diagnostic> = parsed.errors.iter().map(syntax).collect();
+    diagnostics.extend(check(&parsed.module, source));
+    diagnostics.sort_by_key(|d| d.span.start);
+    diagnostics
+}
+
+/// A syntax error as a diagnostic: what was expected, and the fix when there is one.
+pub fn syntax(error: &SyntaxError) -> Diagnostic {
+    let mut d = Diagnostic::error(error.code, error.span, error.message.clone());
+    if !error.expected.is_empty() {
+        d = d.alternatives(error.expected.iter().map(ToString::to_string));
+    }
+    if let Some((span, replacement)) = &error.fix {
+        let message = if replacement.trim().is_empty() {
+            "remove it".to_string()
+        } else {
+            format!("write `{}`", replacement.trim())
+        };
+        d = d.fix(message, Applicability::MachineApplicable, vec![(*span, replacement.clone())]);
+    }
+    d
+}
+
+/// Type-check a parsed module.
+pub fn check(module: &Module, text: &str) -> Vec<Diagnostic> {
+    check_typed(module, text).0
+}
+
+/// The type of each expression of a module, by its span.
+pub type Types = HashMap<Span, Ty>;
+
+/// Type-check a parsed module, keeping the type of every expression for a backend.
+pub fn check_typed(module: &Module, text: &str) -> (Vec<Diagnostic>, Types) {
+    let mut types = Types::new();
+    let mut program = Program::collect(module);
+    let mut diagnostics = std::mem::take(&mut program.diagnostics);
+    for item in &module.items {
+        match item {
+            Item::Fn(f) => {
+                let sig = quiet_signature(&program, f, &[], None);
+                diagnostics.extend(function(&program, text, f, &sig, &[], &mut types));
+            }
+            Item::Impl(imp) => {
+                let TypeKind::Named { name, .. } = &imp.target.kind else { continue };
+                let Some(def) = program.types.get(&name.name) else { continue };
+                let params = def.params().to_vec();
+                let self_ty = Ty::Adt(name.name.clone(), params.iter().map(|p| Ty::Param(p.clone())).collect());
+                let outer: Vec<(String, Option<String>)> = params.iter().map(|p| (p.clone(), None)).collect();
+                for method in &imp.methods {
+                    let sig = quiet_signature(&program, method, &params, Some(&self_ty));
+                    diagnostics.extend(function(&program, text, method, &sig, &outer, &mut types));
+                }
+            }
+            Item::Trait(t) => {
+                let outer = vec![("Self".to_string(), Some(t.name.name.clone()))];
+                for method in &t.methods {
+                    let sig = quiet_signature(&program, method, &[], Some(&Ty::Param("Self".into())));
+                    diagnostics.extend(function(&program, text, method, &sig, &outer, &mut types));
+                }
+            }
+            Item::Record(r) => {
+                let mut body = Body::new(&program, text, None, &[], false);
+                if let Some(program::TypeDef::Record { fields, .. }) = program.types.get(&r.name.name) {
+                    for (field, sig) in r.fields.iter().zip(fields) {
+                        if let Some(default) = &field.default {
+                            let found = body.expr(default, Some(&sig.ty));
+                            body.coerce(&found, &sig.ty, default.span);
+                        }
+                    }
+                }
+                types.extend(body.types());
+                diagnostics.extend(body.diagnostics);
+            }
+            Item::Test(t) => {
+                let mut body = Body::new(&program, text, None, &[], true);
+                body.block(&t.body);
+                types.extend(body.types());
+                diagnostics.extend(body.diagnostics);
+            }
+            Item::Sum(_) | Item::Import(_) | Item::Error(_) => {}
+        }
+    }
+    (diagnostics, types)
+}
+
+/// A signature already reported on when the program was collected, lowered again without
+/// reporting: a duplicate declaration keeps its own signature.
+fn quiet_signature(program: &Program, f: &FnDef, outer: &[String], self_ty: Option<&Ty>) -> FnSig {
+    let mut scratch = Program { types: program.types.clone(), traits: program.traits.clone(), ..Program::default() };
+    scratch.signature(f, outer, self_ty)
+}
+
+fn function(
+    program: &Program,
+    text: &str,
+    f: &FnDef,
+    sig: &FnSig,
+    outer: &[(String, Option<String>)],
+    types: &mut Types,
+) -> Vec<Diagnostic> {
+    let mut body = Body::new(program, text, Some(sig), outer, false);
+    for (param, param_sig) in f.params.iter().zip(&sig.params) {
+        if let Some(default) = &param.default {
+            let found = body.expr(default, Some(&param_sig.ty));
+            body.coerce(&found, &param_sig.ty, default.span);
+        }
+    }
+    if let Some(block) = &f.body {
+        body.function_body(block, sig);
+    }
+    types.extend(body.types());
+    body.diagnostics
+}
+
+/// The names closest to `name`, for "did you mean": by edit distance with transpositions,
+/// and names one contains the other of, nearest first.
+pub(crate) fn closest(name: &str, candidates: &[String]) -> Vec<String> {
+    let limit = (name.chars().count() / 3).max(1);
+    let mut scored: Vec<(usize, &String)> = candidates
+        .iter()
+        .filter(|c| c.as_str() != name && !c.is_empty())
+        .filter_map(|c| {
+            let d = distance(&name.to_lowercase(), &c.to_lowercase());
+            let contained = c.len() >= 3 && name.len() >= 3 && (name.contains(c.as_str()) || c.contains(name));
+            (d <= limit || contained).then_some((d, c))
+        })
+        .collect();
+    scored.sort();
+    scored.dedup_by(|a, b| a.1 == b.1);
+    scored.into_iter().take(5).map(|(_, c)| c.clone()).collect()
+}
+
+/// Optimal string alignment distance: insertions, deletions, substitutions and adjacent
+/// transpositions each cost one.
+fn distance(a: &str, b: &str) -> usize {
+    let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
+    let mut d = vec![vec![0usize; b.len() + 1]; a.len() + 1];
+    for (i, row) in d.iter_mut().enumerate() {
+        row[0] = i;
+    }
+    for (j, cell) in d[0].iter_mut().enumerate() {
+        *cell = j;
+    }
+    for i in 1..=a.len() {
+        for j in 1..=b.len() {
+            let cost = usize::from(a[i - 1] != b[j - 1]);
+            d[i][j] = (d[i - 1][j] + 1).min(d[i][j - 1] + 1).min(d[i - 1][j - 1] + cost);
+            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
+                d[i][j] = d[i][j].min(d[i - 2][j - 2] + 1);
+            }
+        }
+    }
+    d[a.len()][b.len()]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn distance_counts_a_transposition_once() {
+        assert_eq!(distance("cuont", "count"), 1);
+        assert_eq!(distance("abc", "abc"), 0);
+        assert_eq!(distance("", "ab"), 2);
+    }
+
+    #[test]
+    fn closest_finds_near_and_containing_names() {
+        let names: Vec<String> = ["count", "counter", "upper", "zzz"].iter().map(ToString::to_string).collect();
+        assert_eq!(closest("cuont", &names), vec!["count".to_string()]);
+        assert!(closest("uppercase", &names).contains(&"upper".to_string()));
+        assert!(closest("qqqqqq", &names).is_empty());
+    }
 }
