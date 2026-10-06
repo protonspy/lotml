@@ -78,7 +78,10 @@ characters; other characters print as they are. Records and variants print as th
 open-addressing table — the same initial size, probe sequence, growth and hash (`int` modulo
 2^61 − 1, `float` per `_Py_HashDouble`, `str` by SipHash-1-3 over its PEP 393 width with the key
 `PYTHONHASHSEED=0` gives, tuples per xxHash) — so that iteration order matches; dicts keep insertion
-order. The parity suite runs the Python target with `PYTHONHASHSEED=0`.
+order. The parity suite runs the Python target with `PYTHONHASHSEED=0`. Where CPython's versions
+differ, the C target follows 3.12 and 3.13, which CI and the harness run: a set display of three
+or more constants is folded by their compiler into a frozenset rebuilt in its own iteration order,
+while 3.14 adds the items in order.
 
 ## Running and tests
 

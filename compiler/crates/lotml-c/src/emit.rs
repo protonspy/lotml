@@ -458,13 +458,16 @@ impl Writer<'_> {
                         self.line(&format!("lt_dict_set(&{target}, {k}, {v});"));
                     }
                 }
-                StmtKind::Let(local, Expr::SetNew { elem, items }) => {
+                StmtKind::Let(local, Expr::SetNew { elem, items, folded }) => {
                     let target = self.name(*local);
                     let desc = self.types.desc(elem);
                     self.line(&format!("{target} = lt_set_new({desc});"));
                     for item in items {
                         let address = self.address(item, elem);
                         self.line(&format!("lt_set_add(&{target}, {address});"));
+                    }
+                    if *folded {
+                        self.line(&format!("{target} = lt_set_folded({target});"));
                     }
                 }
                 StmtKind::Let(local, Expr::ListNew { elem, items }) => {

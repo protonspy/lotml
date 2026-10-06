@@ -314,6 +314,9 @@ pub enum Expr {
     SetNew {
         elem: Ty,
         items: Vec<Operand>,
+        /// A display of three or more constants, which CPython up to 3.13 builds through a folded
+        /// frozenset, in another order than adding the items would give.
+        folded: bool,
     },
     /// A closure of the lambda `lambda`, of type `ty`, holding copies of `captures`.
     Closure {

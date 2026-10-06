@@ -181,6 +181,22 @@ fn dyn_callable(m: &Method) -> bool {
         && !mentions(&call_ret(&m.sig), "Self")
 }
 
+/// Whether the Python target writes `e` as what CPython's compiler takes for a constant once it
+/// has folded them: a literal, a float negated, a number with a plus, a tuple of constants. A
+/// negated integer is not, since the Python target checks it against its type.
+fn constant(e: &ast::Expr) -> bool {
+    match &e.kind {
+        ExprKind::Int(_) | ExprKind::Float(_) | ExprKind::Bool(_) | ExprKind::None => true,
+        ExprKind::Str(literals) => literals.iter().all(|l| l.parts.iter().all(|p| matches!(p, StrPart::Text(_)))),
+        ExprKind::Unary { op: ast::UnaryOp::Neg, operand } => matches!(operand.kind, ExprKind::Float(_)),
+        ExprKind::Unary { op: ast::UnaryOp::Pos, operand } => {
+            matches!(operand.kind, ExprKind::Int(_) | ExprKind::Float(_))
+        }
+        ExprKind::Tuple(items) => items.iter().all(constant),
+        _ => false,
+    }
+}
+
 /// Whether `import` is of the `math` module, which the C target compiles to its own functions.
 fn is_math(import: &ast::Import) -> bool {
     matches!(import.module.as_slice(), [m] if m.name == "math")
@@ -1844,7 +1860,8 @@ impl<'c, 'a> Builder<'c, 'a> {
                     let v = self.value(item);
                     values.push(self.coerce(v, &t));
                 }
-                Value::Expr(Expr::SetNew { elem: *t, items: values })
+                let folded = items.len() > 2 && items.iter().all(constant);
+                Value::Expr(Expr::SetNew { elem: *t, items: values, folded })
             }
             ExprKind::DictComp { key, value, loops } => {
                 let Ty::Dict(k, v) = self.ty(e) else { return Value::Done(self.unsupported(e.span, "this dict")) };
@@ -1871,7 +1888,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let Ty::Set(t) = self.ty(e) else { return Value::Done(self.unsupported(e.span, "this set")) };
                 let t = *t;
                 let s = self.temp(Ty::Set(Box::new(t.clone())));
-                self.push(StmtKind::Let(s, Expr::SetNew { elem: t.clone(), items: Vec::new() }));
+                self.push(StmtKind::Let(s, Expr::SetNew { elem: t.clone(), items: Vec::new(), folded: false }));
                 self.comprehension_loops(loops, &mut |b| {
                     let v = b.value(element);
                     let v = b.coerce(v, &t);
@@ -2397,7 +2414,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 Value::Expr(rt("lt_range_list", vec![start, stop, step], true))
             }
             ("list", []) => Value::Expr(Expr::ListNew { elem: element(&result_ty), items: Vec::new() }),
-            ("set", []) => Value::Expr(Expr::SetNew { elem: element(&result_ty), items: Vec::new() }),
+            ("set", []) => Value::Expr(Expr::SetNew { elem: element(&result_ty), items: Vec::new(), folded: false }),
             ("set", [x]) => {
                 if let Ty::Set(_) = self.ty(x) {
                     let v = self.value(x);

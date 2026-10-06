@@ -1,5 +1,7 @@
 //! Dicts and sets on the C target: insertion order for dicts, CPython's hash and table order for
-//! sets, under `PYTHONHASHSEED=0` (R1.2, R1.3).
+//! sets, under `PYTHONHASHSEED=0` (R1.2, R1.3). A set display of three or more constants iterates
+//! as CPython 3.12 and 3.13 build it, the versions CI and the harness run; run these tests with
+//! `LOTML_PYTHON` naming one of them.
 
 mod common;
 
@@ -10,7 +12,7 @@ const DICTS: &str = include_str!("programs/dicts.lotml");
 #[test]
 fn dicts_and_sets_print_and_iterate_in_python_s_order() {
     let run = parity("dicts", DICTS);
-    assert!(run.stdout.contains("{1, 2, 3, 100, 10} set() {'banana', 'apple', 'cherry'}"), "{}", run.stdout);
+    assert!(run.stdout.contains("{1, 2, 3, 100, 10} set() {'banana', 'cherry', 'apple'}"), "{}", run.stdout);
     assert!(run.stdout.contains("{1, 2, 3, 100, 36, 8, 9, 10, 20, 52}"), "{}", run.stdout);
 }
 
