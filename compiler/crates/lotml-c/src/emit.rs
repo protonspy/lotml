@@ -214,6 +214,24 @@ impl Writer<'_> {
                     self.depth -= 1;
                     self.line("}");
                 }
+                StmtKind::Let(local, Expr::DictNew { key, value, items }) => {
+                    let target = self.name(*local);
+                    let (kd, vd) = (self.types.desc(key), self.types.desc(value));
+                    self.line(&format!("{target} = lt_dict_new({kd}, {vd});"));
+                    for (k, v) in items {
+                        let (k, v) = (self.address(k, key), self.address(v, value));
+                        self.line(&format!("lt_dict_set(&{target}, {k}, {v});"));
+                    }
+                }
+                StmtKind::Let(local, Expr::SetNew { elem, items }) => {
+                    let target = self.name(*local);
+                    let desc = self.types.desc(elem);
+                    self.line(&format!("{target} = lt_set_new({desc});"));
+                    for item in items {
+                        let address = self.address(item, elem);
+                        self.line(&format!("lt_set_add(&{target}, {address});"));
+                    }
+                }
                 StmtKind::Let(local, Expr::ListNew { elem, items }) => {
                     let target = self.name(*local);
                     let desc = self.types.desc(elem);
@@ -421,6 +439,22 @@ impl Writer<'_> {
                     slot = format!("(&lt_own_t{id}({slot})->f{index})");
                     ty = field;
                 }
+                Proj::Key(k) | Proj::SetDefault(k, _) => {
+                    let (key, value) = match &ty {
+                        Ty::Dict(k, v) => ((**k).clone(), (**v).clone()),
+                        _ => (Ty::Unit, Ty::Unit),
+                    };
+                    let k = self.address(k, &key);
+                    let c = self.c_type(&value);
+                    slot = match proj {
+                        Proj::SetDefault(_, d) => {
+                            let d = self.address(d, &value);
+                            format!("(({c} *)lt_dict_setdefault({slot}, {k}, {d}))")
+                        }
+                        _ => format!("(({c} *)lt_dict_slot({slot}, {k}, LT_HERE))"),
+                    };
+                    ty = value;
+                }
             }
         }
         (ty, slot)
@@ -464,6 +498,8 @@ impl Writer<'_> {
             Arg::Value(o) => self.operand(o),
             Arg::Address(o, ty) => self.address(o, ty),
             Arg::Out(local, _) => format!("&{}", self.name(*local)),
+            Arg::Desc(ty) => self.types.desc(ty),
+            Arg::Offset(ty) => format!("offsetof({}, f1)", self.c_type(ty)),
         }
     }
 
@@ -521,11 +557,16 @@ impl Writer<'_> {
                 match ty {
                     Ty::Str => format!("lt_str_contains({c}, {})", self.operand(item)),
                     Ty::List(elem) => format!("lt_list_contains({c}, {})", self.address(item, elem)),
+                    Ty::Dict(k, _) => format!("lt_dict_contains({c}, {})", self.address(item, k)),
+                    Ty::Set(t) => format!("lt_set_contains({c}, {})", self.address(item, t)),
                     _ => format!("false /* `in` on {ty} */"),
                 }
             }
             Expr::Print { args, sep, end } => self.print(args, sep.as_ref(), end.as_ref()),
-            Expr::Format(_) | Expr::ListNew { .. } => "0 /* written by its Let */".to_string(),
+            Expr::Format(_) | Expr::ListNew { .. } | Expr::DictNew { .. } | Expr::SetNew { .. } => {
+                "0 /* written by its Let */".to_string()
+            }
+            Expr::ReadPlace(place) => format!("(*{})", self.place(place).1),
             Expr::ToStr(value, ty) => {
                 let v = self.operand(value);
                 match ty {
@@ -542,7 +583,8 @@ impl Writer<'_> {
                 let v = self.operand(value);
                 match ty {
                     Ty::Str => format!("{v}->length"),
-                    Ty::List(_) => format!("{v}->len"),
+                    Ty::List(_) | Ty::Dict(..) => format!("{v}->len"),
+                    Ty::Set(_) => format!("{v}->used"),
                     _ => format!("0 /* len of {ty} */"),
                 }
             }
@@ -609,7 +651,7 @@ impl Writer<'_> {
                     _ => format!("(lt_str_compare({a}, {b}) {symbol} 0)"),
                 }
             }
-            Ty::List(_) | Ty::Tuple(_) | Ty::Adt(..) | Ty::Optional(_) | Ty::Result(..) => {
+            Ty::List(_) | Ty::Tuple(_) | Ty::Adt(..) | Ty::Optional(_) | Ty::Result(..) | Ty::Dict(..) | Ty::Set(_) => {
                 let desc = self.types.desc(ty);
                 let (a, b) = (self.address(a, ty), self.address(b, ty));
                 match op {

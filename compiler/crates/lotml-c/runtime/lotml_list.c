@@ -174,7 +174,8 @@ static void lt_share_cell(void *a) {
     lt_cell *c = *(lt_cell **)a;
     if (c->count > 0) c->count = -c->count;
 }
-const lt_type lt_type_str = {sizeof(lt_str *), lt_inc_str, lt_dec_str, lt_eq_str, lt_cmp_str, NULL, lt_repr_str, lt_str_str, lt_share_cell};
+static int64_t lt_hash_str_value(const void *value);
+const lt_type lt_type_str = {sizeof(lt_str *), lt_inc_str, lt_dec_str, lt_eq_str, lt_cmp_str, lt_hash_str_value, lt_repr_str, lt_str_str, lt_share_cell};
 
 void lt_buf_value(lt_buf *b, const lt_type *type, const void *value) {
     type->str(b, value);

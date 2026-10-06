@@ -481,6 +481,67 @@ bool lt_list_last(const lt_list *l, void *out);
 void lt_slice_indices(int64_t length, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step,
                       int64_t *start, int64_t *count, int64_t *by, lt_at at);
 
+/* Dicts and sets --------------------------------------------------------------------------- */
+
+/* `{K: V}`: entries in insertion order — hash, liveness, key, value — behind an index table. */
+typedef struct lt_dict {
+    lt_cell cell;
+    const lt_type *key;
+    const lt_type *value;
+    int64_t len;
+    int64_t used;
+    int64_t cap;
+    char *entries;
+    int64_t *index;
+    int64_t mask;
+} lt_dict;
+
+/* `{T}`: CPython's open-addressing set table, slot for slot. */
+typedef struct lt_set {
+    lt_cell cell;
+    const lt_type *type;
+    int64_t fill;
+    int64_t used;
+    int64_t mask;
+    int64_t finger;
+    char *table;
+} lt_set;
+
+extern const lt_type lt_type_dict, lt_type_set;
+int64_t lt_hash_str(lt_str *s);
+
+lt_dict *lt_dict_new(const lt_type *key, const lt_type *value);
+void lt_dict_drop(lt_dict *d);
+lt_dict *lt_dict_copy(const lt_dict *d);
+void lt_dict_set(lt_dict **slot, const void *key, const void *value);
+const void *lt_dict_get(const lt_dict *d, const void *key, lt_at at);
+const void *lt_dict_get_or(const lt_dict *d, const void *key, const void *otherwise);
+bool lt_dict_get_optional(const lt_dict *d, const void *key, void *out);
+void *lt_dict_slot(lt_dict **slot, const void *key, lt_at at);
+void *lt_dict_setdefault(lt_dict **slot, const void *key, const void *otherwise);
+bool lt_dict_contains(const lt_dict *d, const void *key);
+bool lt_dict_pop(lt_dict **slot, const void *key, void *out);
+void lt_dict_clear(lt_dict **slot);
+lt_list *lt_dict_keys(const lt_dict *d);
+lt_list *lt_dict_values(const lt_dict *d);
+lt_list *lt_dict_items(const lt_dict *d, const lt_type *pair, size_t value_at);
+lt_dict *lt_dict_from_pairs(const lt_type *key, const lt_type *value, const lt_list *pairs, size_t value_at);
+
+lt_set *lt_set_new(const lt_type *type);
+void lt_set_drop(lt_set *s);
+lt_set *lt_set_copy(const lt_set *s);
+void lt_set_add(lt_set **slot, const void *key);
+void lt_set_discard(lt_set **slot, const void *key);
+void lt_set_remove(lt_set **slot, const void *key, lt_at at);
+bool lt_set_pop(lt_set **slot, void *out);
+bool lt_set_contains(const lt_set *s, const void *key);
+lt_list *lt_set_list(const lt_set *s);
+lt_set *lt_set_from_list(const lt_type *type, const lt_list *items);
+lt_set *lt_set_union(const lt_set *a, const lt_set *b);
+lt_set *lt_set_intersection(const lt_set *a, const lt_set *b);
+lt_set *lt_set_difference(const lt_set *a, const lt_set *b);
+bool lt_set_issubset(const lt_set *a, const lt_set *b);
+
 /* The format mini-language: `format(value, spec)` as Python writes it, into `b`. */
 void lt_format_i64(lt_buf *b, int64_t value, const char *spec, size_t size, lt_at at);
 void lt_format_u64(lt_buf *b, uint64_t value, const char *spec, size_t size, lt_at at);

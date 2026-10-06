@@ -50,6 +50,11 @@ pub enum Proj {
     Index(Operand),
     /// A field of a record.
     Field(usize),
+    /// The value of a key of a dict, which must be there.
+    Key(Operand),
+    /// The value of a key of a dict, set to the default first when missing: `setdefault`. The
+    /// key and the default are taken over.
+    SetDefault(Operand, Operand),
 }
 
 #[derive(Clone, Debug)]
@@ -140,6 +145,10 @@ pub enum Arg {
     Address(Operand, Ty),
     /// A pointer to a local the function sets, whatever it returns: an output.
     Out(Local, Ty),
+    /// The descriptor of a type.
+    Desc(Ty),
+    /// The offset of the second field of a pair type: where a dict's value goes in an item.
+    Offset(Ty),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -278,6 +287,20 @@ pub enum Expr {
         value: Operand,
     },
     ResultIsOk(Operand),
+    /// The value at a place, read; reaching it may change the containers on the way, as
+    /// `setdefault` does.
+    ReadPlace(Place),
+    /// A new dict holding `items`, keys and values taken over.
+    DictNew {
+        key: Ty,
+        value: Ty,
+        items: Vec<(Operand, Operand)>,
+    },
+    /// A new set holding `items`, taken over.
+    SetNew {
+        elem: Ty,
+        items: Vec<Operand>,
+    },
     /// An optional `ty` holding `value` when `cond` holds, else `None`.
     OptIf {
         ty: Ty,
@@ -300,7 +323,7 @@ impl Arg {
     pub fn operand(&self) -> Option<&Operand> {
         match self {
             Arg::Value(o) | Arg::Address(o, _) => Some(o),
-            Arg::Out(..) => None,
+            Arg::Out(..) | Arg::Desc(_) | Arg::Offset(_) => None,
         }
     }
 }
@@ -320,6 +343,17 @@ impl Expr {
             | Expr::ResultValue(tuple)
             | Expr::ResultError(tuple) => f(tuple),
             Expr::OptNew { value, .. } => value.iter().for_each(f),
+            Expr::ReadPlace(place) => {
+                f(&Operand::Local(place.local));
+                place_operands(place, f);
+            }
+            Expr::DictNew { items, .. } => {
+                for (k, v) in items {
+                    f(k);
+                    f(v);
+                }
+            }
+            Expr::SetNew { items, .. } => items.iter().for_each(f),
             Expr::OptIf { cond, value, .. } => {
                 f(cond);
                 f(value);
@@ -362,10 +396,15 @@ fn format_operands(parts: &[FormatPart], f: &mut impl FnMut(&Operand)) {
     }
 }
 
-fn place_operands(place: &Place, f: &mut impl FnMut(&Operand)) {
+pub fn place_operands(place: &Place, f: &mut impl FnMut(&Operand)) {
     for proj in &place.proj {
-        if let Proj::Index(i) = proj {
-            f(i);
+        match proj {
+            Proj::Index(i) | Proj::Key(i) => f(i),
+            Proj::SetDefault(k, d) => {
+                f(k);
+                f(d);
+            }
+            Proj::Field(_) => {}
         }
     }
 }
@@ -435,7 +474,7 @@ pub fn block_types(block: &Block, f: &mut impl FnMut(&Ty)) {
 fn arg_types(args: &[Arg], f: &mut impl FnMut(&Ty)) {
     for a in args {
         match a {
-            Arg::Address(_, ty) | Arg::Out(_, ty) => f(ty),
+            Arg::Address(_, ty) | Arg::Out(_, ty) | Arg::Desc(ty) | Arg::Offset(ty) => f(ty),
             Arg::Value(_) => {}
         }
     }
@@ -444,6 +483,8 @@ fn arg_types(args: &[Arg], f: &mut impl FnMut(&Ty)) {
 fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
     match e {
         Expr::ListNew { elem, .. } | Expr::ListGet { elem, .. } => f(&Ty::List(Box::new(elem.clone()))),
+        Expr::SetNew { elem, .. } => f(&Ty::Set(Box::new(elem.clone()))),
+        Expr::DictNew { key, value, .. } => f(&Ty::Dict(Box::new(key.clone()), Box::new(value.clone()))),
         Expr::TupleNew { ty, .. }
         | Expr::ToStr(_, ty)
         | Expr::Contains { ty, .. }
@@ -453,6 +494,7 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
         | Expr::OptNew { ty, .. }
         | Expr::OptIf { ty, .. }
         | Expr::ResultNew { ty, .. }
+        | Expr::Len(_, ty)
         | Expr::Compare(_, _, _, ty) => f(ty),
         Expr::Rt { args, .. } => arg_types(args, f),
         Expr::RtValue { args, ty, .. } => {

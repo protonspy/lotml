@@ -4,7 +4,7 @@
 //! that only reads it lets it be decremented right after, when it was the last. A branch
 //! decrements on entry what it never uses; a spent loop, on exit, what is not used after it.
 
-use crate::mir::{Arg, Block, Expr, Function, Local, LocalInfo, Operand, Stmt, StmtKind, counted, outs};
+use crate::mir::{Arg, Block, Expr, Function, Local, LocalInfo, Operand, Place, Proj, Stmt, StmtKind, counted, outs};
 
 /// A set of locals, as bits.
 #[derive(Clone, PartialEq, Eq)]
@@ -141,6 +141,7 @@ impl Pass {
             StmtKind::Store(place, v) => {
                 let mut s = out.clone();
                 self.add(&mut s, &Operand::Local(place.local));
+                crate::mir::place_operands(place, &mut |o| self.add(&mut s, o));
                 self.add(&mut s, v);
                 s
             }
@@ -150,6 +151,7 @@ impl Pass {
                     s.remove(o);
                 }
                 self.add(&mut s, &Operand::Local(place.local));
+                crate::mir::place_operands(place, &mut |o| self.add(&mut s, o));
                 self.add_args(&mut s, args);
                 s
             }
@@ -216,6 +218,10 @@ impl Pass {
 
     fn uses_of(&self, e: &Expr) -> Uses {
         let mut uses = Uses::default();
+        if let Expr::ReadPlace(place) = e {
+            self.place_uses(place, &mut uses);
+            return uses;
+        }
         let stores = matches!(
             e,
             Expr::Use(_)
@@ -226,6 +232,8 @@ impl Pass {
                 | Expr::OptNew { .. }
                 | Expr::OptIf { .. }
                 | Expr::ResultNew { .. }
+                | Expr::DictNew { .. }
+                | Expr::SetNew { .. }
         );
         e.operands(&mut |o| {
             if let Operand::Local(l) = o
@@ -235,6 +243,19 @@ impl Pass {
             }
         });
         uses
+    }
+
+    /// How a place uses its locals: the local it starts from and its indices are read, the key
+    /// and default of a `setdefault` taken over.
+    fn place_uses(&self, place: &Place, uses: &mut Uses) {
+        self.local_uses(&[&Operand::Local(place.local)], false, uses);
+        for proj in &place.proj {
+            match proj {
+                Proj::Index(i) | Proj::Key(i) => self.local_uses(&[i], false, uses),
+                Proj::SetDefault(k, d) => self.local_uses(&[k, d], true, uses),
+                Proj::Field(_) => {}
+            }
+        }
     }
 
     fn local_uses(&self, operands: &[&Operand], stored: bool, uses: &mut Uses) {
@@ -257,6 +278,7 @@ impl Pass {
                 let borrowed = matches!(
                     e,
                     Expr::ListGet { .. }
+                        | Expr::ReadPlace(_)
                         | Expr::TupleGet { .. }
                         | Expr::RtValue { .. }
                         | Expr::ToStr(_, lotml_check::ty::Ty::Str)
@@ -277,20 +299,20 @@ impl Pass {
             StmtKind::Store(place, v) => {
                 let mut uses = Uses::default();
                 self.local_uses(&[&v], true, &mut uses);
-                self.local_uses(&[&Operand::Local(place.local)], false, &mut uses);
+                self.place_uses(&place, &mut uses);
                 self.simple(line, uses, live_out, None, StmtKind::Store(place, v), out);
             }
             StmtKind::Mutate { name, place, args, at: here, result } => {
-                let stores = matches!(name, "lt_list_push" | "lt_list_insert");
+                let stores = matches!(name, "lt_list_push" | "lt_list_insert" | "lt_dict_set" | "lt_set_add");
                 let mut uses = Uses::default();
                 for a in &args {
                     match a {
                         Arg::Address(o, _) => self.local_uses(&[o], stores, &mut uses),
                         Arg::Value(o) => self.local_uses(&[o], false, &mut uses),
-                        Arg::Out(..) => {}
+                        Arg::Out(..) | Arg::Desc(_) | Arg::Offset(_) => {}
                     }
                 }
-                self.local_uses(&[&Operand::Local(place.local)], false, &mut uses);
+                self.place_uses(&place, &mut uses);
                 let set: Vec<Local> = outs(&args).collect();
                 let kind = StmtKind::Mutate { name, place, args, at: here, result };
                 self.simple(line, uses, live_out, None, kind, out);

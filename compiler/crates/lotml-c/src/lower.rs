@@ -381,6 +381,23 @@ impl<'c, 'a> Builder<'c, 'a> {
                     self.assign_to(item, part, t);
                 }
             }
+            ExprKind::Index { object, index } if matches!(self.ty(object), Ty::Dict(..)) => {
+                let Ty::Dict(key_ty, value_ty) = self.ty(object) else { return };
+                let Some(place) = self.place(object) else {
+                    self.unsupported(target.span, "this assignment target");
+                    return;
+                };
+                let k = self.value(index);
+                let k = self.coerce(k, &key_ty);
+                let value = self.coerce(value, &value_ty);
+                self.push(StmtKind::Mutate {
+                    name: "lt_dict_set",
+                    place,
+                    args: vec![Arg::Address(k, *key_ty), Arg::Address(value, *value_ty)],
+                    at: false,
+                    result: None,
+                });
+            }
             ExprKind::Index { .. } | ExprKind::Attr { .. } => match self.place(target) {
                 Some(place) => {
                     let to = self.place_ty(&place);
@@ -425,11 +442,30 @@ impl<'c, 'a> Builder<'c, 'a> {
                 place.proj.push(Proj::Index(i));
                 Some(place)
             }
+            ExprKind::Index { object, index } if matches!(self.ty(object), Ty::Dict(..)) => {
+                let mut place = self.place(object)?;
+                let k = self.value(index);
+                place.proj.push(Proj::Key(k));
+                Some(place)
+            }
             ExprKind::Attr { object, name } => {
                 let ty = self.ty(object);
                 let (index, _) = self.record_field(&ty, &name.name)?;
                 let mut place = self.place(object)?;
                 place.proj.push(Proj::Field(index));
+                Some(place)
+            }
+            ExprKind::Call { func, args } => {
+                let ExprKind::Attr { object, name } = &func.kind else { return None };
+                let Ty::Dict(_, value_ty) = self.ty(object) else { return None };
+                if name.name != "setdefault" || args.len() != 2 {
+                    return None;
+                }
+                let mut place = self.place(object)?;
+                let k = self.value(args[0].expr());
+                let d = self.value(args[1].expr());
+                let d = self.coerce(d, &value_ty);
+                place.proj.push(Proj::SetDefault(k, d));
                 Some(place)
             }
             _ => None,
@@ -443,6 +479,10 @@ impl<'c, 'a> Builder<'c, 'a> {
             ty = match proj {
                 Proj::Index(_) => element(&ty),
                 Proj::Field(i) => self.fields(&ty, None).get(*i).cloned().unwrap_or(Ty::Error),
+                Proj::Key(_) | Proj::SetDefault(..) => match &ty {
+                    Ty::Dict(_, v) => (**v).clone(),
+                    _ => Ty::Error,
+                },
             };
         }
         ty
@@ -450,6 +490,10 @@ impl<'c, 'a> Builder<'c, 'a> {
 
     /// The value at `place`, read.
     fn read_place(&mut self, place: &Place) -> Operand {
+        if place.proj.iter().any(|p| matches!(p, Proj::Key(_) | Proj::SetDefault(..))) {
+            let ty = self.place_ty(place);
+            return self.hold(ty, Expr::ReadPlace(place.clone()));
+        }
         let mut value = Operand::Local(place.local);
         let mut ty = self.function.locals[place.local].ty.clone();
         for proj in &place.proj {
@@ -466,6 +510,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                         self.hold(field.clone(), Expr::Field { value, ty: ty.clone(), variant: None, index: *index });
                     ty = field;
                 }
+                Proj::Key(_) | Proj::SetDefault(..) => {}
             }
         }
         value
@@ -917,6 +962,11 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let elem = element(&ty);
                 self.indexed(&[(snapshot, elem)], false, body);
             }
+            Ty::Dict(..) | Ty::Set(_) => {
+                let list = self.materialize(iter);
+                let elem = element(&ty);
+                self.indexed(&[(list, elem)], false, body);
+            }
             Ty::Str => {
                 let over = self.value(iter);
                 let snapshot = self.hold(Ty::Str, Expr::Use(over));
@@ -976,14 +1026,21 @@ impl<'c, 'a> Builder<'c, 'a> {
         self.push(StmtKind::Loop(inner));
     }
 
-    /// `e` as a list: a list as it is, a string as its characters.
+    /// `e` as a list: a list as it is, a string as its characters, a dict as its keys, a set as
+    /// its elements in table order.
     fn materialize(&mut self, e: &ast::Expr) -> Operand {
         let ty = self.ty(e);
         let v = self.value(e);
-        if ty == Ty::Str {
-            return self.hold(Ty::list(Ty::Str), rt("lt_str_chars", vec![v], false));
+        self.as_list(v, &ty)
+    }
+
+    fn as_list(&mut self, v: Operand, ty: &Ty) -> Operand {
+        match ty {
+            Ty::Str => self.hold(Ty::list(Ty::Str), rt("lt_str_chars", vec![v], false)),
+            Ty::Dict(k, _) => self.hold(Ty::list((**k).clone()), rt("lt_dict_keys", vec![v], false)),
+            Ty::Set(t) => self.hold(Ty::list((**t).clone()), rt("lt_set_list", vec![v], false)),
+            _ => v,
         }
-        v
     }
 
     /// A new list of `elem`, filled by `fill` with `push_element`.
@@ -1211,6 +1268,66 @@ impl<'c, 'a> Builder<'c, 'a> {
             ExprKind::ListComp { element, loops } | ExprKind::Generator { element, loops } => {
                 Value::Done(self.comprehension(e, element, loops))
             }
+            ExprKind::Dict(pairs) => {
+                let Ty::Dict(k, v) = self.ty(e) else { return Value::Done(self.unsupported(e.span, "this dict")) };
+                let mut items = Vec::new();
+                for (key, value) in pairs {
+                    let key = self.value(key);
+                    let key = self.coerce(key, &k);
+                    let value = self.value(value);
+                    let value = self.coerce(value, &v);
+                    items.push((key, value));
+                }
+                Value::Expr(Expr::DictNew { key: *k, value: *v, items })
+            }
+            ExprKind::Set(items) => {
+                let Ty::Set(t) = self.ty(e) else { return Value::Done(self.unsupported(e.span, "this set")) };
+                let mut values = Vec::new();
+                for item in items {
+                    let v = self.value(item);
+                    values.push(self.coerce(v, &t));
+                }
+                Value::Expr(Expr::SetNew { elem: *t, items: values })
+            }
+            ExprKind::DictComp { key, value, loops } => {
+                let Ty::Dict(k, v) = self.ty(e) else { return Value::Done(self.unsupported(e.span, "this dict")) };
+                let (k, v) = (*k, *v);
+                let dict_ty = Ty::Dict(Box::new(k.clone()), Box::new(v.clone()));
+                let d = self.temp(dict_ty);
+                self.push(StmtKind::Let(d, Expr::DictNew { key: k.clone(), value: v.clone(), items: Vec::new() }));
+                self.comprehension_loops(loops, &mut |b| {
+                    let kv = b.value(key);
+                    let kv = b.coerce(kv, &k);
+                    let vv = b.value(value);
+                    let vv = b.coerce(vv, &v);
+                    b.push(StmtKind::Mutate {
+                        name: "lt_dict_set",
+                        place: Place { local: d, proj: Vec::new() },
+                        args: vec![Arg::Address(kv, k.clone()), Arg::Address(vv, v.clone())],
+                        at: false,
+                        result: None,
+                    });
+                });
+                Value::Done(Operand::Local(d))
+            }
+            ExprKind::SetComp { element, loops } => {
+                let Ty::Set(t) = self.ty(e) else { return Value::Done(self.unsupported(e.span, "this set")) };
+                let t = *t;
+                let s = self.temp(Ty::Set(Box::new(t.clone())));
+                self.push(StmtKind::Let(s, Expr::SetNew { elem: t.clone(), items: Vec::new() }));
+                self.comprehension_loops(loops, &mut |b| {
+                    let v = b.value(element);
+                    let v = b.coerce(v, &t);
+                    b.push(StmtKind::Mutate {
+                        name: "lt_set_add",
+                        place: Place { local: s, proj: Vec::new() },
+                        args: vec![Arg::Address(v, t.clone())],
+                        at: false,
+                        result: None,
+                    });
+                });
+                Value::Done(Operand::Local(s))
+            }
             ExprKind::Binary { op, left, right } => {
                 let ty = self.ty(left);
                 let right_ty = self.ty(right);
@@ -1275,6 +1392,18 @@ impl<'c, 'a> Builder<'c, 'a> {
                         let i = self.value(index);
                         Value::Expr(Expr::ListGet { list: o, index: i, elem })
                     }
+                    Ty::Dict(k, v) => {
+                        let (k, v) = ((**k).clone(), (**v).clone());
+                        let o = self.value(object);
+                        let i = self.value(index);
+                        let i = self.coerce(i, &k);
+                        Value::Expr(Expr::RtValue {
+                            name: "lt_dict_get",
+                            args: vec![Arg::Value(o), Arg::Address(i, k)],
+                            at: true,
+                            ty: v,
+                        })
+                    }
                     _ => Value::Done(self.unsupported(e.span, "indexing this value")),
                 }
             }
@@ -1313,6 +1442,9 @@ impl<'c, 'a> Builder<'c, 'a> {
             (ast::BinOp::Mul, Ty::Str, _) => rt("lt_str_repeat", vec![a, b], true),
             (ast::BinOp::Mul, _, Ty::Str) => rt("lt_str_repeat", vec![b, a], true),
             (ast::BinOp::Add, Ty::List(_), _) => rt("lt_list_concat", vec![a, b], false),
+            (ast::BinOp::BitOr, Ty::Set(_), _) => rt("lt_set_union", vec![a, b], false),
+            (ast::BinOp::BitAnd, Ty::Set(_), _) => rt("lt_set_intersection", vec![a, b], false),
+            (ast::BinOp::Sub, Ty::Set(_), _) => rt("lt_set_difference", vec![a, b], false),
             (ast::BinOp::Mul, Ty::List(_), _) => rt("lt_list_repeat", vec![a, b], true),
             (ast::BinOp::Mul, _, Ty::List(_)) => rt("lt_list_repeat", vec![b, a], true),
             _ => Expr::Binary(binop(op), a, b, left.clone()),
@@ -1590,6 +1722,33 @@ impl<'c, 'a> Builder<'c, 'a> {
                 Value::Expr(rt("lt_range_list", vec![start, stop, step], true))
             }
             ("list", []) => Value::Expr(Expr::ListNew { elem: element(&result_ty), items: Vec::new() }),
+            ("set", []) => Value::Expr(Expr::SetNew { elem: element(&result_ty), items: Vec::new() }),
+            ("set", [x]) => {
+                if let Ty::Set(_) = self.ty(x) {
+                    let v = self.value(x);
+                    return Value::Expr(rt("lt_set_copy", vec![v], false));
+                }
+                let elem = element(&result_ty);
+                let list = match &x.kind {
+                    ExprKind::Call { .. } | ExprKind::Generator { .. } => self.collect(x, &elem),
+                    _ => self.materialize(x),
+                };
+                Value::Expr(rt_args("lt_set_from_list", vec![Arg::Desc(elem), Arg::Value(list)], false))
+            }
+            ("dict", []) => {
+                let Ty::Dict(k, v) = result_ty else { return Value::Done(self.unsupported(whole.span, "this dict")) };
+                Value::Expr(Expr::DictNew { key: *k, value: *v, items: Vec::new() })
+            }
+            ("dict", [x]) => {
+                let Ty::Dict(k, v) = result_ty else { return Value::Done(self.unsupported(whole.span, "this dict")) };
+                let pair = Ty::Tuple(vec![(*k).clone(), (*v).clone()]);
+                let list = self.materialize(x);
+                Value::Expr(rt_args(
+                    "lt_dict_from_pairs",
+                    vec![Arg::Desc(*k), Arg::Desc(*v), Arg::Value(list), Arg::Offset(pair)],
+                    false,
+                ))
+            }
             ("list", [x]) => match &x.kind {
                 ExprKind::Call { .. } | ExprKind::Generator { .. } => {
                     let elem = element(&result_ty);
@@ -1599,8 +1758,8 @@ impl<'c, 'a> Builder<'c, 'a> {
                     let ty = self.ty(x);
                     let v = self.value(x);
                     match ty {
-                        Ty::Str => Value::Expr(rt("lt_str_chars", vec![v], false)),
-                        _ => Value::Expr(rt("lt_list_copy", vec![v], false)),
+                        Ty::List(_) => Value::Expr(rt("lt_list_copy", vec![v], false)),
+                        _ => Value::Done(self.as_list(v, &ty)),
                     }
                 }
             },
@@ -1658,6 +1817,192 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let elem = (**elem).clone();
                 self.list_method(whole, object, name, &elem, &positional, &keywords)
             }
+            Ty::Dict(k, v) => {
+                let (k, v) = ((**k).clone(), (**v).clone());
+                self.dict_method(whole, object, name, &k, &v, &positional)
+            }
+            Ty::Set(t) => {
+                let t = (**t).clone();
+                self.set_method(whole, object, name, &t, &positional)
+            }
+            _ => Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
+        }
+    }
+
+    /// The place of a container a method changes: the place it is, or a temporary holding it.
+    fn place_or_hold(&mut self, object: &ast::Expr) -> Place {
+        match self.place(object) {
+            Some(place) => place,
+            None => {
+                let v = self.value(object);
+                let ty = self.ty(object);
+                let Operand::Local(local) = self.hold(ty, Expr::Use(v)) else { unreachable!("a held value") };
+                Place { local, proj: Vec::new() }
+            }
+        }
+    }
+
+    fn dict_method(
+        &mut self,
+        whole: &ast::Expr,
+        object: &ast::Expr,
+        name: &str,
+        k: &Ty,
+        v: &Ty,
+        positional: &[&ast::Expr],
+    ) -> Value {
+        let ty = self.ty(whole);
+        match (name, positional) {
+            ("setdefault", [_, _]) => {
+                let Some(place) = self.place(whole) else {
+                    return Value::Done(self.unsupported(whole.span, "`setdefault` on this value"));
+                };
+                Value::Expr(Expr::ReadPlace(place))
+            }
+            ("pop", [key, rest @ ..]) if rest.len() <= 1 => {
+                let place = self.place_or_hold(object);
+                let key = self.value(key);
+                let key = self.coerce(key, k);
+                let found = self.temp(v.clone());
+                let ok = self.temp(Ty::Bool);
+                self.push(StmtKind::Mutate {
+                    name: "lt_dict_pop",
+                    place,
+                    args: vec![Arg::Address(key, k.clone()), Arg::Out(found, v.clone())],
+                    at: false,
+                    result: Some(ok),
+                });
+                match rest.first() {
+                    None => Value::Expr(Expr::OptIf { ty, cond: Operand::Local(ok), value: Operand::Local(found) }),
+                    Some(default) => {
+                        let result = self.temp(v.clone());
+                        let then = self.block(|b| b.push(StmtKind::Let(result, Expr::Use(Operand::Local(found)))));
+                        let otherwise = self.block(|b| {
+                            let d = b.value(default);
+                            let d = b.coerce(d, v);
+                            b.push(StmtKind::Let(result, Expr::Use(d)));
+                        });
+                        self.push(StmtKind::If(Operand::Local(ok), then, otherwise));
+                        Value::Done(Operand::Local(result))
+                    }
+                }
+            }
+            ("clear", []) => {
+                let place = self.place_or_hold(object);
+                self.push(StmtKind::Mutate { name: "lt_dict_clear", place, args: Vec::new(), at: false, result: None });
+                Value::Done(Operand::Const(Const::Unit))
+            }
+            _ => {
+                let d = self.value(object);
+                let mut values = Vec::new();
+                for e in positional {
+                    values.push(self.value(e));
+                }
+                match (name, values.as_slice()) {
+                    ("get", [key]) => {
+                        let key = self.coerce(key.clone(), k);
+                        self.optional_from(
+                            &ty,
+                            "lt_dict_get_optional",
+                            vec![Arg::Value(d), Arg::Address(key, k.clone())],
+                            false,
+                        )
+                    }
+                    ("get", [key, default]) => {
+                        let key = self.coerce(key.clone(), k);
+                        let default = self.coerce(default.clone(), v);
+                        Value::Expr(Expr::RtValue {
+                            name: "lt_dict_get_or",
+                            args: vec![Arg::Value(d), Arg::Address(key, k.clone()), Arg::Address(default, v.clone())],
+                            at: false,
+                            ty: v.clone(),
+                        })
+                    }
+                    ("keys", []) => Value::Expr(rt("lt_dict_keys", vec![d], false)),
+                    ("values", []) => Value::Expr(rt("lt_dict_values", vec![d], false)),
+                    ("items", []) => {
+                        let pair = Ty::Tuple(vec![k.clone(), v.clone()]);
+                        Value::Expr(rt_args(
+                            "lt_dict_items",
+                            vec![Arg::Value(d), Arg::Desc(pair.clone()), Arg::Offset(pair)],
+                            false,
+                        ))
+                    }
+                    ("contains", [key]) => {
+                        let key = self.coerce(key.clone(), k);
+                        Value::Expr(rt_args(
+                            "lt_dict_contains",
+                            vec![Arg::Value(d), Arg::Address(key, k.clone())],
+                            false,
+                        ))
+                    }
+                    ("copy", []) => Value::Expr(rt("lt_dict_copy", vec![d], false)),
+                    _ => Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
+                }
+            }
+        }
+    }
+
+    fn set_method(
+        &mut self,
+        whole: &ast::Expr,
+        object: &ast::Expr,
+        name: &str,
+        t: &Ty,
+        positional: &[&ast::Expr],
+    ) -> Value {
+        let ty = self.ty(whole);
+        if matches!(name, "add" | "remove" | "discard" | "pop") {
+            let place = self.place_or_hold(object);
+            let mut values = Vec::new();
+            for e in positional {
+                let v = self.value(e);
+                values.push(self.coerce(v, t));
+            }
+            let mutate = |name: &'static str, args: Vec<Arg>, at: bool| StmtKind::Mutate {
+                name,
+                place: place.clone(),
+                args,
+                at,
+                result: None,
+            };
+            let stmt = match (name, values.as_slice()) {
+                ("add", [x]) => mutate("lt_set_add", vec![Arg::Address(x.clone(), t.clone())], false),
+                ("remove", [x]) => mutate("lt_set_remove", vec![Arg::Address(x.clone(), t.clone())], true),
+                ("discard", [x]) => mutate("lt_set_discard", vec![Arg::Address(x.clone(), t.clone())], false),
+                ("pop", []) => {
+                    let found = self.temp(t.clone());
+                    let ok = self.temp(Ty::Bool);
+                    self.push(StmtKind::Mutate {
+                        name: "lt_set_pop",
+                        place: place.clone(),
+                        args: vec![Arg::Out(found, t.clone())],
+                        at: false,
+                        result: Some(ok),
+                    });
+                    return Value::Expr(Expr::OptIf { ty, cond: Operand::Local(ok), value: Operand::Local(found) });
+                }
+                _ => return Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
+            };
+            self.push(stmt);
+            return Value::Done(Operand::Const(Const::Unit));
+        }
+        let s = self.value(object);
+        let mut values = Vec::new();
+        for e in positional {
+            values.push(self.value(e));
+        }
+        match (name, values.as_slice()) {
+            ("contains", [x]) => {
+                let x = self.coerce(x.clone(), t);
+                Value::Expr(rt_args("lt_set_contains", vec![Arg::Value(s), Arg::Address(x, t.clone())], false))
+            }
+            ("issubset", [other]) => Value::Expr(rt("lt_set_issubset", vec![s, other.clone()], false)),
+            ("issuperset", [other]) => Value::Expr(rt("lt_set_issubset", vec![other.clone(), s], false)),
+            ("union", [other]) => Value::Expr(rt("lt_set_union", vec![s, other.clone()], false)),
+            ("intersection", [other]) => Value::Expr(rt("lt_set_intersection", vec![s, other.clone()], false)),
+            ("difference", [other]) => Value::Expr(rt("lt_set_difference", vec![s, other.clone()], false)),
+            ("copy", []) => Value::Expr(rt("lt_set_copy", vec![s], false)),
             _ => Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
         }
     }

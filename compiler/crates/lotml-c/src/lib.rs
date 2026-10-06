@@ -22,6 +22,7 @@ pub const RUNTIME: &[(&str, &str)] = &[
     ("lotml.c", include_str!("../runtime/lotml.c")),
     ("lotml_text.c", include_str!("../runtime/lotml_text.c")),
     ("lotml_list.c", include_str!("../runtime/lotml_list.c")),
+    ("lotml_dict.c", include_str!("../runtime/lotml_dict.c")),
 ];
 
 /// Write the runtime into `dir`, where a compiled program includes it from.
