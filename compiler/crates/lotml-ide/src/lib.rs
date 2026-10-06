@@ -6,6 +6,7 @@
 //!
 //! Every file is a module of its own, so a name refers to something declared in the same file.
 
+pub mod diff;
 pub mod edit;
 pub mod lines;
 pub mod mutate;

@@ -2,10 +2,10 @@
 
 ## 1 · The diff command
 
-- [ ] 1.1 (Unit) Find the declarations a change touches, innermost first, with their symbols, kinds and spans in both versions — R1.1
-- [ ] 1.2 (TDD) Find the one edit that reproduces a change, an arm before a body before a definition, then an added or removed declaration, then whole lines, reported only when it reproduces the second version byte for byte — R1.2, R1.3, R1.4
+- [x] 1.1 (Unit) Find the declarations a change touches, innermost first, with their symbols, kinds and spans in both versions — R1.1
+- [x] 1.2 (TDD) Find the one edit that reproduces a change, an arm before a body before a definition, then an added or removed declaration, then whole lines, reported only when it reproduces the second version byte for byte — R1.2, R1.3, R1.4
   _Depends 1.1_
-- [ ] 1.3 (Unit) Print both as `lotml dev diff <before> <after> --json`, the `dev` group hidden from help — R1.1, R1.2
+- [x] 1.3 (Unit) Print both as `lotml dev diff <before> <after> --json`, the `dev` group hidden from help — R1.1, R1.2
   _Depends 1.2_
 
 ## 2 · The builder

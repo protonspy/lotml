@@ -192,3 +192,10 @@ fn the_check_on_an_edit_reports_only_what_it_introduced() {
     let introduced: Vec<&str> = ws.introduced(path, edited).iter().map(|d| d.code).collect();
     assert_eq!(introduced, vec!["E0204"], "the old error is not new");
 }
+
+#[test]
+fn replacing_a_type_keeps_the_blank_line_after_it() {
+    let text = "type Point(x: int, y: int)\n\nfn f() -> int:\n    return 1\n";
+    let changed = replace(text, "Point", &Part::Definition, "type Point(x: f64, y: f64)").unwrap();
+    assert_eq!(changed.text, "type Point(x: f64, y: f64)\n\nfn f() -> int:\n    return 1\n");
+}
