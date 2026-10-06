@@ -73,6 +73,18 @@ def test_format_taken_as_a_value_cannot_walk_into_dunder_attributes(body):
     assert result.tests == {"t": "type error"}
 
 
+@pytest.mark.parametrize("mode", ["lotml", "python"])
+@pytest.mark.parametrize("field", ["0.gi_frame", "0.gi_code", "0.gi_frame.f_back"])
+def test_format_fields_cannot_walk_into_the_interpreter(mode, field):
+    source = f'test "t":\n    s = "{{{field}}}".format(y for y in [1])\n'
+    assert run(source, mode=mode).tests == {"t": "type error"}
+
+
+def test_a_field_named_format_can_still_be_assigned():
+    source = 'type R(format: str)\n\ntest "t":\n    var r = R("a")\n    r.format = "b"\n    assert r.format == "b"\n'
+    assert run(source).tests == {"t": "pass"}
+
+
 def test_format_taken_as_a_value_still_formats():
     source = 'test "t":\n    f = "{} {}".format\n    assert f(1, 2) == "1 2"\n'
     assert run(source).tests == {"t": "pass"}

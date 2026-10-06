@@ -22,6 +22,11 @@ def test_download_saves_once_and_reuses_the_file(tmp_path, monkeypatch):
     calls = []
 
     class Response:
+        """A body of b"data" that reads in pieces of at most `size` bytes, then ends."""
+
+        def __init__(self):
+            self.left = b"data"
+
         def __enter__(self):
             return self
 
@@ -29,7 +34,9 @@ def test_download_saves_once_and_reuses_the_file(tmp_path, monkeypatch):
             return False
 
         def read(self, size=-1):
-            return b"data"[:size] if size >= 0 else b"data"
+            piece = self.left if size < 0 else self.left[:size]
+            self.left = self.left[len(piece) :]
+            return piece
 
     def urlopen(url, timeout):
         calls.append(url)
