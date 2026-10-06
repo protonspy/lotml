@@ -2,13 +2,14 @@
 
 ## What changes
 
-Serves R1.1–R1.7, R2.1–R2.4, R3.1–R3.8.
+Serves R1.1–R1.7, R2.1–R2.4, R3.1–R3.8, R4.1–R4.6.
 
 A registry `harness/lotml_harness/agent/licences.toml`, a module `harness/lotml_harness/agent/
-dataset.py` run as `python -m lotml_harness.agent.dataset`, two additions to the trace `run.py`
-writes, and a scrub before anything is written under `harness/results/`. Output:
-`harness/cache/dataset/<date>/` — `trajectories.jsonl`, `repairs.jsonl`, `NOTICE` and a copy of
-the manifest — git-ignored since HumanEval's prompts are inside; the manifest
+dataset.py` run as `python -m lotml_harness.agent.dataset`, the problem split in
+`harness/lotml_harness/split.py`, two additions to the trace `run.py` writes, and a scrub before
+anything is written under `harness/results/`. Output: `harness/cache/dataset/<date>/` —
+`train/` and `validation/`, each with `trajectories.jsonl` and `repairs.jsonl`, then `NOTICE` and
+a copy of the manifest — git-ignored since HumanEval's prompts are inside; the manifest
 `harness/results/dataset.md`, committed.
 
 **The registry** (R1.1, R1.4, R1.5). One TOML table per source, per model, and per provider under
@@ -109,6 +110,24 @@ reports is often not the one to fix; and deduplication per task, since FLAME's p
 deduplication was worth 8 points over a global one. The agent's refused code is the real error
 Break-It-Fix-It found decisive (90.5% against 62.7% for random corruption alone).
 
+**The split** (R4.1–R4.6). `split.py` is one module because three consumers need the same answer:
+this exporter, the seeded failures and the guide's evaluation (plans/harness-guide.md). It holds
+two functions. `problem(id)` maps an id to its original problem by pattern — `humaneval-<n>` and
+`HumanEval_<n>_<name>` to `humaneval/<n>`, `mbpp-<n>` and `mbpp_<n>_<name>` to `mbpp/<n>`, the
+name of a task `bench.load` lists to `bench/<name>` — and raises on anything else (R4.4), so a new source
+fails loudly instead of landing in train. `split(problem)` buckets HumanEval by the first eight
+bytes of `sha256(SALT + problem)` read as an integer over 2^64: below 0.60 train, below 0.75
+validation, otherwise held-out. The salt is a constant, `lotml-split-1`; changing it makes a new
+split, so it never changes once a guide has trained on one. MBPP is held out whole, since it is
+where the guide's arms run; the eight benchmark tasks are ours and too few to hold out.
+
+The bucket depends on the problem alone, so the agent's run, MultiPL-E's translation in the phase
+1 gate and a seeded mutant of the same HumanEval problem always land together — the leak a split by
+row or by source would let through. A quarter held out is about 41 HumanEval problems; their
+failures, from any model, are the guide's offline evaluation, whose own spec fixes how many it
+needs. Held-out records are never written, so no trainer can read one; the evaluation reads the
+traces itself.
+
 **Scrubbing** (R2.3, R3.7). Secrets: the values of every environment variable whose name ends in
 `_KEY`, `_TOKEN` or `_SECRET`, compared exactly and only when eight characters or longer — an
 empty or short value would match everything — and the shapes `sk-[A-Za-z0-9_-]{20,}`,
@@ -136,5 +155,6 @@ themselves. Every drop is counted by reason in the manifest, so the bias it coul
   say whether mutation (out of scope) is needed.
 - Stale data: a record carries the compiler version that judged it, because a rule that changes
   makes old repairs wrong, the failure the wiki records for trained models in a moving language.
-- Contamination: the dataset holds solutions to the benchmark's and HumanEval's tasks; the manifest
-  lists the tasks it holds, so a model trained on it is never scored on them.
+- Contamination: the dataset holds solutions to the benchmark's and HumanEval's tasks; it holds no
+  held-out problem, and the manifest counts each split, so a model trained on it is never scored on
+  a problem it saw.

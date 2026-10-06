@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: ff7f46e64215f5d21c38274f68ec55b2befc9fc15c6e0d867e736dfe386ff00b
+checksum: cd2d7d6a12c5843002c6d887ee2f290c0072b5365d9214052b89aaccefbed512
 ---
 
 # Harness guide
@@ -65,7 +65,7 @@ deepagents and in a second harness — on held-out tasks, and the wiki records w
 
 ## Tasks
 
-- [ ] 1.1 (Unit) Fix a split by problem identity into train, validation and held-out,
+- [x] 1.1 (Unit) Fix a split by problem identity into train, validation and held-out,
       over every source and every derivative of one, MultiPL-E's HumanEval_N being the
       original's HumanEval/N and its MBPP problems the original's, with MBPP's original
       held out whole for the guide arms; record it as a delta to specs/trace-dataset/ so

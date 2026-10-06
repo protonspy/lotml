@@ -12,7 +12,9 @@ diagnostics it gave, and the repairs that made it check (docs/wiki/pages/compile
 Every agent run already leaves that in its trace. This exports it — the trajectories of runs that
 passed, and the repairs inside every run — as a training set, taken only from sources whose
 licence allows it and from models and providers whose terms allow training on their outputs, each
-with the evidence on record (plans/agent-data.md). Training the model is not part of it.
+with the evidence on record (plans/agent-data.md). Every record carries its problem's split, fixed
+once for every source that derives from the problem, so the harness guide is never scored on a
+problem it was trained on (plans/harness-guide.md). Training the model is not part of it.
 
 ## R1 · What may be exported
 
@@ -41,6 +43,15 @@ with the evidence on record (plans/agent-data.md). Training the model is not par
 - **R3.6** The dataset exporter shall write each identical repair once per task, so a repair repeated across tasks counts in each.
 - **R3.7** If a record holds a key-shaped string, the value of an environment variable as R2.3 names them, or an `assert` line of the task's hidden tests that does not also appear in the task's prompt, then the dataset exporter shall leave the record out and count it by reason in the manifest.
 - **R3.8** The dataset exporter shall write the dataset to the git-ignored cache with the notices and a copy of the manifest beside it, and commit only the manifest.
+
+## R4 · The split
+
+- **R4.1** The problem split shall name every problem by its original benchmark's id — `humaneval/<n>`, `mbpp/<n>`, `bench/<task>` — mapping to it the ids that derive from it: the agent harness's `humaneval-<n>` and `mbpp-<n>`, and MultiPL-E's `HumanEval_<n>_<name>` and `mbpp_<n>_<name>`.
+- **R4.2** The problem split shall assign each HumanEval problem to train, validation or held-out from the SHA-256 of a fixed salt and the problem's id, in the proportions 60, 15 and 25.
+- **R4.3** The problem split shall assign every MBPP problem to held-out and every problem of the agent benchmark to train.
+- **R4.4** If an id matches none of the forms R4.1 names, then the problem split shall refuse it.
+- **R4.5** The dataset exporter shall mark every record with its problem and split, write train and validation records to separate files, and write no held-out record.
+- **R4.6** The dataset exporter shall list in the manifest, per source and split, the problems, trajectories and repairs exported.
 
 ## Out of scope
 

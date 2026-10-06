@@ -21,3 +21,9 @@
   _Depends 2.2_
 - [ ] 3.4 (Unit) Export from the command line to the git-ignored cache with the notices and the manifest beside it, and write the committed manifest with every count by reason — R1.7, R3.8
   _Depends 1.1, 1.2, 1.3, 3.1, 3.2, 3.3_
+
+## 4 · The split
+
+- [ ] 4.1 (TDD) Map every source's id to its original problem and bucket it by the salted hash, MBPP held out whole, the benchmark in train, an unknown id refused — R4.1, R4.2, R4.3, R4.4
+- [ ] 4.2 (Unit) Mark every record with its problem and split, write train and validation apart and held-out nowhere, and count them per source and split in the manifest — R4.5, R4.6
+  _Depends 3.4, 4.1_
