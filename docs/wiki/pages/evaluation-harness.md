@@ -15,6 +15,12 @@ decision requires and the roadmap's gates.
 - **Execution** (`research/experiments/transpiler/`): a research transpiler from variants A and B
   to a Python AST that runs `test` blocks under lotml's semantics or Python's, with a step budget
   for runaway loops and tracebacks that point at the `.x` line ([[transpilation-strategy]]).
+- **Executor** (`harness/lotml_harness/`): the research transpiler grown to every construct of
+  the language reference (`reference/lotml.md`) — `inout` arguments written back to the caller,
+  sets, bit operators, trait defaults, positional variant fields — with `int` trapping outside
+  i64, a step budget counted with `sys.monitoring`, tracebacks at the `.lotml` line, the
+  mutability checker that rejects what a Python habit gets wrong, and a child process per
+  program. It reproduces the research transpiler's outcomes on all of the pilot's programs.
 - **Editing** (`research/experiments/editing/` and `indentation/`): twelve editing tasks with hidden
   tests in an indented and a braces form, a search-and-replace applier in strict and tolerant
   modes, and a mutation experiment on indentation and brace slips — see [[editing-robustness]].
@@ -23,18 +29,25 @@ decision requires and the roadmap's gates.
 - **Sources** (`research/literature/`): every paper the decisions rest on, downloaded and converted,
   with each quoted number checked against it — see [[source-verification]].
 
+- **Task set** (`harness/`): HumanEval and MBPP from MultiPL-E's typed originals and LiveCodeBench
+  release v6, translated to lotml signatures and docstrings with hidden tests — 684 tasks and 5,522
+  test cases, every HumanEval and MBPP task kept only when its canonical solution passes the
+  translated tests (`harness/results/tasks.md`). A task is refused, never patched, when its types
+  have no lotml form (`Any`, unions) or Python's result does not fit the signature (`240.0` for an
+  `int`). MultiPL-E's license forbids training on it, so it feeds evaluation only.
+
 ## What is missing
 
-1. **External tasks.** Translate HumanEval and MBPP the way
+1. **External tasks** — built, see the task set above. Translate HumanEval and MBPP the way
    [MultiPL-E](https://arxiv.org/abs/2208.08227) does for 18 languages. The work is a translator
    for signatures, docstring terminology, types and tests — prompt contents matter: removing
    doctests hurt Codex significantly. Add less contaminated tasks (LiveCodeBench v6) and
    multi-file tasks.
 2. **Hidden tests for generation.** The pilot's programs pass their own tests; a task-level
    oracle written independently of the model is what pass@1 needs.
-3. **Editing at scale.** The editing pilot used twelve short programs and three Claude models; the
-   decision in adr:0005-significant-indentation needs long files, multi-turn agents and open
-   models.
+3. **Editing at scale** — built: 192 paired tasks on files of at least 150 lines, three turns
+   with feedback, Claude and two open families ([[editing-robustness]]). Agents with tools editing
+   several files are still missing.
 4. **More model families.** Closed ones (Claude, GPT, Gemini) with the spec in the prompt; open
    ones (Qwen, Llama, DeepSeek), which should leak more and which are, with OpenAI, the only ones
    accepting grammar-based [[constrained-decoding]].
@@ -90,11 +103,15 @@ syntax is revisited ([[requirements-and-roadmap]]):
 
 | gate | criterion |
 | --- | --- |
-| 0 → 1 | parse ≥ 95% and no syntactic leakage for frontier models with the spec; data tests variant B against A (adr:0004-python-syntax-where-semantics-match) and settles indentation versus braces (adr:0005-significant-indentation) on at least 168 paired tasks |
+| 0 → 1 | parse ≥ 95% and no syntactic leakage for frontier models with the spec; data tests variant B against A (adr:0004-python-syntax-where-semantics-match) and settles indentation versus braces (adr:0009-significant-indentation-with-symbol-addressed-edits) on at least 168 paired tasks |
 | 1 → 2 | lotml pass@1 ≥ typed Python pass@1 on the same tasks; median rounds to green ≤ 2; tokens ≤ typed Python |
 | 2 → 3 | calling lotml from Python and Python from lotml works; synthetic corpus validated by tests |
 | 3 → 4 | the whole suite passes on the Python and C targets with the same result; ≤ 2× C on numeric benchmarks, with allocation-heavy ones reported separately |
 
-The current pilot would score 93% parse (56 of 60) on the first criterion; with positional fields
-in variants accepted, it would score 97%. The editing pilot passed 71 of 72 edits, which does not
-yet meet the sample size above.
+The phase 0 gate passed (`harness/results/gate-0.md`, from `python -m
+lotml_harness.experiments.gate`): Sonnet parsed all 350 of its variant B answers with no leaked
+construct; no model did significantly worse in variant B than in A (pooled, 60 tasks solved only
+in B against 26 only in A) nor in the indented form than with braces (pooled, 23 against 15), each
+on 192 to 200 paired tasks. "Not worse" is read as no model significantly worse (exact McNemar,
+5%) and the pooled discordant pairs not favouring the alternative. The decisions it settles are
+adr:0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate.

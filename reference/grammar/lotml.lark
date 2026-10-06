@@ -1,0 +1,222 @@
+// lotml grammar, variant B, for llguidance (constrained decoding).
+// Generated from harness/lotml_harness/lang/grammar.py; do not edit by hand.
+// Statements start with four spaces per block level, at most 8 levels deep.
+
+start: start_d0
+start_d0: (EOL+ | item_d0)*
+item_d0: fn_def_d0 | type_def_d0 | impl_def_d0 | trait_def_d0 | import_stmt_d0 | test_def_d0
+fn_def_d0: fn_head WS? ":" WS? suite_d0
+type_def_d0: "type" WS NAME (WS? type_params)? WS? "(" (WSN? fields_nl)? WSN? ")" EOL+ | "type" WS NAME (WS? type_params)? WS? "=" WS? variant (WS? "|" WS? variant)* EOL+
+impl_def_d0: "impl" WS type (WS "for" WS type)? WS? ":" EOL+ ("    " fn_def_d1)+
+trait_def_d0: "trait" WS NAME (WS? type_params)? WS? ":" EOL+ ("    " trait_item_d1)+
+import_stmt_d0: "from" WS dotted WS "import" WS NAME (WS? "," WS? NAME)* EOL+ | "import" WS dotted EOL+
+test_def_d0: "test" WS STRING WS? ":" WS? suite_d0
+suite_d0: simple_stmt_d0 | EOL+ ("    " stmt_d1)+
+simple_stmt_d0: small_stmt EOL+
+stmt_d1: simple_stmt_d1 | compound_stmt_d1
+simple_stmt_d1: small_stmt EOL+
+compound_stmt_d1: if_stmt_d1 | while_stmt_d1 | for_stmt_d1 | match_stmt_d1
+if_stmt_d1: "if" WS test WS? ":" WS? suite_d1 ("    " elif_clause_d1)* ("    " else_clause_d1)?
+while_stmt_d1: "while" WS test WS? ":" WS? suite_d1
+for_stmt_d1: "for" WS targets WS "in" WS testlist WS? ":" WS? suite_d1
+match_stmt_d1: "match" WS test WS? ":" EOL+ ("        " arm_d2)+
+test: coalesce (WS "if" WS coalesce WS "else" WS test)? | lambdef
+arm_d2: "case" (WS pattern__word | WS? pattern__sign) WS? ":" WS? suite_d2
+pattern__word: NAME WS? "(" (WSN? pattern_nl (WSN? "," WSN? pattern_nl)*)? WSN? ")" | NAME | literal
+pattern__sign: "(" WSN? pattern_nl WSN? "," (WSN? pattern_nl (WSN? "," WSN? pattern_nl)*)? WSN? ")"
+suite_d2: simple_stmt_d2 | EOL+ ("            " stmt_d3)+
+simple_stmt_d2: small_stmt EOL+
+stmt_d3: simple_stmt_d3 | compound_stmt_d3
+simple_stmt_d3: small_stmt EOL+
+compound_stmt_d3: if_stmt_d3 | while_stmt_d3 | for_stmt_d3 | match_stmt_d3
+if_stmt_d3: "if" WS test WS? ":" WS? suite_d3 ("            " elif_clause_d3)* ("            " else_clause_d3)?
+while_stmt_d3: "while" WS test WS? ":" WS? suite_d3
+for_stmt_d3: "for" WS targets WS "in" WS testlist WS? ":" WS? suite_d3
+match_stmt_d3: "match" WS test WS? ":" EOL+ ("                " arm_d4)+
+arm_d4: "case" (WS pattern__word | WS? pattern__sign) WS? ":" WS? suite_d4
+suite_d4: simple_stmt_d4 | EOL+ ("                    " stmt_d5)+
+simple_stmt_d4: small_stmt EOL+
+stmt_d5: simple_stmt_d5 | compound_stmt_d5
+simple_stmt_d5: small_stmt EOL+
+compound_stmt_d5: if_stmt_d5 | while_stmt_d5 | for_stmt_d5 | match_stmt_d5
+if_stmt_d5: "if" WS test WS? ":" WS? suite_d5 ("                    " elif_clause_d5)* ("                    " else_clause_d5)?
+while_stmt_d5: "while" WS test WS? ":" WS? suite_d5
+for_stmt_d5: "for" WS targets WS "in" WS testlist WS? ":" WS? suite_d5
+match_stmt_d5: "match" WS test WS? ":" EOL+ ("                        " arm_d6)+
+arm_d6: "case" (WS pattern__word | WS? pattern__sign) WS? ":" WS? suite_d6
+suite_d6: simple_stmt_d6 | EOL+ ("                            " stmt_d7)+
+simple_stmt_d6: small_stmt EOL+
+stmt_d7: simple_stmt_d7 | compound_stmt_d7
+simple_stmt_d7: small_stmt EOL+
+compound_stmt_d7: if_stmt_d7 | while_stmt_d7 | for_stmt_d7 | match_stmt_d7
+if_stmt_d7: "if" WS test WS? ":" WS? suite_d7 ("                            " elif_clause_d7)* ("                            " else_clause_d7)?
+while_stmt_d7: "while" WS test WS? ":" WS? suite_d7
+for_stmt_d7: "for" WS targets WS "in" WS testlist WS? ":" WS? suite_d7
+match_stmt_d7: "match" WS test WS? ":" EOL+ ("                                " arm_d8)+
+arm_d8: "case" (WS pattern__word | WS? pattern__sign) WS? ":" WS? suite_d8
+suite_d8: simple_stmt_d8
+simple_stmt_d8: small_stmt EOL+
+small_stmt: var_stmt | expr_stmt | return_stmt | assert_stmt | pass_stmt | break_stmt | continue_stmt
+var_stmt: VAR WS NAME (WS? ":" WS? type)? WS? "=" WS? testlist
+expr_stmt: testlist (WS? (annassign | augassign | assign))?
+return_stmt: "return" (WS testlist)?
+assert_stmt: "assert" WS test (WS? "," WS? test)?
+pass_stmt: "pass"
+break_stmt: "break"
+continue_stmt: "continue"
+testlist: test (WS? "," WS? test)*
+annassign: ":" WS? type WS? "=" WS? test
+augassign: AUGOP WS? test
+assign: "=" WS? testlist
+type: base_type (WS? QMARK)*
+base_type: NAME (WS? type_args)? | "[" WSN? type_nl WSN? "]" | "{" WSN? type_nl WSN? ":" WSN? type_nl WSN? "}" | "{" WSN? type_nl WSN? "}" | "(" WSN? type_nl WSN? "," (WSN? type_nl (WSN? "," WSN? type_nl)* (WSN? ",")?)? WSN? ")" | "dyn" WS NAME | NONE
+type_args: "[" WSN? type_nl (WSN? "," WSN? type_nl)* WSN? "]"
+type_nl: base_type_nl (WSN? QMARK)*
+base_type_nl: NAME (WSN? type_args_nl)? | "[" WSN? type_nl WSN? "]" | "{" WSN? type_nl WSN? ":" WSN? type_nl WSN? "}" | "{" WSN? type_nl WSN? "}" | "(" WSN? type_nl WSN? "," (WSN? type_nl (WSN? "," WSN? type_nl)* (WSN? ",")?)? WSN? ")" | "dyn" WSN NAME | NONE
+type_args_nl: "[" WSN? type_nl (WSN? "," WSN? type_nl)* WSN? "]"
+targets: target (WS? "," WS? target)*
+suite_d7: simple_stmt_d7 | EOL+ ("                                " stmt_d8)+
+stmt_d8: simple_stmt_d8 | compound_stmt_d8
+compound_stmt_d8: if_stmt_d8 | while_stmt_d8 | for_stmt_d8
+if_stmt_d8: "if" WS test WS? ":" WS? suite_d8 ("                                " elif_clause_d8)* ("                                " else_clause_d8)?
+while_stmt_d8: "while" WS test WS? ":" WS? suite_d8
+for_stmt_d8: "for" WS targets WS "in" WS testlist WS? ":" WS? suite_d8
+elif_clause_d8: "elif" WS test WS? ":" WS? suite_d8
+else_clause_d8: "else" WS? ":" WS? suite_d8
+target: NAME | "(" WSN? targets_nl WSN? ")"
+targets_nl: target_nl (WSN? "," WSN? target_nl)*
+target_nl: NAME | "(" WSN? targets_nl WSN? ")"
+elif_clause_d7: "elif" WS test WS? ":" WS? suite_d7
+else_clause_d7: "else" WS? ":" WS? suite_d7
+suite_d5: simple_stmt_d5 | EOL+ ("                        " stmt_d6)+
+stmt_d6: simple_stmt_d6 | compound_stmt_d6
+compound_stmt_d6: if_stmt_d6 | while_stmt_d6 | for_stmt_d6 | match_stmt_d6
+if_stmt_d6: "if" WS test WS? ":" WS? suite_d6 ("                        " elif_clause_d6)* ("                        " else_clause_d6)?
+while_stmt_d6: "while" WS test WS? ":" WS? suite_d6
+for_stmt_d6: "for" WS targets WS "in" WS testlist WS? ":" WS? suite_d6
+match_stmt_d6: "match" WS test WS? ":" EOL+ ("                            " arm_d7)+
+arm_d7: "case" (WS pattern__word | WS? pattern__sign) WS? ":" WS? suite_d7
+elif_clause_d6: "elif" WS test WS? ":" WS? suite_d6
+else_clause_d6: "else" WS? ":" WS? suite_d6
+elif_clause_d5: "elif" WS test WS? ":" WS? suite_d5
+else_clause_d5: "else" WS? ":" WS? suite_d5
+suite_d3: simple_stmt_d3 | EOL+ ("                " stmt_d4)+
+stmt_d4: simple_stmt_d4 | compound_stmt_d4
+compound_stmt_d4: if_stmt_d4 | while_stmt_d4 | for_stmt_d4 | match_stmt_d4
+if_stmt_d4: "if" WS test WS? ":" WS? suite_d4 ("                " elif_clause_d4)* ("                " else_clause_d4)?
+while_stmt_d4: "while" WS test WS? ":" WS? suite_d4
+for_stmt_d4: "for" WS targets WS "in" WS testlist WS? ":" WS? suite_d4
+match_stmt_d4: "match" WS test WS? ":" EOL+ ("                    " arm_d5)+
+arm_d5: "case" (WS pattern__word | WS? pattern__sign) WS? ":" WS? suite_d5
+elif_clause_d4: "elif" WS test WS? ":" WS? suite_d4
+else_clause_d4: "else" WS? ":" WS? suite_d4
+elif_clause_d3: "elif" WS test WS? ":" WS? suite_d3
+else_clause_d3: "else" WS? ":" WS? suite_d3
+pattern_nl: NAME WSN? "(" (WSN? pattern_nl (WSN? "," WSN? pattern_nl)*)? WSN? ")" | NAME | "(" WSN? pattern_nl WSN? "," (WSN? pattern_nl (WSN? "," WSN? pattern_nl)*)? WSN? ")" | literal_nl
+literal_nl: (PLUS | MINUS)? WSN? NUMBER | STRING | TRUE | FALSE | NONE
+literal: (PLUS | MINUS)? WS? NUMBER | STRING | TRUE | FALSE | NONE
+coalesce: or_test (WS? "??" WS? or_test)*
+lambdef: "lambda" (WS NAME (WS? "," WS? NAME)*)? WS? ":" WS? test
+or_test: and_test (WS "or" WS and_test)*
+and_test: not_test (WS "and" WS not_test)*
+not_test: "not" WS not_test | comparison
+comparison: bit_or (WS comp_op__word WS bit_or | WS? comp_op__sign WS? bit_or)*
+bit_or: bit_xor (WS? "|" WS? bit_xor)*
+comp_op__word: "in" | "not" WS "in" | "is" | "is" WS "not"
+comp_op__sign: u_comparison
+u_comparison: LT | GT | EQ | NE | LE | GE
+bit_xor: bit_and (WS? "^" WS? bit_and)*
+bit_and: shift (WS? "&" WS? shift)*
+shift: arith (WS? u_shift WS? arith)*
+arith: term (WS? u_sign WS? term)*
+u_shift: LSHIFT | RSHIFT
+term: factor (WS? u_product WS? factor)*
+u_sign: PLUS | MINUS
+factor: u_sign WS? factor | "~" WS? factor | power
+u_product: STAR | SLASH | DSLASH | PERCENT
+power: atom_expr (WS? POW WS? factor)?
+atom_expr: atom_expr WS? "(" (WSN? arguments_nl)? WSN? ")" | atom_expr WS? "[" WSN? subscript_nl WSN? "]" | atom_expr WS? "." WS? NAME | atom_expr WS? "?" | atom
+arguments_nl: argument_nl (WSN? "," WSN? argument_nl)* (WSN? ",")?
+subscript_nl: test_nl | test_nl? WSN? ":" (WSN? test_nl)? (WSN? ":" (WSN? test_nl)?)?
+atom: NAME | NUMBER | STRING (WS? STRING)* | TRUE | FALSE | NONE | "(" WSN? ")" | "(" WSN? test_nl WSN? ")" | "(" WSN? test_nl WSN? "," (WSN? test_nl (WSN? "," WSN? test_nl)* (WSN? ",")?)? WSN? ")" | "(" WSN? test_nl WSN comp_for_nl WSN? ")" | "[" (WSN? test_nl (WSN? "," WSN? test_nl)* (WSN? ",")?)? WSN? "]" | "[" WSN? test_nl WSN comp_for_nl WSN? "]" | "{" (WSN? dict_item_nl (WSN? "," WSN? dict_item_nl)* (WSN? ",")?)? WSN? "}" | "{" WSN? dict_item_nl WSN comp_for_nl WSN? "}" | "{" WSN? test_nl (WSN? "," WSN? test_nl)* (WSN? ",")? WSN? "}" | "{" WSN? test_nl WSN comp_for_nl WSN? "}" | "fail" WS atom_expr
+test_nl: coalesce_nl (WSN "if" WSN coalesce_nl WSN "else" WSN test_nl)? | lambdef_nl
+comp_for_nl: "for" WSN targets_nl WSN "in" WSN or_test_nl (WSN "if" WSN or_test_nl)* (WSN comp_for_nl)?
+dict_item_nl: test_nl WSN? ":" WSN? test_nl
+or_test_nl: and_test_nl (WSN "or" WSN and_test_nl)*
+and_test_nl: not_test_nl (WSN "and" WSN not_test_nl)*
+not_test_nl: "not" WSN not_test_nl | comparison_nl
+comparison_nl: bit_or_nl (WSN comp_op__word_nl WSN bit_or_nl | WSN? comp_op__sign_nl WSN? bit_or_nl)*
+bit_or_nl: bit_xor_nl (WSN? "|" WSN? bit_xor_nl)*
+comp_op__word_nl: "in" | "not" WSN "in" | "is" | "is" WSN "not"
+comp_op__sign_nl: u_comparison_nl
+u_comparison_nl: LT | GT | EQ | NE | LE | GE
+bit_xor_nl: bit_and_nl (WSN? "^" WSN? bit_and_nl)*
+bit_and_nl: shift_nl (WSN? "&" WSN? shift_nl)*
+shift_nl: arith_nl (WSN? u_shift_nl WSN? arith_nl)*
+arith_nl: term_nl (WSN? u_sign_nl WSN? term_nl)*
+u_shift_nl: LSHIFT | RSHIFT
+term_nl: factor_nl (WSN? u_product_nl WSN? factor_nl)*
+u_sign_nl: PLUS | MINUS
+factor_nl: u_sign_nl WSN? factor_nl | "~" WSN? factor_nl | power_nl
+u_product_nl: STAR | SLASH | DSLASH | PERCENT
+power_nl: atom_expr_nl (WSN? POW WSN? factor_nl)?
+atom_expr_nl: atom_expr_nl WSN? "(" (WSN? arguments_nl)? WSN? ")" | atom_expr_nl WSN? "[" WSN? subscript_nl WSN? "]" | atom_expr_nl WSN? "." WSN? NAME | atom_expr_nl WSN? "?" | atom_nl
+atom_nl: NAME | NUMBER | STRING (WSN? STRING)* | TRUE | FALSE | NONE | "(" WSN? ")" | "(" WSN? test_nl WSN? ")" | "(" WSN? test_nl WSN? "," (WSN? test_nl (WSN? "," WSN? test_nl)* (WSN? ",")?)? WSN? ")" | "(" WSN? test_nl WSN comp_for_nl WSN? ")" | "[" (WSN? test_nl (WSN? "," WSN? test_nl)* (WSN? ",")?)? WSN? "]" | "[" WSN? test_nl WSN comp_for_nl WSN? "]" | "{" (WSN? dict_item_nl (WSN? "," WSN? dict_item_nl)* (WSN? ",")?)? WSN? "}" | "{" WSN? dict_item_nl WSN comp_for_nl WSN? "}" | "{" WSN? test_nl (WSN? "," WSN? test_nl)* (WSN? ",")? WSN? "}" | "{" WSN? test_nl WSN comp_for_nl WSN? "}" | "fail" WSN atom_expr_nl
+coalesce_nl: or_test_nl (WSN? "??" WSN? or_test_nl)*
+lambdef_nl: "lambda" (WSN NAME (WSN? "," WSN? NAME)*)? WSN? ":" WSN? test_nl
+argument_nl: NAME WSN? "=" WSN? test_nl | "&" WSN? atom_expr_nl | test_nl (WSN comp_for_nl)?
+suite_d1: simple_stmt_d1 | EOL+ ("        " stmt_d2)+
+stmt_d2: simple_stmt_d2 | compound_stmt_d2
+compound_stmt_d2: if_stmt_d2 | while_stmt_d2 | for_stmt_d2 | match_stmt_d2
+if_stmt_d2: "if" WS test WS? ":" WS? suite_d2 ("        " elif_clause_d2)* ("        " else_clause_d2)?
+while_stmt_d2: "while" WS test WS? ":" WS? suite_d2
+for_stmt_d2: "for" WS targets WS "in" WS testlist WS? ":" WS? suite_d2
+match_stmt_d2: "match" WS test WS? ":" EOL+ ("            " arm_d3)+
+arm_d3: "case" (WS pattern__word | WS? pattern__sign) WS? ":" WS? suite_d3
+elif_clause_d2: "elif" WS test WS? ":" WS? suite_d2
+else_clause_d2: "else" WS? ":" WS? suite_d2
+elif_clause_d1: "elif" WS test WS? ":" WS? suite_d1
+else_clause_d1: "else" WS? ":" WS? suite_d1
+dotted: NAME (WS? "." WS? NAME)*
+type_params: "[" WSN? type_param_nl (WSN? "," WSN? type_param_nl)* WSN? "]"
+trait_item_d1: fn_head EOL+ | fn_def_d1
+fn_head: "fn" WS NAME (WS? type_params)? WS? "(" (WSN? params_nl)? WSN? ")" (WS? "->" WS? ret_type)?
+fn_def_d1: fn_head WS? ":" WS? suite_d1
+params_nl: param_nl (WSN? "," WSN? param_nl)* (WSN? ",")?
+ret_type: type (WS? "!" WS? type)?
+param_nl: ((INOUT | SINK | VAR) WSN)? WSN? NAME (WSN? ":" WSN? type_nl)? (WSN? "=" WSN? test_nl)?
+type_param_nl: NAME (WSN? ":" WSN? NAME)?
+fields_nl: field_nl (WSN? "," WSN? field_nl)* (WSN? ",")?
+variant: NAME (WS? "(" (WSN? variant_fields_nl)? WSN? ")")?
+variant_fields_nl: variant_field_nl (WSN? "," WSN? variant_field_nl)* (WSN? ",")?
+variant_field_nl: field_nl | type_nl
+field_nl: NAME WSN? ":" WSN? type_nl (WSN? "=" WSN? test_nl)?
+INOUT: /inout/
+SINK: /sink/
+VAR: /var/
+NONE: /None/
+TRUE: /True/
+FALSE: /False/
+AUGOP: /(?:\+=|\-=|\*=|\/=|\/\/=|%=|\*\*=|\&=|\|=|\^=|<<=|>>=)/
+LT: /</
+GT: />/
+EQ: /==/
+NE: /!=/
+LE: /<=/
+GE: />=/
+LSHIFT: /<</
+RSHIFT: />>/
+PLUS: /\+/
+MINUS: /\-/
+STAR: /\*/
+SLASH: /\//
+DSLASH: /\/\//
+PERCENT: /%/
+POW: /\*\*/
+QMARK: /\?/
+NAME: /[A-Za-z_][A-Za-z0-9_]*/
+NUMBER: /0[xX][0-9a-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|\d[\d_]*(\.\d[\d_]*)?([eE][+-]?\d+)?/
+STRING: /[rRbBfF]{0,2}("""(("|"")?([^"\\]|\\(.|\n)))*"""|'''(('|'')?([^'\\]|\\(.|\n)))*'''|"([^"\\\n]|\\(.|\n))*"|'([^'\\\n]|\\(.|\n))*')/
+WS: /([ \t\f]|\\[ \t\f]*\r?\n)+/
+WSN: /([ \t\f\r\n]|\\[ \t\f]*\r?\n|#[^\n]*)+/
+EOL: /[ \t\f]*(#[^\n]*)?\r?\n/

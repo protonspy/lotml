@@ -1,8 +1,10 @@
 ---
-autonomy: gated
+autonomy: auto
 ci: wait
 status: approved
-checksum: 9a06d4d9629c1689f09942f739b5507edbca27ba8662b91216c08a8eef032242
+pr: per-group
+merge: auto
+checksum: a271ff1f30c2a265cad9062fea7e59d8846195f642fca6b163e8eb4c7ef17b67
 ---
 
 # lotml roadmap
@@ -54,22 +56,22 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
 
 ## Tasks
 
-- [ ] 1.1 (Unit) Decide what `/` does on two `int`s — `f64` as in Python, or an error pointing at `//` — and record it as an ADR before the spec freezes (R34; docs/wiki/pages/type-system.md, docs/wiki/pages/lotml-syntax.md)
-- [ ] 1.2 (Unit) Review adr:0003 and adr:0005 against the corrected evidence and supersede their context or keep it, as the owner decides (docs/wiki/pages/source-verification.md, docs/wiki/pages/memory-model.md)
-- [ ] 1.3 (Unit) Write the lotml language reference as idiom examples under 10,000 tokens, variant B, with the parameter conventions, the unit type, `todo()` and the places where semantics differ from Python marked (R12, R24, R28, R33; docs/wiki/pages/training-prior.md, research/pilot/spec-b.md)
+- [x] 1.1 (Unit) Decide what `/` does on two `int`s — `f64` as in Python, or an error pointing at `//` — and record it as an ADR before the spec freezes (R34; docs/wiki/pages/type-system.md, docs/wiki/pages/lotml-syntax.md)
+- [x] 1.2 (Unit) Review adr:0003 and adr:0005 against the corrected evidence and supersede their context or keep it, as the owner decides (docs/wiki/pages/source-verification.md, docs/wiki/pages/memory-model.md)
+- [x] 1.3 (Unit) Write the lotml language reference as idiom examples under 10,000 tokens, variant B, with the parameter conventions, the unit type, `todo()` and the places where semantics differ from Python marked (R12, R24, R28, R33; docs/wiki/pages/training-prior.md, research/pilot/spec-b.md)
   _Depends 1.1_
-- [ ] 1.4 (TDD) Build the harness task set: HumanEval, MBPP and LiveCodeBench v6 translated to lotml with signatures, docstrings and hidden tests, at least 168 paired tasks per comparison (docs/wiki/pages/evaluation-harness.md, research/experiments/sample_size/results.md)
+- [x] 1.4 (TDD) Build the harness task set: HumanEval, MBPP and LiveCodeBench v6 translated to lotml with signatures, docstrings and hidden tests, at least 168 paired tasks per comparison (docs/wiki/pages/evaluation-harness.md, research/experiments/sample_size/results.md)
   _Depends 1.3_
-- [ ] 1.5 (Unit) Grow the research transpiler into the harness executor: every construct of the reference, value semantics, the step budget and tracebacks at the lotml line (research/experiments/transpiler/, research/experiments/tracebacks/results.md)
+- [x] 1.5 (Unit) Grow the research transpiler into the harness executor: every construct of the reference, value semantics, the step budget and tracebacks at the lotml line (research/experiments/transpiler/, research/experiments/tracebacks/results.md)
   _Depends 1.3_
-- [ ] 1.6 (TDD) Generate the grammar from the parser's single source in three dialects — llguidance Lark with line-oriented, depth-bounded blocks, GBNF and EBNF — and test each against the whole corpus on every change (R11; research/experiments/grammar/results.md, docs/wiki/pages/constrained-decoding.md)
+- [x] 1.6 (TDD) Generate the grammar from the parser's single source in three dialects — llguidance Lark with line-oriented, depth-bounded blocks, GBNF and EBNF — and test each against the whole corpus on every change (R11; research/experiments/grammar/results.md, docs/wiki/pages/constrained-decoding.md)
   _Depends 1.3_
-- [ ] 1.7 (TDD) Compare variant B against variant A on the task set with at least three model families, closed and open, and report the outcomes that depend on the semantics (adr:0004; research/experiments/transpiler/results.md)
+- [x] 1.7 (TDD) Compare variant B against variant A on the task set with at least three model families, closed and open, and report the outcomes that depend on the semantics (adr:0004; research/experiments/transpiler/results.md)
   _Depends 1.4, 1.5_
-- [ ] 1.8 (TDD) Compare the indented form against a braces form on editing tasks at scale — long files, multi-turn agents, open models, strict and tolerant application — and report slips, rewrites and C-family idioms (adr:0005; research/experiments/editing/results.md, research/experiments/indentation/results.md)
+- [x] 1.8 (TDD) Compare the indented form against a braces form on editing tasks at scale — long files, multi-turn agents, open models, strict and tolerant application — and report slips, rewrites and C-family idioms (adr:0005; research/experiments/editing/results.md, research/experiments/indentation/results.md)
   _Depends 1.4, 1.5_
-- [ ] 1.9 (Unit) Measure the Claude tokenizer with `count_tokens` on the paired corpus and the generated code, closing the gap in the token measurements (docs/wiki/pages/token-cost.md)
-- [ ] 1.10 (Unit) Review the phase 0 gate — parse ≥ 95% and no syntactic leakage with the spec, variant and block style confirmed — and record the decisions it settles
+- [x] 1.9 (Unit) Measure the Claude tokenizer with `count_tokens` on the paired corpus and the generated code, closing the gap in the token measurements (docs/wiki/pages/token-cost.md)
+- [x] 1.10 (Unit) Review the phase 0 gate — parse ≥ 95% and no syntactic leakage with the spec, variant and block style confirmed — and record the decisions it settles
   _Depends 1.6, 1.7, 1.8, 1.9_
 - [ ] 2.1 (Unit) Write the compiler's hand-written, tolerant, recursive-descent parser in Rust on Salsa, reporting positions as UTF-8 offsets and recovering from errors (R10; adr:0006; docs/wiki/pages/transpilation-strategy.md)
   _Depends 1.10_

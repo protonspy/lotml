@@ -1,0 +1,366 @@
+"""Run a lotml program: its `test` blocks, or a task's hidden tests, under a step budget.
+
+`run` executes in this process and is what the child process calls; `isolated` starts that
+child, so a program that hangs past the step budget's reach, exhausts memory or kills its
+interpreter takes only the child with it. Model-written code is still not sandboxed —
+run unreviewed batches on a machine you can throw away.
+"""
+
+import builtins
+import json
+import linecache
+import os
+import secrets
+import subprocess
+import sys
+import tempfile
+import traceback
+import types
+from dataclasses import asdict, dataclass, field
+from typing import Any, ClassVar
+
+from lark.exceptions import LarkError
+
+from lotml_harness import ROOT
+from lotml_harness.compare import matches
+from lotml_harness.lang import runtime
+from lotml_harness.lang.check import violations
+from lotml_harness.lang.transpile import ALLOWED_MODULES, TranspileError, transpile
+from lotml_harness.tasks import Task, values
+
+BUDGET = 10_000_000
+"""Lines one test may run: a deterministic stand-in for a time limit."""
+TOOL = 4
+"""The `sys.monitoring` tool id the step budget uses (0 to 2 and 5 are reserved)."""
+
+
+class StepBudgetExceeded(Exception):
+    """A test ran more lines than its budget."""
+
+
+OUTCOMES = [
+    (StepBudgetExceeded, "timeout"),
+    (RecursionError, "timeout"),
+    (runtime.Fail, "propagated error"),
+    (runtime.NonExhaustiveMatch, "non-exhaustive match"),
+    (runtime.Overflow, "overflow"),
+    (runtime.Todo, "todo"),
+    (runtime.Panic, "panic"),
+    (runtime.LotmlTypeError, "type error"),
+    (AssertionError, "assertion"),
+    (NameError, "unresolved name"),
+    (BaseException, "runtime error"),
+]
+
+
+@dataclass
+class Result:
+    """What running a program produced.
+
+    `error` is set when the program never ran: `parse: …`, `transpile: …` or `load: …`.
+    `tests` maps each `test` block to its outcome, `cases` lists one outcome per hidden
+    test case — `pass`, `wrong answer`, or the label of what stopped it. `violations` are
+    the mutability errors lotml's compiler would reject the program for.
+    """
+
+    error: str | None = None
+    tests: dict[str, str] = field(default_factory=dict)
+    cases: list[str] = field(default_factory=list)
+    tracebacks: dict[str, str] = field(default_factory=dict)
+    violations: list[str] = field(default_factory=list)
+
+    @property
+    def passed(self) -> bool:
+        outcomes = [*self.tests.values(), *self.cases]
+        return (
+            self.error is None
+            and not self.violations
+            and bool(outcomes)
+            and all(o == "pass" for o in outcomes)
+        )
+
+
+def restricted_import(name, globals_=None, locals_=None, fromlist=(), level=0):
+    if name not in ALLOWED_MODULES or level != 0:
+        raise ImportError(f"import of {name} is outside the prelude's modules")
+    return builtins.__import__(name, globals_, locals_, fromlist, level)
+
+
+def code_objects(code: types.CodeType):
+    yield code
+    for constant in code.co_consts:
+        if isinstance(constant, types.CodeType):
+            yield from code_objects(constant)
+
+
+class Budget:
+    """Counts the program's own lines with `sys.monitoring`, and stops it past a limit."""
+
+    def __init__(self, code: types.CodeType):
+        self.codes = list(code_objects(code))
+        self.left = 0
+
+    def line(self, _code, _line):
+        self.left -= 1
+        if self.left < 0:
+            raise StepBudgetExceeded
+
+    def __enter__(self):
+        monitoring = sys.monitoring
+        monitoring.use_tool_id(TOOL, "lotml-budget")
+        monitoring.register_callback(TOOL, monitoring.events.LINE, self.line)
+        for code in self.codes:
+            monitoring.set_local_events(TOOL, code, monitoring.events.LINE)
+        return self
+
+    def __exit__(self, *_):
+        monitoring = sys.monitoring
+        for code in self.codes:
+            monitoring.set_local_events(TOOL, code, 0)
+        monitoring.register_callback(TOOL, monitoring.events.LINE, None)
+        monitoring.free_tool_id(TOOL)
+        return False
+
+
+def label(error: BaseException) -> str:
+    return next(name for cls, name in OUTCOMES if isinstance(error, cls))
+
+
+def report(error: BaseException, path: str) -> str:
+    failure = traceback.TracebackException.from_exception(error)
+    frames = [f for f in failure.stack if f.filename == path]
+    return "".join(traceback.format_list(frames)) + "".join(failure.format_exception_only())
+
+
+def load(source: str, variant: str, mode: str, path: str):
+    """The program's namespace and code, or a `Result` saying why it never ran."""
+    try:
+        tree = transpile(source, variant, mode)
+    except LarkError as error:
+        return Result(error=f"parse: {str(error).strip().splitlines()[0]}")
+    except (TranspileError, RecursionError) as error:
+        return Result(error=f"transpile: {error}")
+    linecache.cache[path] = (len(source), None, source.splitlines(True), path)
+    namespace = types.ModuleType("lotml_program").__dict__
+    prelude = {
+        **runtime.PRELUDE,
+        "print": runtime.capped_print(),
+        "__import__": restricted_import,
+    }
+    # Every name the transpiler generates starts with `__`, which a program cannot write.
+    namespace.update(
+        {
+            "__rt": runtime,
+            "__variants": runtime.Variants(),
+            "__tests": [],
+            "__builtins__": prelude,
+        }
+    )
+    try:
+        code = compile(tree, path, "exec")
+    except (ValueError, TypeError, SyntaxError) as error:
+        return Result(error=f"transpile: {error}")
+    try:
+        exec(code, namespace)  # noqa: S102
+    except BaseException as error:  # noqa: BLE001
+        return Result(error=f"load: {type(error).__name__}: {error}")
+    return namespace, code
+
+
+def attempt(budget: Budget, limit: int, function, *args) -> tuple[str | None, Any, BaseException]:
+    """`function(*args)` under the budget: (None, result, None) or (label, None, error).
+
+    `BaseException` is caught too: a program that leaves through `SystemExit` has failed, not
+    finished.
+    """
+    budget.left = limit
+    try:
+        return None, function(*args), None
+    except BaseException as error:  # noqa: BLE001
+        return label(error), None, error
+
+
+def run(
+    source: str,
+    variant: str = "b",
+    mode: str = "lotml",
+    task: Task | None = None,
+    budget: int = BUDGET,
+    path: str = "program.lotml",
+) -> Result:
+    """Load `source` and run its `test` blocks, or the task's hidden tests when given one."""
+    loaded = load(source, variant, mode, path)
+    if isinstance(loaded, Result):
+        return loaded
+    namespace, code = loaded
+    result = Result(violations=violations(variant, source) if mode == "lotml" else [])
+    with Budget(code) as counter:
+        if task is None:
+            for name, test in namespace["__tests"]:
+                outcome, _, error = attempt(counter, budget, test)
+                result.tests[name] = outcome or "pass"
+                if error is not None:
+                    result.tracebacks[name] = report(error, path)
+            return result
+        function = namespace.get(task.name)
+        if not callable(function):
+            result.error = f"load: no function `{task.name}`"
+            return result
+        for index, case in enumerate(task.tests):
+            args = [
+                values.from_json(values.to_json(a, t), t)
+                for a, (_, t) in zip(case.args, task.params, strict=True)
+            ]
+            outcome, value, error = attempt(counter, budget, function, *args)
+            if outcome is None:
+                outcome = "pass" if matches(value, case, task.returns) else "wrong answer"
+            result.cases.append(outcome)
+            if error is not None and str(index) not in result.tracebacks:
+                result.tracebacks[str(index)] = report(error, path)
+    return result
+
+
+MEMORY = 2 * 2**30
+"""Bytes a child may use."""
+OUTPUT_TAIL = 1_000_000
+"""Bytes of a child's output the parent reads: the end, where the result line is."""
+ENVIRONMENT = ("PATH", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG")
+
+
+def child_environment() -> dict[str, str]:
+    """What a child needs to start Python and nothing else: no tokens, no keys."""
+    kept = {k: v for k, v in os.environ.items() if k.upper() in ENVIRONMENT}
+    return kept | {
+        "PYTHONPATH": str(ROOT / "harness"),
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+
+
+def limit_memory(limit: int) -> None:
+    """Cap this process's memory: an address-space rlimit on POSIX, a job object on Windows."""
+    if sys.platform != "win32":
+        import resource
+
+        resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+        return
+    import ctypes
+    from ctypes import wintypes
+
+    class IoCounters(ctypes.Structure):
+        _fields_: ClassVar = [(f"c{i}", ctypes.c_ulonglong) for i in range(6)]
+
+    class BasicLimits(ctypes.Structure):
+        _fields_: ClassVar = [
+            ("PerProcessUserTimeLimit", ctypes.c_int64),
+            ("PerJobUserTimeLimit", ctypes.c_int64),
+            ("LimitFlags", wintypes.DWORD),
+            ("MinimumWorkingSetSize", ctypes.c_size_t),
+            ("MaximumWorkingSetSize", ctypes.c_size_t),
+            ("ActiveProcessLimit", wintypes.DWORD),
+            ("Affinity", ctypes.c_size_t),
+            ("PriorityClass", wintypes.DWORD),
+            ("SchedulingClass", wintypes.DWORD),
+        ]
+
+    class ExtendedLimits(ctypes.Structure):
+        _fields_: ClassVar = [
+            ("BasicLimitInformation", BasicLimits),
+            ("IoInfo", IoCounters),
+            ("ProcessMemoryLimit", ctypes.c_size_t),
+            ("JobMemoryLimit", ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed", ctypes.c_size_t),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.SetInformationJobObject.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+    ]
+    kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    job = kernel32.CreateJobObjectW(None, None)
+    limits = ExtendedLimits()
+    # JOB_OBJECT_LIMIT_PROCESS_MEMORY, and JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: a process the
+    # program starts dies with the child instead of outliving the wall clock.
+    limits.BasicLimitInformation.LimitFlags = 0x100 | 0x2000
+    limits.ProcessMemoryLimit = limit
+    extended = 9  # JobObjectExtendedLimitInformation
+    if not (
+        job
+        and kernel32.SetInformationJobObject(
+            job, extended, ctypes.byref(limits), ctypes.sizeof(limits)
+        )
+        and kernel32.AssignProcessToJobObject(job, kernel32.GetCurrentProcess())
+    ):
+        raise OSError(ctypes.get_last_error(), "could not limit the child's memory")
+
+
+def tail(file) -> str:
+    file.seek(0, os.SEEK_END)
+    file.seek(max(0, file.tell() - OUTPUT_TAIL))
+    return file.read().decode("utf-8", "replace")
+
+
+def isolated(
+    source: str,
+    variant: str = "b",
+    mode: str = "lotml",
+    task: Task | None = None,
+    budget: int = BUDGET,
+    timeout: float = 120,
+    memory: int = MEMORY,
+) -> Result:
+    """`run` in a child process with a minimal environment, a memory cap and a wall clock.
+
+    The child marks its result line with a nonce the program never sees, so a program
+    printing a result of its own is not believed; output goes to a file and only its end is
+    read, so a program printing without end cannot fill the parent's memory.
+    """
+    nonce = secrets.token_hex(16)
+    request = {
+        "source": source,
+        "variant": variant,
+        "mode": mode,
+        "task": task.to_json() if task is not None else None,
+        "budget": budget,
+        "memory": memory,
+        "nonce": nonce,
+    }
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        try:
+            subprocess.run(  # noqa: S603
+                [sys.executable, "-m", "lotml_harness.execute"],
+                input=json.dumps(request).encode("utf-8"),
+                stdout=out,
+                stderr=err,
+                timeout=timeout,
+                env=child_environment(),
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return Result(error="timeout: the program ran past the wall-clock limit")
+        output, errors = tail(out), tail(err)
+    for line in reversed(output.splitlines()):
+        if line.startswith(nonce):
+            return Result(**json.loads(line[len(nonce) :]))
+    reason = (errors.strip().splitlines() or ["no result"])[-1]
+    return Result(error=f"crash: {reason}")
+
+
+def main() -> None:
+    request = json.load(sys.stdin)
+    nonce = request.pop("nonce")
+    limit_memory(request.pop("memory"))
+    task = Task.from_json(request["task"]) if request["task"] is not None else None
+    sys.setrecursionlimit(10_000)
+    result = run(request["source"], request["variant"], request["mode"], task, request["budget"])
+    sys.stdout.write("\n" + nonce + json.dumps(asdict(result)) + "\n")
+
+
+if __name__ == "__main__":
+    main()

@@ -52,8 +52,18 @@ Both keep: `fn`, `type` for records and sum types, `T?`, `T ! E`, `?`, `fail`, `
   ([arXiv 2510.03415](https://arxiv.org/abs/2510.03415); reading code, not writing it). That is the
   rule's second clause measured: different semantics needs visibly different syntax.
 
-**Decision:** variant B (adr:0004-python-syntax-where-semantics-match); the
-[[evaluation-harness]] repeats the comparison with more models and families before v1 freezes.
+**Decision:** variant B (adr:0004-python-syntax-where-semantics-match), confirmed by the phase 0
+gate and frozen for v1 (adr:0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate).
+
+**Repeated at scale.** Four models of three families — Claude Sonnet 5.5 and Haiku 4.5, Qwen2.5
+Coder 7B, Llama 3.1 8B — wrote the same 200 HumanEval and MBPP tasks from each variant's reference
+(`harness/results/variants.md`). Variant B passed at least as often for three of them and
+significantly more for two: Sonnet 98.0% against 88.0% (21 tasks only B solved, 1 only A, exact
+McNemar p < 0.001) and Qwen 49.0% against 42.0% (19 against 5, p = 0.007); Haiku 82.0% against 80.5%
+and Llama 21.0% against 22.5% were within noise. Twenty of Sonnet's 21 losses in A were `true` and
+`false` in lowercase: a lowercase `none` taught it a convention the rest of the language does not
+follow — the cost of a construct that differs from Python's for no semantic reason, which is the
+rule's own argument. Variant B's answers cost 0.3–7.5% more tokens ([[token-cost]]).
 
 ## Where lotml's semantics already differ
 
@@ -66,10 +76,10 @@ where the design already makes the difference visible:
 | passing an argument | reference | copy | a function changes its caller's value only through `inout`, with `&` at the call |
 | `x = …` again | rebinding | an error for an immutable | `var` at the declaration |
 | `if x:` on a non-`bool` | truthiness | an error | — the compiler rejects it |
-| `a / b` and `//` on integers | float and floor division | to be specified | open — see [[type-system]] |
+| `a / b` and `//` on integers | float and floor division | the same | — adr:0007-integer-division-returns-f64 |
 
-Each row is a diagnostic with a fix ([[semantic-compiler]]); the open row needs a decision before
-the spec freezes.
+Each row that differs is a diagnostic with a fix ([[semantic-compiler]]); integer division kept
+Python's semantics, so it needs none.
 
 ## Gaps in the original proposal
 
@@ -109,9 +119,10 @@ SWE-agent's edit guard, once read as an indentation guard, is a general lint gat
 were never broken down by code. The evidence is in [[editing-robustness]]: the editing risk lives
 in the edit interface more than in the block style, and edits addressed to syntax entities cut
 edit errors by three quarters in Python. **Decision:** keep indentation
-(adr:0005-significant-indentation), with a tolerant parser, a canonical formatter and
-symbol-addressed edits in the compiler; its condition was not triggered by the editing pilot,
-whose twelve tasks per cell cannot separate the designs, and the harness repeats the test at scale. Switching now is cheap; after v1 it is a migration.
+(adr:0009-significant-indentation-with-symbol-addressed-edits), with a tolerant parser, a canonical formatter and
+symbol-addressed edits in the compiler. The editing test at scale met its condition — no model
+edited worse in the indented form on 192 paired tasks — and the choice is frozen for v1
+(adr:0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate).
 
 ## Kept from the original study
 

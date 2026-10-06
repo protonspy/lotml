@@ -1,8 +1,9 @@
 # Editing robustness
 
 Agents change code by editing it — search-and-replace blocks, diffs, line edits — not by writing
-it whole. adr:0005-significant-indentation keeps indentation-based blocks on one condition: that
-an editing test does not find the indented form failing more often than a braces form. This page
+it whole. adr:0009-significant-indentation-with-symbol-addressed-edits kept indentation-based blocks on one condition: that
+an editing test does not find the indented form failing more often than a braces form. The test
+at scale met it (adr:0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate). This page
 gathers what was measured about that question: what a misplaced line does to a program in each
 block style, how three models fared editing both styles, and what the literature on edit formats
 says. The grammar side — whether a constrainer can enforce indentation — is in
@@ -70,6 +71,36 @@ hidden test that fails on the unedited program and passes on a reference edit.
   models are where whitespace errors were reported; the sample is far below the 168 paired tasks a
   decision needs ([[evaluation-harness]]).
 
+## The editing test at scale
+
+`harness/lotml_harness/experiments/editing.py` builds 192 tasks from the harness's task set: a
+file of at least 150 non-blank lines of working functions, written in both forms, with one
+silent slip planted in one function — the program parses and some hidden test fails. A model
+gets three turns of SEARCH/REPLACE edits with feedback (the parse error, or the first failing
+test); an answer without edit blocks that rewrites a function whole is applied by replacing that
+function by name, since the open models answer that way. Results in `harness/results/editing.md`:
+
+| model | pairs | indented, 3 turns | braces, 3 turns | only indented | only braces | McNemar p |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Claude Haiku | 192 | 100.0% | 100.0% | 0 | 0 | 1.000 |
+| Claude Sonnet | 192 | 100.0% | 100.0% | 0 | 0 | 1.000 |
+| Llama 3.1 8B | 192 | 88.0% | 82.3% | 20 | 9 | 0.061 |
+| Qwen 2.5 Coder 7B | 192 | 93.2% | 94.8% | 3 | 6 | 0.508 |
+
+- **No model did significantly worse in the indented form**; pooled, 23 tasks were fixed only in
+  it and 15 only with braces. Claude fixed every task in both.
+- **Syntax slips went the other way from the fear:** Llama's edits broke the syntax in 8 turns
+  indented and 28 with braces, Qwen's in 0 and 3. A misplaced `}` is the slip that does not
+  survive the parser.
+- **The C family's idioms came with the braces:** Llama wrote `else if` 7 times and `||` twice in
+  the braces form, and none of them in the indented one — the pilot's Haiku slip, repeated.
+- **Open models rewrite; Claude edits.** Qwen never wrote a SEARCH/REPLACE block and Llama
+  rarely did, so their answers were applied by function name in both forms; Claude's edits failed
+  to apply in 9 of 781 turns — 8 SEARCH blocks not found, in both forms alike — and applying
+  with a uniform indentation offset would have rescued none of its first answers.
+- **What this does not show:** single-file tasks with the whole file in the prompt, no agent with
+  tools, and the frontier only through Claude.
+
 ## What agent tooling reports
 
 - **SWE-agent's guard is a general lint gate, not an indentation guard**
@@ -126,10 +157,10 @@ hidden test that fails on the unedited program and passes on a reference edit.
 
 ## What follows for lotml
 
-1. **Keep significant indentation** (adr:0005-significant-indentation): nothing measured argues for
-   switching. The pilot did not trigger its condition, though twelve tasks per cell cannot separate
-   the designs; a misplaced brace is silent more often than a misplaced line; and which slips agents
-   make is unmeasured. The decision stays conditional on the editing test at scale.
+1. **Keep significant indentation** (adr:0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate):
+   the editing test at scale met adr:0009-significant-indentation-with-symbol-addressed-edits's
+   condition — no model edited worse in the indented form, and the braces form had more syntax
+   slips and brought the C family's idioms — so the decision is no longer conditional.
 2. **The compiler offers edits addressed to symbols**: replace the body of a function, a branch of
    a `match`, a method of an `impl`, with the indentation taken from the target and any edit that
    breaks the syntax rejected — the interface that cut edit errors by three quarters in Python.

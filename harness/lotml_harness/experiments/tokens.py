@@ -1,0 +1,186 @@
+"""The Claude tokenizer on the paired corpus and on the code the models wrote.
+
+Anthropic does not publish the tokenizer; the `count_tokens` endpoint counts with it. With
+`ANTHROPIC_API_KEY` set, that endpoint is used. Without one, a text is counted through
+`claude -p` as the difference between the input tokens of a message holding it and of the
+same message empty — the same tokenizer, through the usage the CLI reports, at the cost of
+one boundary token either way per text.
+
+    python -m lotml_harness.experiments.tokens --model haiku --model sonnet
+"""
+
+import argparse
+import json
+import os
+import urllib.request
+from collections import defaultdict
+from dataclasses import dataclass
+from pathlib import Path
+
+from lotml_harness import ROOT
+from lotml_harness.experiments.models import ClaudeCli, ModelError
+
+CORPUS = ROOT / "research" / "tokens" / "corpus"
+RUNS = ROOT / "harness" / "results" / "variants"
+REPORT = ROOT / "harness" / "results" / "tokens.md"
+SYSTEM = "Reply with the single word OK."
+WRAPPER = "Count nothing; reply OK.\n<text>\n{}</text>"
+FORMS = {"typed.py": "typed Python", "a.x": "variant A", "b.x": "variant B"}
+
+
+class Counter:
+    """Counts the tokens of a text with one Claude model's tokenizer."""
+
+    name: str
+
+    def count(self, text: str) -> int:
+        raise NotImplementedError
+
+
+class CliCounter(Counter):
+    """`claude -p` input tokens with the text, minus without it."""
+
+    def __init__(self, model: str, client: ClaudeCli | None = None):
+        self.name = model
+        self.client = client or ClaudeCli(model)
+        self.baseline: int | None = None
+
+    def tokens(self, text: str) -> int:
+        return self.client.complete(SYSTEM, WRAPPER.format(text)).input_tokens
+
+    def count(self, text: str) -> int:
+        if self.baseline is None:
+            self.baseline = self.tokens("")
+        return self.tokens(text) - self.baseline
+
+
+class ApiCounter(Counter):
+    """Anthropic's `count_tokens` endpoint."""
+
+    URL = "https://api.anthropic.com/v1/messages/count_tokens"
+
+    def __init__(self, model: str, key: str):
+        self.name = model
+        self.key = key
+
+    def count(self, text: str) -> int:
+        body = {"model": self.name, "messages": [{"role": "user", "content": text}]}
+        request = urllib.request.Request(  # noqa: S310
+            self.URL,
+            data=json.dumps(body).encode(),
+            headers={
+                "x-api-key": self.key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310
+                return json.loads(response.read())["input_tokens"]
+        except OSError as error:
+            raise ModelError(f"count_tokens failed: {error}") from None
+
+
+def counter(model: str) -> Counter:
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    return ApiCounter(model, key) if key else CliCounter(model)
+
+
+def corpus(root: Path = CORPUS) -> dict[str, dict[str, str]]:
+    """Each paired task's text per form; tasks missing a form are left out."""
+    tasks = {}
+    for directory in sorted(p for p in root.iterdir() if p.is_dir()):
+        if all((directory / f).exists() for f in FORMS):
+            tasks[directory.name] = {f: (directory / f).read_text(encoding="utf-8") for f in FORMS}
+    return tasks
+
+
+def generated(runs: Path = RUNS) -> dict[tuple[str, str], str]:
+    """The code each model wrote per variant, for tasks it answered in both, concatenated."""
+    by_model: dict[str, dict[tuple[str, str], str]] = defaultdict(dict)
+    for path in sorted(runs.glob("*.jsonl")):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            row = json.loads(line)
+            if row.get("error") is None and row.get("code"):
+                by_model[row["model"]][(row["task"], row["variant"])] = row["code"]
+    texts = {}
+    for model, codes in by_model.items():
+        paired = sorted({t for t, v in codes if (t, "a") in codes and (t, "b") in codes})
+        for variant in ("a", "b"):
+            texts[(model, variant)] = "\n".join(codes[(t, variant)] for t in paired)
+    return texts
+
+
+@dataclass
+class Measurement:
+    corpus: dict[str, dict[str, int]]
+    generated: dict[tuple[str, str], int]
+    method: str
+
+
+def measure(count: Counter) -> Measurement:
+    sizes = {
+        task: {form: count.count(text) for form, text in texts.items()}
+        for task, texts in corpus().items()
+    }
+    produced = {key: count.count(text) for key, text in generated().items() if text}
+    method = "count_tokens" if isinstance(count, ApiCounter) else "claude -p usage difference"
+    return Measurement(sizes, produced, method)
+
+
+def ratio(part: int, whole: int) -> str:
+    return f"{part / whole:.3f}" if whole else "—"
+
+
+def markdown(measurements: dict[str, Measurement]) -> str:
+    lines = [
+        "# The Claude tokenizer",
+        "",
+        "Generated by `python -m lotml_harness.experiments.tokens`. Counts are the tokens a",
+        "Claude model reads for each text; see the module docstring for how they are taken.",
+        "",
+        "## Paired corpus",
+        "",
+        "| tokenizer | method | typed Python | variant A | variant B | A / typed | B / typed |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for name, m in measurements.items():
+        totals = {f: sum(task[f] for task in m.corpus.values()) for f in FORMS}
+        typed, a, b = totals["typed.py"], totals["a.x"], totals["b.x"]
+        lines.append(
+            f"| {name} | {m.method} | {typed} | {a} | {b} | {ratio(a, typed)} | {ratio(b, typed)} |"
+        )
+    lines += ["", "## Per task", "", "| tokenizer | task | typed Python | variant A | variant B |"]
+    lines += ["| --- | --- | ---: | ---: | ---: |"]
+    for name, m in measurements.items():
+        for task, sizes in m.corpus.items():
+            lines.append(
+                f"| {name} | {task} | {sizes['typed.py']} | {sizes['a.x']} | {sizes['b.x']} |"
+            )
+    lines += [
+        "",
+        "## Code the models wrote",
+        "",
+        "Each model's answers to the tasks it answered in both variants, concatenated.",
+        "",
+        "| tokenizer | writer | variant A | variant B | B / A |",
+        "| --- | --- | ---: | ---: | ---: |",
+    ]
+    for name, m in measurements.items():
+        for writer in sorted({model for model, _ in m.generated}):
+            a, b = m.generated.get((writer, "a"), 0), m.generated.get((writer, "b"), 0)
+            lines.append(f"| {name} | {writer} | {a} | {b} | {ratio(b, a)} |")
+    return "\n".join(lines) + "\n"
+
+
+def main() -> None:
+    options = argparse.ArgumentParser(description=__doc__)
+    options.add_argument("--model", action="append", default=[], help="haiku, sonnet, ...")
+    arguments = options.parse_args()
+    measurements = {model: measure(counter(model)) for model in arguments.model or ["haiku"]}
+    REPORT.write_text(markdown(measurements), encoding="utf-8")
+    print(REPORT.read_text(encoding="utf-8"))
+
+
+if __name__ == "__main__":
+    main()

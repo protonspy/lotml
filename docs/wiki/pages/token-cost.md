@@ -14,9 +14,14 @@ failures rather than from surface verbosity.
   license; the exact names and pinned commits are in `research/tokens/counter.py`.
 - **Special tokens are excluded.** The Llama, Gemma and Mistral tokenizers add a BOS token by
   default; `research/tokens/test_counter.py` requires a count of zero for empty text.
-- **The Claude tokenizer was not measured.** Anthropic does not publish it, and counting
-  requires the `count_tokens` API with a key, which was not available. It is a gap in this
-  measurement.
+- **The Claude tokenizer, measured later.** Anthropic does not publish it; with no key for the
+  `count_tokens` API, `harness/lotml_harness/experiments/tokens.py` counts each text as the
+  difference in input tokens `claude -p` reports for a message with and without it — the same
+  tokenizer, give or take one boundary token per text (`harness/results/tokens.md`). The paired
+  corpus costs 0.903 (A) and 0.911 (B) of typed Python under Claude Haiku 4.5's tokenizer and 0.899
+  and 0.909 under Claude Sonnet 5.5's — the other tokenizers' ratio. The newer tokenizer counts
+  about 21% more tokens for the same text (3,778 against 3,117 for typed Python), so absolute
+  budgets move between Claude generations while the ratios hold.
 - **Paired corpus** in `research/tokens/corpus/`: 12 tasks (records, sum types, errors,
   generics, traits, algorithms), each in modern typed Python (3.12, `X | None`, `type`,
   dataclasses), in variant A and in variant B, always with tests. The Python side passes pytest
@@ -159,6 +164,7 @@ Each number taken from a paper in `research/literature/sources.json` is quoted i
    typed Python" — see [[requirements-and-roadmap]].
 4. **Limitations.** A single author wrote the corpus knowing the hypotheses; the assumed standard
    library differs from Python's in a few places (`find`, a `pop` that returns an optional,
-   `Heap`); the choice of tasks moves the result between 0.76 and 0.99; and the Claude tokenizer
-   was not measured. The [[evaluation-harness]] must measure model-generated code, not
-   handwritten code.
+   `Heap`); the choice of tasks moves the result between 0.76 and 0.99. The
+   [[evaluation-harness]] measured model-generated code: across four models answering the same
+   200 tasks, variant B's answers cost 0.3–7.5% more Claude tokens than variant A's
+   (`harness/results/tokens.md`), the order of the corpus's 0.8 points, with Llama the widest.

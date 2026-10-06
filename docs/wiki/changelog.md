@@ -10,6 +10,14 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-05 — the phase 0 gate passed and adr:0010 freezes variant B and indented blocks: [[evaluation-harness]] records the gate, [[lotml-syntax]], [[llm-oriented-language]], [[requirements-and-roadmap]] and [[lotml-risks]] drop the condition
+- 2026-10-05 — the indented form against braces edited at scale, 192 tasks with four models: [[editing-robustness]] reports it, [[evaluation-harness]] lists it as built
+- 2026-10-05 — variant B against variant A repeated at scale with four models: [[lotml-syntax]] reports it
+- 2026-10-05 — the Claude tokenizer measured on the paired corpus and on model-written code: [[token-cost]] closes the gap it listed
+- 2026-10-05 — the grammar published in three dialects: [[constrained-decoding]] describes how they are generated and tested
+- 2026-10-05 — the harness executor built: [[evaluation-harness]] lists it under what exists
+- 2026-10-05 — the harness task set built: [[evaluation-harness]] lists it under what exists
+- 2026-10-05 — integer division decided and ADRs 0003 and 0005 superseded with the corrected evidence: [[type-system]], [[lotml-syntax]], [[requirements-and-roadmap]], [[memory-model]], [[editing-robustness]], [[evaluation-harness]] and [[llm-oriented-language]] cite adr:0007, adr:0008 and adr:0009
 - 2026-10-05 — evidence deep dive: added [[source-verification]] and [[editing-robustness]]; corrected numbers and conditions against the downloaded papers and added the experiments' results in [[llm-oriented-language]], [[semantic-compiler]], [[constrained-decoding]], [[training-prior]], [[memory-model]], [[token-cost]], [[type-system]], [[lotml-syntax]], [[python-leakage-pilot]], [[transpilation-strategy]], [[evaluation-harness]], [[languages-for-agents]], [[colorless-concurrency]], [[lotml-risks]] and [[requirements-and-roadmap]]
 - 2026-10-05 — wiki translated into English, with English slugs: `linguagem-orientada-a-llms` → [[llm-oriented-language]], `custo-em-tokens` → [[token-cost]], `piloto-de-vazamento-de-python` → [[python-leakage-pilot]], `prior-de-treino` → [[training-prior]], `linguagens-para-agentes` → [[languages-for-agents]], `sintaxe-do-lotml` → [[lotml-syntax]], `sistema-de-tipos` → [[type-system]], `modelo-de-memoria` → [[memory-model]], `concorrencia-sem-cor` → [[colorless-concurrency]], `compilador-semantico` → [[semantic-compiler]], `decodificacao-restrita` → [[constrained-decoding]], `estrategia-de-transpilacao` → [[transpilation-strategy]], `harness-de-avaliacao` → [[evaluation-harness]], `riscos-do-lotml` → [[lotml-risks]], `requisitos-e-roadmap` → [[requirements-and-roadmap]]
 - 2026-10-05 — lotml's file extension set to `.lotml`: [[transpilation-strategy]], [[evaluation-harness]] and [[python-leakage-pilot]]

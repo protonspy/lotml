@@ -1,5 +1,6 @@
 ---
-status: accepted
+status: superseded
+superseded-by: 0008-value-semantics-with-reuse-before-borrowing
 ---
 
 # 0003 · Value semantics with reference counting

@@ -140,3 +140,6 @@ numeric ones, and report them separately.
 3. Non-atomic counting by default; values handed to a task are marked shared once, as Koka and
    Lean do — not biased counting, which assumes objects stay on their thread.
 4. No stored references; closures capture by copy; arena and indices in the standard library.
+
+The four are recorded as adr:0008-value-semantics-with-reuse-before-borrowing, which supersedes
+adr:0003-value-semantics-with-reference-counting.

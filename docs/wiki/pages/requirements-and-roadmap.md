@@ -9,7 +9,7 @@ the accepted ADRs under `docs/adr/`.
 
 | ID | requirement | phase | status |
 | --- | --- | --- | --- |
-| R01 | indentation-based syntax with Python's vocabulary | v1 | kept, conditional on the [[evaluation-harness]]'s editing test |
+| R01 | indentation-based syntax with Python's vocabulary | v1 | kept, settled by the [[evaluation-harness]]'s editing test (adr:0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate) |
 | R02 | mandatory types in signatures, fields and exports; local inference | v1 | **adjusted:** local, bidirectional inference, checkable on prefixes ([[type-system]]) |
 | R03 | records, sum types and exhaustive `match` | v1 | **adjusted:** variants accept positional fields |
 | R04 | `T?` as the only form of absence; `T ! E` with `?` and `fail` | v1 | **adjusted:** `??` and `is None`, from variant B (adr:0004-python-syntax-where-semantics-match) |
@@ -42,7 +42,7 @@ the accepted ADRs under `docs/adr/`.
 | R31 | `check --since <rev>`: only the diagnostics an edit introduced, with an explicit "no errors" | v1 | **new** — check-on-edit without blocking files that already had errors ([[semantic-compiler]]) |
 | R32 | edits addressed to symbols — replace a function body, a `match` arm, a method — re-indented by the tool and rejected if they break the syntax | v2 | **new** — entity-addressed edits cut edit errors by 76–88% ([[editing-robustness]]) |
 | R33 | a never-typed placeholder (`todo()`) that fills any hole | v1 | **new** — keeps prefixes free of dead ends and gives the model a legal way to leave a hole ([[type-system]]) |
-| R34 | integer division specified: `/` on `int` returns `f64` or is an error pointing at `//`, never a silent truncation | v1 | **new** ([[type-system]]) |
+| R34 | integer division specified: `/` on `int` returns `f64` as in Python, `//` floors; never a silent truncation | v1 | **new** — adr:0007-integer-division-returns-f64 ([[type-system]]) |
 | R35 | a prelude covering the common names, so they need no import | v1 | **new** — missing imports were 56.6% of C++ compile errors and 8.1% in Java, whose common names need no import ([[semantic-compiler]]) |
 
 ## Non-functional requirements
