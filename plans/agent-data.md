@@ -24,7 +24,7 @@ only sources and models whose terms allow training, each with its evidence.
 ## Paths
 
 - `harness/lotml_harness/agent/` — the agent harness these extend
-- `harness/lotml_harness/tasks/` — the translator the HumanEval tasks go through
+- `harness/lotml_harness/tasks/` — `sources.download` and `values.render`, which the HumanEval tasks reuse
 - `harness/results/` — the rows, the reports and the dataset's manifest
 - `harness/cache/agent/` — the traces the dataset is exported from
 
@@ -36,7 +36,7 @@ only sources and models whose terms allow training, each with its evidence.
 - `plans/compiler-embedded-model.md` — the study of small repair models these runs are data for
 - `docs/wiki/pages/compiler-embedded-model.md` — what that study concluded: the compiler as critic and source of data, repair over authoring
 - adr:0014-deepagents-over-openrouter-for-the-agent-harness
-- adr:0015-infer-humaneval-types-from-its-own-tests — 30 of the original's 164 functions are typed; the rest are inferred
+- adr:0015-pose-humaneval-untyped — the agent writes the types; 30 of the original's 164 functions carry them
 - `harness/results/NOTICE.md` — why the task set's MultiPL-E HumanEval may not be trained on
 
 ## Out of scope
@@ -53,7 +53,7 @@ only sources and models whose terms allow training, each with its evidence.
 ## Tasks
 
 - [ ] 1.1 (Unit) Record in the registry whether Z.ai's and the serving providers' terms allow training on `z-ai/glm-5.3-flash`'s outputs, with the link to each
-- [ ] 1.2 (Unit) Record in this plan's `## Why` how many HumanEval tasks the inference and the translator kept, as `harness/results/agent-humaneval.md` reports it
+- [ ] 1.2 (Unit) Record in this plan's `## Why` how many HumanEval tasks were kept and how many cases they hold, as `harness/results/agent-humaneval.md` reports it
 - [ ] 2.1 (Unit) Run every kept HumanEval task in both arms on `z-ai/glm-5.3-flash`, with traces carrying the check snapshots, and commit the rows and the report
   _Depends 1.2_
 - [ ] 2.2 (Unit) Run the agent benchmark again in both arms, so its traces carry the check snapshots, the system message and the compiler version the export needs
@@ -62,7 +62,7 @@ only sources and models whose terms allow training, each with its evidence.
 
 ## Done when
 
-- `harness/results/agent.md` reports both arms on every HumanEval task the translator keeps,
+- `harness/results/agent.md` reports both arms on every HumanEval task kept,
   with McNemar's comparison.
 - `harness/results/dataset.md` lists only sources and models the registry permits, each with its
   evidence and notice. If the model's terms forbid training or cannot be established, a manifest
