@@ -122,6 +122,7 @@ fn guide_render_prints_the_messages_for_a_state_given_as_json() {
     let out = lotml(&["guide", "render", "state.json"], &dir, &[]).output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let rendered: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(rendered["renderer"], 1);
     let messages = rendered["messages"].as_array().unwrap();
     assert_eq!((messages[0]["role"].as_str(), messages[1]["role"].as_str()), (Some("system"), Some("user")));
     let user = messages[1]["content"].as_str().unwrap();

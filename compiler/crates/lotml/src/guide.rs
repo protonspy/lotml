@@ -292,13 +292,15 @@ impl State {
     }
 }
 
-/// `lotml guide render`: the messages for the state in `path`.
+/// `lotml guide render`: the messages for the state in `path`, and the renderer's version.
 pub fn render_file(path: &Path) -> Result<bool, crate::Failure> {
     let text = read(path).map_err(crate::Failure)?;
     let value: serde_json::Value =
         serde_json::from_str(&text).map_err(|e| crate::Failure(format!("{}: not JSON: {e}", path.display())))?;
     let state = State::from_json(&value).map_err(|why| crate::Failure(format!("{}: {why}", path.display())))?;
-    println!("{}", render(&state));
+    let mut rendered = render(&state);
+    rendered["renderer"] = serde_json::json!(RENDERER);
+    println!("{rendered}");
     Ok(true)
 }
 
