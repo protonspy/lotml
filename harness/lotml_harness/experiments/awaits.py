@@ -18,6 +18,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -220,6 +221,8 @@ def tasks() -> list[ConcurrencyTask]:
 
 CHILD = r"""
 import asyncio, inspect, json, sys, warnings
+from lotml_harness.execute import MEMORY, limit_memory
+limit_memory(MEMORY)
 job = json.loads(sys.stdin.read())
 namespace = {}
 results = []
@@ -271,16 +274,18 @@ def judge_python(task: ConcurrencyTask, code: str) -> Judged:
         "cases": [[c.args, c.expected] for c in task.task.tests],
     }
     try:
-        child = subprocess.run(  # noqa: S603
-            [sys.executable, "-c", CHILD],
-            input=json.dumps(job),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            env=child_environment(),
-            timeout=TIMEOUT,
-            check=False,
-        )
+        with tempfile.TemporaryDirectory(prefix="lotml-awaits-") as scratch:
+            child = subprocess.run(  # noqa: S603
+                [sys.executable, "-c", CHILD],
+                input=json.dumps(job),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=child_environment(),
+                cwd=scratch,
+                timeout=TIMEOUT,
+                check=False,
+            )
         report = json.loads(child.stdout.strip().splitlines()[-1])
     except (subprocess.TimeoutExpired, json.JSONDecodeError, IndexError):
         return Judged(False, concurrent_python(code), None, "did not finish")

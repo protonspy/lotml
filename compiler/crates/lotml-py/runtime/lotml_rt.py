@@ -581,9 +581,13 @@ def c_function(library: str, name: str, params: list, returns: str):
     function.restype = kinds[returns]
 
     def call(*args):
-        converted = [
-            a.encode("utf-8") if p == "str" else a for a, p in zip(args, params, strict=True)
-        ]
+        converted = []
+        for value, param in zip(args, params, strict=True):
+            if param == "str":
+                if "\0" in value:
+                    raise Panic(f"{name}: a str holding a NUL byte cannot be passed to C")
+                value = value.encode("utf-8")
+            converted.append(value)
         return function(*converted)
 
     call.__name__ = call.__qualname__ = name

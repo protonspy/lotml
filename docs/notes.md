@@ -80,3 +80,8 @@ over this file answers with the example above as well as with the notes. -->
 - n-0040 2026-10-06 #ceiling @compiler/crates/lotml-check/src/interface.rs — a C interface passes scalars and read-only strings only: pointers, structs, arrays and callbacks need an ownership rule first
 - n-0041 2026-10-06 #gotcha @harness/lotml_harness/lang/dialects.py — Lark settles shift/reduce conflicts by shifting without a word; a grammar generated for another engine must say it (prec.right in tree-sitter)
 - n-0042 2026-10-06 #gotcha @compiler/crates/lotml/src/files.rs — a git hook exports GIT_DIR, and a git command a test or the compiler runs inherits it: clear the GIT_* location variables, or it writes into the repository being pushed
+- n-0043 2026-10-06 #gotcha @compiler/crates/lotml-py/runtime/lotml_rt.py — a str passed to C is refused if it holds a NUL: C would read only up to it, so what it saw would not be what was checked
+- n-0044 2026-10-06 #gotcha @compiler/crates/lotml/src/exec.rs — lotml bind refuses Windows device names (con, nul, comN, lptN…): nul.lotmli would be written nowhere
+- n-0045 2026-10-06 #gotcha @compiler/crates/lotml/src/files.rs — files::walk skips symlinked directories: a link can lead out of the project or round in a loop; interfaces_for stops at the directory holding .git
+- n-0046 2026-10-06 #gotcha @harness/lotml_harness/experiments/awaits.py — awaits experiment runs model answers with limit_memory and cwd in a fresh temporary directory, never the repository
+- n-0047 2026-10-06 #gotcha @compiler/crates/lotml/src/exec.rs — scripts lotml starts run python -P with the scratch dir first and the working dir last on sys.path, so a planted json.py never shadows the library

@@ -212,3 +212,35 @@ fn run_and_test_still_see_the_program_unwrapped() {
     let tested = lotml(&["test", "p.lotml"], &dir);
     assert!(tested.status.success(), "{}", stdout(&tested));
 }
+
+/// `-P`: the working directory is searched after the library, so a planted `json.py` is never
+/// imported by the scripts `lotml test`, `lotml run` and `lotml bind` start.
+#[test]
+fn a_python_module_left_in_the_directory_never_shadows_the_library() {
+    let planted = "import sys\nsys.stdout.write('PLANTED')\nsys.exit(3)\n";
+    let program = "fn main():\n    print(1)\n\ntest \"t\":\n    assert 1 == 1\n";
+    let dir = scratch(
+        "planted",
+        &[
+            ("json.py", planted),
+            ("ast.py", planted),
+            ("importlib.py", planted),
+            ("p.lotml", program),
+            ("stub.pyi", "def f(x: int) -> int: ...\n"),
+        ],
+    );
+    for args in [vec!["test", "p.lotml"], vec!["run", "p.lotml"], vec!["bind", "stubbed", "--stub", "stub.pyi"]] {
+        let out = lotml(&args, &dir);
+        assert!(out.status.success() && !stdout(&out).contains("PLANTED"), "{args:?}: {}", stdout(&out));
+    }
+}
+
+#[test]
+fn bind_refuses_a_device_s_name() {
+    let dir = scratch("bind-device", &[]);
+    for name in ["nul", "con", "com1", "lpt9.x"] {
+        let out = lotml(&["bind", name, "--stub", "x.pyi"], &dir);
+        assert_eq!(out.status.code(), Some(2), "{name}");
+        assert!(String::from_utf8_lossy(&out.stderr).contains("device"), "{name}");
+    }
+}

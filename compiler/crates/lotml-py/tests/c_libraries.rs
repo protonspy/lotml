@@ -81,3 +81,13 @@ fn a_missing_library_or_function_stops_the_program_when_it_loads() {
     assert_eq!(out.status.code(), Some(101));
     assert!(String::from_utf8_lossy(&out.stderr).contains("LinkError"), "{}", String::from_utf8_lossy(&out.stderr));
 }
+
+#[test]
+fn a_string_with_a_nul_byte_is_never_cut_short_in_c() {
+    let (libc, _, _) = platform();
+    // The lotml source holds the escape `\x00`, a NUL in the string's value.
+    let source = format!("from {libc} import strlen\n\nfn main():\n    print(strlen(\"a\\x00b\"))\n");
+    let out = run("nul-byte", &source, &[(libc, "fn strlen(s: str) -> u64\n")]);
+    assert_eq!(out.status.code(), Some(101), "{}", stdout(&out));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("NUL byte"), "{}", String::from_utf8_lossy(&out.stderr));
+}

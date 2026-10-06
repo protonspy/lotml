@@ -32,8 +32,11 @@ const LEGACY: &[&str] = &["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"
 const UNSUPPORTED_VERSION: i64 = -32022;
 /// How many lines around each reference a result shows.
 const AROUND: usize = 2;
+/// How long the `test` tool's run may take, and how much of its output is kept.
+const TEST_SECONDS: u64 = 60;
+const TEST_OUTPUT: usize = 4 * 1024 * 1024;
 
-const INSTRUCTIONS: &str = "lotml's compiler. Run `check` after every edit: diagnostics come root cause first, with the alternatives in scope and fixes. `digest` is the project's index of signatures; `show` gives a symbol's body; `references` lists every use with the lines around it; `explain` gives an error code's page; `test` runs the test blocks. Edit with `replace` (a definition, a body or a match arm, addressed by symbol, re-indented for you), `add`, `remove`, `edit` (whole lines) and `rename` (every reference at once); each says which errors it introduced.";
+const INSTRUCTIONS: &str = "lotml's compiler. Run `check` after every edit: diagnostics come root cause first, with the alternatives in scope and fixes. `digest` is the project's index of signatures; `show` gives a symbol's body; `references` lists every use with the lines around it; `explain` gives an error code's page; `test` runs the test blocks, which is running the project's code. Edit with `replace` (a definition, a body or a match arm, addressed by symbol, re-indented for you), `add`, `remove`, `edit` (whole lines) and `rename` (every reference at once); each says which errors it introduced.";
 
 /// Serve on standard input and output until the input ends.
 pub fn serve(root: &Path) -> Result<u8, Failure> {
@@ -350,7 +353,8 @@ impl Server {
 
     fn test(&self, args: &Value) -> Result<String, ToolError> {
         let paths = self.selected(args)?;
-        let (_, report) = exec::test_report(&paths, true).map_err(|Failure(why)| ToolError(why))?;
+        let limits = exec::Limits { seconds: TEST_SECONDS, output: TEST_OUTPUT };
+        let (_, report) = exec::test_report(&paths, true, Some(&limits)).map_err(|Failure(why)| ToolError(why))?;
         Ok(report)
     }
 
@@ -447,6 +451,7 @@ impl Server {
             Symbol::Local(declared) => text[declared.range()].to_string(),
         };
         let renamed = self.workspace.rename(&path, &symbol, new_name).map_err(|Refused(why)| ToolError(why))?;
+        self.unchanged(&path)?;
         save(&path, &renamed.text)?;
         self.workspace.set(&path, renamed.text.clone());
         self.modified.insert(path.clone(), stamp(&path));
@@ -473,6 +478,7 @@ impl Server {
     /// Write an edit's text to its file; then say where it went and what it introduced.
     fn write(&mut self, path: &Path, changed: &Changed, what: &str) -> Result<String, ToolError> {
         let introduced = self.workspace.introduced(path, &changed.text);
+        self.unchanged(path)?;
         save(path, &changed.text)?;
         self.workspace.set(path, changed.text.clone());
         self.modified.insert(path.to_path_buf(), stamp(path));
@@ -488,6 +494,20 @@ impl Server {
             out += &format!("the edit introduced:\n{}", lotml_diag::text(&[report], Some(DEFAULT_LIMIT)));
         }
         Ok(out)
+    }
+}
+
+impl Server {
+    /// Refuse to write over a file that changed on the disk since it was read, at the start of
+    /// this call: the edit was worked out on the text before that change, which it would lose.
+    fn unchanged(&self, path: &Path) -> Result<(), ToolError> {
+        if self.modified.get(path).is_some_and(|known| *known == stamp(path)) {
+            return Ok(());
+        }
+        Err(ToolError(format!(
+            "{} changed on the disk while this edit was worked out: nothing was written; call again",
+            self.shown(path)
+        )))
     }
 }
 
@@ -573,7 +593,7 @@ fn tools() -> Vec<Value> {
         }),
         json!({
             "name": "test",
-            "description": "Run the `test` blocks and report each as JSON: pass, or fail with the values each side of the comparison had.",
+            "description": "Run the project's `test` blocks and report each as JSON: pass, or fail with the values each side of the comparison had. This runs the project's code, with the user's privileges, and any Python module or C library its interfaces bind; it stops after 60 s.",
             "inputSchema": {"type": "object", "properties": {"paths": paths}}
         }),
         json!({
@@ -634,4 +654,25 @@ fn tools() -> Vec<Value> {
             }
         }),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_file_changed_on_the_disk_since_it_was_read_is_not_written_over() {
+        let dir = std::env::temp_dir().join(format!("lotml-mcp-unchanged-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.lotml"), "fn f() -> int:\n    return 1\n").unwrap();
+        let server = Server::new(&dir).unwrap_or_else(|Failure(why)| panic!("{why}"));
+        let path = server.modified.keys().next().expect("the file was read").clone();
+        assert!(server.unchanged(&path).is_ok());
+        let later = SystemTime::now() + std::time::Duration::from_secs(60);
+        std::fs::File::options().write(true).open(&path).unwrap().set_modified(later).unwrap();
+        let Err(ToolError(why)) = server.unchanged(&path) else { panic!("a changed file was taken as read") };
+        assert!(why.contains("nothing was written"), "{why}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

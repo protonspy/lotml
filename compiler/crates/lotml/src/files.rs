@@ -27,7 +27,8 @@ fn walk(dir: &Path, found: &mut Vec<PathBuf>) -> std::io::Result<()> {
         // A file found under `.` is named as the user would write it, without `./`.
         let path = if dir == Path::new(".") { PathBuf::from(entry.file_name()) } else { entry.path() };
         let hidden = entry.file_name().to_string_lossy().starts_with('.');
-        if path.is_dir() && !hidden && entry.file_name() != "target" {
+        let linked = entry.file_type().is_ok_and(|t| t.is_symlink());
+        if path.is_dir() && !hidden && !linked && entry.file_name() != "target" {
             walk(&path, found)?;
         } else if path.extension().is_some_and(|e| e == "lotml") {
             found.push(path);
@@ -44,7 +45,8 @@ pub struct Binding {
 }
 
 /// The interfaces a file may import from: each `bindings/<module>.lotmli` in the file's
-/// directory or one above it, the nearest one for each module.
+/// directory or one above it, the nearest one for each module — up to the repository's root,
+/// the directory holding `.git`, so a `bindings/` outside the project never applies.
 pub fn interfaces_for(path: &Path) -> Vec<Binding> {
     let mut found: Vec<Binding> = Vec::new();
     let mut dir = std::path::absolute(path).ok().and_then(|p| p.parent().map(Path::to_path_buf));
@@ -61,6 +63,9 @@ pub fn interfaces_for(path: &Path) -> Vec<Binding> {
                     found.push(Binding { module, path: file, text });
                 }
             }
+        }
+        if here.join(".git").exists() {
+            break;
         }
         dir = here.parent().map(Path::to_path_buf);
     }
@@ -136,5 +141,26 @@ pub fn at_revision(rev: &str, path: &Path) -> Result<String, Failure> {
         Ok(String::new())
     } else {
         Err(Failure(format!("`{rev}` is not a revision of the repository holding {}", path.display())))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn interfaces_are_looked_for_up_to_the_repository_s_root() {
+        let base = std::env::temp_dir().join(format!("lotml-files-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let project = base.join("repo").join("src");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::create_dir_all(base.join("repo").join(".git")).unwrap();
+        std::fs::create_dir_all(base.join("repo").join("bindings")).unwrap();
+        std::fs::create_dir_all(base.join("bindings")).unwrap();
+        std::fs::write(base.join("repo").join("bindings").join("inside.lotmli"), "").unwrap();
+        std::fs::write(base.join("bindings").join("outside.lotmli"), "").unwrap();
+        let found: Vec<String> = interfaces_for(&project.join("a.lotml")).into_iter().map(|b| b.module).collect();
+        let _ = std::fs::remove_dir_all(&base);
+        assert_eq!(found, vec!["inside"], "a bindings/ above the repository never applies");
     }
 }
