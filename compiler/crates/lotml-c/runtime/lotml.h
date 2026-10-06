@@ -65,6 +65,7 @@ typedef struct lt_cell {
 } lt_cell;
 
 void *lt_alloc(size_t size);
+void *lt_reuse_or_alloc(void *token, size_t token_size, size_t size);
 void lt_free(void *cell);
 int32_t lt_atomic_add(int32_t *count, int32_t delta);
 

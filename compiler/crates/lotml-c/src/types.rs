@@ -483,6 +483,12 @@ impl<'d> Types<'d> {
         );
         let _ = writeln!(
             out,
+            "static LT_UNUSED void *lt_reuse_t{id}(lt_t{id} **slot, size_t *size) {{ lt_t{id} *v = *slot; \
+             if (v != NULL && lt_unique(v)) {{{} *size = sizeof(lt_t{id}); return v; }} lt_dec_t{id}(slot); *size = 0; return NULL; }}",
+            self.each_field(&types, "v", "dec")
+        );
+        let _ = writeln!(
+            out,
             "static LT_UNUSED lt_t{id} *lt_own_t{id}(lt_t{id} **slot) {{ if (!lt_unique(*slot)) {{ \
              lt_t{id} *c = lt_alloc(sizeof(lt_t{id})); memcpy((char *)c + sizeof(lt_cell), (char *)*slot + sizeof(lt_cell), \
              sizeof(lt_t{id}) - sizeof(lt_cell));{} lt_dec_t{id}(slot); *slot = c; }} return *slot; }}",
@@ -570,6 +576,18 @@ impl<'d> Types<'d> {
         let _ = writeln!(
             out,
             "static void lt_repr_t{id}(lt_buf *b, const void *p) {{ const lt_t{id} *v = *(lt_t{id} *const *)p; switch (v->cell.aux) {{{repr} default: break; }} }}"
+        );
+        let reuse = cases(&|k, types| {
+            format!(
+                "lt_t{id}_v{k} *f = (lt_t{id}_v{k} *)v; (void)f;{} *size = sizeof(lt_t{id}_v{k});",
+                self.each_field(types, "f", "dec")
+            )
+        });
+        let _ = writeln!(
+            out,
+            "static LT_UNUSED void *lt_reuse_t{id}(lt_t{id} **slot, size_t *size) {{ lt_t{id} *v = *slot; *size = 0; \
+             if (v != NULL && lt_unique(v)) {{ switch (v->cell.aux) {{{reuse} default: break; }} if (*size > 0) return v; }} \
+             lt_dec_t{id}(slot); return NULL; }}"
         );
     }
 }

@@ -577,7 +577,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             let v = self.value(e);
             fields.push(self.coerce(v, &types[i]));
         }
-        Value::Expr(Expr::Construct { ty, variant, fields })
+        Value::Expr(Expr::Construct { ty, variant, fields, reuse: None })
     }
 
     // match -----------------------------------------------------------------------------
@@ -587,6 +587,12 @@ impl<'c, 'a> Builder<'c, 'a> {
     fn match_stmt(&mut self, subject: &ast::Expr, arms: &[ast::Arm]) {
         let ty = self.ty(subject);
         let value = self.value(subject);
+        if let Some(variants) = self.simple_arms(&ty, arms) {
+            let tag = self.hold(Ty::Int(IntKind::U32), Expr::Tag(value.clone()));
+            let line = self.line;
+            self.variant_chain(&variants, &value, &ty, &tag, line);
+            return;
+        }
         let narrow =
             arms.iter().any(|a| matches!(&a.pattern.kind, PatternKind::Literal(e) if matches!(e.kind, ExprKind::None)));
         let done = self.temp(Ty::Bool);
@@ -602,6 +608,80 @@ impl<'c, 'a> Builder<'c, 'a> {
             self.line = line;
             let open = self.hold(Ty::Bool, Expr::Unary(UnOp::Not, Operand::Local(done), Ty::Bool));
             self.push(StmtKind::If(open, body, Vec::new()));
+        }
+    }
+
+    /// The variant each arm takes apart, `None` for an arm matching anything, when every arm is
+    /// a variant of the sum type `ty` whose fields are only named or ignored: such a match is a
+    /// chain of tests of the tag, each arm a branch of its own.
+    fn simple_arms<'m>(&self, ty: &Ty, arms: &'m [ast::Arm]) -> Option<Vec<(Option<usize>, &'m ast::Arm)>> {
+        let Ty::Adt(owner, _) = ty else { return None };
+        if !matches!(self.cx.checked.declared.get(owner), Some(TypeDef::Sum { .. })) {
+            return None;
+        }
+        let variant = |name: &str| self.cx.variant_of.get(name).filter(|(o, _)| o == owner).map(|(_, k)| *k);
+        let irrefutable = |p: &ast::Pattern| match &p.kind {
+            PatternKind::Wildcard => true,
+            PatternKind::Name(n) => !self.cx.variant_of.contains_key(&n.name),
+            _ => false,
+        };
+        arms.iter()
+            .map(|arm| match &arm.pattern.kind {
+                PatternKind::Variant { name, args } if args.iter().all(irrefutable) => {
+                    Some((Some(variant(&name.name)?), arm))
+                }
+                PatternKind::Name(n) if self.cx.variant_of.contains_key(&n.name) => {
+                    Some((Some(variant(&n.name)?), arm))
+                }
+                PatternKind::Wildcard => Some((None, arm)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn variant_chain(
+        &mut self,
+        arms: &[(Option<usize>, &ast::Arm)],
+        value: &Operand,
+        ty: &Ty,
+        tag: &Operand,
+        line: u32,
+    ) {
+        let Some(((variant, arm), rest)) = arms.split_first() else { return };
+        let body = |b: &mut Self| {
+            if let (Some(k), PatternKind::Variant { args, .. }) = (variant, &arm.pattern.kind) {
+                let types = b.fields(ty, Some(*k));
+                for (i, p) in args.iter().enumerate() {
+                    let PatternKind::Name(name) = &p.kind else { continue };
+                    let t = types.get(i).cloned().unwrap_or(Ty::Error);
+                    let part = b.hold(
+                        t.clone(),
+                        Expr::Field { value: value.clone(), ty: ty.clone(), variant: Some(*k), index: i },
+                    );
+                    let local = b.declare(name.span, &name.name, t);
+                    b.push(StmtKind::Let(local, Expr::Use(part)));
+                }
+            }
+            b.statements(&arm.body.stmts);
+        };
+        match variant {
+            None => body(self),
+            Some(k) => {
+                let k = *k;
+                let test = self.hold(
+                    Ty::Bool,
+                    Expr::Compare(
+                        CmpOp::Eq,
+                        tag.clone(),
+                        Operand::Const(Const::Int(k as i128, IntKind::U32)),
+                        Ty::Int(IntKind::U32),
+                    ),
+                );
+                let then = self.block(body);
+                let otherwise = self.block(|b| b.variant_chain(rest, value, ty, tag, line));
+                self.line = line;
+                self.push(StmtKind::If(test, then, otherwise));
+            }
         }
     }
 

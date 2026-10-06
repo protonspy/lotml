@@ -223,14 +223,18 @@ impl Writer<'_> {
                         self.line(&format!("lt_list_push(&{target}, {address});"));
                     }
                 }
-                StmtKind::Let(local, Expr::Construct { ty, variant, fields }) => {
+                StmtKind::Let(local, Expr::Construct { ty, variant, fields, reuse }) => {
                     let target = self.name(*local);
                     let values: Vec<String> = fields.iter().map(|f| self.operand(f)).collect();
+                    let alloc = |size: &str| match reuse {
+                        Some(n) => format!("lt_reuse_or_alloc(lt_tok{n}, lt_toksz{n}, sizeof({size}))"),
+                        None => format!("lt_alloc(sizeof({size}))"),
+                    };
                     match variant {
                         None => {
                             let c = self.types.c_type(ty);
-                            let c = c.trim_end_matches(" *");
-                            self.line(&format!("{target} = lt_alloc(sizeof({c}));"));
+                            let c = c.trim_end_matches(" *").to_string();
+                            self.line(&format!("{target} = {};", alloc(&c)));
                             for (i, v) in values.iter().enumerate() {
                                 self.line(&format!("{target}->f{i} = {v};"));
                             }
@@ -238,7 +242,7 @@ impl Writer<'_> {
                         Some(k) => {
                             let v = self.types.variant(ty, *k);
                             self.line("{");
-                            self.line(&format!("    {v} *c = lt_alloc(sizeof({v}));"));
+                            self.line(&format!("    {v} *c = {};", alloc(&v)));
                             self.line(&format!("    c->cell.aux = {k};"));
                             for (i, value) in values.iter().enumerate() {
                                 self.line(&format!("    c->f{i} = {value};"));
@@ -267,6 +271,13 @@ impl Writer<'_> {
                     } else {
                         self.line(&format!("*{slot} = {value};"));
                     }
+                }
+                StmtKind::DropReuse { local, token } => {
+                    let ty = self.function.locals[*local].ty.clone();
+                    let id = self.types.ids[&ty];
+                    let name = self.name(*local);
+                    self.line(&format!("size_t lt_toksz{token} = 0;"));
+                    self.line(&format!("void *lt_tok{token} = lt_reuse_t{id}(&{name}, &lt_toksz{token});"));
                 }
                 StmtKind::Inc(local) | StmtKind::Dec(local) => {
                     let ty = self.function.locals[*local].ty.clone();

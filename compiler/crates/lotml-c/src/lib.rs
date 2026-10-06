@@ -6,6 +6,7 @@ mod emit;
 mod lower;
 mod mir;
 mod own;
+mod reuse;
 mod types;
 
 use std::path::Path;
@@ -43,6 +44,7 @@ pub fn compile(source: &str, path: &Path) -> Result<String, Vec<Diagnostic>> {
     let mut lowered = lower::lower(&parsed.module, &checked, source)?;
     for f in &mut lowered.functions {
         own::insert_counts(f);
+        reuse::insert_reuse(f);
     }
     Ok(emit::program(&lowered, &path.display().to_string()))
 }

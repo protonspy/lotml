@@ -171,7 +171,7 @@ impl Pass {
                 s
             }
             StmtKind::Panic(_) => Set::new(self.locals.len()),
-            StmtKind::Inc(_) | StmtKind::Dec(_) => out.clone(),
+            StmtKind::Inc(_) | StmtKind::Dec(_) | StmtKind::DropReuse { .. } => out.clone(),
         }
     }
 

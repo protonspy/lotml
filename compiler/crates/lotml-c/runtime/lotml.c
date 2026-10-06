@@ -80,6 +80,18 @@ void *lt_alloc(size_t size) {
     return cell;
 }
 
+/* A cell of `size` for a constructor: the reuse token `token`, of `token_size` bytes, when it is
+ * large enough (R3.4), else a new one, the token freed. */
+void *lt_reuse_or_alloc(void *token, size_t token_size, size_t size) {
+    if (token != NULL && token_size >= size) {
+        ((lt_cell *)token)->count = 1;
+        ((lt_cell *)token)->aux = 0;
+        return token;
+    }
+    if (token != NULL) lt_free(token);
+    return lt_alloc(size);
+}
+
 void lt_free(void *cell) {
 #ifdef LT_COUNT_CELLS
     lt_count_cells(-1);

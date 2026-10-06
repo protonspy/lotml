@@ -98,6 +98,12 @@ pub enum StmtKind {
     Inc(Local),
     /// Take a count off the value of a local, freeing it when it was the last.
     Dec(Local),
+    /// `Dec`, but when the value was unique its fields are dropped and its memory kept as the
+    /// reuse token `token`, for a constructor further on.
+    DropReuse {
+        local: Local,
+        token: usize,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -235,11 +241,13 @@ pub enum Expr {
         tuple: Operand,
         index: usize,
     },
-    /// A new record (`variant` None) or variant of a sum type `ty`, holding `fields`.
+    /// A new record (`variant` None) or variant of a sum type `ty`, holding `fields`; built in
+    /// the memory of the reuse token `reuse` when it holds some large enough.
     Construct {
         ty: Ty,
         variant: Option<usize>,
         fields: Vec<Operand>,
+        reuse: Option<usize>,
     },
     /// A variant of `ty` without fields: a static cell.
     UnitVariant {
@@ -399,7 +407,8 @@ pub fn block_operands(block: &Block, f: &mut impl FnMut(&Operand)) {
             | StmtKind::Return(None)
             | StmtKind::Panic(_)
             | StmtKind::Inc(_)
-            | StmtKind::Dec(_) => {}
+            | StmtKind::Dec(_)
+            | StmtKind::DropReuse { .. } => {}
         }
     }
 }
