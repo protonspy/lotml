@@ -1,0 +1,31 @@
+fn histogram(words: [str]) -> {str: int}:
+    var counts: {str: int} = {}
+    for w in words:
+        counts[w] = counts.get(w, 0) + 1
+    return counts
+
+fn main():
+    d = {"b": 2, "a": 1}
+    var e = d
+    e["c"] = 3
+    e["b"] += 10
+    print(d, e, len(e), "a" in e, "z" not in e, e["b"], e.get("z"), e.get("z", -1), e.get("a"))
+    print(e.keys(), e.values(), e.items(), sorted(e.items()), list(e), [k for k in e])
+    print(histogram("the cat and the hat and the bat".split()))
+    var g: {int: [int]} = {}
+    for i in range(6):
+        g.setdefault(i % 3, []).append(i)
+    print(g, {k: len(v) for k, v in g.items()}, dict([(1, "a"), (2, "b")]))
+    var p = {"x": 1, "y": 2}
+    print(p.pop("x"), p.pop("q"), p, p == {"y": 2}, {(1, 2): "t"}, {True: 1})
+    s = {3, 1, 2, 10, 100}
+    print(s, set(), {"apple", "banana", "cherry"}, set([5, 3, 5, 1]), set("hello"), {(1, 2), (3, 4)}, {1.5, 2.5, -0.5})
+    var t = set()
+    for x in [20, 4, 36, 8, 52]:
+        t.add(x)
+    t.discard(4)
+    t.add(9)
+    print(t, len(t), 36 in t, sorted(t), s | t, s & {1, 2, 3, 4}, s - {1, 10}, {1, 2}.issubset(s), s.issuperset({3}))
+    var u = {8, 16, 24}
+    print(u.pop(), u, {x * x for x in range(-3, 4)}, s == {100, 10, 3, 2, 1})
+    print({"k": [1, 2], "j": []}, {-1: "neg", -2: "neg2"}, {2**61 - 1, 2**61, 0})
