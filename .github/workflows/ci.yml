@@ -23,7 +23,7 @@ jobs:
       - name: Build
         run: cargo build --manifest-path compiler/Cargo.toml --locked --all-targets
       - name: Format
-        run: cargo fmt --manifest-path compiler/Cargo.toml --check
+        run: cargo fmt --manifest-path compiler/Cargo.toml --all --check
       - name: Lint
         run: cargo clippy --manifest-path compiler/Cargo.toml --locked --all-targets -- -D warnings
       - name: Test
