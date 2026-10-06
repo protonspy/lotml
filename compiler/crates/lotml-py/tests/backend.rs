@@ -223,3 +223,74 @@ fn the_runtime_has_exactly_the_prelude_the_checker_knows() {
     checker.sort_unstable();
     assert_eq!(runtime, checker.join(" "));
 }
+
+// The rest of the language, run end to end ----------------------------------------------------
+
+const REST: &str = r#"type Point(x: int, y: int)
+type Token = Num(int) | Word(str) | Stop
+
+fn tokens(text: str) -> [Token]:
+    var out = []
+    for part in text.split():
+        match part.to_int():
+            case None:
+                out.append(Stop if part == "." else Word(part))
+            case n:
+                out.append(Num(n))
+    return out
+
+fn describe(t: Token) -> str:
+    match t:
+        case Num(0):
+            return "zero"
+        case Num(n):
+            return f"num {n!r}"
+        case Word(w):
+            return f"word {w:>4}"
+        case Stop:
+            return "stop"
+
+fn shift(inout p: Point, by: int):
+    p.x += by
+    p.y -= by
+
+fn rest() -> str:
+    var p = Point(1, 2)
+    shift(&p, 3)
+    var grid = [[0, 0], [0, 0]]
+    grid[1][0] += 5
+    var i = 0
+    while i < 3:
+        i += 1
+    squares = {k: k * k for k in range(4) if k != 2}
+    odd = {x for x in [1, 2, 3] if x % 2 == 1}
+    evens = [1, 2, 3, 4, 5, 6][1::2]
+    pairs = sorted([(2, "b"), (1, "a")], reverse=True)
+    total = sum(x for x in range(5))
+    labels = [describe(t) for t in tokens("0 7 hi .")]
+    found = 3 in odd and 9 not in odd and p is not None
+    data = b"ab"
+    nums = {"a": 1, "b": 2}
+    keys = sorted(nums.keys())
+    vals = sorted(nums.values())
+    var h = Heap([5, 1, 3])
+    h.push(0)
+    low = h.pop_min() ?? -1
+    word = "x" "y" + str(len(data))
+    return f"{p.x},{p.y} {grid[1][0]} {i} {squares} {odd} {evens} {pairs[0]} {total} {labels} {found} {keys} {vals} {low} {word}"
+"#;
+
+#[test]
+fn the_rest_of_the_language_runs() {
+    assert_eq!(
+        prints("rest", REST, "print(m.rest())"),
+        "4,-1 5 3 {0: 0, 1: 1, 3: 9} {1, 3} [2, 4, 6] (2, 'b') 10 ['zero', 'num 7', 'word   hi', 'stop'] True ['a', 'b'] [1, 2] 0 xy2"
+    );
+}
+
+#[test]
+fn augmented_assignment_traps_on_fields_and_elements() {
+    let source = "type C(n: int)\n\nfn grow(var c: C, var xs: [int]) -> (int, int):\n    c.n *= 4\n    xs[0] += c.n\n    return (c.n, xs[0])\n";
+    let script = "print(m.grow(m.C(3), [1]))\ntry:\n    m.grow(m.C(2**62), [1])\nexcept Exception as e:\n    print(type(e).__name__)";
+    assert_eq!(prints("augmented", source, script), "(12, 13)\nOverflow");
+}

@@ -132,7 +132,12 @@ pub fn show(symbol: &str, sources: &[Source]) -> Result<String, Vec<String>> {
         close.truncate(5);
         return Err(close);
     };
-    let text = |i: usize, start: u32, end: u32| sources[i].text[start as usize..end as usize].trim_end().to_string();
+    // From the start of the line, so an indented method keeps its shape once dedented.
+    let text = |i: usize, start: u32, end: u32| {
+        let source = &sources[i].text;
+        let line = source[..start as usize].rfind('\n').map_or(0, |n| n + 1);
+        dedent_block(source[line..end as usize].trim_end())
+    };
     let (body, uses) = match found {
         Found::Item(item) => (text(file, item.span().start, item.end()), used(item)),
         Found::Method(m) => {
@@ -155,7 +160,8 @@ pub fn show(symbol: &str, sources: &[Source]) -> Result<String, Vec<String>> {
             if let Some(item) = module.items.iter().find(|item| declares(item, &name)) {
                 if shown.insert((i, item.span().start)) {
                     let text = text(i, item.span().start, item.end());
-                    out += &format!("\n# uses {name}, from {}\n{text}\n", sources[i].name);
+                    let declared = declared_name(item).unwrap_or(&name);
+                    out += &format!("\n# uses {declared}, from {}\n{text}\n", sources[i].name);
                 }
                 break;
             }
@@ -169,6 +175,24 @@ fn near(a: &str, b: &str) -> bool {
     a.contains(&b) || b.contains(&a) || {
         let common = a.chars().zip(b.chars()).take_while(|(x, y)| x == y).count();
         common >= 3
+    }
+}
+
+/// A block of lines without the indentation they all share.
+fn dedent_block(text: &str) -> String {
+    let margin =
+        text.lines().filter(|l| !l.trim().is_empty()).map(|l| l.len() - l.trim_start().len()).min().unwrap_or(0);
+    text.lines().map(|l| l.get(margin..).unwrap_or(l.trim_start())).collect::<Vec<_>>().join("\n")
+}
+
+/// The name an item is declared under: a sum type's, not its variant's.
+fn declared_name(item: &Item) -> Option<&str> {
+    match item {
+        Item::Fn(f) => Some(&f.name.name),
+        Item::Record(r) => Some(&r.name.name),
+        Item::Sum(s) => Some(&s.name.name),
+        Item::Trait(t) => Some(&t.name.name),
+        _ => None,
     }
 }
 
@@ -221,6 +245,9 @@ fn used(item: &Item) -> BTreeSet<String> {
 }
 
 fn function_uses(f: &FnDef, out: &mut BTreeSet<String>) {
+    for bound in f.type_params.iter().filter_map(|p| p.bound.as_ref()) {
+        out.insert(bound.name.clone());
+    }
     for p in &f.params {
         if let Some(t) = &p.ty {
             type_uses(t, out);

@@ -450,12 +450,29 @@ pub fn method(receiver: &Ty, name: &str, args: &[Ty], infer: &mut Infer) -> Opti
             }
             (|| -> Result<Ty, String> {
                 match name {
-                    "split" | "splitlines" => {
+                    "split" => {
                         arity(0, 2)?;
+                        if let Some(separator) = args.first() {
+                            expect(infer, separator, &Ty::Str)?;
+                        }
+                        if let Some(most) = args.get(1) {
+                            expect(infer, most, &INT)?;
+                        }
                         Ok(Ty::list(Ty::Str))
                     }
-                    "strip" | "lstrip" | "rstrip" | "lower" | "upper" | "title" | "capitalize" | "swapcase" => {
+                    "splitlines" => {
+                        arity(0, 0)?;
+                        Ok(Ty::list(Ty::Str))
+                    }
+                    "strip" | "lstrip" | "rstrip" => {
                         arity(0, 1)?;
+                        if let Some(characters) = args.first() {
+                            expect(infer, characters, &Ty::Str)?;
+                        }
+                        Ok(Ty::Str)
+                    }
+                    "lower" | "upper" | "title" | "capitalize" | "swapcase" => {
+                        arity(0, 0)?;
                         Ok(Ty::Str)
                     }
                     "startswith" | "endswith" => {

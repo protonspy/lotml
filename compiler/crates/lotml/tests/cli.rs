@@ -204,3 +204,36 @@ fn a_missing_path_cannot_run() {
     let dir = scratch("missing", &[]);
     assert_eq!(lotml(&["check", "nope.lotml"], &dir).status.code(), Some(2));
 }
+
+const SHAPES: &str = "trait Area:\n    fn area(self) -> f64\n\n    fn describe(self) -> str:\n        \"\"\"A line about the shape.\"\"\"\n        return f\"area {self.area()}\"\n\ntype Shape = Circle(r: f64) | Square(side: f64)\ntype Box[T](items: [T] = [])\n\nimpl Area for Shape:\n    fn area(self) -> f64:\n        match self:\n            case Circle(r):\n                return 3.0 * r * r\n            case Square(side):\n                return side * side\n\nfn largest[T: Area](shapes: [T]) -> f64:\n    \"\"\"The largest area.\"\"\"\n    return max([s.area() for s in shapes])\n\nfn unit() -> Shape:\n    return Square(1.0)\n";
+
+#[test]
+fn digest_shows_traits_generics_and_several_files() {
+    let dir = scratch("digest-more", &[("shapes.lotml", SHAPES), ("shop.lotml", SHOP)]);
+    let out = stdout(&lotml(&["digest", "."], &dir));
+    assert!(out.contains("# shapes.lotml") && out.contains("# shop.lotml"), "{out}");
+    assert!(
+        out.contains(
+            "trait Area:\n    fn area(self) -> f64\n    # A line about the shape.\n    fn describe(self) -> str\n"
+        ),
+        "{out}"
+    );
+    assert!(out.contains("type Box[T](items: [T] = [])"), "{out}");
+    assert!(out.contains("# The largest area.\nfn largest[T: Area](shapes: [T]) -> f64\n"), "{out}");
+    assert!(out.contains("impl Area for Shape:\n    fn area(self) -> f64\n"), "{out}");
+}
+
+#[test]
+fn show_finds_variants_traits_and_types_used_through_patterns() {
+    let dir = scratch("show-more", &[("shapes.lotml", SHAPES)]);
+    let variant = stdout(&lotml(&["show", "Circle", "shapes.lotml"], &dir));
+    assert!(variant.starts_with("# shapes.lotml\ntype Shape = Circle(r: f64) | Square(side: f64)"), "{variant}");
+    let method = stdout(&lotml(&["show", "Shape.area", "shapes.lotml"], &dir));
+    assert!(method.contains("case Circle(r):") && method.contains("# uses Shape"), "{method}");
+    let generic = stdout(&lotml(&["show", "largest", "shapes.lotml"], &dir));
+    assert!(generic.contains("# uses Area") && generic.contains("trait Area:"), "{generic}");
+    let built = stdout(&lotml(&["show", "unit", "shapes.lotml"], &dir));
+    assert!(built.contains("# uses Shape") && built.contains("type Shape ="), "{built}");
+    let none = lotml(&["show", "zzz", "shapes.lotml"], &dir);
+    assert_eq!(stdout(&none).trim_end(), "nothing is called `zzz`");
+}

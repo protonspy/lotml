@@ -76,3 +76,76 @@ fn calls_conventions_errors_and_lambdas() {
 fn a_file_with_syntax_errors_is_not_formatted() {
     assert!(format("fn f(:\n").is_err());
 }
+
+/// A program in canonical form that reaches every construct: formatting it changes nothing.
+const EVERYTHING: &str = r#"from math import sqrt
+import math
+
+type Shape = Circle(f64) | Rect(w: f64, h: f64) | Empty
+
+type Box[T](items: [T] = [], label: str? = None)
+
+trait Show:
+    fn show(self) -> str
+
+    fn twice(self) -> str:
+        return self.show() + self.show()
+
+impl Show for Shape:
+    fn show(self) -> str:
+        return "shape"
+
+fn first[T: Show](xs: [T], table: {str: (int, f64)}, seen: {int}, d: dyn Show) -> T? ! str:
+    var total: int = 0
+    count: int = len(xs)
+    while total < 10 and not (count == 0):
+        total += 1
+        if total % 2 == 0:
+            continue
+        elif total > 8:
+            break
+        else:
+            pass
+    for (i, x), y in []:
+        print(i, x, y)
+    match (total, count):
+        case (0, _):
+            fail "none"
+        case (-1, 2):
+            return None
+        case _:
+            pass
+    match Circle(1.0):
+        case Circle(r):
+            print(r)
+        case Rect(w, h):
+            print(w * h)
+        case Empty:
+            print(True, False, None, ())
+    squares = {k: v for k, v in [(1, 2)] if k > 0}
+    odd = {x for x in [1, 2] if x % 2 == 1}
+    total = sum(x * x for x in [1, 2])
+    both = list(zip((y for y in [1]), [2]))
+    picked = [1, 2, 3][::2] + [1, 2][1:] + [3][:1]
+    flipped = -total + ~total + +total
+    ok = 1 < 2 <= 3 and 4 not in [5] and total is not None
+    either = total ?? 0 ?? 1
+    pick = 1 if ok else 2
+    f = lambda: 1
+    g = lambda a, b: a + b
+    move(&total, key=1)
+    n = parse("1")?
+    s = "a" "b"
+    t = (1,)
+    assert ok, "message"
+    return xs[0] if len(xs) > 0 else None
+
+test "everything":
+    assert sqrt(4.0) == 2.0
+"#;
+
+#[test]
+fn every_construct_is_a_fixed_point() {
+    let formatted = format(EVERYTHING).expect("no syntax errors");
+    assert_eq!(formatted, EVERYTHING);
+}

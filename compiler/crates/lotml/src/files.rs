@@ -24,7 +24,8 @@ fn walk(dir: &Path, found: &mut Vec<PathBuf>) -> std::io::Result<()> {
     let mut entries: Vec<_> = std::fs::read_dir(dir)?.collect::<Result<_, _>>()?;
     entries.sort_by_key(std::fs::DirEntry::file_name);
     for entry in entries {
-        let path = entry.path();
+        // A file found under `.` is named as the user would write it, without `./`.
+        let path = if dir == Path::new(".") { PathBuf::from(entry.file_name()) } else { entry.path() };
         let hidden = entry.file_name().to_string_lossy().starts_with('.');
         if path.is_dir() && !hidden && entry.file_name() != "target" {
             walk(&path, found)?;
