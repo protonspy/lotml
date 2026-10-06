@@ -7,9 +7,10 @@ is in `research/literature/`; the claims it checks are used throughout the wiki,
 
 ## How it works
 
-- **Sources** (`sources.json`): 58 papers — the 43 the first survey cited plus 15 published since or
+- **Sources** (`sources.json`): 83 papers — the 43 the first survey cited plus 15 published since or
   missed by it, found by a search on edit formats, languages designed for LLMs, prefix checking,
-  diagnostics and low-resource languages. Each has a versioned URL and the SHA-256 of the PDF.
+  diagnostics and low-resource languages, and 25 on a small model inside the compiler
+  ([[compiler-embedded-model]]). Each has a versioned URL and the SHA-256 of the PDF.
 - **Fetch** (`fetch.py`): downloads each PDF into the git-ignored `cache/` — papers are identified,
   not redistributed — and converts it to Markdown page by page with docling, tables included.
 - **Claims** (`claims.json`): every number or statement the study uses, with a verbatim quote from
@@ -21,14 +22,14 @@ is in `research/literature/`; the claims it checks are used throughout the wiki,
   each quote to occur in its paper, reporting the page. A quote shorter than 12 canonical characters is
   refused; within one paper, longer strings do not match by accident.
 
-The quotes were extracted by twelve reading passes, each covering four to six papers in full —
+The quotes were extracted by seventeen reading passes, each covering four to six papers in full —
 abstract, method, every results section and table, limitations — with instructions to check the
 denominator, model, benchmark and condition behind every number. The verifier then checked every
 quote mechanically.
 
 ## What it found
 
-791 quotes, all found verbatim: 290 claims, 112 discrepancies and 389 findings over 58 papers.
+1,047 quotes, all found verbatim: 546 claims, 112 discrepancies and 389 findings over 83 papers.
 
 The discrepancies are the first survey's errors, and most are not wrong numbers but numbers
 detached from their conditions — one model, one benchmark, a relative gain read as points, a best
@@ -56,6 +57,13 @@ The findings changed the design more than the corrections did: checking partial 
 compiler while the model writes, admissible alternatives as the content of a diagnostic, edits
 addressed to syntax entities, and the cost of familiar syntax with a new meaning — see
 [[semantic-compiler]], [[editing-robustness]] and [[lotml-syntax]].
+
+The 25 papers added for [[compiler-embedded-model]] corrected the web survey that found them, which
+had read abstracts, in the same way: CORE's 59.2% holds on a 520-file user-study subset, and its
+25.8% fewer false positives is one of two figures the paper gives for the same filter; RTLFixer's
+32.3% gain is 33.2 points by its own table; SLMFix's gains are in passing the validator, with
+functional correctness unchanged; and AutoCommenter reached its 80% useful ratio by suppressing
+practices, not by confidence thresholds.
 
 ## What it does not guarantee
 

@@ -462,5 +462,205 @@
     "year": 2026,
     "url": "https://arxiv.org/pdf/2601.02060v1",
     "sha256": "e0e619215b655503472b7ed8298f3f6d22762ec101531ef0745e3736ba42bc77"
+  },
+  {
+    "id": "1506.01159",
+    "title": "On the \"Naturalness\" of Buggy Code",
+    "authors": "Baishakhi Ray et al.",
+    "year": 2015,
+    "url": "https://arxiv.org/pdf/1506.01159v2",
+    "sha256": "db9ef7d2db9103af8d877805dfee606f4356d8cd34bf28d2ecbbbfdb59ab1aa7"
+  },
+  {
+    "id": "1805.11683",
+    "title": "DeepBugs: A Learning Approach to Name-based Bug Detection",
+    "authors": "Michael Pradel and Koushik Sen",
+    "year": 2018,
+    "url": "https://arxiv.org/pdf/1805.11683v1",
+    "sha256": "16059de92786995868a1e40c4c8a794413eca21b1d496a425070ea2de0e556af"
+  },
+  {
+    "id": "2005.10636",
+    "title": "Graph-based, Self-Supervised Program Repair from Diagnostic Feedback",
+    "authors": "Michihiro Yasunaga and Percy Liang",
+    "year": 2020,
+    "url": "https://arxiv.org/pdf/2005.10636v2",
+    "sha256": "ac07b2823112fa60503f0958051e52844e1163eef729d2c50275bcbc26b368cf"
+  },
+  {
+    "id": "2104.14671",
+    "title": "SYNFIX: Automatically Fixing Syntax Errors using Compiler Diagnostics",
+    "authors": "Toufique Ahmed et al.",
+    "year": 2021,
+    "url": "https://arxiv.org/pdf/2104.14671v2",
+    "sha256": "1d16fd4bcbc912e4ed898431247fea38329091bbb3aca9abe488347e718646ec"
+  },
+  {
+    "id": "2106.06600",
+    "title": "Break-It-Fix-It: Unsupervised Learning for Program Repair",
+    "authors": "Michihiro Yasunaga and Percy Liang",
+    "year": 2021,
+    "url": "https://arxiv.org/pdf/2106.06600v2",
+    "sha256": "de2d980c5f586ec1affd0a5ec5b4c82bc7112cddef4c0bafcd705eb258c7e62c"
+  },
+  {
+    "id": "2207.11765",
+    "title": "Neurosymbolic Repair for Low-Code Formula Languages",
+    "authors": "Rohan Bavishi et al.",
+    "year": 2022,
+    "url": "https://arxiv.org/pdf/2207.11765v1",
+    "sha256": "2c6edd5b1a98b3e386957a55e896a5c2a2f788f2d68fd524105ea71849079670"
+  },
+  {
+    "id": "2208.11640",
+    "title": "Repair Is Nearly Generation: Multilingual Program Repair with LLMs",
+    "authors": "Harshit Joshi et al.",
+    "year": 2022,
+    "url": "https://arxiv.org/pdf/2208.11640v3",
+    "sha256": "0a86762f71e772a03cebeccb95bbc00b6844a7117e13fe8d7e13ee75151102cb"
+  },
+  {
+    "id": "2210.11630",
+    "title": "Using Large Language Models to Enhance Programming Error Messages",
+    "authors": "Juho Leinonen et al.",
+    "year": 2022,
+    "url": "https://arxiv.org/pdf/2210.11630v1",
+    "sha256": "da336a79d1ff8624004c31f2d8d343b54b4c8789a26885dd671467c6160a8ee8"
+  },
+  {
+    "id": "2301.13779",
+    "title": "FLAME: A small language model for spreadsheet formulas",
+    "authors": "Harshit Joshi et al.",
+    "year": 2023,
+    "url": "https://arxiv.org/pdf/2301.13779v2",
+    "sha256": "b0dcec2a69062068d8fc2038121961e2b1eb652b18c50f151026fd19583173a9"
+  },
+  {
+    "id": "2302.04662",
+    "title": "Generating High-Precision Feedback for Programming Syntax Errors using Large Language Models",
+    "authors": "Tung Phung et al.",
+    "year": 2023,
+    "url": "https://arxiv.org/pdf/2302.04662v2",
+    "sha256": "b6d9e700bf3369f386579de1dab40513a9cb3902112d6a260638eef19d9823ee"
+  },
+  {
+    "id": "2305.02783",
+    "title": "Automated Code generation for Information Technology Tasks in YAML through Large Language Models",
+    "authors": "Saurabh Pujar et al.",
+    "year": 2023,
+    "url": "https://arxiv.org/pdf/2305.02783v4",
+    "sha256": "8db6e8f3f6b736ae1af6041a2774246500eeac472b6098df04f424234d967e4e"
+  },
+  {
+    "id": "2308.11873",
+    "title": "Dcc --help: Generating Context-Aware Compiler Error Explanations with Large Language Models",
+    "authors": "Andrew Taylor et al.",
+    "year": 2023,
+    "url": "https://arxiv.org/pdf/2308.11873v2",
+    "sha256": "6d5968b6c218d1671d74abf537695a6375718aea4779d21b04823cef79900874"
+  },
+  {
+    "id": "2309.12938",
+    "title": "Frustrated with Code Quality Issues? LLMs can Help!",
+    "authors": "Nalin Wadhwa et al.",
+    "year": 2023,
+    "url": "https://arxiv.org/pdf/2309.12938v1",
+    "sha256": "54c7120dafa05fa0299eb35663b2436334ba8d3771fbe5789a841ec66a2d6658"
+  },
+  {
+    "id": "2311.16543",
+    "title": "RTLFixer: Automatically Fixing RTL Syntax Errors with Large Language Models",
+    "authors": "Yun-Da Tsai et al.",
+    "year": 2023,
+    "url": "https://arxiv.org/pdf/2311.16543v3",
+    "sha256": "5cf927d1f80af388a352f9dcd6b0a005b53ccdf23afd6f7fb14d9d35de61f5ab"
+  },
+  {
+    "id": "2403.11671",
+    "title": "HDLdebugger: Streamlining HDL debugging with Large Language Models",
+    "authors": "Xufeng Yao et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2403.11671v1",
+    "sha256": "3ac18c5ff3d4defebca553db8f11fd9feab44f1e7a07b9a1303df34ca64da199"
+  },
+  {
+    "id": "2403.12737",
+    "title": "Navigating Compiler Errors with AI Assistance -- A Study of GPT Hints in an Introductory Programming Course",
+    "authors": "Maciej Pankiewicz and Ryan S. Baker",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2403.12737v1",
+    "sha256": "78cb7a10e6281ba2508fb3734e0103815c3b12d591928f1ca5ac655d338d9d5a"
+  },
+  {
+    "id": "2404.12534",
+    "title": "Lean Copilot: Large Language Models as Copilots for Theorem Proving in Lean",
+    "authors": "Peiyang Song et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2404.12534v3",
+    "sha256": "5ac8ca11a79cbc8a8fe5c3ab795d5e7c01fdb15516b2bec0eac5881528e03eae"
+  },
+  {
+    "id": "2405.08704",
+    "title": "Full Line Code Completion: Bringing AI to Desktop",
+    "authors": "Anton Semenkin et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2405.08704v3",
+    "sha256": "f75e20a12c141ced73a223a7880b57ce859a6cb76aba34a18702d6b32984a7f0"
+  },
+  {
+    "id": "2405.13565",
+    "title": "AI-Assisted Assessment of Coding Practices in Modern Code Review",
+    "authors": "Manushree Vijayvergiya et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2405.13565v1",
+    "sha256": "e1c71b8058d1521f0cf6c0537ae00934fcc075c65b5aa69b26539baf3bcc3f4b"
+  },
+  {
+    "id": "2406.14867",
+    "title": "Investigating the Transferability of Code Repair for Low-Resource Programming Languages",
+    "authors": "Kyle Wong et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2406.14867v2",
+    "sha256": "8ad42d1f15c6b08303c8465ba1be1c8b0f2e9bfeff637f80b72e260f40da90da"
+  },
+  {
+    "id": "2409.18661",
+    "title": "Not the Silver Bullet: LLM-enhanced Programming Error Messages are Ineffective in Practice",
+    "authors": "Eddie Antonio Santos and Brett A. Becker",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2409.18661v1",
+    "sha256": "19f2a55c6e52cd317e6477a40e1ada52269a0fd462adfbe7f82de150aa0e3474"
+  },
+  {
+    "id": "2507.05305",
+    "title": "Narrowing the Gap: Supervised Fine-Tuning of Open-Source LLMs as a Viable Alternative to Proprietary Models for Pedagogical Tools",
+    "authors": "Lorenzo Lee Solano et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2507.05305v1",
+    "sha256": "afdcf3aa05d36391f3e13e310a5d7b6d8d8b3fac6ac2857bd6c76d4da05cb3ad"
+  },
+  {
+    "id": "2511.19422",
+    "title": "SLMFix: Leveraging Small Language Models for Domain Specific Language Error Fixing with Reinforcement Learning",
+    "authors": "David Jiahao Fu et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2511.19422v2",
+    "sha256": "4c2097883cb7691a02bb33f46cd589ed30841d21a7d32f27fd177231fa64144b"
+  },
+  {
+    "id": "2608.20896",
+    "title": "Beyond the Traceback: Using LLMs for Adaptive Explanations of Programming Errors",
+    "authors": "Alexandru-Radu Moraru et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2608.20896v1",
+    "sha256": "e0faf963f66b46cfcc660c80a2c488f8975e55657511fa748d9ba5ca2b90417d"
+  },
+  {
+    "id": "2609.03086",
+    "title": "Large Language Models and Language Server Protocol: a match made in context",
+    "authors": "Alessandro Schena et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2609.03086v1",
+    "sha256": "ea965f3906bfd9f3e52d7eb6953d32a4e90fc2bf4a57cc0733ecf87b7d0c3f52"
   }
 ]

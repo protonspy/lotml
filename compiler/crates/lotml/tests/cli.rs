@@ -3,8 +3,22 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+/// `program` run in `dir` with every `GIT_*` variable removed, blind to any repository a git
+/// hook exported to the suite: under `pre-push` in a worktree `GIT_DIR` is set, and a test's
+/// `git commit` would land there.
+fn isolated(program: &str, dir: &Path) -> Command {
+    let mut command = Command::new(program);
+    command.current_dir(dir);
+    for (name, _) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with("GIT_") {
+            command.env_remove(name);
+        }
+    }
+    command
+}
+
 fn lotml(args: &[&str], dir: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_lotml")).args(args).current_dir(dir).output().expect("the binary runs")
+    isolated(env!("CARGO_BIN_EXE_lotml"), dir).args(args).output().expect("the binary runs")
 }
 
 fn stdout(output: &Output) -> String {
@@ -81,7 +95,7 @@ fn prefix_gives_a_verdict() {
 fn since_reports_only_what_the_edit_introduced() {
     let dir = scratch("since", &[("a.lotml", "fn f() -> int:\n    return y\n")]);
     let git = |args: &[&str]| {
-        let status = Command::new("git").args(args).current_dir(&dir).output().expect("git runs").status;
+        let status = isolated("git", &dir).args(args).output().expect("git runs").status;
         assert!(status.success(), "git {args:?}");
     };
     git(&["init", "-q"]);

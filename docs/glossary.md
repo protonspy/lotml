@@ -20,5 +20,6 @@ Every avoided synonym is reported wherever it appears as a whole word under `doc
 - **slip** — an editing error that puts lines at the wrong block depth: wrong whitespace in the indented form, a misplaced `}` in the braces form; silent when the program still parses. Avoid: indentation bug
 - **editing pilot** — models applying search-and-replace edits to the indented and the braces form of the paired corpus's programs, scored by applying, parsing and running hidden tests.
 - **source verification** — checking every number the study quotes against the downloaded paper, by a verbatim quote that `research/literature/verify.py` finds in the converted text.
+- **compiler-embedded model** — a small language model specialised to one language and shipped inside its compiler or toolchain to repair errors, explain diagnostics or suggest improvements; lotml has none.
 - **prefix check** — the semantic compiler judging a partial file while a model writes it: completable, an error here, or not yet decidable; it never rejects a prefix that can still be completed.
 - **symbol-addressed edit** — an edit that names a syntax entity (a function body, a `match` arm, a method) and gives only its new content; the tool re-indents it and rejects it if it breaks the syntax. Avoid: AST edit
