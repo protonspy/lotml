@@ -66,6 +66,7 @@ def test_literals_are_written_as_lotml_writes_them():
         [(1, 2), (1, 2, 3)],
         [()],
         [None],
+        [[{}, 1]],
     ],
     ids=[
         "mixed list",
@@ -78,6 +79,7 @@ def test_literals_are_written_as_lotml_writes_them():
         "tuple lengths",
         "empty tuple",
         "only None",
+        "empty dict and int",
     ],
 )
 def test_a_value_with_no_lotml_form_is_refused(values):

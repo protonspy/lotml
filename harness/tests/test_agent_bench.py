@@ -68,3 +68,69 @@ def test_a_graded_file_without_hidden_tests_is_refused(tmp_path: Path):
     (tmp_path / "prompt.md").write_text("Fix it.\n", encoding="utf-8")
     with pytest.raises(ValueError, match="no hidden tests"):
         load(tmp_path)
+
+
+def a_task(tmp_path: Path) -> Path:
+    directory = tmp_path / "task"
+    for path, text in {
+        "task.toml": 'kind = "fix"\ngraded = ["src/a.lotml"]\n',
+        "prompt.md": "Fix it.\n",
+        "workspace/src/a.lotml": "fn a() -> int:\n    return 0\n",
+        "workspace/lotml.toml": "",
+        "hidden/src/a.lotml": 'test "hidden: a":\n    assert a() == 1\n',
+        "solution/src/a.lotml": "fn a() -> int:\n    return 1\n",
+    }.items():
+        (directory / path).parent.mkdir(parents=True, exist_ok=True)
+        (directory / path).write_text(text, encoding="utf-8")
+    return directory
+
+
+def test_a_task_carries_its_files_as_data_read_from_its_directory(tmp_path: Path):
+    task = load(a_task(tmp_path))
+    assert task.workspace_files == {
+        "lotml.toml": "",
+        "src/a.lotml": "fn a() -> int:\n    return 0\n",
+    }
+    assert task.hidden_files == {"src/a.lotml": 'test "hidden: a":\n    assert a() == 1\n'}
+    assert task.solution_files == {"src/a.lotml": "fn a() -> int:\n    return 1\n"}
+    assert task.hidden("src/a.lotml") == task.hidden_files["src/a.lotml"]
+
+
+def test_lay_writes_the_workspace_then_with_solution_the_reference_over_it(tmp_path: Path):
+    task = load(a_task(tmp_path))
+    started, solved = tmp_path / "started", tmp_path / "solved"
+    task.lay(started)
+    task.lay(solved, solution=True)
+    assert (started / "src" / "a.lotml").read_text(encoding="utf-8").endswith("return 0\n")
+    assert (solved / "src" / "a.lotml").read_text(encoding="utf-8").endswith("return 1\n")
+    assert (solved / "lotml.toml").exists()
+
+
+def test_a_task_needs_no_directory():
+    task = AgentTask(
+        id="t",
+        kind="implement",
+        graded=("a.lotml",),
+        prompt="Write a.",
+        workspace_files={"a.lotml": "fn a() -> int:\n    return todo()\n"},
+        hidden_files={"a.lotml": 'test "hidden: 1":\n    assert a() == 1\n'},
+    )
+    assert task.directory is None
+    assert task.solution_files == {}
+    assert task.hidden("a.lotml").startswith('test "hidden: 1"')
+
+
+@pytest.mark.parametrize("name", ["../out.lotml", "a/../../out.lotml", "/abs.lotml", "C:/x.lotml"])
+def test_lay_refuses_a_name_that_is_absolute_holds_dot_dot_or_leaves_the_target(name, tmp_path):
+    task = AgentTask(
+        id="t",
+        kind="implement",
+        graded=("a.lotml",),
+        prompt="",
+        workspace_files={name: "x"},
+        hidden_files={},
+    )
+    target = tmp_path / "target"
+    with pytest.raises(ValueError, match="outside"):
+        task.lay(target)
+    assert not (tmp_path / "out.lotml").exists()

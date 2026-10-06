@@ -1,6 +1,8 @@
 ---
 autonomy: auto
 ci: wait
+branch: feat/guide-training
+delivery: in-progress
 ---
 
 # Agent HumanEval — requirements
