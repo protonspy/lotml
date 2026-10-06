@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn cl_takes_visual_studio_s_options() {
-        assert_eq!(CCompiler::new(PathBuf::from(r"C:\VS\bin\cl.exe"), vec![], vec![]).flavor, Flavor::Msvc);
+        assert_eq!(CCompiler::new(PathBuf::from("C:/VS/bin/cl.exe"), vec![], vec![]).flavor, Flavor::Msvc);
         assert_eq!(CCompiler::new(PathBuf::from("/usr/bin/clang"), vec![], vec![]).flavor, Flavor::Gnu);
     }
 
