@@ -48,3 +48,18 @@ def test_the_settings_are_the_pilot_s():
     assert (settings.rank, settings.alpha, settings.learning_rate) == (16, 32, 2e-4)
     assert (settings.batch, settings.accumulate, settings.memory_fraction) == (1, 16, 0.85)
     assert settings.model == "Qwen/Qwen2.5-Coder-0.5B-Instruct"
+    assert settings.revision.startswith("ea3f2471") and len(settings.revision) == 40
+
+
+def test_llama_cpp_s_tools_are_found_by_exact_name_and_only_once(tmp_path: Path):
+    (tmp_path / "bin" / "llama-quantize-docs").mkdir(parents=True)
+    (tmp_path / "bin" / "llama-quantize.exe").write_bytes(b"")
+    assert train._tool(tmp_path, ("llama-quantize", "llama-quantize.exe")).name == (
+        "llama-quantize.exe"
+    )
+    (tmp_path / "other").mkdir()
+    (tmp_path / "other" / "llama-quantize").write_bytes(b"")
+    with pytest.raises(FileNotFoundError):
+        train._tool(tmp_path, ("llama-quantize", "llama-quantize.exe"))
+    with pytest.raises(FileNotFoundError):
+        train._tool(tmp_path, ("convert_hf_to_gguf.py",))

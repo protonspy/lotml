@@ -28,6 +28,7 @@ from lotml_harness.agent.bench import AgentTask
 from lotml_harness.agent.dataset import source_of
 from lotml_harness.agent.grade import grade
 from lotml_harness.agent.mcp import LotmlMcp, langchain_tools, relative
+from lotml_harness.agent.secrets import anonymised
 from lotml_harness.experiments import variants
 from lotml_harness.experiments.phase1 import Lotml
 
@@ -44,6 +45,9 @@ SNAPSHOT_FILE = 256 * 1024
 SNAPSHOT_TOTAL = 2 * 2**20
 """Bytes of one file, and of all of them, a check's or test's snapshot keeps; past either the
 call is marked truncated, and opens or closes no repair."""
+UNNAMED = "unnamed"
+"""The provider a response that names none is counted under: the licence registry holds no entry
+for it, so the run is not exported (specs/trace-dataset/ R1.6)."""
 WATCHED = ("check", "test")
 
 SYSTEM = (
@@ -152,8 +156,7 @@ class Meter(BaseCallbackHandler):
                     details = usage.get("output_token_details") or {}
                     self.tokens["reasoning"] += details.get("reasoning", 0)
                     self.cost += float(metadata.get("cost") or 0.0)
-                    if metadata.get("provider"):
-                        self.providers[metadata["provider"]] += 1
+                    self.providers[str(metadata.get("provider") or UNNAMED)] += 1
                     calls, cost = self.model_calls, self.cost
                 self.say(
                     f"model #{calls}: +{usage.get('input_tokens', 0)} in"
@@ -243,23 +246,14 @@ def bounded_snapshot(workspace: Path) -> tuple[dict[str, str], bool]:
     for path in sorted(workspace.rglob("*.lotml")):
         if path.is_symlink() or not path.is_file():
             continue
-        data = path.read_bytes()
-        if len(data) > SNAPSHOT_FILE or total + len(data) > SNAPSHOT_TOTAL:
+        size = path.stat().st_size
+        if size > SNAPSHOT_FILE or total + size > SNAPSHOT_TOTAL:
             cut = True
             continue
+        data = path.read_bytes()[:SNAPSHOT_FILE]
         total += len(data)
         files[path.relative_to(workspace).as_posix()] = data.decode("utf-8", errors="replace")
     return files, cut
-
-
-def anonymised(text: str) -> str:
-    """`text` with the user's home directory and name replaced by `~` and `<user>`: a test report's
-    load errors name host paths."""
-    home = str(Path.home())
-    for written in {home, home.replace("\\", "/"), home.replace("\\", "\\\\")}:
-        text = text.replace(written, "~")
-    user = Path.home().name
-    return text.replace(user, "<user>") if len(user) >= 3 else text
 
 
 def compiler_version(lotml: Lotml) -> str:

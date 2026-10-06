@@ -14,7 +14,6 @@ import json
 import math
 import re
 import statistics
-import subprocess
 import sys
 import tempfile
 import time
@@ -22,10 +21,11 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, ClassVar
 
 from lotml_harness import split
 from lotml_harness.agent import humaneval, safe, secrets
-from lotml_harness.agent.dataset import block_repairs, check_repairs
+from lotml_harness.agent.dataset import block_repairs, cell, check_repairs
 from lotml_harness.agent.report import wilson
 from lotml_harness.agent.run import TRACES
 from lotml_harness.experiments.phase1 import RESULTS
@@ -126,7 +126,13 @@ def trace_failures(directory: Path) -> tuple[list[Failure], Counter]:
     for path in sorted(directory.rglob("*.json")) if directory.is_dir() else []:
         if path.is_symlink():
             continue
-        trace = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            trace = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            trace = None
+        if not isinstance(trace, dict):
+            refused["unreadable trace"] += 1
+            continue
         row = trace.get("row") or {}
         try:
             problem = split.problem(str(row.get("task")))
@@ -137,6 +143,9 @@ def trace_failures(directory: Path) -> tuple[list[Failure], Counter]:
             if split.split(problem) != HELD_OUT:
                 refused["not held out"] += 1
                 continue
+            if not _layable(repair["path"], repair["before"], repair["after"]):
+                refused["a file the safe layer refuses"] += 1
+                continue
             kind = "check" if repair["diagnostics"] is not None else "test"
             failure = Failure(
                 problem, "agent", str(row.get("model")), kind, repair["prompt"] or None,
@@ -146,6 +155,16 @@ def trace_failures(directory: Path) -> tuple[list[Failure], Counter]:
                 seen.add(_key(failure))
                 found.append(failure)
     return found, refused
+
+
+def _layable(path: object, *texts: str) -> bool:
+    """Whether the safe layer will write `path` with each of `texts`: a trace's file name is the
+    model's choice, and one refused name must not end the evaluation."""
+    try:
+        safe.checked_name(path)
+    except ValueError:
+        return False
+    return all(len(text.encode("utf-8")) <= safe.FILE_BYTES for text in texts)
 
 
 def guard(records: Path | None) -> str:
@@ -214,14 +233,27 @@ def score(truth: list[str], guide: list[str], baseline: list[str]) -> dict[str, 
     }
 
 
-def _call(args: list[str], files: list[str], root: Path, env: dict | None = None) -> dict | list:
+UNREAD = "unread"
+"""The harness's own reason for a silent guide, beside the tool's: `lotml guide ask` crashed or
+printed no JSON."""
+
+
+def _call(args: list[str], files: list[str], root: Path, env: dict | None = None) -> object:
+    """The JSON a `lotml` call printed last; `deadline` when it overran, `unread` when it printed
+    none — fixed strings, never the call's output."""
     done = safe.lotml(args, files, root, DEADLINE, env=env)
     if done is None:
-        return {"guidance": None, "reason": "deadline"}
+        return "deadline"
     try:
         return json.loads(done.stdout.strip().splitlines()[-1])
     except (json.JSONDecodeError, IndexError):
-        return {}
+        return UNREAD
+
+
+def _shaped(found: object, kind: type) -> Any:
+    """`found` when it is the JSON shape a call promises, else that shape empty: a call that
+    overran or crashed scores as one that found nothing."""
+    return found if isinstance(found, kind) else kind()
 
 
 def judged(failure: Failure, config: Path) -> dict:
@@ -235,24 +267,29 @@ def judged(failure: Failure, config: Path) -> dict:
         safe.lay(root / "project", {failure.path: failure.failing})
         args = ["guide", "ask", "--root", "."] + (["--task", failure.task] if failure.task else [])
         started = time.time()
-        answer = _call(args, [failure.path], root / "project", {"LOTML_HARNESS_GUIDE": str(config)})
+        asked = _call(args, [failure.path], root / "project", {"LOTML_HARNESS_GUIDE": str(config)})
         seconds = time.time() - started
-        diff = _call(
-            ["dev", "diff", "--path", failure.path, "--json"], ["before.lotml", "after.lotml"], root
+        reason = asked if isinstance(asked, str) else UNREAD
+        answer = asked if isinstance(asked, dict) else {"guidance": None, "reason": reason}
+        diff = _shaped(
+            _call(
+                ["dev", "diff", "--path", failure.path, "--json"],
+                ["before.lotml", "after.lotml"],
+                root,
+            ),
+            dict,
         )
-        declared = _call(["dev", "outline"], ["before.lotml"], root)
+        declared = _shaped(_call(["dev", "outline"], ["before.lotml"], root), list)
         if failure.kind == "check":
-            checked = _call(["check", "--json"], ["before.lotml"], root)
+            checked = _shaped(_call(["check", "--json"], ["before.lotml"], root), dict)
             lines = [
                 d["location"]["line"] for d in checked.get("diagnostics", []) if "location" in d
             ]
-            baseline = baseline_of_check(declared or [], lines)
+            baseline = baseline_of_check(declared, lines)
         else:
-            tested = _call(["test", "--json"], ["before.lotml"], root)
+            tested = _shaped(_call(["test", "--json"], ["before.lotml"], root), dict)
             rows = [t for t in tested.get("tests", []) if t.get("outcome") != "pass"]
-            baseline = baseline_of_test(
-                declared or [], rows[0].get("expression", "") if rows else ""
-            )
+            baseline = baseline_of_test(declared, rows[0].get("expression", "") if rows else "")
     truth = [d["symbol"] for d in diff.get("declarations", []) if d.get("symbol")]
     locations = [loc["symbol"] for loc in answer.get("locations") or [] if loc.get("symbol")]
     silent = answer.get("guidance", "") is None
@@ -278,19 +315,46 @@ def judged(failure: Failure, config: Path) -> dict:
 
 
 def peak_memory(pid: int | None) -> int | None:
-    """The guide server's resident memory in bytes, when its process is known."""
+    """The guide server's peak resident memory in bytes since it started, when its process is
+    known: Windows' peak working set, Linux's high-water mark."""
     if pid is None:
         return None
     if sys.platform == "win32":
-        done = subprocess.run(  # noqa: S603
-            ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],  # noqa: S607
-            capture_output=True, text=True, check=False,
-        )  # fmt: skip
-        found = re.search(r'"([\d.,\s]+) K"', done.stdout)
-        return int(re.sub(r"\D", "", found.group(1))) * 1024 if found else None
+        return _peak_working_set(pid)
     status = Path(f"/proc/{pid}/status")
     found = re.search(r"VmHWM:\s+(\d+) kB", status.read_text()) if status.exists() else None
     return int(found.group(1)) * 1024 if found else None
+
+
+def _peak_working_set(pid: int) -> int | None:
+    import ctypes
+    from ctypes import wintypes
+
+    class Counters(ctypes.Structure):
+        _fields_: ClassVar = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [
+            (name, ctypes.c_size_t)
+            for name in ("PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage",
+                         "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage",
+                         "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage")
+        ]  # fmt: skip
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD]
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    query_limited_information = 0x1000
+    handle = kernel32.OpenProcess(query_limited_information, False, pid)
+    if not handle:
+        return None
+    try:
+        counters = Counters(cb=ctypes.sizeof(Counters))
+        if not psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb):
+            return None
+        return int(counters.PeakWorkingSetSize)
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def _rate(rows: list[dict], key: str) -> str:
@@ -363,14 +427,18 @@ def markdown(rows: list[dict], digest: str, setting: dict, day: str) -> str:
         ("origin", "origin"),
     ):
         lines += [
-            f"| {title} | failures | guide top-1 | compiler's top-1 |",
-            "|---|---:|---:|---:|",
+            f"| {title} | failures | guide top-1 | guide top-3 | compiler's top-1 "
+            "| compiler's top-3 | silent | top-1 precision |",
+            "|---|---:|---|---|---|---|---:|---|",
         ]
         for value in sorted({r[field] for r in rows}):
             part = [r for r in rows if r[field] == value]
-            guide = sum(r["top1"] for r in part) / len(part)
-            base = sum(r["baseline_top1"] for r in part) / len(part)
-            lines.append(f"| {value} | {len(part)} | {guide:.0%} | {base:.0%} |")
+            spoke = [r for r in part if not r["guide"]["silent"]]
+            cells = [_rate(part, k) for k in ("top1", "top3", "baseline_top1", "baseline_top3")]
+            lines.append(
+                f"| {cell(value)} | {len(part)} | {' | '.join(cells)} | "
+                f"{len(part) - len(spoke)} | {_rate(spoke, 'top1')} |"
+            )
         lines.append("")
     return "\n".join(lines)
 
@@ -398,18 +466,16 @@ def main(argv: list[str] | None = None) -> None:
     from_phase1, refused_phase1 = phase1_failures(rows_found, tasks)
     from_traces, refused_traces = trace_failures(TRACES)
     failures = from_phase1 + from_traces
-    before = peak_memory(args.server_pid)
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         rows = list(pool.map(lambda f: judged(f, config), failures))
-    after = peak_memory(args.server_pid)
-    memory = max(m for m in (before, after, 0) if m is not None) or None
+    memory = peak_memory(args.server_pid)
     day = datetime.date.today().isoformat()
     ROWS.mkdir(parents=True, exist_ok=True)
     lines = "".join(json.dumps(secrets.scrub_value(r)) + "\n" for r in rows)
     (ROWS / f"{day}.jsonl").write_text(lines, encoding="utf-8")
     setting = {"cpu": args.cpu, "model_file": args.model_file, "quantization": args.quantization,
                "memory": memory}  # fmt: skip
-    text = secrets.scrub(markdown(rows, digest, setting, day))
+    text = secrets.anonymised(secrets.scrub(markdown(rows, digest, setting, day)))
     refused = refused_phase1 + refused_traces
     if refused:
         text += "Left out: " + ", ".join(f"{k} {n}" for k, n in sorted(refused.items())) + ".\n"

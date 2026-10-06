@@ -1,10 +1,12 @@
 """Secrets kept out of what is committed and what is exported (specs/trace-dataset/ R2.3, R3.7):
-the value of every environment variable whose name ends in `_KEY`, `_TOKEN` or `_SECRET`, and the
-shapes keys come in.
+the value of every environment variable whose name ends in `_KEY`, `_TOKEN`, `_SECRET`,
+`_PASSWORD` or `_PASS`, and the shapes keys come in; and the user's home and name, which host
+paths carry.
 """
 
 import os
 import re
+from pathlib import Path
 from typing import Any
 
 SHAPES = re.compile(
@@ -15,7 +17,7 @@ SHAPES = re.compile(
     r"|Bearer [A-Za-z0-9._~+/-]{20,}"
     r"|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"
 )
-NAMES = ("_KEY", "_TOKEN", "_SECRET")
+NAMES = ("_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_PASS")
 SHORTEST = 8
 """Values shorter than this are not matched: an empty or short value would match everything."""
 REDACTED = "<redacted>"
@@ -52,3 +54,13 @@ def scrub_value(value: Any) -> Any:
 
 def holds_secret(text: str) -> bool:
     return any(value in text for value in values()) or SHAPES.search(text) is not None
+
+
+def anonymised(text: str) -> str:
+    """`text` with the user's home directory replaced by `~`, and their name by `<user>` where it
+    is a whole segment of a path: a test report's load errors name host paths."""
+    home = str(Path.home())
+    for written in {home, home.replace("\\", "/"), home.replace("\\", "\\\\")}:
+        text = text.replace(written, "~")
+    user = re.escape(Path.home().name)
+    return re.sub(rf"(?<=[\\/]){user}(?![\w.-])", "<user>", text)

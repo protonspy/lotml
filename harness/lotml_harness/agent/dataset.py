@@ -10,6 +10,7 @@ the same shape, `meta.origin` telling them apart.
 """
 
 import difflib
+import functools
 import hashlib
 import json
 import re
@@ -18,9 +19,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from lotml_harness.agent.secrets import holds_secret
+from lotml_harness.agent.secrets import anonymised, holds_secret, scrub
 
 if TYPE_CHECKING:
+    from lotml_harness.agent.bench import AgentTask
     from lotml_harness.agent.registry import Registry
 
 
@@ -64,12 +66,16 @@ def repair(
 
 
 def source_of(task: str) -> str:
-    """The source a task id says it comes from."""
-    if task.startswith("humaneval-"):
+    """The source a task id says it comes from, read only from the spellings the agent harness
+    writes; any other, though the split maps it to a problem, is `unknown`, which the licence
+    registry holds no entry for."""
+    from lotml_harness import split
+
+    if re.fullmatch(r"humaneval-\d+", task):
         return "humaneval-original"
-    if task.startswith("mbpp-"):
+    if re.fullmatch(r"mbpp-\d+", task):
         return "mbpp-original"
-    return "bench"
+    return "bench" if task in split.bench_tasks() else "unknown"
 
 
 def _prompt(trace: dict) -> str:
@@ -191,7 +197,7 @@ def _strings(value: Any) -> list[str]:
         case list():
             return [s for v in value for s in _strings(v)]
         case dict():
-            return [s for v in value.values() for s in _strings(v)]
+            return [s for k, v in value.items() for s in [str(k), *_strings(v)]]
     return []
 
 
@@ -210,22 +216,34 @@ def dropped(record: dict, hidden: set[str]) -> str | None:
         (m.get("content") for m in record.get("messages") or [] if m.get("role") == "user"), ""
     )
     prompt = _collapsed(str(asked))
-    lines = {_collapsed(line) for line in text.splitlines()}
+    collapsed = _collapsed(text)
     for line in hidden:
         wanted = _collapsed(line)
-        if wanted in lines and not _shown(wanted, prompt):
+        if _bounded(re.escape(wanted)).search(collapsed) and not _shown(wanted, prompt):
             return "a hidden test"
     return None
 
 
+SHOWN_BY = r"\s*(?:==|=>|->|➞|→|should return|returns?)?\s*"
+"""What a prompt puts between a call and its result: a docstring's line break, collapsed to a
+space, or an arrow or a word."""
+
+
+def _bounded(pattern: str) -> re.Pattern:
+    """`pattern` matched whole: no word character on either side, and no decimal part after it,
+    so `f(1) == 2` is not found in `f(1) == 20`."""
+    return re.compile(rf"(?<![\w.]){pattern}(?!\w|\.\d)")
+
+
 def _shown(assertion: str, prompt: str) -> bool:
-    """Whether the prompt shows the call an assert makes and the value it expects, as a
-    docstring's example does: `>>> f(x)` and the result on the next line."""
+    """Whether the prompt pairs the call an assert makes with the value it expects, as a
+    docstring's example does — `>>> f(x)` with the result on the next line, or `f(x) == y` — or
+    holds the whole assert. A call and a value apart in the prompt are not an example of it."""
     compared = re.fullmatch(r"assert (.+?) == (.+)", assertion)
     if compared is None:
-        return assertion.removeprefix("assert ") in prompt
+        return bool(_bounded(re.escape(assertion.removeprefix("assert "))).search(prompt))
     call, expected = compared.groups()
-    return call in prompt and expected in prompt
+    return bool(_bounded(re.escape(call) + SHOWN_BY + re.escape(expected)).search(prompt))
 
 
 def _chat(message: dict) -> dict | None:
@@ -299,7 +317,14 @@ def export(traces: Path, found: "Registry", hidden_for, out: Path) -> Manifest:
         if path.is_symlink():
             continue
         manifest.runs += 1
-        trace = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            trace = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            manifest.left_out["unreadable trace"] += 1
+            continue
+        if not isinstance(trace, dict):
+            manifest.left_out["unreadable trace"] += 1
+            continue
         run, why = identity(trace, path, traces)
         if run is None:
             manifest.left_out[why] += 1
@@ -322,7 +347,11 @@ def export(traces: Path, found: "Registry", hidden_for, out: Path) -> Manifest:
         for provider in run["providers"]:
             served = found.models[run["model"]]["providers"][provider]
             manifest.exported.setdefault(("provider", f"{run['model']} via {provider}"), served)
-        hidden = hidden_for(run["task"])
+        try:
+            hidden = hidden_for(run["task"])
+        except (LookupError, ValueError):
+            manifest.left_out["unknown task"] += 1
+            continue
         made = [("trajectories", trajectory(trace))]
         made += [("repairs", r) for r in check_repairs(trace) + block_repairs(trace)]
         for kind, record in made:
@@ -332,6 +361,7 @@ def export(traces: Path, found: "Registry", hidden_for, out: Path) -> Manifest:
             if why is not None:
                 manifest.dropped[why] += 1
                 continue
+            record = json.loads(anonymised(json.dumps(record)))
             record["meta"] |= {"problem": problem, "split": bucket}
             kept[(bucket, kind)].append(record)
             manifest.written[(run["source"], bucket, kind)] += 1
@@ -344,6 +374,12 @@ def export(traces: Path, found: "Registry", hidden_for, out: Path) -> Manifest:
     notices = sorted({entry["notice"] for entry in manifest.exported.values() if entry["notice"]})
     (out / "NOTICE").write_text("\n\n".join(notices) + "\n", encoding="utf-8")
     return manifest
+
+
+def cell(text: object) -> str:
+    """`text` as one table cell: a pipe or a line break in a model's or a provider's name cannot
+    split the row."""
+    return " ".join(str(text).split()).replace("|", "\\|")
 
 
 def markdown(manifest: Manifest, day: str) -> str:
@@ -360,13 +396,16 @@ def markdown(manifest: Manifest, day: str) -> str:
     ]
     for (kind, name), entry in sorted(manifest.exported.items()):
         terms = entry.get("licence") or entry.get("terms") or ""
-        lines.append(f"| {kind} | {name} | {terms} | {entry['evidence']} | {entry['notice']} |")
+        row = (kind, name, terms, entry["evidence"], entry["notice"])
+        lines.append("| " + " | ".join(cell(c) for c in row) + " |")
     lines += ["", "| left out | runs |", "|---|---:|"]
-    lines += [f"| {why} | {n} |" for why, n in sorted(manifest.left_out.items())] or [
+    lines += [f"| {cell(why)} | {n} |" for why, n in sorted(manifest.left_out.items())] or [
         "| none | 0 |"
     ]
     lines += ["", "| record dropped | records |", "|---|---:|"]
-    lines += [f"| {why} | {n} |" for why, n in sorted(manifest.dropped.items())] or ["| none | 0 |"]
+    lines += [f"| {cell(why)} | {n} |" for why, n in sorted(manifest.dropped.items())] or [
+        "| none | 0 |"
+    ]
     lines += [
         "",
         "| source | split | problems | trajectories | repairs |",
@@ -381,19 +420,33 @@ def markdown(manifest: Manifest, day: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def hidden_asserts(task_id: str) -> set[str]:
-    """The assert lines of a task's hidden tests: the benchmark's hidden files, or HumanEval's and
-    MBPP's recorded cases."""
+@functools.cache
+def posed(task_id: str) -> "AgentTask":
+    """The agent task an id names: the benchmark's, or HumanEval's or MBPP's posed from its
+    pinned release, read once per process; LookupError for an id none of them holds."""
     from lotml_harness.agent import humaneval
     from lotml_harness.agent.bench import tasks
 
-    if task_id.startswith("humaneval-"):
-        records, _ = humaneval.read_humaneval()
-        number = int(task_id.removeprefix("humaneval-"))
-        found = next(r for r in records if r["task_id"] == f"HumanEval/{number}")
-        texts = list(humaneval.pose_humaneval(found).hidden_files.values())
-    else:
-        texts = [t for task in tasks() if task.id == task_id for t in task.hidden_files.values()]
+    for prefix, read, pose, key in (
+        ("humaneval-", humaneval.read_humaneval, humaneval.pose_humaneval, "HumanEval/{}"),
+        ("mbpp-", humaneval.read_mbpp, humaneval.pose_mbpp, "{}"),
+    ):
+        if task_id.startswith(prefix):
+            number = task_id.removeprefix(prefix)
+            records, _ = read()
+            found = [r for r in records if str(r["task_id"]) == key.format(number)]
+            if not found:
+                raise LookupError(f"no task {task_id}")
+            return pose(found[0])
+    found = [task for task in tasks() if task.id == task_id]
+    if not found:
+        raise LookupError(f"no task {task_id}")
+    return found[0]
+
+
+def hidden_asserts(task_id: str) -> set[str]:
+    """The assert lines of a task's hidden tests."""
+    texts = posed(task_id).hidden_files.values()
     lines = (line.strip() for text in texts for line in text.splitlines())
     return {line for line in lines if line.startswith("assert")}
 
@@ -411,7 +464,7 @@ def main() -> None:
     day = datetime.date.today().isoformat()
     out = DATASET / day
     manifest = export(TRACES, found, hidden_asserts, out)
-    text = markdown(manifest, day)
+    text = anonymised(scrub(markdown(manifest, day)))
     (out / "manifest.md").write_text(text, encoding="utf-8")
     MANIFEST.write_text(text, encoding="utf-8")
     print(text)

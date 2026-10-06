@@ -291,8 +291,25 @@ def test_a_snapshot_skips_links_and_marks_a_cut(tmp_path: Path, monkeypatch: pyt
 
 
 def test_a_test_report_names_no_home_directory_or_user():
-    home = str(Path.home())
-    text = json.dumps({"message": f"cannot load {home}/x.py for {Path.home().name}"})
+    home, user = str(Path.home()), Path.home().name
+    text = json.dumps({"message": f"cannot load {home}/x.py or D:/work/{user}/y.py"})
     shown = runner.anonymised(text)
-    assert home not in shown and Path.home().name not in shown
-    assert "~" in shown
+    assert home not in shown and user not in shown
+    assert "~" in shown and "D:/work/<user>/y.py" in shown
+
+
+def test_a_word_holding_the_user_name_is_left_alone(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(Path, "home", lambda: Path("/home/test"))
+    shown = runner.anonymised("the contest in /srv/test/a.py and /srv/tester/b.py")
+    assert shown == "the contest in /srv/<user>/a.py and /srv/tester/b.py"
+
+
+def test_a_response_naming_no_provider_is_counted_under_one_the_registry_does_not_hold():
+    from langchain_core.outputs import ChatGeneration, LLMResult
+
+    meter = runner.Meter()
+    named, unnamed = said(0), said(1)
+    unnamed.response_metadata = {"cost": 0.001}
+    generations = [[ChatGeneration(message=named)], [ChatGeneration(message=unnamed)]]
+    meter.on_llm_end(LLMResult(generations=generations))
+    assert meter.providers == {"Scripted": 1, runner.UNNAMED: 1}

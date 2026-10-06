@@ -32,6 +32,8 @@ class Settings:
     """What a run is trained with; the report keeps them beside its numbers."""
 
     model: str = "Qwen/Qwen2.5-Coder-0.5B-Instruct"
+    revision: str = "ea3f2471cf1b1f0db85067f1ef93848e38e88c25"
+    """The base model's commit (adr:0016): a moved branch would change what is trained."""
     rank: int = 16
     alpha: int = 32
     dropout: float = 0.05
@@ -78,7 +80,7 @@ def train(settings: Settings, records: Path, out: Path) -> dict:
 
     torch.cuda.set_per_process_memory_fraction(settings.memory_fraction)
     rows = examples(load(records, "train"))
-    tokenizer = AutoTokenizer.from_pretrained(settings.model)
+    tokenizer = AutoTokenizer.from_pretrained(settings.model, revision=settings.revision)
     config = SFTConfig(
         output_dir=str(out / "checkpoints"),
         num_train_epochs=settings.epochs,
@@ -104,7 +106,9 @@ def train(settings: Settings, records: Path, out: Path) -> dict:
         target_modules="all-linear",
         task_type="CAUSAL_LM",
     )
-    model = AutoModelForCausalLM.from_pretrained(settings.model, dtype=torch.bfloat16)
+    model = AutoModelForCausalLM.from_pretrained(
+        settings.model, revision=settings.revision, dtype=torch.bfloat16
+    )
     trainer = SFTTrainer(
         model=model,
         args=config,
@@ -129,15 +133,15 @@ def train(settings: Settings, records: Path, out: Path) -> dict:
     return report
 
 
-def merge(model: str, adapter: Path, out: Path) -> Path:
+def merge(model: str, revision: str, adapter: Path, out: Path) -> Path:
     """The base model with the adapter merged into it, saved with its tokenizer."""
     import torch
     from peft import PeftModel
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    base = AutoModelForCausalLM.from_pretrained(model, dtype=torch.bfloat16)
+    base = AutoModelForCausalLM.from_pretrained(model, revision=revision, dtype=torch.bfloat16)
     PeftModel.from_pretrained(base, str(adapter)).merge_and_unload().save_pretrained(out)
-    AutoTokenizer.from_pretrained(model).save_pretrained(out)
+    AutoTokenizer.from_pretrained(model, revision=revision).save_pretrained(out)
     return out
 
 
@@ -146,8 +150,8 @@ def export(merged: Path, llama_cpp: Path, out: Path, quantization: str = "Q4_K_M
     converter from the source tree and `llama-quantize` from its release."""
     full = out / "guide-f16.gguf"
     quantized = out / f"guide-{quantization.lower()}.gguf"
-    converter = next(llama_cpp.rglob("convert_hf_to_gguf.py"))
-    quantize = next(p for p in llama_cpp.rglob("llama-quantize*") if p.suffix in ("", ".exe"))
+    converter = _tool(llama_cpp, ("convert_hf_to_gguf.py",))
+    quantize = _tool(llama_cpp, ("llama-quantize", "llama-quantize.exe"))
     subprocess.run(  # noqa: S603
         [sys.executable, str(converter), str(merged), "--outfile", str(full), "--outtype", "f16"],
         check=True,
@@ -156,20 +160,30 @@ def export(merged: Path, llama_cpp: Path, out: Path, quantization: str = "Q4_K_M
     return quantized
 
 
+def _tool(llama_cpp: Path, names: tuple[str, ...]) -> Path:
+    """The one file under `llama_cpp` with one of `names`: two would leave which runs to chance."""
+    found = [p for p in llama_cpp.rglob("*") if p.name in names and p.is_file()]
+    if len(found) != 1:
+        raise FileNotFoundError(f"{len(found)} files named {' or '.join(names)} in {llama_cpp}")
+    return found[0]
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--records", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--model", default=Settings.model)
+    parser.add_argument("--revision", default=Settings.revision)
     parser.add_argument("--export", action="store_true", help="merge and quantize a trained run")
     parser.add_argument("--llama-cpp", type=Path, help="llama.cpp's source and release")
     parser.add_argument("--quantization", default="Q4_K_M")
     args = parser.parse_args(argv)
     if args.export:
-        merged = merge(args.model, args.out / "adapter", args.out / "merged")
+        merged = merge(args.model, args.revision, args.out / "adapter", args.out / "merged")
         print(export(merged, args.llama_cpp, args.out, args.quantization))
         return
-    print(json.dumps(train(Settings(model=args.model), args.records, args.out), indent=2))
+    settings = Settings(model=args.model, revision=args.revision)
+    print(json.dumps(train(settings, args.records, args.out), indent=2))
 
 
 if __name__ == "__main__":

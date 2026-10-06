@@ -122,3 +122,42 @@ def test_a_permitted_passing_run_gives_its_trajectory_and_repair_by_split(tmp_pa
 def test_a_failing_run_gives_no_trajectory_but_its_repairs():
     trace = {"row": {"task": "median-mode", "outcome": "fail"}, "messages": [], "checks": []}
     assert dataset.trajectory(trace) is None
+
+
+def test_an_unreadable_trace_and_a_task_with_no_tests_are_left_out_not_fatal(tmp_path: Path):
+    traces, out = tmp_path / "traces", tmp_path / "out"
+    write(traces, "median-mode")
+    write(traces, "stock-take")
+    (traces / "m__x" / "agents" / "broken-0.json").write_text("{not json", encoding="utf-8")
+    (tmp_path / "licences.toml").write_text(REGISTRY, encoding="utf-8")
+    found = registry.read(tmp_path / "licences.toml")
+
+    def hidden_for(task: str) -> set[str]:
+        if task == "stock-take":
+            raise LookupError(task)
+        return set()
+
+    manifest = dataset.export(traces, found, hidden_for, out)
+    assert manifest.left_out == {"unreadable trace": 1, "unknown task": 1}
+    assert manifest.runs == 3
+
+
+def test_an_exported_record_names_no_home_directory(tmp_path: Path):
+    traces, out = tmp_path / "traces", tmp_path / "out"
+    write(traces, "median-mode", final=FIXED + f"# {Path.home()}\n")
+    (tmp_path / "licences.toml").write_text(REGISTRY, encoding="utf-8")
+    dataset.export(traces, registry.read(tmp_path / "licences.toml"), lambda task: set(), out)
+    text = (out / "train" / "trajectories.jsonl").read_text(encoding="utf-8")
+    assert str(Path.home()).replace("\\", "\\\\") not in text and "# ~" in text
+
+
+def test_a_source_is_read_only_from_the_spellings_the_harness_writes():
+    assert dataset.source_of("humaneval-12") == "humaneval-original"
+    assert dataset.source_of("mbpp-7") == "mbpp-original"
+    assert dataset.source_of("median-mode") == "bench"
+    assert dataset.source_of("HumanEval_12_x") == "unknown"
+    assert dataset.source_of("humaneval/12") == "unknown"
+
+
+def test_a_manifest_cell_cannot_split_its_row():
+    assert dataset.cell("provider a|b\nc") == "provider a\\|b c"

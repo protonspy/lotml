@@ -164,3 +164,20 @@ def test_wilson_s_interval_and_the_minimum():
     low, high = evaluate.wilson(5, 10)
     assert high - low > 0.2
     assert evaluate.MINIMUM == 97
+
+
+def test_an_unreadable_trace_and_a_file_the_safe_layer_refuses_are_counted_not_fatal(
+    tmp_path: Path,
+):
+    (tmp_path / "broken.json").write_text("{not json", encoding="utf-8")
+    (tmp_path / "list.json").write_text("[]", encoding="utf-8")
+    renamed = trace("mbpp-2")
+    for check in renamed["checks"]:
+        check["before"] = check["after"] = {"con.lotml": check["before"]["a.lotml"]}
+        check["report"]["diagnostics"] = [
+            d | {"file": "con.lotml"} for d in check["report"]["diagnostics"]
+        ]
+    (tmp_path / "renamed.json").write_text(json.dumps(renamed), encoding="utf-8")
+    found, refused = evaluate.trace_failures(tmp_path)
+    assert found == []
+    assert refused == {"unreadable trace": 2, "a file the safe layer refuses": 1}

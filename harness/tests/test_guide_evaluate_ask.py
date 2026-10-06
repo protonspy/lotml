@@ -108,4 +108,33 @@ def test_a_silent_guide_is_counted_and_the_report_gives_no_verdict_short_of_the_
     assert "Silent on 1 of 1 (not-confident 1)" in text
     assert "| compiler's pointer | 1/1" in text
     assert "peak memory 1024 MiB" in text
-    assert "| check | 1 | 0% | 100% |" in text
+    assert "| check | 1 | 0/1 (0%, 95% CI 0% to 79%) |" in text
+    assert "| 1/1 (100%, 95% CI 21% to 100%) | 1 | — |" in text
+
+
+def test_calls_that_overrun_or_print_no_json_score_as_finding_nothing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    failure = evaluate.Failure(
+        "mbpp/2", "agent", "m", "check", None, "a.lotml", "fn f() -> int:\n", "", ""
+    )
+    for said, reason in (("deadline", "deadline"), (evaluate.UNREAD, "unread"), ([1], "unread")):
+        monkeypatch.setattr(evaluate, "_call", lambda *_, said=said, **__: said)
+        row = evaluate.judged(failure, tmp_path / "harness-guide.toml")
+        assert (row["guide"]["silent"], row["guide"]["reason"]) == (True, reason)
+        assert (row["truth"], row["baseline"], row["top1"]) == ([], [], False)
+
+
+def test_every_breakdown_gives_top_3_silence_and_precision_with_intervals():
+    row = {
+        "problem": "mbpp/2", "origin": "agent", "model": "a|b", "kind": "test", "truth": ["add"],
+        "guide": {"locations": ["add"], "kind": "body", "edit": False, "withheld": None,
+                  "silent": False, "reason": None, "confidence": 0.9},
+        "baseline": [], "top1": True, "top3": True, "baseline_top1": False,
+        "baseline_top3": False, "seconds": 1.0,
+    }  # fmt: skip
+    setting = {"cpu": "x", "model_file": "g.gguf", "quantization": "Q4_K_M", "memory": None}
+    text = evaluate.markdown([row], "d" * 64, setting, "2026-10-06")
+    assert "| model that failed | failures | guide top-1 | guide top-3 |" in text
+    assert "| a\\|b | 1 | 1/1 (100%, 95% CI 21% to 100%) | 1/1 (100%" in text
+    assert "| 0/1 (0%, 95% CI 0% to 79%) | 0 | 1/1 (100%, 95% CI 21% to 100%) |" in text

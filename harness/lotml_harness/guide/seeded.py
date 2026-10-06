@@ -210,7 +210,7 @@ def trajectory_programs(export: Path | None, hidden_for) -> Taken:
                         raise ValueError(f"{name!r} holds no text")
                 task = hidden_for(meta["task"])
                 joined = with_hidden(task, files)
-            except (ValueError, KeyError, StopIteration) as refusal:
+            except (ValueError, LookupError) as refusal:
                 taken.left_out[f"unusable files: {type(refusal).__name__}"] += 1
                 continue
             taken.programs.append(
@@ -615,13 +615,8 @@ def repair_codes(export: Path | None) -> Counter:
 
 
 def hidden_for(task_id: str) -> AgentTask:
-    """A trajectory's task, to append its hidden blocks: the benchmark's or HumanEval's."""
-    if task_id.startswith("humaneval-"):
-        records, _ = humaneval.read_humaneval()
-        number = int(task_id.removeprefix("humaneval-"))
-        record = next(r for r in records if r["task_id"] == f"HumanEval/{number}")
-        return humaneval.pose_humaneval(record)
-    return next(t for t in tasks() if t.id == task_id)
+    """A trajectory's task, to append its hidden blocks."""
+    return dataset.posed(task_id)
 
 
 def main(argv: list[str] | None = None) -> None:
