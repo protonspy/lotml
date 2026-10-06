@@ -1,6 +1,8 @@
 ---
 autonomy: auto
 ci: wait
+branch: feat/guide-tool
+delivery: in-progress
 ---
 
 # Guide tool — requirements

@@ -12,17 +12,19 @@
 //! The server speaks both eras of the protocol: the handshake of `initialize` (2025-11-25 and
 //! earlier) and per-request metadata with `server/discover` (2026-07-28).
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io;
 use std::path::{Component, Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
 
-use lotml_diag::{DEFAULT_LIMIT, Report};
+use lotml_diag::{DEFAULT_LIMIT, Report, Severity};
 use lotml_ide::edit::{self, Changed, Part};
 use lotml_ide::lines::{Encoding, Lines};
 use lotml_ide::{Refused, Symbol, Workspace};
 use lotml_syntax::span::{Span, line_column};
 use serde_json::{Value, json};
+
+use crate::guide;
 
 use crate::rpc::{self, Framing, Incoming, Kind};
 use crate::{Failure, exec, files, index};
@@ -36,7 +38,29 @@ const AROUND: usize = 2;
 const TEST_SECONDS: u64 = 60;
 const TEST_OUTPUT: usize = 4 * 1024 * 1024;
 
+/// One call of the `guide` tool, its tests, its request and its candidate's tests together: under
+/// the agent harness client's 90 s, since the server answers one call at a time.
+const GUIDE_DEADLINE: Duration = Duration::from_secs(75);
+/// Bytes of the project a candidate's private copy may hold.
+const CANDIDATE_BYTES: usize = 4 * 1024 * 1024;
+const GUIDE_INSTRUCTIONS: &str = "When `check` refuses the code or a test fails and you do not see why, `guide` asks a small local model where to change it and what kind of change it needs; it points and may propose one edit that checks, and you decide and edit.";
 const INSTRUCTIONS: &str = "lotml's compiler. Run `check` after every edit: diagnostics come root cause first, with the alternatives in scope and fixes. `digest` is the project's index of signatures; `show` gives a symbol's body; `references` lists every use with the lines around it; `explain` gives an error code's page; `test` runs the test blocks, which is running the project's code. Edit with `replace` (a definition, a body or a match arm, addressed by symbol, re-indented for you), `add`, `remove`, `edit` (whole lines) and `rename` (every reference at once); each says which errors it introduced.";
+
+/// `lotml guide ask`: the `guide` tool's call over the project at `root`, its answer printed; exit
+/// 0 with an answer or a silence, 1 when this machine has no usable guide.
+pub fn ask_guide(root: &Path, task: Option<String>, files: &[String]) -> Result<u8, Failure> {
+    let server = Server::new(root)?;
+    if server.guide.is_none() {
+        eprintln!("lotml: no harness guide is configured: set {} or write harness-guide.toml", guide::VARIABLE);
+        return Ok(1);
+    }
+    let mut args = json!({"task": task});
+    if !files.is_empty() {
+        args["paths"] = json!(files);
+    }
+    println!("{}", server.ask_guide(&args));
+    Ok(0)
+}
 
 /// Serve on standard input and output until the input ends.
 pub fn serve(root: &Path) -> Result<u8, Failure> {
@@ -61,9 +85,12 @@ pub struct Server {
     workspace: Workspace,
     /// When each file was last read, so an unchanged one is not read again.
     modified: HashMap<PathBuf, Option<SystemTime>>,
+    /// The harness guide this machine has configured; the `guide` tool is listed only with one.
+    guide: Option<guide::Config>,
 }
 
 /// A tool's failure, told to the agent as a result so it can correct the call.
+#[derive(Debug)]
 struct ToolError(String);
 
 impl Server {
@@ -73,7 +100,14 @@ impl Server {
         if !root.is_dir() {
             return Err(Failure(format!("{} is not a directory", root.display())));
         }
-        let mut server = Server { root, workspace: Workspace::new(), modified: HashMap::new() };
+        let guide = match guide::configured(&|name| std::env::var(name).ok()) {
+            Ok(found) => found,
+            Err(why) => {
+                eprintln!("lotml: the guide tool is off: {why}");
+                None
+            }
+        };
+        let mut server = Server { root, workspace: Workspace::new(), modified: HashMap::new(), guide };
         server.refresh();
         server.workspace.warm();
         Ok(server)
@@ -123,10 +157,10 @@ impl Server {
             "server/discover" => Ok(json!({
                 "supportedVersions": supported(),
                 "capabilities": {"tools": {}},
-                "instructions": INSTRUCTIONS,
+                "instructions": instructions(self.guide.is_some()),
             })),
             "ping" => Ok(json!({})),
-            "tools/list" => Ok(json!({"tools": tools()})),
+            "tools/list" => Ok(json!({"tools": tools(self.guide.is_some())})),
             "tools/call" => self.call(params),
             _ => Err((rpc::METHOD_NOT_FOUND, format!("`{method}` is not supported"))),
         };
@@ -149,13 +183,13 @@ impl Server {
             "protocolVersion": version,
             "capabilities": {"tools": {"listChanged": false}},
             "serverInfo": server_info(),
-            "instructions": INSTRUCTIONS,
+            "instructions": instructions(self.guide.is_some()),
         })
     }
 
     fn call(&mut self, params: &Value) -> Result<Value, (i64, String)> {
         let name = params["name"].as_str().ok_or((rpc::INVALID_PARAMS, "a call needs the tool's name".to_string()))?;
-        if !tools().iter().any(|t| t["name"] == name) {
+        if !tools(self.guide.is_some()).iter().any(|t| t["name"] == name) {
             return Err((rpc::INVALID_PARAMS, format!("Unknown tool: {name}")));
         }
         static EMPTY: Value = Value::Null;
@@ -178,6 +212,7 @@ impl Server {
             "remove" => self.remove(args),
             "edit" => self.edit(args),
             "rename" => self.rename(args),
+            "guide" => Ok(self.ask_guide(args)),
             _ => Err(ToolError(format!("Unknown tool: {name}"))),
         };
         let (text, failed) = match outcome {
@@ -185,6 +220,167 @@ impl Server {
             Err(ToolError(why)) => (why, true),
         };
         Ok(json!({"content": [{"type": "text", "text": text}], "isError": failed}))
+    }
+
+    /// The `guide` tool's answer: JSON with the guidance, or none and the reason.
+    pub fn ask_guide(&self, args: &Value) -> String {
+        let silence = |reason: &str| json!({"guidance": null, "reason": reason}).to_string();
+        let Some(config) = &self.guide else { return silence("server-error") };
+        let deadline = Instant::now() + GUIDE_DEADLINE;
+        let state = match self.guide_state(args, deadline) {
+            Ok(Some(state)) => state,
+            Ok(None) => return silence("nothing-to-guide"),
+            Err(_) if Instant::now() >= deadline => return silence("deadline"),
+            Err(_) => return silence("server-error"),
+        };
+        let messages = guide::render(&state)["messages"].clone();
+        let response = match guide::ask(&config.url, &config.model, &messages, config.answer, deadline) {
+            Ok(response) => response,
+            Err(why) => return silence(why.reason()),
+        };
+        let (answer, confidence) = match guide::judge(&response, config.threshold, &self.guide_files()) {
+            Ok(judged) => judged,
+            Err(reason) => return silence(reason),
+        };
+        let withheld = answer.edit.as_ref().and_then(|edit| self.withheld(edit, &state, config, deadline));
+        let shown = match (&answer.edit, withheld) {
+            (Some(edit), None) => json!({"tool": edit.tool, "arguments": edit.arguments}),
+            _ => Value::Null,
+        };
+        let locations: Vec<Value> =
+            answer.locations.iter().map(|l| json!({"path": l.path, "symbol": l.symbol, "lines": l.lines})).collect();
+        json!({"locations": locations, "kind": answer.kind, "edit": shown, "confidence": confidence, "withheld": withheld})
+            .to_string()
+    }
+
+    /// The project's files the guide's locations may name: each one's line count and the symbols
+    /// it declares, by the name the tools show it under. Symbolic links are left out.
+    fn guide_files(&self) -> BTreeMap<String, guide::ProjectFile> {
+        self.workspace
+            .paths()
+            .filter(|p| !p.symlink_metadata().is_ok_and(|m| m.is_symlink()))
+            .map(|p| {
+                let lines = self.workspace.text(p).unwrap_or_default().lines().count();
+                let symbols = lotml_ide::symbols(&self.workspace.outline(p)).into_iter().collect();
+                (self.shown(p), guide::ProjectFile { lines, symbols })
+            })
+            .collect()
+    }
+
+    /// Why the guide's edit is not shown, or None: the gate, with the candidate run in a private
+    /// copy of the project when the state is a failing block, candidates may run and the project
+    /// binds nothing through an interface.
+    fn withheld(
+        &self,
+        edit: &guide::Edit,
+        state: &guide::State,
+        config: &guide::Config,
+        deadline: Instant,
+    ) -> Option<&'static str> {
+        let path = self.workspace.paths().find(|p| self.shown(p) == edit.path)?.to_path_buf();
+        let text = self.workspace.text(&path).unwrap_or_default().to_string();
+        let interfaces: lotml_check::Interfaces = files::interfaces_for(&path)
+            .into_iter()
+            .map(|b| (b.module.clone(), lotml_check::interface_of(&b.module, &b.text).0))
+            .collect();
+        let clean =
+            |new: &str| lotml_check::check_source_with(new, &interfaces).iter().all(|d| d.severity != Severity::Error);
+        let binds = self.workspace.paths().any(|p| !files::interfaces_for(p).is_empty());
+        let run = |new: &str| self.candidate_passes(&path, new, state, deadline);
+        let failing =
+            state.failing.as_ref().map(|_| (config.run_candidates && !binds, &run as &dyn Fn(&str) -> Option<bool>));
+        guide::withheld(edit, &text, &clean, failing)
+    }
+
+    /// Whether the failing block passes with `new` in place of `path`, run in a fresh directory
+    /// holding the project's `.lotml` files that are not symbolic links, at most 4 MiB in all, and
+    /// an empty `.git` at its root so the interface search stops inside it. The project is only
+    /// read.
+    fn candidate_passes(&self, path: &Path, new: &str, state: &guide::State, deadline: Instant) -> Option<bool> {
+        let block = state.failing.as_ref()?["name"].as_str()?.to_string();
+        let scratch = exec::Scratch::new().ok()?;
+        std::fs::create_dir(scratch.0.join(".git")).ok()?;
+        let (mut total, mut laid, mut edited) = (0, Vec::new(), None);
+        for project_path in self.workspace.paths() {
+            if project_path.symlink_metadata().is_ok_and(|m| m.is_symlink()) {
+                continue;
+            }
+            let relative = project_path.strip_prefix(&self.root).ok()?;
+            let text = if project_path == path { new } else { self.workspace.text(project_path).unwrap_or_default() };
+            total += text.len();
+            if total > CANDIDATE_BYTES {
+                return None;
+            }
+            let target = scratch.0.join(relative);
+            std::fs::create_dir_all(target.parent()?).ok()?;
+            std::fs::write(&target, text).ok()?;
+            if project_path == path {
+                edited = Some(target.display().to_string());
+            }
+            laid.push(target);
+        }
+        let edited = edited?;
+        let seconds = deadline.saturating_duration_since(Instant::now()).as_secs();
+        if seconds == 0 {
+            return None;
+        }
+        let limits = exec::Limits { seconds, output: TEST_OUTPUT };
+        let (_, report) = exec::test_report(&laid, true, Some(&limits)).ok()?;
+        let report: Value = serde_json::from_str(report.trim()).ok()?;
+        let row =
+            report["tests"].as_array()?.iter().find(|r| r["file"] == edited.as_str() && r["name"] == block.as_str())?;
+        Some(row["outcome"] == "pass")
+    }
+
+    /// What the guide is asked about: the first file named, or of the project, with errors and
+    /// its diagnostics as `check` lists them; or else the first test block that fails, with the
+    /// values each side had. None when everything checks and passes. Symbolic links are skipped.
+    fn guide_state(&self, args: &Value, deadline: Instant) -> Result<Option<guide::State>, ToolError> {
+        let task = match &args["task"] {
+            Value::Null => None,
+            Value::String(task) if task.chars().count() <= guide::TASK_LIMIT => Some(task.clone()),
+            _ => return Err(ToolError(format!("`task` is a string of at most {} characters", guide::TASK_LIMIT))),
+        };
+        let paths: Vec<PathBuf> =
+            self.selected(args)?.into_iter().filter(|p| !p.symlink_metadata().is_ok_and(|m| m.is_symlink())).collect();
+        for path in &paths {
+            let diagnostics = self.workspace.diagnostics(path);
+            if diagnostics.iter().any(|d| d.severity == Severity::Error) {
+                let name = self.shown(path);
+                let text = self.workspace.text(path).unwrap_or_default();
+                let report = lotml_diag::json(
+                    &[Report { file: &name, text, diagnostics: diagnostics.to_vec() }],
+                    Some(DEFAULT_LIMIT),
+                );
+                let listed = report["diagnostics"].as_array().cloned().unwrap_or_default();
+                return Ok(Some(guide::State {
+                    task,
+                    path: name,
+                    text: text.to_string(),
+                    diagnostics: listed,
+                    failing: None,
+                }));
+            }
+        }
+        let seconds = deadline.saturating_duration_since(Instant::now()).as_secs().min(TEST_SECONDS);
+        if seconds == 0 {
+            return Err(ToolError("the deadline passed".to_string()));
+        }
+        let limits = exec::Limits { seconds, output: TEST_OUTPUT };
+        let (_, report) = exec::test_report(&paths, true, Some(&limits)).map_err(|Failure(why)| ToolError(why))?;
+        let report: Value =
+            serde_json::from_str(report.trim()).map_err(|_| ToolError("the tests did not report".to_string()))?;
+        let Some(row) = report["tests"].as_array().into_iter().flatten().find(|r| r["outcome"] != "pass") else {
+            return Ok(None);
+        };
+        let file = row["file"].as_str().unwrap_or_default();
+        let Some(path) = paths.iter().find(|p| p.display().to_string() == file) else {
+            return Err(ToolError(format!("a test failed in `{file}`, which was not asked about")));
+        };
+        let mut failing = row.clone();
+        failing["file"] = json!(self.shown(path));
+        let text = self.workspace.text(path).unwrap_or_default().to_string();
+        Ok(Some(guide::State { task, path: self.shown(path), text, diagnostics: Vec::new(), failing: Some(failing) }))
     }
 
     /// A path an agent named, which must be inside the root.
@@ -532,8 +728,13 @@ fn server_info() -> Value {
     json!({"name": "lotml", "version": env!("CARGO_PKG_VERSION")})
 }
 
-/// The tools, each with the schema of its arguments.
-fn tools() -> Vec<Value> {
+/// The server's instructions, naming the `guide` tool when there is one.
+fn instructions(guided: bool) -> String {
+    if guided { format!("{INSTRUCTIONS} {GUIDE_INSTRUCTIONS}") } else { INSTRUCTIONS.to_string() }
+}
+
+/// The tools, each with the schema of its arguments; `guide` among them when one is configured.
+fn tools(guided: bool) -> Vec<Value> {
     let paths = json!({
         "type": "array",
         "items": {"type": "string"},
@@ -551,7 +752,7 @@ fn tools() -> Vec<Value> {
             "description": what
         })
     };
-    vec![
+    let mut found = vec![
         json!({
             "name": "check",
             "description": "Check files for syntax, type and mutability errors. Returns versioned JSON: diagnostics root cause first, each with its code, location, the alternatives in scope and fixes; five at most unless `all`.",
@@ -653,7 +854,21 @@ fn tools() -> Vec<Value> {
                 "required": ["new_name"]
             }
         }),
-    ]
+    ];
+    if guided {
+        found.push(json!({
+            "name": "guide",
+            "description": "Ask the harness guide, a small model on this machine, where to change the code and what kind of change it needs, when `check` refuses it or a test fails. It checks the files and runs the test blocks, which is running the project's code. It points and may propose one edit that checks; you decide and edit. Answers JSON: up to three locations, the kind of change, the edit when one checks; or nothing, with the reason, when it is not confident.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "paths": paths,
+                    "task": {"type": "string", "maxLength": 2000, "description": "What you are doing, in a sentence or two."}
+                }
+            }
+        }));
+    }
+    found
 }
 
 #[cfg(test)]
@@ -673,6 +888,60 @@ mod tests {
         std::fs::File::options().write(true).open(&path).unwrap().set_modified(later).unwrap();
         let Err(ToolError(why)) = server.unchanged(&path) else { panic!("a changed file was taken as read") };
         assert!(why.contains("nothing was written"), "{why}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn project(name: &str, files: &[(&str, &str)]) -> (PathBuf, Server) {
+        let dir = std::env::temp_dir().join(format!("lotml-mcp-guide-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for (file, text) in files {
+            std::fs::write(dir.join(file), text).unwrap();
+        }
+        let server = Server::new(&dir).unwrap_or_else(|Failure(why)| panic!("{why}"));
+        (dir, server)
+    }
+
+    const CLEAN: &str = "fn add(a: int, b: int) -> int:\n    return a + b\n";
+
+    #[test]
+    fn the_guide_s_state_is_the_first_file_with_errors_and_its_diagnostics() {
+        let broken = "fn f() -> int:\n    return missing\n";
+        let (dir, server) = project("errors", &[("a.lotml", CLEAN), ("b.lotml", broken)]);
+        let state =
+            server.guide_state(&json!({"task": "Fix f."}), Instant::now() + GUIDE_DEADLINE).unwrap().expect("a state");
+        assert_eq!((state.path.as_str(), state.text.as_str()), ("b.lotml", broken));
+        assert_eq!(state.task.as_deref(), Some("Fix f."));
+        assert_eq!(state.diagnostics[0]["code"], "E0201");
+        assert!(state.failing.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn with_every_file_checking_the_state_is_the_first_failing_block_with_its_values() {
+        let failing = format!("{CLEAN}\ntest \"adds\":\n    assert add(1, 2) == 4\n");
+        let (dir, server) = project("failing", &[("a.lotml", &failing)]);
+        let state = server.guide_state(&json!({}), Instant::now() + GUIDE_DEADLINE).unwrap().expect("a state");
+        assert!(state.diagnostics.is_empty());
+        let row = state.failing.expect("a failing block");
+        assert_eq!(
+            (row["name"].as_str(), row["left"].as_str(), row["right"].as_str()),
+            (Some("adds"), Some("3"), Some("4"))
+        );
+        assert_eq!(row["file"], "a.lotml");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn with_everything_green_there_is_nothing_to_guide() {
+        let passing = format!("{CLEAN}\ntest \"adds\":\n    assert add(1, 2) == 3\n");
+        let (dir, server) = project("green", &[("a.lotml", &passing)]);
+        assert!(server.guide_state(&json!({}), Instant::now() + GUIDE_DEADLINE).unwrap().is_none());
+        assert!(
+            server
+                .guide_state(&json!({"task": "x".repeat(guide::TASK_LIMIT + 1)}), Instant::now() + GUIDE_DEADLINE)
+                .is_err()
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

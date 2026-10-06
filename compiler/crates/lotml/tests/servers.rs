@@ -43,8 +43,11 @@ struct Client {
 
 impl Client {
     fn start(args: &[&str], headers: bool) -> Client {
+        // A guide this machine has configured would add a tool; these tests serve without one.
+        let no_guide = Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-harness-guide.toml");
         let mut child = Command::new(env!("CARGO_BIN_EXE_lotml"))
             .args(args)
+            .env("LOTML_HARNESS_GUIDE", no_guide)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()

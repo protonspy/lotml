@@ -372,6 +372,31 @@ impl Workspace {
     }
 }
 
+/// The symbols an outline declares, named as `show` and `replace` take them: `area`, `Shape`, a
+/// variant `Circle`, a field `Point.x`, a method `Counter.get` (a generic impl's type without its
+/// parameters), a trait's method `Show.show`, and a test block as `test "name"`.
+pub fn symbols(outline: &[Outline]) -> Vec<String> {
+    let mut found = Vec::new();
+    for entry in outline {
+        match entry.kind {
+            Kind::Impl => {
+                let target = entry.name.rsplit(" for ").next().unwrap_or("").trim_start_matches("impl ");
+                let owner = target.split('[').next().unwrap_or(target).trim();
+                found.extend(entry.children.iter().map(|m| format!("{owner}.{}", m.name)));
+            }
+            Kind::Sum => {
+                found.push(entry.name.clone());
+                found.extend(entry.children.iter().map(|v| v.name.clone()));
+            }
+            _ => {
+                found.push(entry.name.clone());
+                found.extend(entry.children.iter().map(|c| format!("{}.{}", entry.name, c.name)));
+            }
+        }
+    }
+    found
+}
+
 /// The whole-word occurrences of `name` in `text` that are no reference to anything: in a
 /// comment or a string, or a name nothing declares.
 fn mentions(text: &str, occurrences: &[Occurrence], name: &str) -> Vec<Span> {
