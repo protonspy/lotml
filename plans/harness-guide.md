@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: e46641cacbfcccd72141d546a94f914e772af1c30f4dc2e6d4b956c1d8c2f375
+checksum: 8b8aba1790b2ce60237ef905c7987fc4346dcbaf0e06d0f055686b7cd4b03dba
 ---
 
 # Harness guide
@@ -76,7 +76,7 @@ deepagents and in a second harness — on held-out tasks, and the wiki records w
       task — paired with the edit that got it out, its symbol and lines as where, its
       diff as what, through the licence registry; the failing-test state is a delta to
       specs/trace-dataset/, whose repairs today open only on a check
-- [ ] 1.3 (Unit) Write the spec for the seeded failures: lotml programs that check and pass, mutated the ways agents break them, kept only when `check` refuses the mutant or a test then fails, with the known fix as the record
+- [x] 1.3 (Unit) Write the spec for the seeded failures: lotml programs that check and pass, mutated the ways agents break them, kept only when `check` refuses the mutant or a test then fails, with the known fix as the record
 - [ ] 1.4 (Unit) Write the spec for the guide's evaluation offline: top-1 and top-3
       location against the real fix, the share of proposed patches that check and pass,
       how often it stays silent, latency and memory, on held-out real failures, never
