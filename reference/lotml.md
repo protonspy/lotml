@@ -51,7 +51,9 @@ bits = (n & 6) | (1 << 4) ^ ~n
 ```
 
 - `int` is a 64-bit signed integer (alias of `i64`); also `i8` `i16` `i32` `u8` `u16` `u32` `u64`,
-  `f64`, `f32`. Integer literals are `int`; `1.0` and `1e9` are `f64`.
+  `f64`, `f32`. Integer literals are `int`, or the sized type expected where they fit
+  (`limit: u8 = 200`); `1.0` and `1e9` are `f64`. `i32(n)`, `u8(n)` and the rest convert,
+  stopping the program when the value does not fit.
 - **Not Python:** `int` does not grow. Overflow stops the program with an error, in every build.
   Use `wrapping_add(a, b)`, `wrapping_mul(a, b)` for modular arithmetic.
 - **Not Python:** no implicit conversions except `/`, which converts both integers to `f64`.
@@ -354,6 +356,9 @@ steps = math.floor(d)
   module's stub: `from textwrap import dedent`, then `text = dedent(raw)?`. Each of its functions
   returns `T ! PyError`, since any call into Python can fail; `PyError(kind, message)` is in the
   prelude.
+- A C library is imported from its interface, written by hand in `bindings/c.<library>.lotmli`:
+  `from c.m import cos`. Its functions take and return numbers, `bool` and (taken only) `str`,
+  and cannot fail.
 
 ## Tests
 

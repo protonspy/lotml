@@ -139,6 +139,13 @@ Phase 2 built both directions of R14 and R27 on one checked boundary
   written `= todo()`. `import m` finds the nearest `bindings/m.lotmli` up the directory tree. At
   run time any exception, and any returned value that does not match the declared type, is
   `Err(PyError(kind, message))`.
+- **lotml calling C** (R17, adr:0013-c-libraries-through-interfaces-named-c). An interface named
+  `c.<library>`, written by hand, declares C functions over what C passes by value — integers,
+  `f32`, `f64`, `bool`, and `str` as a `const char*` argument — none of which can fail. On the
+  Python target `ctypes` loads the library when the module loads, so a missing one stops the
+  program as linking would, and releases the interpreter during a call, so a call that blocks
+  holds up only its own task's thread. Calling C made the sized integers usable: a literal
+  takes the integer type expected where it fits, and `i32(n)`, `u8(n)` and the rest convert.
 
 ## Recommended order
 

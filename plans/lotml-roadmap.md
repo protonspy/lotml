@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: a081260f99b7f51b3a85dad8195eea6f49a7f3c7e038b91a7f59ce96e9707a98
+checksum: 2ca55785aca5512afb9148a1212253cf9bfaf86247b1ddbab2feb59f903f94d5
 ---
 
 # lotml roadmap
@@ -111,7 +111,7 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 2.13_
 - [ ] 3.6 (TDD) Measure in the harness what the literature left open: terse against detailed diagnostics, type masks for open models, and the forgotten-`await` hypothesis (docs/wiki/pages/semantic-compiler.md, docs/wiki/pages/constrained-decoding.md)
   _Depends 3.1_
-- [ ] 3.8 (Unit) Add the FFI with C, handing blocking calls to dedicated threads (R17; docs/wiki/pages/colorless-concurrency.md)
+- [x] 3.8 (Unit) Add the FFI with C, handing blocking calls to dedicated threads (R17; docs/wiki/pages/colorless-concurrency.md)
   _Depends 3.5_
 - [ ] 3.9 (Unit) Generate the tree-sitter grammar for editors from the parser's single source (docs/wiki/pages/requirements-and-roadmap.md)
   _Depends 1.6_

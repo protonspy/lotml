@@ -182,6 +182,25 @@ fn stored_ctx(mut target: Value) -> Value {
     target
 }
 
+/// The C type a value of `ty` crosses into C as, by the name the runtime's `c_function` reads.
+fn c_type(ty: &Ty) -> &'static str {
+    match ty {
+        Ty::Int(IntKind::I8) => "i8",
+        Ty::Int(IntKind::I16) => "i16",
+        Ty::Int(IntKind::I32) => "i32",
+        Ty::Int(IntKind::I64) => "i64",
+        Ty::Int(IntKind::U8) => "u8",
+        Ty::Int(IntKind::U16) => "u16",
+        Ty::Int(IntKind::U32) => "u32",
+        Ty::Int(IntKind::U64) => "u64",
+        Ty::Float(lotml_check::ty::FloatKind::F32) => "f32",
+        Ty::Float(_) => "f64",
+        Ty::Bool => "bool",
+        Ty::Str => "str",
+        _ => "none",
+    }
+}
+
 pub(crate) fn range_of(kind: IntKind) -> (i128, i128) {
     match kind {
         IntKind::I8 => (i8::MIN.into(), i8::MAX.into()),
@@ -550,6 +569,9 @@ impl<'a> Emitter<'a> {
     fn import(&mut self, import: &Import) -> Vec<Value> {
         let path = import.module.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(".");
         if let Some(functions) = self.foreign.get(&path) {
+            if lotml_check::is_c_library(&path) {
+                return self.import_c(import, &path, functions);
+            }
             return self.import_python(import, &path, functions);
         }
         let module = rt("math");
@@ -561,6 +583,30 @@ impl<'a> Emitter<'a> {
             .names
             .iter()
             .map(|n| self.at(assign(vec![target(&n.name)], attr(module.clone(), &n.name)), n.span))
+            .collect()
+    }
+
+    /// `from c.<library> import f`: each C function loaded when the module loads, with the C
+    /// types of its parameters and result (adr:0013).
+    fn import_c(&mut self, import: &Import, path: &str, functions: &BTreeMap<String, FnSig>) -> Vec<Value> {
+        let library = constant(path.trim_start_matches("c.").into());
+        import
+            .names
+            .iter()
+            .filter_map(|n| functions.get(&n.name).map(|sig| (n, sig)))
+            .map(|(n, sig)| {
+                let params: Vec<Value> = sig.params.iter().map(|p| constant(c_type(&p.ty).into())).collect();
+                let loaded = call(
+                    rt("c_function"),
+                    vec![
+                        library.clone(),
+                        constant(n.name.clone().into()),
+                        node("List", vec![("elts", Value::Array(params)), ("ctx", load())]),
+                        constant(c_type(&sig.ret).into()),
+                    ],
+                );
+                self.at(assign(vec![target(&n.name)], loaded), n.span)
+            })
             .collect()
     }
 

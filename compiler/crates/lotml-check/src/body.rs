@@ -10,7 +10,7 @@ use lotml_syntax::span::Span;
 use crate::builtins;
 use crate::closest;
 use crate::program::{FnSig, Method, Program, TypeDef};
-use crate::ty::{F64, INT, Infer, Ty};
+use crate::ty::{F64, INT, Infer, IntKind, Ty};
 
 #[derive(Clone, Debug)]
 pub struct Local {
@@ -1104,11 +1104,53 @@ impl<'p> Body<'p> {
         }
     }
 
+    /// An integer literal: an `int`, or the integer type expected where it fits — `limit: u8 =
+    /// 200`, an `i32` argument — and reported where it does not.
+    fn int_literal(&mut self, text: &str, span: Span, expected: Option<&Ty>) -> Ty {
+        let wanted = match expected.map(|e| self.resolve(e)) {
+            Some(Ty::Int(kind)) => kind,
+            Some(Ty::Optional(inner)) => match *inner {
+                Ty::Int(kind) => kind,
+                _ => return INT,
+            },
+            _ => return INT,
+        };
+        if wanted == IntKind::I64 {
+            return INT;
+        }
+        let digits = text.replace('_', "").to_ascii_lowercase();
+        let (negative, lower) = match digits.strip_prefix('-') {
+            Some(rest) => (true, rest.to_string()),
+            None => (false, digits),
+        };
+        let value = match lower.get(..2) {
+            Some("0x") => i128::from_str_radix(&lower[2..], 16),
+            Some("0o") => i128::from_str_radix(&lower[2..], 8),
+            Some("0b") => i128::from_str_radix(&lower[2..], 2),
+            _ => lower.parse::<i128>(),
+        }
+        .map(|v| if negative { -v } else { v });
+        let (low, high) = int_range(wanted);
+        if value.is_ok_and(|v| v < low || v > high) {
+            let ty = Ty::Int(wanted);
+            self.report(Diagnostic::error(
+                "E0204",
+                span,
+                format!("`{text}` does not fit in `{ty}`, from {low} to {high}"),
+            ));
+        }
+        Ty::Int(wanted)
+    }
+
     fn expr_inner(&mut self, expr: &Expr, expected: Option<&Ty>) -> Ty {
         match &expr.kind {
             ExprKind::Error => Ty::Error,
-            ExprKind::Int(_) => INT,
-            ExprKind::Float(_) => F64,
+            ExprKind::Int(text) => self.int_literal(text, expr.span, expected),
+            ExprKind::Float(_) => match expected.map(|e| self.resolve(e)) {
+                Some(Ty::Float(kind)) => Ty::Float(kind),
+                Some(Ty::Optional(inner)) if matches!(*inner, Ty::Float(_)) => *inner,
+                _ => F64,
+            },
             ExprKind::Str(literals) => {
                 for literal in literals {
                     for part in &literal.parts {
@@ -1184,8 +1226,19 @@ impl<'p> Body<'p> {
                     _ => Ty::Error,
                 }
             }
+            ExprKind::Unary { op: UnaryOp::Neg, operand }
+                if matches!(operand.kind, ExprKind::Int(_))
+                    && matches!(expected.map(|e| self.resolve(e)), Some(Ty::Int(_) | Ty::Optional(_))) =>
+            {
+                // `-128` is one literal for its range: an `i8`, though `128` alone is not.
+                let ExprKind::Int(text) = &operand.kind else { unreachable!("matched above") };
+                let ty = self.int_literal(&format!("-{text}"), expr.span, expected);
+                self.seen.insert(operand.span, ty.clone());
+                ty
+            }
             ExprKind::Unary { op, operand } => {
-                let ty = self.expr(operand, None);
+                let numeric = expected.filter(|e| self.resolve(e).is_numeric());
+                let ty = self.expr(operand, numeric);
                 let ok = match op {
                     UnaryOp::Neg | UnaryOp::Pos => ty.is_numeric() || ty.is_poison() || matches!(ty, Ty::Var(_)),
                     UnaryOp::Invert => matches!(ty, Ty::Int(_) | Ty::Error | Ty::Never | Ty::Var(_)),
@@ -2781,4 +2834,18 @@ fn function_value(sig: &FnSig) -> Ty {
         None => sig.ret.clone(),
     };
     Ty::Func(sig.params.iter().map(|p| p.ty.clone()).collect(), Box::new(ret))
+}
+
+/// The values an integer type holds.
+fn int_range(kind: IntKind) -> (i128, i128) {
+    match kind {
+        IntKind::I8 => (i8::MIN.into(), i8::MAX.into()),
+        IntKind::I16 => (i16::MIN.into(), i16::MAX.into()),
+        IntKind::I32 => (i32::MIN.into(), i32::MAX.into()),
+        IntKind::I64 => (i64::MIN.into(), i64::MAX.into()),
+        IntKind::U8 => (0, u8::MAX.into()),
+        IntKind::U16 => (0, u16::MAX.into()),
+        IntKind::U32 => (0, u32::MAX.into()),
+        IntKind::U64 => (0, u64::MAX.into()),
+    }
 }

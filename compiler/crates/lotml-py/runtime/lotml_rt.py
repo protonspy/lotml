@@ -531,6 +531,65 @@ def foreign(module: str, name: str, returns: str):
     return call
 
 
+_C_LIBRARIES: dict = {}
+
+
+def _c_library(name: str):
+    """A C library by its name — `m`, `c`, `msvcrt` — as the platform finds it."""
+    import ctypes
+    import ctypes.util
+
+    if name not in _C_LIBRARIES:
+        found = ctypes.util.find_library(name)
+        try:
+            _C_LIBRARIES[name] = ctypes.CDLL(found or name)
+        except OSError as error:
+            raise LinkError(f"the C library `{name}` cannot be loaded: {error}") from None
+    return _C_LIBRARIES[name]
+
+
+class LinkError(Panic):
+    """A C library or one of its functions that is not there: the program cannot start."""
+
+
+def c_function(library: str, name: str, params: list, returns: str):
+    """A C function a lotml program calls through its interface (adr:0013), loaded when the
+    module loads. `ctypes` releases the interpreter while the call runs, so a call that blocks
+    holds up only its own task's thread."""
+    import ctypes
+
+    kinds = {
+        "i8": ctypes.c_int8,
+        "i16": ctypes.c_int16,
+        "i32": ctypes.c_int32,
+        "i64": ctypes.c_int64,
+        "u8": ctypes.c_uint8,
+        "u16": ctypes.c_uint16,
+        "u32": ctypes.c_uint32,
+        "u64": ctypes.c_uint64,
+        "f32": ctypes.c_float,
+        "f64": ctypes.c_double,
+        "bool": ctypes.c_bool,
+        "str": ctypes.c_char_p,
+        "none": None,
+    }
+    try:
+        function = getattr(_c_library(library), name)
+    except AttributeError:
+        raise LinkError(f"the C library `{library}` has no function `{name}`") from None
+    function.argtypes = [kinds[p] for p in params]
+    function.restype = kinds[returns]
+
+    def call(*args):
+        converted = [
+            a.encode("utf-8") if p == "str" else a for a, p in zip(args, params, strict=True)
+        ]
+        return function(*converted)
+
+    call.__name__ = call.__qualname__ = name
+    return call
+
+
 class ForeignModule:
     """`import m` of a Python module with an interface: its functions, through `foreign`."""
 
@@ -579,6 +638,31 @@ def _abs(value):
 
 def _int(value):
     return i64(builtins.int(value))
+
+
+def _sized(name: str, low: int, high: int):
+    """`i32(x)` and the rest: a number made the sized integer, stopping when it does not fit."""
+
+    def convert(value):
+        return check(builtins.int(value), low, high)
+
+    convert.__name__ = convert.__qualname__ = name
+    return convert
+
+
+SIZED = {
+    name: _sized(name, low, high)
+    for name, low, high in (
+        ("i8", -(2**7), 2**7 - 1),
+        ("i16", -(2**15), 2**15 - 1),
+        ("i32", -(2**31), 2**31 - 1),
+        ("i64", I64_MIN, I64_MAX),
+        ("u8", 0, 2**8 - 1),
+        ("u16", 0, 2**16 - 1),
+        ("u32", 0, 2**32 - 1),
+        ("u64", 0, 2**64 - 1),
+    )
+}
 
 
 def _round(value, digits=None):
@@ -692,6 +776,8 @@ PRELUDE = {
     "isqrt": math.isqrt,
     "gcd": _math.gcd,
     "parallel": parallel,
+    **SIZED,
+    "f32": builtins.float,
 }
 """The names every program sees without an import (R35)."""
 

@@ -46,6 +46,16 @@ pub const PRELUDE: &[&str] = &[
     "gcd",
     // Runs tasks concurrently and waits for them all, in no function marked `async` (R20).
     "parallel",
+    // Conversions to the sized numbers, stopping on a value that does not fit.
+    "i8",
+    "i16",
+    "i32",
+    "i64",
+    "u8",
+    "u16",
+    "u32",
+    "u64",
+    "f32",
 ];
 
 pub fn is_prelude(name: &str) -> bool {
@@ -268,12 +278,14 @@ pub fn call(name: &str, args: &[Ty], keywords: &[(String, Ty)], infer: &mut Infe
             }
             Ok(Ty::Bool)
         }
-        "int" | "float" => {
+        "int" | "float" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" => {
             count(1, 1)?;
             match infer.resolve(&args[0]) {
-                Ty::Int(_) | Ty::Float(_) | Ty::Bool | Ty::Var(_) | Ty::Error | Ty::Never => {
-                    Ok(if name == "int" { INT } else { F64 })
-                }
+                Ty::Int(_) | Ty::Float(_) | Ty::Bool | Ty::Var(_) | Ty::Error | Ty::Never => Ok(match name {
+                    "int" => INT,
+                    "float" => F64,
+                    sized => Ty::primitive(sized).unwrap_or(INT),
+                }),
                 Ty::Str => Err(format!(
                     "`{name}` converts numbers; text converts with `.{}()`, which returns an optional",
                     if name == "int" { "to_int" } else { "to_float" }

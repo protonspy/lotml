@@ -27,8 +27,13 @@ fn compile(paths: &[PathBuf], dir: &Path) -> Result<Result<Vec<Module>, String>,
     for path in files::expand(paths)? {
         let text = files::read(&path)?;
         let absolute = std::path::absolute(&path).map_err(|e| Failure(format!("{}: {e}", path.display())))?;
-        let interfaces: Interfaces =
-            files::interfaces_for(&path).into_iter().map(|b| (b.module, lotml_check::interface(&b.text).0)).collect();
+        let interfaces: Interfaces = files::interfaces_for(&path)
+            .into_iter()
+            .map(|b| {
+                let read = lotml_check::interface_of(&b.module, &b.text).0;
+                (b.module, read)
+            })
+            .collect();
         let result = lotml_py::compile_with(&text, &absolute, &interfaces);
         texts.push((path.display().to_string(), text, result, absolute));
     }
@@ -197,6 +202,11 @@ pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failu
     });
     if !valid {
         return Err(Failure(format!("`{module}` is not a Python module name")));
+    }
+    if lotml_check::is_c_library(module) {
+        return Err(Failure(format!(
+            "`{module}` names a C library, whose interface is written by hand: bindings/{module}.lotmli (adr:0013)"
+        )));
     }
     let python = python()?;
     let output = Command::new(&python[0])

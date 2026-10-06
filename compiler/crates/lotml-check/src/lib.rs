@@ -9,7 +9,7 @@ mod prefix;
 mod program;
 pub mod ty;
 
-pub use interface::{Interface, Interfaces, interface};
+pub use interface::{Interface, Interfaces, c_interface, interface, interface_of, is_c_library};
 pub use prefix::{PrefixCheck, Verdict, check_prefix, check_prefix_with};
 pub use program::{FieldSig, FnSig, ParamSig, TypeDef, VariantSig};
 

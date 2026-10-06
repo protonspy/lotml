@@ -77,3 +77,4 @@ over this file answers with the example above as well as with the notes. -->
 - n-0037 2026-10-06 #ceiling @compiler/crates/lotml-py/runtime/lotml_bind.py — lotml bind binds module-level functions only: Python classes, callables and unions are listed as not bound; binding a class needs an opaque handle type
 - n-0038 2026-10-06 #gotcha @compiler/crates/lotml/src/exec.rs — Python's text-mode stdout writes \r\n on Windows: output a Rust command reads from Python is normalized before it is written to a file
 - n-0039 2026-10-06 #ceiling @compiler/crates/lotml-py/runtime/lotml_rt.py — parallel runs each task on an OS thread, at most 256 at once: tasks beyond that wait for a thread, and a blocking call holds one; green threads arrive with the C target
+- n-0040 2026-10-06 #ceiling @compiler/crates/lotml-check/src/interface.rs — a C interface passes scalars and read-only strings only: pointers, structs, arrays and callbacks need an ownership rule first

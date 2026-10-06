@@ -27,12 +27,12 @@ pub fn run(options: &Options) -> Result<bool, Failure> {
     let mut db = Database::default();
     let mut sources = Vec::new();
     // Every interface a checked file may import, so a broken one is reported once.
-    let mut interfaces: BTreeMap<String, String> = BTreeMap::new();
+    let mut interfaces: BTreeMap<String, (String, String)> = BTreeMap::new();
     for path in &paths {
         let text = files::read(path)?;
         let bindings = files::interfaces_for(path);
         for b in &bindings {
-            interfaces.entry(b.path.display().to_string()).or_insert_with(|| b.text.clone());
+            interfaces.entry(b.path.display().to_string()).or_insert_with(|| (b.module.clone(), b.text.clone()));
         }
         let bindings = bindings.into_iter().map(|b| (b.module, b.text)).collect();
         sources.push(SourceFile::new(&db, path.display().to_string(), text, bindings));
@@ -71,8 +71,8 @@ pub fn run(options: &Options) -> Result<bool, Failure> {
         .zip(found)
         .map(|(&f, diagnostics)| Report { file: f.path(&db), text: f.text(&db), diagnostics })
         .collect();
-    for (file, text) in &interfaces {
-        let problems = lotml_check::interface(text).1;
+    for (file, (module, text)) in &interfaces {
+        let problems = lotml_check::interface_of(module, text).1;
         if !problems.is_empty() && options.since.is_none() {
             reports.push(Report { file, text, diagnostics: problems });
         }

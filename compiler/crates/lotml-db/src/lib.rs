@@ -19,7 +19,10 @@ pub struct SourceFile {
 
 /// The interfaces a file may import from, read.
 pub fn interfaces(db: &dyn salsa::Database, file: SourceFile) -> lotml_check::Interfaces {
-    file.interfaces(db).iter().map(|(module, text)| (module.clone(), lotml_check::interface(text).0)).collect()
+    file.interfaces(db)
+        .iter()
+        .map(|(module, text)| (module.clone(), lotml_check::interface_of(module, text).0))
+        .collect()
 }
 
 /// The syntax tree of a file, with its syntax errors.
