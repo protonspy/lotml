@@ -77,6 +77,7 @@ def test_a_solved_task_passes_with_its_metrics(tmp_path: Path):
         "done",
     )
     assert row["model_calls"] == 4
+    assert row["source"] == "bench"
     assert row["tools"] == {"check": 1, "replace": 2, "test": 1}
     assert row["tool_errors"] == 0 and row["check_errors"] == 0
     assert row["tokens"] == {"input": 400, "output": 40, "reasoning": 0}

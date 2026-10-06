@@ -25,6 +25,7 @@ from langchain_core.outputs import LLMResult
 
 from lotml_harness import ROOT
 from lotml_harness.agent.bench import AgentTask
+from lotml_harness.agent.dataset import source_of
 from lotml_harness.agent.grade import grade
 from lotml_harness.agent.mcp import LotmlMcp, langchain_tools, relative
 from lotml_harness.experiments import variants
@@ -352,6 +353,7 @@ def run(
         graded = grade(task, workspace, lotml)
     row = {
         "task": task.id,
+        "source": source_of(task.id),
         "kind": task.kind,
         "model": model_name,
         "arm": arm,
@@ -397,6 +399,7 @@ def error_row(task: AgentTask, arm: str, attempt: int, model_name: str, error: s
     """The row of a run that could not be set up or graded: an error, run again next time."""
     return {
         "task": task.id,
+        "source": source_of(task.id),
         "kind": task.kind,
         "model": model_name,
         "arm": arm,
