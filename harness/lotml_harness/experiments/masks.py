@@ -10,13 +10,19 @@ every draw is refused. The free arm is the same model, prompt and template, answ
 greedy call. Both answers run on the hidden tests of the phase 1 sample, and the arms are
 compared per task by the exact McNemar test.
 
+A model named by its OpenRouter id (`owner/model`) is served instead by OpenRouter's raw text
+completions, from one provider and no other; the key is read from `OPENROUTER_API_KEY`.
+
     python -m lotml_harness.experiments.masks --model qwen2.5-coder:7b --model llama3.1:8b
+    python -m lotml_harness.experiments.masks --model meta-llama/llama-3.1-8b-instruct --workers 8
 """
 
 import argparse
 import json
+import os
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
@@ -39,6 +45,16 @@ TEMPERATURE = 0.8
 MAX_LINES = 80
 """Lines an answer may have before its decoding is cut off."""
 HOST = "http://localhost:11434"
+OPENROUTER = "https://openrouter.ai/api/v1/completions"
+PROVIDERS = {
+    "meta-llama/llama-3.1-8b-instruct": "DeepInfra",
+    "z-ai/glm-5.3-flash": "AtlasCloud",
+}
+"""The one provider OpenRouter may send each hosted model's calls to, so every line of a run comes
+from the same weights and quantization. Each was checked to take the prompt as written: several
+providers wrap a text completion in their own chat template, and the model then answers a turn
+the experiment never wrote."""
+ATTEMPTS = 5
 EVERY = 2
 """Every other task of the phase 1 sample, 100 of its 200: a line costs a call, about 2.4 s for a
 7-8B model on the machine the runs were made on, so the whole sample would take six hours."""
@@ -47,9 +63,28 @@ Generate = Callable[[str, float, int], str]
 """A raw prompt, a temperature and a seed, to the next line the model writes."""
 
 
+def label(model: str) -> str:
+    """The model's name in the runs: an Ollama tag or an OpenRouter id, without its owner."""
+    return model.rsplit("/", 1)[-1].replace(":", "-")
+
+
+def served(model: str) -> str:
+    """Where the model runs: an OpenRouter id has its owner before a slash, an Ollama tag not."""
+    if "/" not in model:
+        return "ollama"
+    if model not in PROVIDERS:
+        raise ValueError(f"{model}: no provider checked to take a raw prompt")
+    return f"openrouter/{PROVIDERS[model]}"
+
+
 def raw_prompt(model: str, system: str, user: str, partial: str) -> str:
     """The prompt as the model's chat template lays it out, its answer begun with `partial`."""
-    if model.startswith("llama"):
+    if "glm" in model:
+        return (
+            f"[gMASK]<sop><|system|>Reasoning Effort: Low<|system|>{system}<|user|>{user}"
+            f"<|assistant|><think></think>{partial}"
+        )
+    if "llama" in model:
         return (
             "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
             f"{system}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{user}<|eot_id|>"
@@ -152,18 +187,71 @@ def ollama(
         raise ModelError(f"ollama did not answer: {error}") from None
 
 
+def openrouter_body(
+    model: str, prompt: str, temperature: float, seed: int, stop: list[str], limit: int
+) -> dict:
+    """A raw text completion: the prompt goes to the model as written, template and all."""
+    return {
+        "model": model,
+        "prompt": prompt,
+        "temperature": temperature,
+        "seed": seed,
+        "stop": stop,
+        "max_tokens": limit,
+        "provider": {"order": [PROVIDERS[model]], "allow_fallbacks": False},
+    }
+
+
+def openrouter(
+    model: str, prompt: str, temperature: float, seed: int, stop: list[str], limit: int
+) -> str:
+    key = os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        raise ModelError("OPENROUTER_API_KEY is not set")
+    request = urllib.request.Request(  # noqa: S310
+        OPENROUTER,
+        data=json.dumps(openrouter_body(model, prompt, temperature, seed, stop, limit)).encode(),
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
+    )
+    for attempt in range(ATTEMPTS):
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310
+                choice = json.loads(response.read())["choices"][0]
+            if choice.get("reasoning"):
+                raise ModelError(f"{PROVIDERS[model]} wrapped the raw prompt in a chat turn")
+            return choice.get("text") or ""
+        except (
+            OSError,
+            urllib.error.URLError,
+            json.JSONDecodeError,
+            KeyError,
+            IndexError,
+        ) as error:
+            if attempt == ATTEMPTS - 1:
+                raise ModelError(f"openrouter did not answer: {error}") from None
+            time.sleep(2**attempt)
+    return ""
+
+
+def complete(
+    model: str, prompt: str, temperature: float, seed: int, stop: list[str], limit: int
+) -> str:
+    call = openrouter if served(model) != "ollama" else ollama
+    return call(model, prompt, temperature, seed, stop, limit)
+
+
 def answer(model: str, task: Task, arm: str, lotml: Lotml) -> dict:
-    record = {"model": model.replace(":", "-"), "task": task.id, "arm": arm}
+    record = {"model": label(model), "served": served(model), "task": task.id, "arm": arm}
     system, user = variants.prompt(task, "b")
     try:
         if arm == "free":
-            decoded = free(model, system, user, lambda p: ollama(model, p, 0.0, 0, ["```"], 2048))
+            decoded = free(model, system, user, lambda p: complete(model, p, 0.0, 0, ["```"], 2048))
         else:
             decoded = masked(
                 model,
                 system,
                 user,
-                lambda p, t, s: ollama(model, p, t, s, ["\n"], 200),
+                lambda p, t, s: complete(model, p, t, s, ["\n"], 200),
                 prefix_checker(lotml),
             )
     except ModelError as error:
@@ -210,6 +298,7 @@ def summarize(rows: list[dict]) -> dict[str, dict]:
         only_free = len(passed["free"] - passed["masked"])
         only_masked = len(passed["masked"] - passed["free"])
         summary[model] = {
+            "served": next((r["served"] for r in records.values() if r.get("served")), "ollama"),
             "pairs": len(paired),
             "passed": {arm: len(passed[arm]) for arm in ARMS},
             "refused": {
@@ -229,21 +318,22 @@ def markdown(summary: dict[str, dict], tasks: int) -> str:
         "# Type masks for open models, by the line",
         "",
         "Generated by `python -m lotml_harness.experiments.masks`. Each open model wrote",
-        f"{tasks} tasks of the phase 1 sample, every other one, twice through Ollama's raw mode",
-        "and its own chat template: free,",
+        f"{tasks} tasks of the phase 1 sample, every other one, twice from a raw prompt in its",
+        "own chat template, served by Ollama's raw mode or by OpenRouter's text completions from",
+        "the one provider named: free,",
         "in one greedy call; and masked, one line per call, each line checked with what came",
         "before it by `lotml check --prefix`, and a line that left the program impossible to",
-        f"complete drawn again at temperature {TEMPERATURE}, up to {RETRIES} times. Ollama cannot",
-        "mask tokens, so this is a coarse mask: a line, not a token, is the unit refused.",
+        f"complete drawn again at temperature {TEMPERATURE}, up to {RETRIES} times. Neither lets",
+        "a caller mask tokens, so this is a coarse mask: a line, not a token, is the unit refused.",
         "",
-        "| model | tasks | pass@1, free | pass@1, masked | refused, free | refused, masked |"
-        " only free | only masked | McNemar p | lines redrawn |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| model | served by | tasks | pass@1, free | pass@1, masked | refused, free |"
+        " refused, masked | only free | only masked | McNemar p | lines redrawn |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for model, s in summary.items():
         n = max(1, s["pairs"])
         lines.append(
-            f"| {model} | {s['pairs']} | {s['passed']['free'] / n:.1%} |"
+            f"| {model} | {s['served']} | {s['pairs']} | {s['passed']['free'] / n:.1%} |"
             f" {s['passed']['masked'] / n:.1%} |"
             f" {s['refused']['free']} | {s['refused']['masked']} | {s['only_free']} |"
             f" {s['only_masked']} | {s['p']:.3f} | {s['rejected']} |"
@@ -262,7 +352,7 @@ def main() -> None:
     args = parser.parse_args()
     tasks = variants.sample(build.load(), variants.SAMPLE)[:: args.every]
     for model in args.model:
-        run(model, tasks, RUNS / f"{model.replace(':', '-')}.jsonl", workers=args.workers)
+        run(model, tasks, RUNS / f"{label(model)}.jsonl", workers=args.workers)
     wanted = {t.id for t in tasks}
     rows = [
         record
