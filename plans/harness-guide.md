@@ -1,6 +1,10 @@
 ---
 autonomy: auto
 ci: wait
+pr: per-group
+merge: manual
+status: approved
+checksum: ff7f46e64215f5d21c38274f68ec55b2befc9fc15c6e0d867e736dfe386ff00b
 ---
 
 # Harness guide
@@ -44,6 +48,9 @@ deepagents and in a second harness — on held-out tasks, and the wiki records w
 - adr:0014-deepagents-over-openrouter-for-the-agent-harness
 - adr:0015-pose-humaneval-untyped
 
+- `specs/trace-dataset/` — the exporter and manifest the split and the guidance records are deltas to
+- `specs/agent-humaneval/` — how a benchmark's original is posed untyped, which MBPP's original follows
+
 ## Out of scope
 
 - Editing for the agent: the guide points and may propose a patch that checks; the agent decides
@@ -58,14 +65,32 @@ deepagents and in a second harness — on held-out tasks, and the wiki records w
 
 ## Tasks
 
-- [ ] 1.1 (Unit) Fix a split of every source by task id — train, validation, held-out evaluation — record it in the trace dataset's manifest, and keep held-out tasks out of every training set
-- [ ] 1.2 (Unit) Write the spec for the guidance records: from each run's traces, the state where the agent failed — code, diagnostics, the failing test's values, the task — paired with the edit that got it out, its symbol and lines as where, its diff as what, through the licence registry
+- [ ] 1.1 (Unit) Fix a split by problem identity into train, validation and held-out,
+      over every source and every derivative of one, MultiPL-E's HumanEval_N being the
+      original's HumanEval/N and its MBPP problems the original's, with MBPP's original
+      held out whole for the guide arms; record it as a delta to specs/trace-dataset/ so
+      its manifest carries each record's split, and keep held-out problems out of every
+      training set
+- [ ] 1.2 (Unit) Write the spec for the guidance records: from each run's traces, the
+      state where the agent failed — code, diagnostics, the failing test's values, the
+      task — paired with the edit that got it out, its symbol and lines as where, its
+      diff as what, through the licence registry; the failing-test state is a delta to
+      specs/trace-dataset/, whose repairs today open only on a check
 - [ ] 1.3 (Unit) Write the spec for the seeded failures: lotml programs that check and pass, mutated the ways agents break them, kept only when `check` refuses the mutant or a test then fails, with the known fix as the record
-- [ ] 1.4 (Unit) Write the spec for the guide's evaluation offline: top-1 and top-3 location against the real fix, the share of proposed patches that check and pass, how often it stays silent, latency and memory, on held-out real failures, never seeded ones
+- [ ] 1.4 (Unit) Write the spec for the guide's evaluation offline: top-1 and top-3
+      location against the real fix, the share of proposed patches that check and pass,
+      how often it stays silent, latency and memory, on held-out real failures, never
+      seeded ones — from any model, since evaluating needs no permission to train, the
+      phase 1 gate's refused answers to held-out problems included — with a minimum
+      count of them fixed so top-1's 95% interval is no wider than ±10 points, and
+      held-out runs on local models added until it is met
 - [ ] 1.5 (Unit) Write the spec for the guide's tool: one MCP call taking the agent's state and answering with a location, a kind of change and at most one patch that `check` accepts, or nothing below the threshold, reachable from every harness `lotml init` registers
-- [ ] 2.1 (Unit) Decide in an ADR, from a pilot, the base model and size, the runtime it is served from — llama.cpp's `llama-server` the first candidate: GGUF quantized for the CPU, answers held to the guide's JSON schema — and where training runs: the local GPU, or an on-demand RunPod GPU from a pinned Dockerfile with the Hugging Face stack, checkpoints and the model pushed to private Hugging Face repositories and resumed from there, the token a RunPod secret — with measured time, memory, cost and a budget per run, and record them in `docs/stack.md`
-  _Depends 1.1_
-- [ ] 2.2 (Unit) Fine-tune the guide on the guidance records and the seeded failures, and report it on the validation split
+- [ ] 2.1 (Unit) Decide in an ADR, from a pilot, the base model and size, the runtime it
+      is served from
+  _Depends 1.1, 1.3_
+- [ ] 2.2 (Unit) Fine-tune the guide on the seeded failures and on the guidance records
+      the licence registry permits — the seeded failures alone if it permits none — once
+      the specs 1.2 to 1.4 wrote are built, and report it on the validation split
   _Depends 1.2, 1.3, 1.4, 2.1_
 - [ ] 2.3 (TDD) Train it further by reinforcement learning, the reward the location's overlap with the real fix and the patch passing `check` and the tests, and report the validation split before and after
   _Depends 2.2_
@@ -73,9 +98,19 @@ deepagents and in a second harness — on held-out tasks, and the wiki records w
   _Depends 2.3_
 - [ ] 3.1 (Unit) Report the guide offline on the held-out real failures
   _Depends 2.4_
-- [ ] 3.2 (Unit) Write the spec for the guide arms: the same agents with and without the guide's tool, a cheap model and a frontier one, in deepagents and in a second harness through MCP, scored on pass@1, tokens, steps and cost, with any task the guide made worse listed
-- [ ] 3.3 (Unit) Run the guide arms on the held-out tasks, commit the report, and record in the wiki whether the guide helps cheap agents, frontier ones, both or neither
-  _Depends 1.5, 3.1, 3.2_
+- [ ] 3.2 (Unit) Write the spec for the guide arms: the same agents with and without the
+      guide's tool, a cheap model and a frontier one, in deepagents and in a second
+      harness through MCP, on at least 168 paired MBPP tasks, scored on pass@1 by
+      McNemar's test and on tokens, steps and cost over the tasks where the guide was
+      called, with a budget per arm fixed before the run and any task the guide made
+      worse listed
+- [ ] 3.3 (Unit) Run the guide arms on MBPP's held-out tasks once the spec 1.6 wrote is
+      built, commit the report, and record in the wiki whether the guide helps cheap
+      agents, frontier ones, both or neither
+  _Depends 1.5, 1.6, 3.1, 3.2_
+- [ ] 1.6 (Unit) Write the spec for MBPP's original as agent tasks, posed untyped the
+      way specs/agent-humaneval/ poses HumanEval and as a delta to it, held out whole
+      from training for the guide arms
 
 ## Done when
 
