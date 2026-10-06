@@ -202,6 +202,16 @@ def openrouter_body(
     }
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A redirect is refused rather than followed: urllib would carry the key's header along."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+OPENER = urllib.request.build_opener(NoRedirect())
+
+
 def openrouter(
     model: str, prompt: str, temperature: float, seed: int, stop: list[str], limit: int
 ) -> str:
@@ -215,11 +225,15 @@ def openrouter(
     )
     for attempt in range(ATTEMPTS):
         try:
-            with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310
+            with OPENER.open(request, timeout=120) as response:
                 choice = json.loads(response.read())["choices"][0]
             if choice.get("reasoning"):
                 raise ModelError(f"{PROVIDERS[model]} wrapped the raw prompt in a chat turn")
             return choice.get("text") or ""
+        except urllib.error.HTTPError as error:
+            if (error.code != 429 and error.code < 500) or attempt == ATTEMPTS - 1:
+                raise ModelError(f"openrouter refused the call: {error}") from None
+            time.sleep(2**attempt)
         except (
             OSError,
             urllib.error.URLError,
