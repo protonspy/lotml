@@ -11,6 +11,7 @@ them.
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -36,11 +37,15 @@ class Settings:
     dropout: float = 0.05
     learning_rate: float = 2e-4
     epochs: float = 1.0
-    batch: int = 4
-    accumulate: int = 4
+    batch: int = 1
+    accumulate: int = 16
     max_length: int = 4096
     warmup_steps: int = 10
     seed: int = 0
+    checkpoint_steps: int = 50
+    memory_fraction: float = 0.85
+    """The card's share the CUDA allocator may hold: past it the Windows driver spills into system
+    memory, slowing every step and growing the process (adr:0016)."""
 
 
 def load(records: Path, bucket: str) -> list[dict]:
@@ -62,12 +67,16 @@ def examples(records: list[dict]) -> list[dict]:
 
 def train(settings: Settings, records: Path, out: Path) -> dict:
     """Train the adapter on the train split and write it to `out/adapter`; the run's report."""
+    os.environ.setdefault(
+        "PYTORCH_CUDA_ALLOC_CONF", "garbage_collection_threshold:0.6,max_split_size_mb:256"
+    )
     import torch
     from datasets import Dataset
     from peft import LoraConfig
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from trl import SFTConfig, SFTTrainer
 
+    torch.cuda.set_per_process_memory_fraction(settings.memory_fraction)
     rows = examples(load(records, "train"))
     tokenizer = AutoTokenizer.from_pretrained(settings.model)
     config = SFTConfig(
@@ -82,7 +91,9 @@ def train(settings: Settings, records: Path, out: Path) -> dict:
         gradient_checkpointing=True,
         max_length=settings.max_length,
         logging_steps=20,
-        save_strategy="no",
+        save_strategy="steps",
+        save_steps=settings.checkpoint_steps,
+        save_total_limit=2,
         report_to=[],
         seed=settings.seed,
     )
@@ -103,7 +114,8 @@ def train(settings: Settings, records: Path, out: Path) -> dict:
     )
     torch.cuda.reset_peak_memory_stats()
     started = time.time()
-    result = trainer.train()
+    resumed = bool(sorted((out / "checkpoints").glob("checkpoint-*")))
+    result = trainer.train(resume_from_checkpoint=resumed)
     trainer.model.save_pretrained(out / "adapter")
     report = {
         "settings": asdict(settings),

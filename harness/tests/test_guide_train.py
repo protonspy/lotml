@@ -46,4 +46,5 @@ def test_a_split_is_loaded_with_every_problem_checked_against_it(tmp_path: Path)
 def test_the_settings_are_the_pilot_s():
     settings = train.Settings()
     assert (settings.rank, settings.alpha, settings.learning_rate) == (16, 32, 2e-4)
+    assert (settings.batch, settings.accumulate, settings.memory_fraction) == (1, 16, 0.85)
     assert settings.model == "Qwen/Qwen2.5-Coder-0.5B-Instruct"

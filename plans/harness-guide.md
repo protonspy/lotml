@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 466bd03baf4a15503d4531e0772a06f634bfbb2020fadc656b04be4c6818f772
+checksum: 4a635710a429261cb92fcfc1bf8c3d7760efd2d4823dd3b0f265484a079b8168
 ---
 
 # Harness guide
@@ -85,7 +85,7 @@ deepagents and in a second harness — on held-out tasks, and the wiki records w
       count of them fixed so top-1's 95% interval is no wider than ±10 points, and
       held-out runs on local models added until it is met
 - [x] 1.5 (Unit) Write the spec for the guide's tool: one MCP call taking the agent's state and answering with a location, a kind of change and at most one patch that `check` accepts, or nothing below the threshold, reachable from every harness `lotml init` registers
-- [ ] 2.1 (Unit) Decide in an ADR, from a pilot, the base model and size, the runtime it
+- [x] 2.1 (Unit) Decide in an ADR, from a pilot, the base model and size, the runtime it
       is served from
   _Depends 1.1, 1.3_
 - [ ] 2.2 (Unit) Fine-tune the guide on the seeded failures and on the guidance records
@@ -111,7 +111,7 @@ deepagents and in a second harness — on held-out tasks, and the wiki records w
 - [x] 1.6 (Unit) Write the spec for MBPP's original as agent tasks, posed untyped the
       way specs/agent-humaneval/ poses HumanEval and as a delta to it, held out whole
       from training for the guide arms
-- [ ] 2.5 (Unit) Record in 2.1's ADR the runtime's first candidate — llama.cpp's
+- [x] 2.5 (Unit) Record in 2.1's ADR the runtime's first candidate — llama.cpp's
       `llama-server`, GGUF quantized for the CPU, answers held to the guide's JSON
       schema — and where training runs: the local GPU, or an on-demand RunPod GPU from a
       pinned Dockerfile with the Hugging Face stack, checkpoints and the model pushed to
