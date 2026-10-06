@@ -12,7 +12,7 @@
 
 - [x] 2.1 (TDD) Compile lists, tuples, ranges, comprehensions and the prelude over them — R1.2, R1.3
   _Depends 1.3_
-- [ ] 2.2 (TDD) Insert counts: owned parameters, moves at the last use, decrements where a value dies, copy before changing a value that is not unique, and a leak report in test builds — R3.1, R3.2, R3.5, R3.6
+- [x] 2.2 (TDD) Insert counts: owned parameters, moves at the last use, decrements where a value dies, copy before changing a value that is not unique, and a leak report in test builds — R3.1, R3.2, R3.5, R3.6
   _Depends 2.1_
 - [ ] 2.3 (TDD) Compile records, sum types, `match`, optionals and results with `?`, `fail` and `??` — R1.2, R1.3
   _Depends 2.2_
