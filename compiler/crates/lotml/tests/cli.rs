@@ -278,3 +278,17 @@ fn show_finds_variants_traits_and_types_used_through_patterns() {
     let none = lotml(&["show", "zzz", "shapes.lotml"], &dir);
     assert_eq!(stdout(&none).trim_end(), "nothing is called `zzz`");
 }
+
+#[test]
+fn test_runs_hundreds_of_files_at_once() {
+    // The modules once went to Python on its command line, which Windows caps at 32,767 characters.
+    let files: Vec<(String, String)> = (0..400)
+        .map(|i| (format!("module_with_a_long_name_{i}.lotml"), format!("test \"t{i}\":\n    assert {i} == {i}\n")))
+        .collect();
+    let named: Vec<(&str, &str)> = files.iter().map(|(n, t)| (n.as_str(), t.as_str())).collect();
+    let dir = scratch("many", &named);
+    let out = lotml(&["test", "--json", "."], &dir);
+    assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
+    let json: serde_json::Value = serde_json::from_str(stdout(&out).trim()).expect("JSON");
+    assert_eq!(json["summary"]["passed"], 400);
+}

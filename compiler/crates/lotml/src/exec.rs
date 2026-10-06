@@ -1,7 +1,8 @@
 //! `lotml build`, `lotml run` and `lotml test`: programs compiled to Python and run by it.
 
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use lotml_check::Interfaces;
 use lotml_diag::Report;
@@ -144,19 +145,27 @@ pub fn test_report(paths: &[PathBuf], as_json: bool) -> Result<(u8, String), Fai
     };
     let python = python()?;
     let listed: Vec<Value> = modules.iter().map(|m| json!([m.name, m.source.display().to_string()])).collect();
+    // The modules go in on standard input: a command line holding hundreds of paths passes
+    // Windows' limit of 32,767 characters.
     let script = format!(
-        "import importlib, json, sys\nsys.path.insert(0, {dir})\nimport lotml_rt\nout = []\nfor name, path in {modules}:\n    try:\n        module = importlib.import_module(name)\n        out.append({{'file': path, 'tests': lotml_rt.run_tests(vars(module), path)}})\n    except Exception as error:\n        out.append({{'file': path, 'load': type(error).__name__ + ': ' + str(error)}})\nsys.stdout.write(json.dumps(out))",
+        "import importlib, json, sys\nsys.path.insert(0, {dir})\nimport lotml_rt\nout = []\nfor name, path in json.loads(sys.stdin.readline()):\n    try:\n        module = importlib.import_module(name)\n        out.append({{'file': path, 'tests': lotml_rt.run_tests(vars(module), path)}})\n    except Exception as error:\n        out.append({{'file': path, 'load': type(error).__name__ + ': ' + str(error)}})\nsys.stdout.write(json.dumps(out))",
         dir = Value::String(scratch.0.display().to_string()),
-        modules = Value::Array(listed),
     );
-    let output = Command::new(&python[0])
+    let mut child = Command::new(&python[0])
         .args(&python[1..])
         .arg("-c")
         .arg(script)
         .env("PYTHONDONTWRITEBYTECODE", "1")
         .env("PYTHONIOENCODING", "utf-8")
-        .output()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|e| Failure(format!("cannot run Python: {e}")))?;
+    if let Some(mut input) = child.stdin.take() {
+        writeln!(input, "{}", Value::Array(listed)).map_err(|e| Failure(format!("cannot reach Python: {e}")))?;
+    }
+    let output = child.wait_with_output().map_err(|e| Failure(format!("cannot run Python: {e}")))?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     let files: Vec<Value> = serde_json::from_str(stdout.lines().last().unwrap_or("")).map_err(|_| {
         Failure(format!("the tests did not report: {}", String::from_utf8_lossy(&output.stderr).trim()))
