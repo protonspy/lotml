@@ -1,5 +1,6 @@
 //! Types, inference variables, and unification.
 
+use std::cell::Cell;
 use std::fmt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -72,24 +73,15 @@ impl Ty {
         matches!(self, Ty::Int(_) | Ty::Float(_))
     }
 
-    /// Whether the type has more than `limit` nodes, counted no further than the first node past
-    /// it: a type too large to walk is never walked whole.
-    pub fn larger_than(&self, limit: usize) -> bool {
-        fn exceeds(ty: &Ty, budget: &mut usize) -> bool {
-            if *budget == 0 {
-                return true;
-            }
-            *budget -= 1;
-            match ty {
-                Ty::List(t) | Ty::Set(t) | Ty::Heap(t) | Ty::Optional(t) => exceeds(t, budget),
-                Ty::Dict(a, b) | Ty::Result(a, b) => exceeds(a, budget) || exceeds(b, budget),
-                Ty::Tuple(items) | Ty::Adt(_, items) => items.iter().any(|t| exceeds(t, budget)),
-                Ty::Func(params, ret) => params.iter().any(|t| exceeds(t, budget)) || exceeds(ret, budget),
-                _ => false,
-            }
+    /// How many nodes the type has: at most [`TYPE_LIMIT`] for one [`Infer::resolve`] gave.
+    pub fn size(&self) -> usize {
+        1 + match self {
+            Ty::List(t) | Ty::Set(t) | Ty::Heap(t) | Ty::Optional(t) => t.size(),
+            Ty::Dict(a, b) | Ty::Result(a, b) => a.size() + b.size(),
+            Ty::Tuple(items) | Ty::Adt(_, items) => items.iter().map(Ty::size).sum(),
+            Ty::Func(params, ret) => params.iter().map(Ty::size).sum::<usize>() + ret.size(),
+            _ => 0,
         }
-        let mut budget = limit;
-        exceeds(self, &mut budget)
     }
 
     pub fn is_poison(&self) -> bool {
@@ -134,8 +126,32 @@ impl Ty {
     }
 }
 
+/// The most nodes of a type a message or a hover writes; the rest is `...`.
+const SHOWN: usize = 64;
+
 impl fmt::Display for Ty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut budget = SHOWN;
+        self.write(f, &mut budget)
+    }
+}
+
+impl Ty {
+    /// The type as lotml writes it, `budget` nodes of it at most.
+    fn write(&self, f: &mut fmt::Formatter<'_>, budget: &mut usize) -> fmt::Result {
+        fn list(f: &mut fmt::Formatter<'_>, items: &[Ty], budget: &mut usize) -> fmt::Result {
+            for (i, t) in items.iter().enumerate() {
+                if i > 0 {
+                    f.write_str(", ")?;
+                }
+                t.write(f, budget)?;
+            }
+            Ok(())
+        }
+        if *budget == 0 {
+            return f.write_str("...");
+        }
+        *budget -= 1;
         match self {
             Ty::Int(kind) => f.write_str(match kind {
                 IntKind::I64 => "int",
@@ -153,26 +169,55 @@ impl fmt::Display for Ty {
             Ty::Str => f.write_str("str"),
             Ty::Bytes => f.write_str("bytes"),
             Ty::Unit => f.write_str("None"),
-            Ty::List(t) => write!(f, "[{t}]"),
-            Ty::Set(t) => write!(f, "{{{t}}}"),
-            Ty::Heap(t) => write!(f, "Heap[{t}]"),
-            Ty::Dict(k, v) => write!(f, "{{{k}: {v}}}"),
-            Ty::Tuple(items) => {
-                let inner: Vec<String> = items.iter().map(ToString::to_string).collect();
-                if items.len() == 1 { write!(f, "({},)", inner[0]) } else { write!(f, "({})", inner.join(", ")) }
+            Ty::List(t) => {
+                f.write_str("[")?;
+                t.write(f, budget)?;
+                f.write_str("]")
             }
-            Ty::Optional(t) => write!(f, "{t}?"),
-            Ty::Result(t, e) => write!(f, "{t} ! {e}"),
+            Ty::Set(t) => {
+                f.write_str("{")?;
+                t.write(f, budget)?;
+                f.write_str("}")
+            }
+            Ty::Heap(t) => {
+                f.write_str("Heap[")?;
+                t.write(f, budget)?;
+                f.write_str("]")
+            }
+            Ty::Dict(k, v) => {
+                f.write_str("{")?;
+                k.write(f, budget)?;
+                f.write_str(": ")?;
+                v.write(f, budget)?;
+                f.write_str("}")
+            }
+            Ty::Tuple(items) => {
+                f.write_str("(")?;
+                list(f, items, budget)?;
+                f.write_str(if items.len() == 1 { ",)" } else { ")" })
+            }
+            Ty::Optional(t) => {
+                t.write(f, budget)?;
+                f.write_str("?")
+            }
+            Ty::Result(t, e) => {
+                t.write(f, budget)?;
+                f.write_str(" ! ")?;
+                e.write(f, budget)
+            }
             Ty::Adt(name, args) if args.is_empty() => f.write_str(name),
             Ty::Adt(name, args) => {
-                let inner: Vec<String> = args.iter().map(ToString::to_string).collect();
-                write!(f, "{name}[{}]", inner.join(", "))
+                write!(f, "{name}[")?;
+                list(f, args, budget)?;
+                f.write_str("]")
             }
             Ty::Param(name) => f.write_str(name),
             Ty::Var(_) => f.write_str("_"),
             Ty::Func(params, ret) => {
-                let inner: Vec<String> = params.iter().map(ToString::to_string).collect();
-                write!(f, "fn({}) -> {ret}", inner.join(", "))
+                f.write_str("fn(")?;
+                list(f, params, budget)?;
+                f.write_str(") -> ")?;
+                ret.write(f, budget)
             }
             Ty::Dyn(name) => write!(f, "dyn {name}"),
             Ty::Module(name) => write!(f, "module {name}"),
@@ -183,10 +228,17 @@ impl fmt::Display for Ty {
     }
 }
 
+/// The most nodes a type may have once its variables are replaced. A type is a tree, so a pair of
+/// pairs doubles it at each step, and variables bound to one another share what a tree repeats:
+/// past this, [`Infer::resolve`] gives an error rather than build it.
+pub const TYPE_LIMIT: usize = 1024;
+
 /// Inference variables and what each has been unified with.
 #[derive(Default)]
 pub struct Infer {
     bound: Vec<Option<Ty>>,
+    /// Whether a resolution passed [`TYPE_LIMIT`] since [`Infer::take_overflow`] last asked.
+    overflowed: Cell<bool>,
 }
 
 impl Infer {
@@ -195,37 +247,56 @@ impl Infer {
         Ty::Var((self.bound.len() - 1) as u32)
     }
 
-    /// `ty` with every bound variable replaced, as deep as it goes.
+    /// `ty` with every bound variable replaced, as deep as it goes: an error, noted for
+    /// [`Infer::take_overflow`], once that passes [`TYPE_LIMIT`] nodes and variables followed.
     pub fn resolve(&self, ty: &Ty) -> Ty {
-        match ty {
-            Ty::Var(v) => match self.bound.get(*v as usize).and_then(Clone::clone) {
-                Some(bound) => self.resolve(&bound),
+        let mut budget = TYPE_LIMIT;
+        self.expand(ty, &mut budget).unwrap_or_else(|| {
+            self.overflowed.set(true);
+            Ty::Error
+        })
+    }
+
+    /// Whether a resolution passed [`TYPE_LIMIT`] since this last asked.
+    pub fn take_overflow(&self) -> bool {
+        self.overflowed.replace(false)
+    }
+
+    fn expand(&self, ty: &Ty, budget: &mut usize) -> Option<Ty> {
+        *budget = budget.checked_sub(1)?;
+        let all = |items: &[Ty], budget: &mut usize| -> Option<Vec<Ty>> {
+            items.iter().map(|t| self.expand(t, budget)).collect()
+        };
+        Some(match ty {
+            Ty::Var(v) => match self.bound.get(*v as usize).and_then(Option::as_ref) {
+                Some(bound) => return self.expand(bound, budget),
                 None => ty.clone(),
             },
-            Ty::List(t) => Ty::List(Box::new(self.resolve(t))),
-            Ty::Set(t) => Ty::Set(Box::new(self.resolve(t))),
-            Ty::Heap(t) => Ty::Heap(Box::new(self.resolve(t))),
-            Ty::Optional(t) => Ty::Optional(Box::new(self.resolve(t))),
-            Ty::Dict(k, v) => Ty::Dict(Box::new(self.resolve(k)), Box::new(self.resolve(v))),
-            Ty::Result(t, e) => Ty::Result(Box::new(self.resolve(t)), Box::new(self.resolve(e))),
-            Ty::Tuple(items) => Ty::Tuple(items.iter().map(|t| self.resolve(t)).collect()),
-            Ty::Adt(name, args) => Ty::Adt(name.clone(), args.iter().map(|t| self.resolve(t)).collect()),
-            Ty::Func(params, ret) => {
-                Ty::Func(params.iter().map(|t| self.resolve(t)).collect(), Box::new(self.resolve(ret)))
-            }
+            Ty::List(t) => Ty::List(Box::new(self.expand(t, budget)?)),
+            Ty::Set(t) => Ty::Set(Box::new(self.expand(t, budget)?)),
+            Ty::Heap(t) => Ty::Heap(Box::new(self.expand(t, budget)?)),
+            Ty::Optional(t) => Ty::Optional(Box::new(self.expand(t, budget)?)),
+            Ty::Dict(k, v) => Ty::Dict(Box::new(self.expand(k, budget)?), Box::new(self.expand(v, budget)?)),
+            Ty::Result(t, e) => Ty::Result(Box::new(self.expand(t, budget)?), Box::new(self.expand(e, budget)?)),
+            Ty::Tuple(items) => Ty::Tuple(all(items, budget)?),
+            Ty::Adt(name, args) => Ty::Adt(name.clone(), all(args, budget)?),
+            Ty::Func(params, ret) => Ty::Func(all(params, budget)?, Box::new(self.expand(ret, budget)?)),
             other => other.clone(),
-        }
+        })
     }
 
     fn occurs(&self, var: u32, ty: &Ty) -> bool {
-        match self.resolve(ty) {
-            Ty::Var(v) => v == var,
-            Ty::List(t) | Ty::Set(t) | Ty::Heap(t) | Ty::Optional(t) => self.occurs(var, &t),
-            Ty::Dict(a, b) | Ty::Result(a, b) => self.occurs(var, &a) || self.occurs(var, &b),
-            Ty::Tuple(items) | Ty::Adt(_, items) => items.iter().any(|t| self.occurs(var, t)),
-            Ty::Func(params, ret) => params.iter().any(|t| self.occurs(var, t)) || self.occurs(var, &ret),
-            _ => false,
+        fn mentions(ty: &Ty, var: u32) -> bool {
+            match ty {
+                Ty::Var(v) => *v == var,
+                Ty::List(t) | Ty::Set(t) | Ty::Heap(t) | Ty::Optional(t) => mentions(t, var),
+                Ty::Dict(a, b) | Ty::Result(a, b) => mentions(a, var) || mentions(b, var),
+                Ty::Tuple(items) | Ty::Adt(_, items) => items.iter().any(|t| mentions(t, var)),
+                Ty::Func(params, ret) => params.iter().any(|t| mentions(t, var)) || mentions(ret, var),
+                _ => false,
+            }
         }
+        mentions(&self.resolve(ty), var)
     }
 
     /// Make `a` and `b` the same type, binding variables; false when they cannot be.

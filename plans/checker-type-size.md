@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 status: approved
-checksum: 48de7e137e26041a32997b03cd7ba28a4caef908a5afe9fa3c63364b62434304
+checksum: 4d30e4999410d6b02ee44ed236c6a1dc86b0a6577cc47f444e35d429c6a43912
 ---
 
 # Checker type size
@@ -36,6 +36,14 @@ changes.
 ## Tasks
 
 - [x] 1.1 (Unit) Report an expression whose type passes 65,536 nodes as E0222, explained in the code table, and check on with it as an error
+- [x] 1.2 (TDD) Bound every resolution of a type at 1,024 nodes, so variables bound to
+      each other cannot expand past it
+  _Reason security review F1: the bound in Body::expr ran after resolve had expanded the type_
+- [x] 1.3 (TDD) Bound the type nodes one function and one module store in all
+  _Reason security review F2: thousands of mentions of a type under the limit still took gigabytes_
+- [x] 1.4 (Unit) Write at most 64 nodes of a type in a message or a hover, eliding the
+      rest
+  _Reason security review F3: a type in a message was written whole_
 
 ## Done when
 
