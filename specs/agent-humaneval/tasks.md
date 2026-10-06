@@ -14,10 +14,10 @@
 
 ## 2 · Running and reporting
 
-- [ ] 2.1 (TDD) Draw a seeded sample of the kept tasks, the same for every arm and model — R2.1
-- [ ] 2.2 (Unit) Run HumanEval tasks from the command line with `--source humaneval`, `--sample`, `--seed` and `--task humaneval-<n>` — R2.1, R2.2
+- [x] 2.1 (TDD) Draw a seeded sample of the kept tasks, the same for every arm and model — R2.1
+- [x] 2.2 (Unit) Run HumanEval tasks from the command line with `--source humaneval`, `--sample`, `--seed` and `--task humaneval-<n>` — R2.1, R2.2
   _Depends 1.6, 2.1_
-- [ ] 2.3 (Unit) Record every row's source, and report pass@1 per source, the arms' McNemar comparison on first attempts, and failures by signature apart from behaviour — R2.3, R2.4, R2.5
+- [x] 2.3 (Unit) Record every row's source, and report pass@1 per source, the arms' McNemar comparison on first attempts, and failures by signature apart from behaviour — R2.3, R2.4, R2.5
   _Depends 2.2_
 
 ## 3 · MBPP's tasks

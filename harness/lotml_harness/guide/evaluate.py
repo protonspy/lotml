@@ -26,6 +26,7 @@ from pathlib import Path
 from lotml_harness import split
 from lotml_harness.agent import humaneval, safe, secrets
 from lotml_harness.agent.dataset import block_repairs, check_repairs
+from lotml_harness.agent.report import wilson
 from lotml_harness.agent.run import TRACES
 from lotml_harness.experiments.phase1 import RESULTS
 from lotml_harness.tasks import Task, build
@@ -211,16 +212,6 @@ def score(truth: list[str], guide: list[str], baseline: list[str]) -> dict[str, 
         "baseline_top1": bool(baseline) and baseline[0] in truth,
         "baseline_top3": any(s in truth for s in baseline[:3]),
     }
-
-
-def wilson(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
-    """Wilson's 95% interval for a proportion."""
-    if n == 0:
-        return 0.0, 1.0
-    p = successes / n
-    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
-    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
-    return max(0.0, centre - half), min(1.0, centre + half)
 
 
 def _call(args: list[str], files: list[str], root: Path, env: dict | None = None) -> dict | list:

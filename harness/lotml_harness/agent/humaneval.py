@@ -592,6 +592,14 @@ def _ident(record: dict) -> str:
     return f"mbpp-{task_id}"
 
 
+def sample(ids: list[str], count: int, seed: int = 0) -> list[str]:
+    """`count` of the kept tasks, drawn by a generator seeded with `seed` from the ids sorted, so
+    the draw depends on the seed and the set alone — the same for every arm and model (R2.1)."""
+    ordered = sorted(ids)
+    random.Random(seed).shuffle(ordered)  # noqa: S311 - a reproducible draw
+    return ordered[:count]
+
+
 def humaneval_tasks(lotml: Lotml | None = None) -> tuple[list[AgentTask], Report]:
     """HumanEval's kept problems as agent tasks, and the report of what was read."""
     records, digest = read_humaneval()

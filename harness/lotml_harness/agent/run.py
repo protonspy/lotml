@@ -372,6 +372,7 @@ def run(
         "seconds": round(seconds_taken, 1),
         "lines_changed": lines_changed(before, after),
         "failures": graded.failures[:5],
+        "failure": None if error else graded.failure,
         "error": error,
         "compiler": compiler,
     }

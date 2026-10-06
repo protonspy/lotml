@@ -9,6 +9,8 @@ import math
 from collections import defaultdict
 from statistics import mean
 
+from lotml_harness.experiments.variants import mcnemar
+
 
 def pass_at_k(n: int, c: int, k: int) -> float:
     """The chance that at least one of `k` runs drawn from `n`, `c` of them passing, passes."""
@@ -87,6 +89,48 @@ PER_RUN = {
 }
 
 
+def by_source(rows: list[dict]) -> dict[tuple[str, str, str], tuple[int, int]]:
+    """Per model, arm and source: runs graded and runs passed. A row from before rows carried
+    their source was a benchmark run."""
+    found: dict[tuple[str, str, str], list[int]] = defaultdict(lambda: [0, 0])
+    for row in latest(rows):
+        if row["outcome"] == "error":
+            continue
+        counts = found[(row["model"], row["arm"], row.get("source", "bench"))]
+        counts[0] += 1
+        counts[1] += row["outcome"] == "pass"
+    return {key: (runs, passed) for key, (runs, passed) in sorted(found.items())}
+
+
+def arms_compared(rows: list[dict]) -> dict[str, tuple[int, int, int, float]]:
+    """Per model with both arms: the tasks both arms ran a first attempt of, the ones only
+    `agents` passed and only `reference` passed, and McNemar's p over those discordant pairs."""
+    first = {
+        (r["model"], r["arm"], r["task"]): r["outcome"] == "pass"
+        for r in latest(rows)
+        if r["attempt"] == 0 and r["outcome"] != "error"
+    }
+    compared = {}
+    for model in sorted({m for m, _, _ in first}):
+        tasks = {t for m, a, t in first if m == model and a == "agents"}
+        tasks &= {t for m, a, t in first if m == model and a == "reference"}
+        if not tasks:
+            continue
+        only_agents = sum(
+            first[(model, "agents", t)] and not first[(model, "reference", t)] for t in tasks
+        )
+        only_reference = sum(
+            first[(model, "reference", t)] and not first[(model, "agents", t)] for t in tasks
+        )
+        compared[model] = (
+            len(tasks),
+            only_agents,
+            only_reference,
+            mcnemar(only_agents, only_reference),
+        )
+    return compared
+
+
 def _count(values) -> dict:
     counts: dict = defaultdict(int)
     for v in values:
@@ -121,6 +165,41 @@ def markdown(rows: list[dict]) -> str:
             f" {low:.2f}-{high:.2f} | {at} | {s['hidden']:.0%} | {s['checks']}/{s['runs']} |"
             f" {s['errors']} | {stopped} |"
         )
+    lines += [
+        "",
+        "## By source",
+        "",
+        "| model | arm | source | runs | pass@1 |",
+        "| --- | --- | --- | ---: | ---: |",
+    ]
+    for (model, arm, source), (runs, passed) in by_source(rows).items():
+        lines.append(f"| {model} | {arm} | {source} | {runs} | {passed / runs:.2f} |")
+    compared = arms_compared(rows)
+    if compared:
+        lines += [
+            "",
+            "## The arms compared",
+            "",
+            "Each task's first attempt in both arms, paired; McNemar's exact test on the pairs",
+            "that differ.",
+            "",
+            "| model | tasks | only agents passed | only reference passed | p |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ]
+        for model, (tasks, only_agents, only_reference, p) in compared.items():
+            lines.append(f"| {model} | {tasks} | {only_agents} | {only_reference} | {p:.3f} |")
+    failures = _count(
+        r.get("failure")
+        for r in rows
+        if r.get("source", "bench") != "bench" and r["outcome"] not in ("pass", "error")
+    )
+    if failures:
+        lines += [
+            "",
+            "HumanEval and MBPP runs that failed: "
+            + ", ".join(f"{k} {v}" for k, v in sorted(failures.items(), key=str))
+            + " (`signature`: the agent's types refused the tests' values).",
+        ]
     lines += ["", "## Per run, on average", "", "| model | arm | " + " | ".join(PER_RUN) + " |"]
     lines.append("| --- | --- |" + " ---: |" * len(PER_RUN))
     for (model, arm), s in summary.items():

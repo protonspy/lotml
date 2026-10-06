@@ -114,3 +114,14 @@ def test_the_report_carries_the_counts_the_digest_and_the_notice():
     assert text.index("| humaneval-1 | 4 |") < text.index("| humaneval-10 | 2 |")
     assert f"SHA-256 `{'d' * 64}`" in text
     assert "> Copyright (c) OpenAI (https://openai.com)" in text
+
+
+def test_a_sample_is_drawn_from_the_sorted_ids_by_a_seeded_generator():
+    ids = [f"humaneval-{n}" for n in (5, 1, 3, 2, 4)]
+    first = humaneval.sample(ids, 3, seed=0)
+    assert first == humaneval.sample(list(reversed(ids)), 3, seed=0), "the order given is moot"
+    assert len(first) == 3
+    assert set(first) <= set(ids)
+    other = [humaneval.sample(ids, 3, seed=s) for s in range(1, 6)]
+    assert any(o != first for o in other), "the seed decides the draw"
+    assert humaneval.sample(ids, 10, seed=0) == humaneval.sample(ids, 5, seed=0), "at most all"
