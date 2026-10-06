@@ -52,8 +52,8 @@ Both keep: `fn`, `type` for records and sum types, `T?`, `T ! E`, `?`, `fail`, `
   ([arXiv 2510.03415](https://arxiv.org/abs/2510.03415); reading code, not writing it). That is the
   rule's second clause measured: different semantics needs visibly different syntax.
 
-**Decision:** variant B (adr:0004-python-syntax-where-semantics-match); the
-[[evaluation-harness]] repeats the comparison with more models and families before v1 freezes.
+**Decision:** variant B (adr:0004-python-syntax-where-semantics-match), confirmed by the phase 0
+gate and frozen for v1 (adr:0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate).
 
 **Repeated at scale.** Four models of three families — Claude Sonnet 5.5 and Haiku 4.5, Qwen2.5
 Coder 7B, Llama 3.1 8B — wrote the same 200 HumanEval and MBPP tasks from each variant's reference
@@ -120,8 +120,9 @@ were never broken down by code. The evidence is in [[editing-robustness]]: the e
 in the edit interface more than in the block style, and edits addressed to syntax entities cut
 edit errors by three quarters in Python. **Decision:** keep indentation
 (adr:0009-significant-indentation-with-symbol-addressed-edits), with a tolerant parser, a canonical formatter and
-symbol-addressed edits in the compiler; its condition was not triggered by the editing pilot,
-whose twelve tasks per cell cannot separate the designs, and the harness repeats the test at scale. Switching now is cheap; after v1 it is a migration.
+symbol-addressed edits in the compiler. The editing test at scale met its condition — no model
+edited worse in the indented form on 192 paired tasks — and the choice is frozen for v1
+(adr:0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate).
 
 ## Kept from the original study
 

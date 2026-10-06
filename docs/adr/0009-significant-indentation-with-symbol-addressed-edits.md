@@ -1,5 +1,6 @@
 ---
-status: accepted
+status: superseded
+superseded-by: 0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate
 ---
 
 # 0009 · Significant indentation with symbol-addressed edits

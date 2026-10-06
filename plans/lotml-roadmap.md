@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: auto
-checksum: 57c151ed9362ae0769078b526eb918ec70dd30ba6d521f9deff14d5daec26bac
+checksum: a271ff1f30c2a265cad9062fea7e59d8846195f642fca6b163e8eb4c7ef17b67
 ---
 
 # lotml roadmap
@@ -68,10 +68,10 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 1.3_
 - [x] 1.7 (TDD) Compare variant B against variant A on the task set with at least three model families, closed and open, and report the outcomes that depend on the semantics (adr:0004; research/experiments/transpiler/results.md)
   _Depends 1.4, 1.5_
-- [ ] 1.8 (TDD) Compare the indented form against a braces form on editing tasks at scale — long files, multi-turn agents, open models, strict and tolerant application — and report slips, rewrites and C-family idioms (adr:0005; research/experiments/editing/results.md, research/experiments/indentation/results.md)
+- [x] 1.8 (TDD) Compare the indented form against a braces form on editing tasks at scale — long files, multi-turn agents, open models, strict and tolerant application — and report slips, rewrites and C-family idioms (adr:0005; research/experiments/editing/results.md, research/experiments/indentation/results.md)
   _Depends 1.4, 1.5_
 - [x] 1.9 (Unit) Measure the Claude tokenizer with `count_tokens` on the paired corpus and the generated code, closing the gap in the token measurements (docs/wiki/pages/token-cost.md)
-- [ ] 1.10 (Unit) Review the phase 0 gate — parse ≥ 95% and no syntactic leakage with the spec, variant and block style confirmed — and record the decisions it settles
+- [x] 1.10 (Unit) Review the phase 0 gate — parse ≥ 95% and no syntactic leakage with the spec, variant and block style confirmed — and record the decisions it settles
   _Depends 1.6, 1.7, 1.8, 1.9_
 - [ ] 2.1 (Unit) Write the compiler's hand-written, tolerant, recursive-descent parser in Rust on Salsa, reporting positions as UTF-8 offsets and recovering from errors (R10; adr:0006; docs/wiki/pages/transpilation-strategy.md)
   _Depends 1.10_

@@ -9,7 +9,7 @@ the accepted ADRs under `docs/adr/`.
 
 | ID | requirement | phase | status |
 | --- | --- | --- | --- |
-| R01 | indentation-based syntax with Python's vocabulary | v1 | kept, conditional on the [[evaluation-harness]]'s editing test |
+| R01 | indentation-based syntax with Python's vocabulary | v1 | kept, settled by the [[evaluation-harness]]'s editing test (adr:0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate) |
 | R02 | mandatory types in signatures, fields and exports; local inference | v1 | **adjusted:** local, bidirectional inference, checkable on prefixes ([[type-system]]) |
 | R03 | records, sum types and exhaustive `match` | v1 | **adjusted:** variants accept positional fields |
 | R04 | `T?` as the only form of absence; `T ! E` with `?` and `fail` | v1 | **adjusted:** `??` and `is None`, from variant B (adr:0004-python-syntax-where-semantics-match) |

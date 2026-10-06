@@ -23,9 +23,10 @@ every source in full, checked each quoted number against the downloaded paper
 4. **Where the semantics are Python's, the syntax should be Python's — and where they differ, the
    difference must be visible.** Variant B costs 0.8 percentage points more tokens and removes two
    traps that execution showed in model-written variant A code ([[lotml-syntax]]).
-5. **Significant indentation stays, conditionally.** Nothing measured argues for switching: the
-   editing pilot did not trigger adr:0005's condition (on too few tasks to separate the designs), a
-   misplaced brace is silent more often than a misplaced line, the edit interface matters more than
+5. **Significant indentation stays.** The editing test at scale met the condition: no model edited
+   worse in the indented form, on 192 paired tasks with four models
+   (adr:0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate); a misplaced brace is silent
+   more often than a misplaced line, the edit interface matters more than
    the block style, and a depth-bounded grammar constrains it at no extra decode cost
    ([[editing-robustness]], [[constrained-decoding]]).
 6. **Value semantics with reference counting is the right choice**, with explicit parameter
@@ -58,7 +59,7 @@ every source in full, checked each quoted number against the downloaded paper
 | configurable overflow in release | **corrected:** one semantics in every build and on every target; trapping costs about 2.4× on CPython | [[type-system]], [[transpilation-strategy]] |
 | colorless concurrency eliminates the forgotten `await` | plausible, not measured | [[colorless-concurrency]] |
 | transpile to Python, then C, then native | confirmed, with a minimal transpiler already in phase 0 — and tracebacks verified to point at the lotml source | [[transpilation-strategy]] |
-| indentation-based blocks | kept, conditional: the editing pilot did not trigger the condition | [[editing-robustness]] |
+| indentation-based blocks | kept, and settled by the phase 0 gate | [[editing-robustness]] |
 
 ## Pages
 
@@ -100,6 +101,7 @@ which harness result would lead to replacing them:
 - adr:0007-integer-division-returns-f64
 - adr:0008-value-semantics-with-reuse-before-borrowing
 - adr:0009-significant-indentation-with-symbol-addressed-edits
+- adr:0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate
 
 The second pass supports all six original decisions; two records cited evidence it corrected.
 adr:0003-value-semantics-with-reference-counting credited Lean's speed over OCaml to borrow
