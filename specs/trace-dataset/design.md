@@ -2,7 +2,7 @@
 
 ## What changes
 
-Serves R1.1–R1.7, R2.1–R2.3, R3.1–R3.8.
+Serves R1.1–R1.7, R2.1–R2.4, R3.1–R3.8.
 
 A registry `harness/lotml_harness/agent/licences.toml`, a module `harness/lotml_harness/agent/
 dataset.py` run as `python -m lotml_harness.agent.dataset`, two additions to the trace `run.py`
@@ -12,7 +12,9 @@ the manifest — git-ignored since HumanEval's prompts are inside; the manifest
 `harness/results/dataset.md`, committed.
 
 **The registry** (R1.1, R1.4, R1.5). One TOML table per source, per model, and per provider under
-its model, read with `tomllib`:
+its model, read with `tomllib`; model and provider names are quoted keys, since OpenRouter's
+(`"Z.AI"`, `"Together AI"`) hold dots and spaces. Providers are added as rows report them; the one
+below is illustrative:
 
 ```toml
 [sources.bench]
@@ -43,7 +45,7 @@ evidence = ""
 checked = ""
 notice = ""
 
-[models."z-ai/glm-5.3-flash".providers.Parasail]
+[models."z-ai/glm-5.3-flash".providers."Parasail"]
 training = "unknown"
 evidence = ""
 checked = ""
@@ -52,9 +54,9 @@ notice = ""
 
 Default deny. An entry lets a run through only when `training` is exactly `permitted`, `evidence`
 is an existing repository path or an `https://` URL, and `checked` and `notice` are set;
-`notice` may be empty only for a forbidden entry. Anything else — `"Permitted"`, `true`, a missing
-field, an unknown field — denies that entry; a registry that does not parse, or holds an unknown
-table or a duplicate, stops the export with the reason (R1.5). A test fails if any `permitted`
+`notice` may be empty only for a forbidden entry. A value other than those — `"Permitted"`,
+`true`, an empty or missing field — denies that entry; a registry that does not parse, or holds an
+unknown table, an unknown field or a duplicate, stops the export with the reason (R1.5). A test fails if any `permitted`
 entry lacks a field. The forbidden MultiPL-E entry is named so it cannot be read for the permitted
 original, and no source of the agent harness is ever called `humaneval` alone.
 
@@ -70,21 +72,28 @@ task id (`humaneval-<n>` is `humaneval-original`, a benchmark directory name is 
 rejects a row whose `source` says otherwise or is missing. Symbolic links among the traces are
 skipped. Output paths are built from constants and the date only.
 
-**What the trace must carry** (R2.1, R2.2). The `Meter` snapshots the workspace's `.lotml` files
-at each `check`'s start and end — `is_symlink` skipped, each file and the snapshot capped in bytes —
-and keeps both with the parsed report and the call's arguments, so the trace gains
-`checks: [{"paths": [...], "before": {...}, "after": {...}, "report": {...} | null,
-"status": "success" | "error"}]` in call order. `lotml --version` is read once per run into the
-trace and the row.
+**What the trace must carry** (R2.1, R2.2, R2.4). The `Meter` snapshots the workspace's `.lotml`
+files at each `check`'s start and end — `is_symlink` skipped, each file and the snapshot capped in
+bytes — and keeps both with the parsed report and the call's arguments, taken from the callback's
+`inputs` as JSON rather than its stringified `input_str`, and normalised as the MCP wrapper
+normalises them: the leading `/` the file tools show is stripped, so `paths` and snapshot keys are
+both workspace-relative. The trace gains `checks: [{"paths": [...], "before": {...},
+"after": {...}, "report": {...} | null, "status": "success" | "error"}]` in call order.
+`lotml --version` is read once per run into the trace and the row. The first call of the main
+agent's model is caught in `on_chat_model_start`: its system message — deepagents' base prompt, the
+harness's, and the memory it injects — and the tool schemas in its invocation parameters are kept
+as `system` and `tools`; the state's messages never hold them.
 
 **Trajectories** (R3.1, R3.5). One record per passing run, in the OpenAI chat shape most trainers
-read — `{"messages": [...], "tools": [...], "meta": {...}}` — the system prompt and memory as the
-run had them, `tool_calls` on assistant turns, `tool` turns with their results. `meta` holds task,
-source, model, arm, outcome, compiler version.
+read — `{"messages": [...], "tools": [...], "meta": {...}}` — the kept system message first,
+`tool_calls` on assistant turns, `tool` turns with their results. `meta` holds task, source, model,
+arm, outcome, compiler version. A trajectory is the main agent's: a deepagents subagent's calls
+never reach its state and appear only as the `task` tool's call and result.
 
 **Repairs** (R3.2–R3.4, R3.6). Walking a trace's `checks` in order, a check counts only when its
 status is `success`, its report parsed as JSON and `before` equals `after`. A file it judged —
-named in `paths`, or every file when `paths` is empty — with an error in the report opens a pending
+named in `paths`, under a directory named there (`.` names all), or every file when `paths` is
+empty, as the server's own selection reads them — with an error in the report opens a pending
 repair; the next counting check that judged that file and reports no error in it closes it, with
 the file at both points, the diagnostics, the task's prompt, and the changed line numbers from a
 `difflib` diff of the two. A file still failing at the end of the run gives nothing. Records are
@@ -92,21 +101,25 @@ keyed by task and the SHA-256 of before, diagnostics and after; a key seen befor
 
 The record's shape follows the study behind the compiler-embedded model
 (docs/wiki/pages/compiler-embedded-model.md, plans/compiler-embedded-model.md): the (broken code,
-compiler messages, fix) triple of HDLdebugger and DrRepair, whose repair rate fell from 62.5% to
-34.0% on real errors without the message; the prompt, which SLMFix's fixer reads with the program
+compiler messages, fix) triple HDLdebugger built and DrRepair trained on — DrRepair's model, given
+no compiler message, looked the same on synthetic data and fell to 34.0% on the real test set; the
+prompt, which SLMFix's fixer reads with the program
 and the validator's output; the changed lines, because DrRepair found the line the compiler
 reports is often not the one to fix; and deduplication per task, since FLAME's per-workbook
 deduplication was worth 8 points over a global one. The agent's refused code is the real error
 Break-It-Fix-It found decisive (90.5% against 62.7% for random corruption alone).
 
 **Scrubbing** (R2.3, R3.7). Secrets: the values of every environment variable whose name ends in
-`_KEY`, `_TOKEN` or `_SECRET`, compared exactly, and the shapes `sk-[A-Za-z0-9_-]{20,}`,
+`_KEY`, `_TOKEN` or `_SECRET`, compared exactly and only when eight characters or longer — an
+empty or short value would match everything — and the shapes `sk-[A-Za-z0-9_-]{20,}`,
 `ghp_[A-Za-z0-9]{30,}`, `hf_[A-Za-z0-9]{30,}`, `AKIA[0-9A-Z]{16}`, `Bearer [A-Za-z0-9._~+/-]{20,}`
 and three-part JWTs. In a dataset record a secret drops the record; in a row or report bound for
 `harness/results/` it is replaced with `<redacted>` before writing, the `error` field included.
-Hidden tests: a record holding any `assert` line of the task's hidden blocks, compared after
-collapsing whitespace, is dropped — the agent never sees those lines, so one in its record means a
-leak. A docstring's example is a `>>>` line and never an `assert` line, so it does not trip it.
+Hidden tests: a record holding an `assert` line of the task's hidden blocks, compared after
+collapsing whitespace, is dropped — unless the same call and expected value appear in the task's
+prompt. Many HumanEval cases are its docstring's examples, and an agent that copies one into its
+own `test` block writes an identical line; dropping it would remove exactly the runs that test
+themselves. Every drop is counted by reason in the manifest, so the bias it could introduce shows.
 
 ## Alternatives considered
 
