@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-06 — the phase 1 gate failed on pass@1, so phase 2 has not started: [[evaluation-harness]] records the gate and why, [[lotml-risks]] measures the training-corpus risk
 - 2026-10-06 — the compiler built: [[semantic-compiler]] lists what phase 1 shipped, [[transpilation-strategy]] the Python backend
 - 2026-10-05 — the phase 0 gate passed and adr:0010 freezes variant B and indented blocks: [[evaluation-harness]] records the gate, [[lotml-syntax]], [[llm-oriented-language]], [[requirements-and-roadmap]] and [[lotml-risks]] drop the condition
 - 2026-10-05 — the indented form against braces edited at scale, 192 tasks with four models: [[editing-robustness]] reports it, [[evaluation-harness]] lists it as built
