@@ -1,0 +1,32 @@
+type Chain = Link(head: int, rest: Chain) | End
+
+fn build(n: int) -> Chain:
+    var c = End
+    for i in range(n):
+        c = Link(n - i, c)
+    return c
+
+fn bump(c: Chain) -> Chain:
+    match c:
+        case Link(h, rest):
+            return Link(h + 1, bump(rest))
+        case End:
+            return End
+
+fn total(c: Chain) -> int:
+    var sum = 0
+    var at = c
+    while True:
+        match at:
+            case Link(h, rest):
+                sum += h
+                at = rest
+            case End:
+                return sum
+
+fn main():
+    ys = bump(build(200))
+    print(total(ys))
+    xs = build(5)
+    zs = bump(xs)
+    print(total(xs), total(zs), xs == build(5))

@@ -1,0 +1,24 @@
+type User(name: str, age: int)
+
+fn shout(s: str) -> str:
+    return s.upper()
+
+fn main():
+    users = [User("bo", 31), User("ana", 25), User("cy", 31)]
+    print(sorted(users, key=lambda u: u.age), sorted(users, key=lambda u: u.name, reverse=True))
+    print(min(users, key=lambda u: u.age), max(users, key=lambda u: u.age))
+    words = ["kiwi", "fig", "banana", "apple"]
+    print(sorted(words, key=len), list(map(len, words)), list(map(shout, words)), list(filter(lambda w: len(w) > 3, words)))
+    var ws = words
+    ws.sort(key=lambda w: w[-1])
+    print(ws, words.find(lambda w: w.startswith("b")), words.find(lambda w: w == "zz"))
+    add3 = lambda x: x + 3
+    print(add3(4), add3(add3(10)))
+    var n = 1
+    capture = lambda: n * 10
+    n = 2
+    print(capture(), n)
+    tag = "#"
+    fs = [lambda x: x + 1, lambda x: x * 100, add3]
+    print([f(5) for f in fs], list(map(str, [1, 2])), list(map(int, ["7", "8"])), list(map(lambda w: tag + w, ["a", "b"])))
+    print(sorted([3, -1, 2], key=abs), sorted(["b", "A", "c"], key=lambda s: s.lower()))

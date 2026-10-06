@@ -2,7 +2,7 @@
 status: accepted
 ---
 
-# 0016 · A half-billion-parameter coder model, tuned locally and served by llama-server
+# 0017 · A half-billion-parameter coder model, tuned locally and served by llama-server
 
 ## Context
 

@@ -1,0 +1,50 @@
+fn steps(n: int) -> [int]:
+    var out: [int] = []
+    for i in range(1, n + 1):
+        if i % 2 == 0:
+            var x = 1
+            x *= i
+            out.append(x)
+        else:
+            var x = 0
+            x += i
+            out.append(x)
+    return out
+
+fn second(xs: [int]) -> int?:
+    return None if len(xs) < 2 else xs[1]
+
+fn pair(n: int) -> (int, int)?:
+    if n < 0:
+        return None
+    return (n, n * 2)
+
+fn primes(text: str) -> int:
+    digits = ('2', '3', '5', '7')
+    var total = 0
+    for c in text:
+        if c in digits:
+            total += 1
+        if c not in ('0', '1'):
+            total += 10
+    return total
+
+fn ratio(x: str) -> int:
+    (a, b) = x.split("/")
+    return int(a) * 100 // int(b)
+
+fn main():
+    print(steps(6))
+    print(second([3]), second([3, 4]), second([3]) == None, second([3, 4]) == 4, second([3, 4]) != 4)
+    print(pair(2) == (2, 4), pair(-1) == (0, 0), 4 == second([1, 4]))
+    print(primes("2357B1"), ratio("3/4"))
+    t = (1, "x", 2.5)
+    print(t[-1], t[-3])
+    var total = 0
+    for v in (1, 2, 3):
+        total += v
+    print(total, [a + b for a, b in zip((1, 2), (10, 20))])
+    print(sorted([[3, 1], [2]], key=sum), list(map(sorted, [[2, 1], [4, 3]])), max([[1, 9], [5, 6]], key=sum))
+    print("a.b.c".split(sep="."), "a b  c".split(maxsplit=1), "a,b,c".split(",", maxsplit=1))
+    c, d = ["p", "q"]
+    print(c + d)

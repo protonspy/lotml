@@ -1,0 +1,68 @@
+type Counter(count: int, log: [str])
+
+impl Counter:
+    fn new() -> Counter:
+        return Counter(0, [])
+
+    fn get(self) -> int:
+        return self.count
+
+    fn bump(inout self, by: int = 1):
+        self.count += by
+        self.log.append(f"+{by}")
+
+    fn twice(self) -> Counter:
+        var c = self
+        c.bump()
+        c.bump()
+        return c
+
+type Point(x: int, y: int)
+
+type Box(c: Counter)
+
+impl Point:
+    fn moved(self, dx: int) -> Point:
+        return Point(self.x + dx, self.y)
+
+fn add_all(inout xs: [int], values: [int]):
+    for v in values:
+        xs.append(v)
+
+fn swap(inout a: int, inout b: int):
+    t = a
+    a = b
+    b = t
+
+fn consume(sink lines: [str]) -> int:
+    return len(lines)
+
+fn tweak(var xs: [int]) -> [int]:
+    xs.append(0)
+    return xs
+
+fn main():
+    var c = Counter.new()
+    c.bump()
+    c.bump(by=5)
+    copy = c
+    c.bump()
+    print(c.get(), copy.get(), c, copy, c.twice().get(), c.get())
+    var xs = [1]
+    add_all(&xs, [2, 3])
+    var a = 1
+    var b = 2
+    swap(&a, &b)
+    ys = xs
+    add_all(&xs, [4])
+    print(xs, ys, a, b, consume(["x", "y"]), tweak(xs), xs)
+    print(Point(1, 2).moved(3))
+    var pts = [Point(0, 0)]
+    pts[0] = pts[0].moved(5)
+    print(pts)
+    var grid = [[1], [2]]
+    shared = grid
+    add_all(&grid[1], [5])
+    var box = Box(Counter.new())
+    box.c.bump(by=2)
+    print(grid, shared, box)

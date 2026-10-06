@@ -33,7 +33,7 @@ class Settings:
 
     model: str = "Qwen/Qwen2.5-Coder-0.5B-Instruct"
     revision: str = "ea3f2471cf1b1f0db85067f1ef93848e38e88c25"
-    """The base model's commit (adr:0016): a moved branch would change what is trained."""
+    """The base model's commit (adr:0017): a moved branch would change what is trained."""
     rank: int = 16
     alpha: int = 32
     dropout: float = 0.05
@@ -47,7 +47,7 @@ class Settings:
     checkpoint_steps: int = 50
     memory_fraction: float = 0.85
     """The card's share the CUDA allocator may hold: past it the Windows driver spills into system
-    memory, slowing every step and growing the process (adr:0016)."""
+    memory, slowing every step and growing the process (adr:0017)."""
 
 
 def load(records: Path, bucket: str) -> list[dict]:

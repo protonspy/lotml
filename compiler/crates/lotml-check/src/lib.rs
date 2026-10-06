@@ -11,7 +11,7 @@ pub mod ty;
 
 pub use interface::{Interface, Interfaces, c_interface, interface, interface_of, is_c_library};
 pub use prefix::{PrefixCheck, Verdict, check_prefix, check_prefix_with};
-pub use program::{FieldSig, FnSig, ParamSig, TypeDef, VariantSig};
+pub use program::{FieldSig, FnSig, Method, ParamSig, TypeDef, VariantSig};
 
 /// The names every program sees without an import (R35).
 pub const PRELUDE: &[&str] = builtins::PRELUDE;
@@ -78,6 +78,8 @@ pub fn check_typed(module: &Module, text: &str) -> (Vec<Diagnostic>, Types) {
 pub struct Checked {
     pub diagnostics: Vec<Diagnostic>,
     pub types: Types,
+    /// How many type nodes `types` holds, up to [`MODULE_TYPES`].
+    stored: usize,
     /// Each name that resolved to a local, parameter or binding, with the span of the name
     /// that declared it; a declaration refers to itself. One span may be listed more than once.
     pub locals: Vec<(Span, Span)>,
@@ -87,11 +89,38 @@ pub struct Checked {
     pub declared: BTreeMap<String, TypeDef>,
     /// The Python modules imported through interfaces, each with its functions.
     pub foreign: BTreeMap<String, BTreeMap<String, FnSig>>,
+    /// The methods of each type the module declares, by type and by name.
+    pub methods: BTreeMap<String, BTreeMap<String, Method>>,
+    /// The methods of each trait the module declares, by trait and by name; `self` is of the
+    /// type `Self`.
+    pub traits: BTreeMap<String, BTreeMap<String, Method>>,
 }
 
+/// The most type nodes a module keeps for its expressions, in all: a long-lived editor or MCP
+/// server holds them for every file it has open.
+const MODULE_TYPES: usize = 1 << 21;
+
 impl Checked {
-    fn absorb(&mut self, body: Body) {
-        self.types.extend(body.types());
+    fn absorb(&mut self, mut body: Body) {
+        for (span, ty) in body.types() {
+            let before = self.stored;
+            self.stored = self.stored.saturating_add(ty.size());
+            if self.stored <= MODULE_TYPES {
+                self.types.insert(span, ty);
+                continue;
+            }
+            if before <= MODULE_TYPES {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E0222",
+                        span,
+                        format!("the types of this module have more than {MODULE_TYPES} parts in all"),
+                    )
+                    .note("name the shape with a record type, or keep the values in a list"),
+                );
+            }
+            self.types.insert(span, Ty::Error);
+        }
         self.locals.extend_from_slice(body.locals());
         self.diagnostics.extend(body.diagnostics);
     }
@@ -163,6 +192,13 @@ pub fn check_resolved_with(module: &Module, text: &str, interfaces: &Interfaces)
         program.functions.iter().filter(|(n, _)| declared_here(n)).map(|(n, s)| (n.clone(), s.clone())).collect();
     checked.declared =
         program.types.iter().filter(|(n, _)| declared_here(n)).map(|(n, t)| (n.clone(), t.clone())).collect();
+    checked.methods = program
+        .methods
+        .iter()
+        .filter(|(n, _)| checked.declared.contains_key(*n))
+        .map(|(n, m)| (n.clone(), m.clone()))
+        .collect();
+    checked.traits = program.traits;
     checked.foreign = program.foreign;
     checked
 }

@@ -10,7 +10,11 @@ use lotml_syntax::span::Span;
 use crate::builtins;
 use crate::closest;
 use crate::program::{FnSig, Method, Program, TypeDef};
-use crate::ty::{F64, INT, Infer, IntKind, Ty};
+use crate::ty::{F64, INT, Infer, IntKind, TYPE_LIMIT, Ty};
+
+/// The most type nodes one body keeps for its expressions, in all: each keeps a whole tree, so
+/// many mentions of a type under [`TYPE_LIMIT`] add up.
+const BODY_TYPES: usize = 1 << 19;
 
 #[derive(Clone, Debug)]
 pub struct Local {
@@ -61,6 +65,11 @@ pub struct Body<'p> {
     returned: BTreeSet<String>,
     /// The type of every expression checked, by its span; resolved by `types`.
     seen: HashMap<Span, Ty>,
+    /// How many type nodes `seen` holds, up to [`BODY_TYPES`]: past it, an expression keeps an
+    /// error, and the first one past it is reported.
+    stored: usize,
+    /// Whether the types have passed [`BODY_TYPES`], and that is reported.
+    full: bool,
     /// Each name that resolved to a local, with where that local was declared; a declaration
     /// refers to itself.
     locals: Vec<(Span, Span)>,
@@ -99,6 +108,8 @@ impl<'p> Body<'p> {
             mutated: BTreeSet::new(),
             returned: BTreeSet::new(),
             seen: HashMap::new(),
+            stored: 0,
+            full: false,
             locals: Vec::new(),
             diagnostics: Vec::new(),
         };
@@ -324,6 +335,7 @@ impl<'p> Body<'p> {
                     self.coerce(&found, declared, value.span);
                 }
                 let ty = declared.unwrap_or(found);
+                self.seen.insert(name.span, ty.clone());
                 if let ExprKind::Name(param) = &value.kind {
                     let by_copy =
                         self.params.get(param).is_some_and(|c| matches!(c, Convention::Default | Convention::Sink));
@@ -342,6 +354,8 @@ impl<'p> Body<'p> {
                 let declared = self.lower(ty);
                 let found = self.expr(value, Some(&declared));
                 self.coerce(&found, &declared, value.span);
+                // The declared type, by the name's span: what a backend gives the local.
+                self.seen.insert(target.span, declared.clone());
                 self.assign_name(target, declared, Some(stmt.span.start));
                 false
             }
@@ -1027,13 +1041,56 @@ impl<'p> Body<'p> {
     pub fn expr(&mut self, expr: &Expr, expected: Option<&Ty>) -> Ty {
         let ty = self.expr_inner(expr, expected);
         let ty = self.resolve(&ty);
+        // Resolving gives an error past TYPE_LIMIT, here or in what checking this expression
+        // unified: reported at the expression, and checked on as an error so nothing is built on it.
+        if self.infer.take_overflow() {
+            self.too_large(expr.span, format!("this type has more than {TYPE_LIMIT} parts"));
+        }
+        let ty = self.kept(expr.span, ty);
         self.seen.insert(expr.span, ty.clone());
         ty
     }
 
-    /// The type of every expression in the body, as inference finally resolved it.
-    pub fn types(&self) -> impl Iterator<Item = (Span, Ty)> + '_ {
-        self.seen.iter().map(|(span, ty)| (*span, self.infer.resolve(ty)))
+    /// `ty`, counted against [`BODY_TYPES`]: an error once the body's types pass it, the first
+    /// time reported.
+    fn kept(&mut self, span: Span, ty: Ty) -> Ty {
+        self.stored = self.stored.saturating_add(ty.size());
+        if self.stored <= BODY_TYPES {
+            return ty;
+        }
+        if !self.full {
+            self.full = true;
+            self.too_large(span, format!("the types of this function have more than {BODY_TYPES} parts in all"));
+        }
+        Ty::Error
+    }
+
+    fn too_large(&mut self, span: Span, message: String) {
+        self.report(
+            Diagnostic::error("E0222", span, message)
+                .note("name the shape with a record type, or keep the values in a list"),
+        );
+    }
+
+    /// The type of every expression in the body, as inference finally resolved it, in source
+    /// order. A variable bound after an expression was checked can make its type larger than it
+    /// was then, so the limits hold here again, each reported once.
+    pub fn types(&mut self) -> Vec<(Span, Ty)> {
+        let mut spans: Vec<Span> = self.seen.keys().copied().collect();
+        spans.sort();
+        self.stored = 0;
+        let mut overflowed = false;
+        let mut out = Vec::with_capacity(spans.len());
+        for span in spans {
+            let ty = self.infer.resolve(&self.seen[&span]);
+            if self.infer.take_overflow() && !overflowed {
+                overflowed = true;
+                self.too_large(span, format!("this type has more than {TYPE_LIMIT} parts"));
+            }
+            let ty = self.kept(span, ty);
+            out.push((span, ty));
+        }
+        out
     }
 
     /// Each name that resolved to a local, with the span of its declaration.

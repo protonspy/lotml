@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: fcccd56e561dcf2f59ea9aafe8757c65404f4955e6fe5951c60cd5092c435b87
+checksum: 3a0a3c6f1c85ea590dfdb65109a05bb68442ddec00ced4173d161e4e296def59
 ---
 
 # lotml roadmap
@@ -117,11 +117,11 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 1.6_
 - [x] 3.7 (Unit) Review the phase 2 gate — incremental adoption from Python working, corpus validated by tests
   _Depends 3.2, 3.3, 3.4, 3.5, 3.6, 3.8, 3.9_
-- [ ] 4.1 (TDD) Write the C backend: reference counting with Perceus-style reuse, non-atomic counts, checked arithmetic and `#line` directives (R18, R19; docs/wiki/pages/memory-model.md, docs/wiki/pages/transpilation-strategy.md)
+- [x] 4.1 (TDD) Write the C backend: reference counting with Perceus-style reuse, non-atomic counts, checked arithmetic and `#line` directives (R18, R19; docs/wiki/pages/memory-model.md, docs/wiki/pages/transpilation-strategy.md)
   _Depends 3.7_
-- [ ] 4.2 (TDD) Run the same suite on the Python and C targets and require identical results (R18; docs/wiki/pages/transpilation-strategy.md)
+- [x] 4.2 (TDD) Run the same suite on the Python and C targets and require identical results (R18; docs/wiki/pages/transpilation-strategy.md)
   _Depends 4.1_
-- [ ] 4.3 (Unit) Benchmark numeric, allocation-heavy and sharing-heavy programs separately against C (docs/wiki/pages/memory-model.md)
+- [x] 4.3 (Unit) Benchmark numeric, allocation-heavy and sharing-heavy programs separately against C (docs/wiki/pages/memory-model.md)
   _Depends 4.1_
 - [ ] 4.4 (Unit) Review the phase 3 gate — the suite green on both targets, ≤ 2× C on numeric benchmarks
   _Depends 4.2, 4.3_

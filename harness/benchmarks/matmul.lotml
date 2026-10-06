@@ -1,0 +1,23 @@
+fn matmul(a: [[f64]], b: [[f64]], n: int) -> [[f64]]:
+    var c: [[f64]] = []
+    for i in range(n):
+        var row = [0.0] * n
+        ai = a[i]
+        for k in range(n):
+            aik = ai[k]
+            bk = b[k]
+            for j in range(n):
+                row[j] += aik * bk[j]
+        c.append(row)
+    return c
+
+fn main():
+    n = 700
+    a = [[float(i * n + j) / float(n * n) for j in range(n)] for i in range(n)]
+    b = [[float(i - j) / float(n) for j in range(n)] for i in range(n)]
+    c = matmul(a, b, n)
+    var total = 0.0
+    for row in c:
+        for x in row:
+            total += x
+    print(int(total * 1000.0))
