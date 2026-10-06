@@ -29,8 +29,9 @@ same pinned versions.
 A Cargo workspace, Rust 1.97 and edition 2024 (adr:0006-compiler-written-in-rust), with a lock
 file. Each crate is a stage: `lotml-syntax` (lexer, tolerant parser), `lotml-diag` (diagnostics
 and their codes), `lotml-check` (types, mutability, errors as values), `lotml-db` (the queries),
-`lotml-fmt` (the formatter), `lotml-py` (the Python backend and its runtime), `lotml` (the
-command).
+`lotml-fmt` (the formatter), `lotml-py` (the Python backend and its runtime), `lotml-ide` (what
+each name refers to, and the workspace an editor or agent queries), `lotml` (the command, with
+its language and MCP servers — JSON-RPC written over `serde_json`, with no protocol library).
 
 - **salsa** 0.28 — incremental queries over source files, the property the under-100 ms check
   rests on ([[transpilation-strategy]]); chosen over a hand-rolled cache because rust-analyzer

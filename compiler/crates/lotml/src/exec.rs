@@ -16,9 +16,9 @@ struct Module {
     shown: String,
 }
 
-/// The Python modules compiled from `paths`, written into `dir` with the runtime. Files that do
-/// not compile are reported, and none is written.
-fn compile(paths: &[PathBuf], dir: &Path) -> Result<Option<Vec<Module>>, Failure> {
+/// The Python modules compiled from `paths`, written into `dir` with the runtime. When a file
+/// does not compile, none is written and the diagnostics come back as text.
+fn compile(paths: &[PathBuf], dir: &Path) -> Result<Result<Vec<Module>, String>, Failure> {
     let mut compiled = Vec::new();
     let mut reports = Vec::new();
     let mut texts = Vec::new();
@@ -34,8 +34,7 @@ fn compile(paths: &[PathBuf], dir: &Path) -> Result<Option<Vec<Module>>, Failure
         }
     }
     if !reports.is_empty() {
-        print!("{}", lotml_diag::text(&reports, Some(lotml_diag::DEFAULT_LIMIT)));
-        return Ok(None);
+        return Ok(Err(lotml_diag::text(&reports, Some(lotml_diag::DEFAULT_LIMIT))));
     }
     std::fs::create_dir_all(dir).map_err(|e| Failure(format!("cannot create {}: {e}", dir.display())))?;
     write(&dir.join("lotml_rt.py"), lotml_py::RUNTIME)?;
@@ -48,7 +47,18 @@ fn compile(paths: &[PathBuf], dir: &Path) -> Result<Option<Vec<Module>>, Failure
         write(&dir.join(format!("{name}.py")), &module)?;
         modules.push(Module { name, source, shown });
     }
-    Ok(Some(modules))
+    Ok(Ok(modules))
+}
+
+/// The compiled modules, or the diagnostics printed and `None` when a file does not compile.
+fn compile_or_report(paths: &[PathBuf], dir: &Path) -> Result<Option<Vec<Module>>, Failure> {
+    match compile(paths, dir)? {
+        Ok(modules) => Ok(Some(modules)),
+        Err(report) => {
+            print!("{report}");
+            Ok(None)
+        }
+    }
 }
 
 fn write(path: &Path, text: &str) -> Result<(), Failure> {
@@ -78,7 +88,7 @@ impl Drop for Scratch {
 
 /// `lotml build`: each file as `<name>_lotml.py`, next to the runtime, in `out`.
 pub fn build(paths: &[PathBuf], out: &Path) -> Result<u8, Failure> {
-    let Some(modules) = compile(paths, out)? else { return Ok(1) };
+    let Some(modules) = compile_or_report(paths, out)? else { return Ok(1) };
     for module in modules {
         println!("{} -> {}", module.shown, out.join(format!("{}.py", module.name)).display());
     }
@@ -89,7 +99,7 @@ pub fn build(paths: &[PathBuf], out: &Path) -> Result<u8, Failure> {
 /// error, 101 when it panicked.
 pub fn run(path: &Path) -> Result<u8, Failure> {
     let scratch = Scratch::new();
-    let Some(modules) = compile(&[path.to_path_buf()], &scratch.0)? else { return Ok(1) };
+    let Some(modules) = compile_or_report(&[path.to_path_buf()], &scratch.0)? else { return Ok(1) };
     let name = &modules[0].name;
     let python = python()?;
     let script = format!(
@@ -109,8 +119,18 @@ pub fn run(path: &Path) -> Result<u8, Failure> {
 
 /// `lotml test`: every `test` block, with the values a failed comparison saw.
 pub fn test(paths: &[PathBuf], as_json: bool) -> Result<u8, Failure> {
+    let (status, report) = test_report(paths, as_json)?;
+    print!("{report}");
+    Ok(status)
+}
+
+/// What `lotml test` prints, and its exit status.
+pub fn test_report(paths: &[PathBuf], as_json: bool) -> Result<(u8, String), Failure> {
     let scratch = Scratch::new();
-    let Some(modules) = compile(paths, &scratch.0)? else { return Ok(1) };
+    let modules = match compile(paths, &scratch.0)? {
+        Ok(modules) => modules,
+        Err(report) => return Ok((1, report)),
+    };
     let python = python()?;
     let listed: Vec<Value> = modules.iter().map(|m| json!([m.name, m.source.display().to_string()])).collect();
     let script = format!(
@@ -146,16 +166,19 @@ pub fn test(paths: &[PathBuf], as_json: bool) -> Result<u8, Failure> {
     let count = |outcome: &str| rows.iter().filter(|r| r["outcome"] == outcome).count();
     let summary =
         json!({"passed": count("pass"), "failed": count("fail"), "errors": count("error"), "panics": count("panic")});
-    if as_json {
-        println!("{}", json!({"version": 1, "tests": rows, "summary": summary}));
+    let report = if as_json {
+        format!("{}\n", json!({"version": 1, "tests": rows, "summary": summary}))
     } else {
-        print!("{}", text(&rows));
-        println!(
-            "{} passed, {} failed, {} errors, {} panics",
-            summary["passed"], summary["failed"], summary["errors"], summary["panics"]
-        );
-    }
-    Ok(u8::from(rows.iter().any(|r| r["outcome"] != "pass")))
+        format!(
+            "{}{} passed, {} failed, {} errors, {} panics\n",
+            text(&rows),
+            summary["passed"],
+            summary["failed"],
+            summary["errors"],
+            summary["panics"]
+        )
+    };
+    Ok((u8::from(rows.iter().any(|r| r["outcome"] != "pass")), report))
 }
 
 fn text(rows: &[Value]) -> String {

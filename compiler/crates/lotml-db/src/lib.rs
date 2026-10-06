@@ -1,6 +1,7 @@
 //! The compiler as queries over source files: each file is a Salsa input, and parsing and
 //! checking are tracked functions, so a query whose inputs did not change answers from memory.
 
+use lotml_check::Checked;
 use lotml_diag::Diagnostic;
 use lotml_syntax::Parsed;
 
@@ -19,12 +20,18 @@ pub fn parse(db: &dyn salsa::Database, file: SourceFile) -> Parsed {
     lotml_syntax::parse(file.text(db))
 }
 
+/// What the checker found in a file: its type errors, the type of every expression, and what
+/// each local's name refers to.
+#[salsa::tracked(returns(ref))]
+pub fn checked(db: &dyn salsa::Database, file: SourceFile) -> Checked {
+    lotml_check::check_resolved(&parse(db, file).module, file.text(db))
+}
+
 /// Every diagnostic of a file, in source order: syntax errors, then type errors.
 #[salsa::tracked(returns(ref))]
 pub fn diagnostics(db: &dyn salsa::Database, file: SourceFile) -> Vec<Diagnostic> {
-    let parsed = parse(db, file);
-    let mut found: Vec<Diagnostic> = parsed.errors.iter().map(lotml_check::syntax).collect();
-    found.extend(lotml_check::check(&parsed.module, file.text(db)));
+    let mut found: Vec<Diagnostic> = parse(db, file).errors.iter().map(lotml_check::syntax).collect();
+    found.extend(checked(db, file).diagnostics.iter().cloned());
     found.sort_by_key(|d| d.span.start);
     found
 }

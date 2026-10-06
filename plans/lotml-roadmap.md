@@ -3,8 +3,8 @@ autonomy: auto
 ci: wait
 status: approved
 pr: per-group
-merge: auto
-checksum: d73c807b57ff8c6b16612d6e1a0eb2be4d88c48e4300f74234d5a4dcaea24ca7
+merge: manual
+checksum: 34be7b507b6b803a026f4d6e7c7ff1adaec070d4bf841c280a36893144bcfa6b
 ---
 
 # lotml roadmap
@@ -99,7 +99,7 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 2.2_
 - [x] 2.13 (Unit) Review the phase 1 gate on the harness — lotml pass@1 ≥ typed Python, median rounds to green ≤ 2, tokens ≤ typed Python
   _Depends 2.6, 2.7, 2.9, 2.10, 2.11, 2.12_
-- [ ] 3.1 (Unit) Serve LSP and MCP from the incremental engine, with a warm index and references that carry their surrounding lines (R16; docs/wiki/pages/semantic-compiler.md)
+- [x] 3.1 (Unit) Serve LSP and MCP from the incremental engine, with a warm index and references that carry their surrounding lines (R16; docs/wiki/pages/semantic-compiler.md)
   _Depends 2.13_
 - [ ] 3.2 (Unit) Offer symbol-addressed edits and atomic refactorings, rename listing textual mentions too (R32; docs/wiki/pages/editing-robustness.md)
   _Depends 3.1_

@@ -1,27 +1,16 @@
 [package]
-name = "lotml"
+name = "lotml-ide"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[[bin]]
-name = "lotml"
-path = "src/main.rs"
-
 [dependencies]
-clap = { workspace = true }
-serde_json = { workspace = true }
 salsa = { workspace = true }
 lotml-syntax = { path = "../lotml-syntax" }
-lotml-diag = { path = "../lotml-diag" }
 lotml-check = { path = "../lotml-check" }
 lotml-db = { path = "../lotml-db" }
+lotml-diag = { path = "../lotml-diag" }
 lotml-fmt = { path = "../lotml-fmt" }
-lotml-py = { path = "../lotml-py" }
-lotml-ide = { path = "../lotml-ide" }
 
 [lints]
 workspace = true
-
-[dev-dependencies]
-serde_json = { workspace = true }

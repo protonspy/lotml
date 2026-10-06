@@ -61,6 +61,9 @@ pub struct Body<'p> {
     returned: BTreeSet<String>,
     /// The type of every expression checked, by its span; resolved by `types`.
     seen: HashMap<Span, Ty>,
+    /// Each name that resolved to a local, with where that local was declared; a declaration
+    /// refers to itself.
+    locals: Vec<(Span, Span)>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -96,6 +99,7 @@ impl<'p> Body<'p> {
             mutated: BTreeSet::new(),
             returned: BTreeSet::new(),
             seen: HashMap::new(),
+            locals: Vec::new(),
             diagnostics: Vec::new(),
         };
         if let Some(sig) = sig {
@@ -107,6 +111,7 @@ impl<'p> Body<'p> {
             for p in &sig.params {
                 let mutable = matches!(p.convention, Convention::Inout | Convention::Var);
                 body.params.insert(p.name.clone(), p.convention);
+                body.locals.push((p.span, p.span));
                 body.scopes[0].locals.insert(
                     p.name.clone(),
                     Local {
@@ -181,6 +186,7 @@ impl<'p> Body<'p> {
         scope
             .locals
             .insert(name.name.clone(), Local { ty, mutable, span: name.span, declared_at, moved: false, origin });
+        self.locals.push((name.span, name.span));
     }
 
     fn with_scope<T>(&mut self, facts: &[(String, Ty)], f: impl FnOnce(&mut Self) -> T) -> (T, Scope) {
@@ -203,6 +209,16 @@ impl<'p> Body<'p> {
             }
             if branches[1..].iter().all(|b| b.locals.get(name).is_some_and(|l| self.infer.unify(&l.ty, &local.ty))) {
                 self.scopes.last_mut().expect("a scope").locals.insert(name.clone(), local.clone());
+                // One local, declared in each branch: the later declarations, and what referred
+                // to them, refer to the first.
+                for branch in &branches[1..] {
+                    let declared = branch.locals[name].span;
+                    for (_, to) in &mut self.locals {
+                        if *to == declared {
+                            *to = local.span;
+                        }
+                    }
+                }
             }
         }
     }
@@ -777,6 +793,7 @@ impl<'p> Body<'p> {
         match self.lookup(&name.name).cloned() {
             None => self.declare(name, ty, false, at),
             Some(local) => {
+                self.locals.push((name.span, local.span));
                 if !local.mutable {
                     self.immutable(&name.name, &local, name.span, "assigned again");
                     return;
@@ -1017,6 +1034,11 @@ impl<'p> Body<'p> {
     /// The type of every expression in the body, as inference finally resolved it.
     pub fn types(&self) -> impl Iterator<Item = (Span, Ty)> + '_ {
         self.seen.iter().map(|(span, ty)| (*span, self.infer.resolve(ty)))
+    }
+
+    /// Each name that resolved to a local, with the span of its declaration.
+    pub fn locals(&self) -> &[(Span, Span)] {
+        &self.locals
     }
 
     /// Accept `found` where `expected` is wanted, allowing the coercions lotml has: a value
@@ -1436,6 +1458,9 @@ impl<'p> Body<'p> {
     }
 
     fn name(&mut self, name: &str, span: Span) -> Ty {
+        if let Some(local) = self.lookup(name) {
+            self.locals.push((span, local.span));
+        }
         if let Some(ty) = self.narrowed(name) {
             return ty;
         }
@@ -1495,6 +1520,7 @@ impl<'p> Body<'p> {
                 .note("a name is in scope after the statement that declares it"),
         );
         // Declare it as unknown so the same mistake is reported once.
+        self.locals.push((span, span));
         self.scopes[0].locals.insert(
             name.to_string(),
             Local { ty: Ty::Error, mutable: true, span, declared_at: None, moved: false, origin: Origin::Declared },

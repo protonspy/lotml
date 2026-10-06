@@ -214,3 +214,27 @@ above except `rename` and `refs`, over Salsa queries:
 - **`test --json`** reports each `test` block: pass, fail with the value each side of the
   comparison had, an error passed on by `?`, or a panic with its line.
 - **`fmt`** is the canonical form; on 1,509 stored programs it changes no tree and loses no comment.
+
+## What phase 2 adds
+
+The same engine serves an editor and an agent (`compiler/crates/lotml-ide`), with no protocol
+library — JSON-RPC over `serde_json`:
+
+- **What each name refers to.** The checker records, for every local, parameter and binding,
+  the name that declared it — a local declared in each branch of an `if` is one local — and the
+  rest is resolved by name: functions, types, traits and variants by declaration, fields and
+  methods through the checked type of the value they are read from (`c.get()` is `Counter.get`
+  because `c` is a `Counter`), keyword arguments to the parameter or field they name. Each file
+  is its own module, so a name refers to a declaration in the same file.
+- **`lotml lsp`** loads and checks every `.lotml` file under the workspace's folders when the
+  client connects, so the first question meets a warm index, and publishes their diagnostics —
+  notes and alternatives in the message, labels as related locations. It answers definitions,
+  references, hover (a local's type, a declaration's signature and documentation), outlines,
+  workspace symbols, formatting, and the diagnostics' fixes as quick fixes, the
+  machine-applicable ones preferred. Columns are UTF-16 units unless the client accepts UTF-8.
+- **`lotml mcp`** offers `check`, `digest`, `show`, `references`, `definition`, `hover`,
+  `explain` and `test` as tools. A reference comes with the two lines around it and its own
+  marked, the inline context that recovered most of the location-only results' loss
+  ([arXiv 2608.13568](https://arxiv.org/abs/2608.13568)). Files changed on the disk are read
+  again before each call and only they are checked again. It speaks both eras of the protocol:
+  the `initialize` handshake and the stateless requests of the 2026-07-28 revision.

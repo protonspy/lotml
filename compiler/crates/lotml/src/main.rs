@@ -7,6 +7,9 @@ mod check;
 mod exec;
 mod files;
 mod index;
+mod lsp;
+mod mcp;
+mod rpc;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -97,6 +100,14 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Serve the Language Server Protocol on standard input and output.
+    Lsp,
+    /// Serve the compiler's tools to an agent over MCP, on standard input and output.
+    Mcp {
+        /// The project: every `.lotml` file under it.
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -139,6 +150,8 @@ fn run() -> ExitCode {
         Command::Build { paths, out } => return status(exec::build(&paths, &out)),
         Command::Run { path } => return status(exec::run(&path)),
         Command::Test { paths, json } => return status(exec::test(&paths, json)),
+        Command::Lsp => return status(lsp::serve()),
+        Command::Mcp { root } => return status(mcp::serve(&root)),
         Command::Show { symbol, paths } => sources(&paths).map(|s| match index::show(&symbol, &s) {
             Ok(text) => {
                 print!("{text}");
@@ -205,13 +218,16 @@ fn fmt(paths: &[PathBuf], check: bool) -> Result<bool, Failure> {
 }
 
 fn explain(code: &str) -> Result<bool, Failure> {
+    println!("{}", explanation(code)?);
+    Ok(true)
+}
+
+/// The page explaining an error code, written `E0204`, `e204` or `204`.
+pub fn explanation(code: &str) -> Result<String, Failure> {
     let digits: String = code.chars().filter(char::is_ascii_digit).collect();
     let wanted = format!("E{digits:0>4}");
     match lotml_diag::codes::find(&wanted) {
-        Some(found) => {
-            println!("{}: {}\n\n{}", found.code, found.title, found.explanation);
-            Ok(true)
-        }
+        Some(found) => Ok(format!("{}: {}\n\n{}", found.code, found.title, found.explanation)),
         None => Err(Failure(format!("there is no error code `{code}`; codes look like `E0204`"))),
     }
 }
