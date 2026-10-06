@@ -110,6 +110,37 @@ def test_the_summary_pairs_tasks_and_the_gate_reads_it():
     assert all(c.passed for c in phase1.gate({"m": summary}))
 
 
+def test_the_report_says_how_each_first_answer_ended_and_why_lotml_refused_it():
+    refused = {
+        "code": "x\n",
+        "outcome": "does not check",
+        "output_tokens": 5,
+        "feedback": (
+            "`lotml check` reports:\n\n"
+            "s.lotml:1:1: error[E0201]: no `y`\n"
+            "s.lotml:2:1: error[E0204]: …"
+        ),
+    }
+    wrong = {"code": "x\n", "outcome": "tests fail", "output_tokens": 5, "feedback": "…"}
+    rows = [
+        row("a", "lotml", None) | {"rounds": [refused]},
+        row("b", "lotml", None) | {"rounds": [refused]},
+        row("c", "lotml", None) | {"rounds": [wrong]},
+        row("a", "python", 1),
+        row("b", "python", None) | {"rounds": [wrong]},
+        row("c", "python", 1),
+    ]
+    summary = phase1.summarize(rows)
+    first = summary["m"]["first"]
+    assert first["lotml"]["does not check"] == 2 and first["lotml"]["tests fail"] == 1
+    assert first["python"]["pass"] == 2 and first["python"]["tests fail"] == 1
+    # Only the first error of each refused answer counts: what the model met first.
+    assert summary["m"]["codes"] == [("E0201", 2)]
+    text = phase1.markdown(summary, phase1.gate(summary))
+    assert "| m | lotml | 0 | 2 | 1 | 0 | E0201 2 |" in text
+    assert "| m | python | 2 | 0 | 1 | 0 | — |" in text
+
+
 def test_too_few_pairs_do_not_pass_the_gate():
     summary = phase1.summarize([row("t", "lotml", 1), row("t", "python", 1)])
     assert not phase1.gate(summary)[0].passed

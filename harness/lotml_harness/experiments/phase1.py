@@ -18,9 +18,11 @@ Python's.
 import argparse
 import json
 import os
+import re
 import statistics
 import subprocess
 import tempfile
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -291,8 +293,29 @@ def summarize(rows: list[dict]) -> dict[str, dict]:
                 lang: sum(r["output_tokens"] for t in paired for r in records[(t, lang)]["rounds"])
                 for lang in LANGUAGES
             },
+            "first": {
+                lang: Counter(records[(t, lang)]["rounds"][0]["outcome"] for t in paired)
+                for lang in LANGUAGES
+            },
+            "codes": Counter(
+                code
+                for t in paired
+                if (code := first_code(records[(t, "lotml")]["rounds"][0])) is not None
+            ).most_common(),
         }
     return summary
+
+
+OUTCOMES = ("pass", "does not check", "tests fail", "does not run")
+CODE = re.compile(r"error\[(E\d{4})\]")
+
+
+def first_code(answer: dict) -> str | None:
+    """The first error code `lotml check` gave an answer it refused, if it refused it."""
+    if answer["outcome"] != "does not check":
+        return None
+    found = CODE.search(answer.get("feedback") or "")
+    return found.group(1) if found else None
 
 
 @dataclass
@@ -361,6 +384,19 @@ def markdown(summary: dict[str, dict], criteria: list[Criterion]) -> str:
             f" {s['solved']['python']:.1%} | {s['only_lotml']} | {s['only_python']} |"
             f" {s['p']:.3f} | {s['median_rounds']} | {ratio} |"
         )
+    lines += [
+        "",
+        "How each first answer ended, and the first error of each lotml answer the compiler",
+        "refused (`lotml explain <code>` says what it means):",
+        "",
+        "| model | language | " + " | ".join(OUTCOMES) + " | first errors |",
+        "| --- | --- | " + " | ".join("---:" for _ in OUTCOMES) + " | --- |",
+    ]
+    for model, s in summary.items():
+        for lang in LANGUAGES:
+            counts = " | ".join(str(s["first"][lang][o]) for o in OUTCOMES)
+            codes = ", ".join(f"{c} {n}" for c, n in s["codes"]) if lang == "lotml" else ""
+            lines.append(f"| {model} | {lang} | {counts} | {codes or '—'} |")
     lines += ["", "| criterion | result | evidence |", "| --- | --- | --- |"]
     for c in criteria:
         lines.append(f"| {c.name} | {'pass' if c.passed else 'fail'} | {c.evidence} |")
