@@ -1,5 +1,6 @@
 """Running HumanEval's tasks and reporting them by source (specs/agent-humaneval/ R2.1-R2.5)."""
 
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -116,3 +117,13 @@ def test_a_failure_whose_files_check_alone_but_not_with_the_hidden_blocks_is_a_s
     assert Grade(True, 1, 2, ["solution.lotml: hidden: 1: fail"]).failure == "behaviour"
     assert Grade(False, 0, 2, ["solution.lotml: the tests did not run"]).failure == "behaviour"
     assert Grade(True, 2, 2).failure is None
+
+
+def test_a_named_mbpp_task_runs_from_mbpp(ran, monkeypatch, tmp_path: Path):
+    report = humaneval.Report(digest="d")
+    mbpp = [dataclasses.replace(kept(n), id=f"mbpp-{n}") for n in (11, 12)]
+    monkeypatch.setattr(humaneval, "mbpp_tasks", lambda: (mbpp, report))
+    monkeypatch.setattr(humaneval, "write_mbpp_report", lambda built: None)
+    agent_main.main(["--task", "mbpp-12", "--arm", "agents"], runs=tmp_path,
+                    written=tmp_path / "agent.md")  # fmt: skip
+    assert ran == ["mbpp-12"]

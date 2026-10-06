@@ -43,16 +43,21 @@ def pending(found: list[AgentTask], attempts: int, done: list[dict]) -> list[tup
 
 
 def chosen(args: argparse.Namespace) -> list[AgentTask] | None:
-    """The tasks to run: the benchmark's, or HumanEval's kept ones, sampled or named. None when
-    HumanEval cannot be read: then nothing runs (specs/agent-humaneval/ R2.1, R2.2)."""
+    """The tasks to run: the benchmark's, or HumanEval's or MBPP's kept ones, sampled or named.
+    None when the source cannot be read: then nothing runs (specs/agent-humaneval/ R2.1, R2.2,
+    R3.5)."""
     if args.source == "bench":
         return [t for t in tasks() if not args.task or t.id in args.task]
+    reading, writing = {
+        "humaneval": (humaneval.humaneval_tasks, humaneval.write_humaneval_report),
+        "mbpp": (humaneval.mbpp_tasks, humaneval.write_mbpp_report),
+    }[args.source]
     try:
-        kept, built = humaneval.humaneval_tasks()
+        kept, built = reading()
     except (DigestMismatch, OSError, ValueError) as failure:
-        print(f"HumanEval could not be read, so nothing runs: {failure}", file=sys.stderr)
+        print(f"{args.source} could not be read, so nothing runs: {failure}", file=sys.stderr)
         return None
-    humaneval.write_humaneval_report(built)
+    writing(built)
     drawn = (
         set(humaneval.sample([t.id for t in kept], args.sample, args.seed)) if args.sample else None
     )
@@ -67,17 +72,20 @@ def main(argv: list[str] | None = None, runs: Path = RUNS, written: Path = REPOR
     parser.add_argument("--arm", action="append", choices=ARMS, help="both when absent")
     parser.add_argument("--attempts", type=int, default=1, help="runs per task and arm")
     parser.add_argument("--task", action="append", help="only these tasks")
-    parser.add_argument("--source", choices=("bench", "humaneval"), default="bench")
-    parser.add_argument("--sample", type=int, help="with --source humaneval: N tasks by --seed")
+    parser.add_argument("--source", choices=("bench", "humaneval", "mbpp"), default="bench")
+    parser.add_argument(
+        "--sample", type=int, help="with --source humaneval or mbpp: N tasks by --seed"
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--report-only", action="store_true")
     parser.add_argument("--live", action="store_true", help="say each model and tool call")
     args = parser.parse_args(argv)
-    if any(t.startswith("humaneval-") for t in args.task or []):
-        args.source = "humaneval"
-    if args.sample is not None and args.source != "humaneval":
-        parser.error("--sample draws from --source humaneval")
+    for prefix in ("humaneval", "mbpp"):
+        if any(t.startswith(f"{prefix}-") for t in args.task or []):
+            args.source = prefix
+    if args.sample is not None and args.source == "bench":
+        parser.error("--sample draws from --source humaneval or mbpp")
     if not args.report_only:
         found = chosen(args)
         if found is None:
