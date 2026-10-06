@@ -12,13 +12,16 @@
 /* Cells and output ------------------------------------------------------------------------- */
 
 int64_t lt_live_cells = 0;
+int64_t lt_allocated_cells = 0;
 
 #ifdef LT_COUNT_CELLS
 static void lt_count_cells(int64_t delta) {
 #if LT_GNU
     __atomic_add_fetch(&lt_live_cells, delta, __ATOMIC_RELAXED);
+    if (delta > 0) __atomic_add_fetch(&lt_allocated_cells, delta, __ATOMIC_RELAXED);
 #else
     _InterlockedExchangeAdd64((volatile long long *)&lt_live_cells, delta);
+    if (delta > 0) _InterlockedExchangeAdd64((volatile long long *)&lt_allocated_cells, delta);
 #endif
 }
 #endif
@@ -59,6 +62,7 @@ int lt_exit(int status) {
     lt_flush();
 #ifdef LT_COUNT_CELLS
     fprintf(stderr, "lotml: %lld cells live at exit\n", (long long)lt_live_cells);
+    fprintf(stderr, "lotml: %lld cells allocated\n", (long long)lt_allocated_cells);
 #endif
     return status;
 }
