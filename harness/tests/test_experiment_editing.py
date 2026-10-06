@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -63,6 +64,9 @@ def test_more_solutions_answer_unsampled_tasks_in_variant_b(monkeypatch, tmp_pat
     def answer(model, tasks, path, workers, variants):
         seen.update(model=model.name, count=len(tasks), path=path.name, variants=variants)
 
+    pool = [replace(task(), id=f"humaneval/{i}", source="humaneval") for i in range(8)]
+    monkeypatch.setattr(editing.build, "load", lambda only=None: pool)
+    monkeypatch.setattr(editing, "sample", lambda tasks, counts, seed: tasks[:2])
     monkeypatch.setattr(editing, "answer", answer)
     monkeypatch.setattr(editing, "ANSWERS", tmp_path)
     editing.more_solutions("claude:sonnet", 5)
