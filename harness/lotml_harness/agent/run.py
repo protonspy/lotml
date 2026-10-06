@@ -31,6 +31,15 @@ from lotml_harness.experiments import variants
 from lotml_harness.experiments.phase1 import Lotml
 
 MODEL = "z-ai/glm-5.3-flash"
+"""The model when neither `--model` nor `LOTML_AGENT_MODEL` names one."""
+MODEL_VARIABLE = "LOTML_AGENT_MODEL"
+
+
+def default_model() -> str:
+    """The OpenRouter model id runs use unless told otherwise: `LOTML_AGENT_MODEL`, or `MODEL`."""
+    return os.environ.get(MODEL_VARIABLE, "").strip() or MODEL
+
+
 ARMS = ("agents", "reference")
 STEPS = 60
 """Model calls a run may make, its subagents' included."""
@@ -74,13 +83,16 @@ def require_key() -> str:
     return key
 
 
-def openrouter(model: str = MODEL) -> BaseChatModel:
+def openrouter(model: str | None = None) -> BaseChatModel:
     from langchain_openrouter import ChatOpenRouter
 
     require_key()
     # ChatOpenRouter's timeout is in milliseconds: it is the SDK's `timeout_ms`.
     return ChatOpenRouter(
-        model=model, temperature=0, request_timeout=REQUEST_TIMEOUT * 1000, max_retries=2
+        model=model or default_model(),
+        temperature=0,
+        request_timeout=REQUEST_TIMEOUT * 1000,
+        max_retries=2,
     )
 
 

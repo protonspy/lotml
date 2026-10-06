@@ -4,6 +4,8 @@
     python -m lotml_harness.agent --model z-ai/glm-5.3-flash --arm agents --task stock-take
     python -m lotml_harness.agent --report-only
 
+The model is `--model`, else `LOTML_AGENT_MODEL`, else `z-ai/glm-5.3-flash`.
+
 Rows go to `harness/results/agent/<model>__<arm>.jsonl`, the report to `harness/results/agent.md`.
 A task, arm and attempt already recorded is skipped, unless its run ended in a model error.
 """
@@ -17,7 +19,15 @@ from pathlib import Path
 
 from lotml_harness.agent import report
 from lotml_harness.agent.bench import AgentTask, tasks
-from lotml_harness.agent.run import ARMS, MODEL, error_row, openrouter, run
+from lotml_harness.agent.run import (
+    ARMS,
+    MODEL,
+    MODEL_VARIABLE,
+    default_model,
+    error_row,
+    openrouter,
+    run,
+)
 from lotml_harness.experiments.phase1 import RESULTS
 
 RUNS = RESULTS / "agent"
@@ -42,7 +52,11 @@ def pending(found: list[AgentTask], attempts: int, done: list[dict]) -> list[tup
 
 def main(argv: list[str] | None = None, runs: Path = RUNS, written: Path = REPORT) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--model", default=MODEL, help="an OpenRouter model id")
+    parser.add_argument(
+        "--model",
+        default=default_model(),
+        help=f"an OpenRouter model id; {MODEL_VARIABLE}, or {MODEL} when unset",
+    )
     parser.add_argument("--arm", action="append", choices=ARMS, help="both when absent")
     parser.add_argument("--attempts", type=int, default=1, help="runs per task and arm")
     parser.add_argument("--task", action="append", help="only these tasks")

@@ -25,7 +25,7 @@ hidden tests. It measures how often the agent gets lotml right, what it costs, a
 
 ## R2 · A run
 
-- **R2.1** When a task runs, the agent harness shall copy its workspace to a fresh temporary directory and run a deepagents agent on it, over a ChatOpenRouter model, `z-ai/glm-5.3-flash` unless another is named.
+- **R2.1** When a task runs, the agent harness shall copy its workspace to a fresh temporary directory and run a deepagents agent on it, over a ChatOpenRouter model: the one `--model` names, else the one `LOTML_AGENT_MODEL` names, else `z-ai/glm-5.3-flash`.
 - **R2.2** The agent harness shall confine the agent's file tools to the workspace and give the agent no shell.
 - **R2.3** The agent harness shall give the agent the tools `lotml mcp --root <workspace>` serves, started with an environment that holds no API key.
 - **R2.4** Where the context arm is `agents`, the agent harness shall run `lotml init --harness none` in the workspace and load its `AGENTS.md` as the agent's memory.

@@ -235,6 +235,30 @@ def test_the_model_waits_minutes_not_milliseconds(monkeypatch: pytest.MonkeyPatc
     assert model.model_name == runner.MODEL
 
 
+def test_the_model_comes_from_the_environment_or_the_default(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test")
+    monkeypatch.delenv("LOTML_AGENT_MODEL", raising=False)
+    assert runner.default_model() == "z-ai/glm-5.3-flash"
+    monkeypatch.setenv("LOTML_AGENT_MODEL", "  ")
+    assert runner.default_model() == "z-ai/glm-5.3-flash"
+    monkeypatch.setenv("LOTML_AGENT_MODEL", "qwen/qwen3-coder")
+    assert runner.openrouter().model_name == "qwen/qwen3-coder"
+    assert runner.openrouter("z-ai/glm-5.3").model_name == "z-ai/glm-5.3"
+
+
+def test_the_command_takes_its_default_model_from_the_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from lotml_harness.agent import __main__ as cli
+
+    seen = []
+    monkeypatch.setenv("LOTML_AGENT_MODEL", "qwen/qwen3-coder")
+    monkeypatch.setattr(cli, "openrouter", lambda name: seen.append(name))
+    monkeypatch.setattr(cli, "tasks", lambda: [])
+    cli.main(["--arm", "agents"], runs=tmp_path, written=tmp_path / "r.md")
+    assert seen == ["qwen/qwen3-coder"]
+
+
 def test_lines_changed_counts_both_sides():
     assert runner.lines_changed({"a": "x\ny\n"}, {"a": "x\nz\n", "b": "new\n"}) == 3
 
