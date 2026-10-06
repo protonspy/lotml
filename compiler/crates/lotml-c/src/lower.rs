@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use lotml_check::ty::{INT, IntKind, Ty};
-use lotml_check::{Checked, FieldSig, FnSig, TypeDef};
+use lotml_check::{Checked, FieldSig, FnSig, Method, ParamSig, TypeDef};
 use lotml_diag::Diagnostic;
 use lotml_syntax::ast::{
     self, Arg as AstArg, BoolOp, ExprKind, FnDef, Item, Module, PatternKind, StmtKind as Ast, StrPart,
@@ -26,8 +26,158 @@ pub struct Lowered {
     /// Each lambda: the types of what it captures, and its function type; its code is the
     /// function `lambda_name(index)`.
     pub lambdas: Vec<(Vec<Ty>, Ty)>,
-    /// The module's functions used as values.
+    /// The module's functions used as values, by their C names.
     pub fn_refs: BTreeSet<String>,
+    /// How many methods each trait's table holds.
+    pub traits: BTreeMap<String, usize>,
+    /// The table of each type a `dyn` value was made of, one per trait.
+    pub vtables: Vec<VTable>,
+}
+
+/// The table of one type's methods for one trait, a slot per method of the trait in name order:
+/// the function a `dyn` call reaches, `None` for a method no `dyn` call can reach.
+pub struct VTable {
+    pub trait_name: String,
+    pub ty: Ty,
+    pub slots: Vec<Option<VSlot>>,
+}
+
+pub struct VSlot {
+    pub function: String,
+    /// The parameters after `self`, and the result.
+    pub params: Vec<Ty>,
+    pub ret: Ty,
+}
+
+/// Type parameters and the types they stand for in one instance of a generic function.
+#[derive(Clone, Default)]
+struct Subst {
+    names: Vec<String>,
+    types: Vec<Ty>,
+}
+
+impl Subst {
+    fn apply(&self, ty: Ty) -> Ty {
+        if self.names.is_empty() { ty } else { ty.substitute(&self.names, &self.types) }
+    }
+
+    fn sig(&self, sig: &FnSig) -> FnSig {
+        FnSig {
+            params: sig.params.iter().map(|p| ParamSig { ty: self.apply(p.ty.clone()), ..p.clone() }).collect(),
+            ret: self.apply(sig.ret.clone()),
+            error: sig.error.clone().map(|e| self.apply(e)),
+            ..sig.clone()
+        }
+    }
+}
+
+/// A generic function or method named for one choice of its type arguments, not yet lowered.
+struct Pending<'a> {
+    def: &'a FnDef,
+    sig: FnSig,
+    name: String,
+    subst: Subst,
+}
+
+/// What a call of a function of `sig` gives: its result, or a result type when it can fail.
+fn call_ret(sig: &FnSig) -> Ty {
+    match &sig.error {
+        Some(error) => Ty::Result(Box::new(sig.ret.clone()), Box::new(error.clone())),
+        None => sig.ret.clone(),
+    }
+}
+
+/// Whether `ty` names no type parameter and no type left to infer.
+fn concrete(ty: &Ty) -> bool {
+    match ty {
+        Ty::Param(_) | Ty::Var(_) | Ty::Error | Ty::Never | Ty::TypeName(_) | Ty::Module(_) => false,
+        Ty::List(t) | Ty::Set(t) | Ty::Heap(t) | Ty::Optional(t) => concrete(t),
+        Ty::Dict(a, b) | Ty::Result(a, b) => concrete(a) && concrete(b),
+        Ty::Tuple(items) | Ty::Adt(_, items) => items.iter().all(concrete),
+        Ty::Func(params, ret) => params.iter().all(concrete) && concrete(ret),
+        _ => true,
+    }
+}
+
+/// Whether `ty` mentions the type parameter `name`.
+fn mentions(ty: &Ty, name: &str) -> bool {
+    match ty {
+        Ty::Param(p) => p == name,
+        Ty::List(t) | Ty::Set(t) | Ty::Heap(t) | Ty::Optional(t) => mentions(t, name),
+        Ty::Dict(a, b) | Ty::Result(a, b) => mentions(a, name) || mentions(b, name),
+        Ty::Tuple(items) | Ty::Adt(_, items) => items.iter().any(|t| mentions(t, name)),
+        Ty::Func(params, ret) => params.iter().any(|t| mentions(t, name)) || mentions(ret, name),
+        _ => false,
+    }
+}
+
+/// The type arguments `pattern`, written with the type parameters `names`, takes where a value
+/// of `actual` is: each parameter bound the first time it is matched.
+fn bind(pattern: &Ty, actual: &Ty, names: &[String], map: &mut HashMap<String, Ty>) {
+    match (pattern, actual) {
+        (Ty::Param(p), _) if names.contains(p) => {
+            if concrete(actual) {
+                map.entry(p.clone()).or_insert_with(|| actual.clone());
+            }
+        }
+        (Ty::List(a), Ty::List(b))
+        | (Ty::Set(a), Ty::Set(b))
+        | (Ty::Heap(a), Ty::Heap(b))
+        | (Ty::Optional(a), Ty::Optional(b)) => bind(a, b, names, map),
+        (Ty::Optional(a), _) => bind(a, actual, names, map),
+        (Ty::Dict(a, b), Ty::Dict(c, d)) | (Ty::Result(a, b), Ty::Result(c, d)) => {
+            bind(a, c, names, map);
+            bind(b, d, names, map);
+        }
+        (Ty::Tuple(a), Ty::Tuple(b)) if a.len() == b.len() => {
+            a.iter().zip(b).for_each(|(a, b)| bind(a, b, names, map));
+        }
+        (Ty::Adt(n, a), Ty::Adt(m, b)) if n == m && a.len() == b.len() => {
+            a.iter().zip(b).for_each(|(a, b)| bind(a, b, names, map));
+        }
+        (Ty::Func(a, r), Ty::Func(b, s)) if a.len() == b.len() => {
+            a.iter().zip(b).for_each(|(a, b)| bind(a, b, names, map));
+            bind(r, s, names, map);
+        }
+        _ => {}
+    }
+}
+
+/// Which argument each of `params` is given: by position, by name or, `None`, its default.
+fn arg_slots<'e>(params: &[ast::Param], args: &'e [AstArg]) -> Vec<Option<&'e AstArg>> {
+    let mut slots: Vec<Option<&AstArg>> = vec![None; params.len()];
+    let mut next = 0;
+    for a in args {
+        match a {
+            AstArg::Positional(_) | AstArg::Inout(..) => {
+                if next < slots.len() {
+                    slots[next] = Some(a);
+                }
+                next += 1;
+            }
+            AstArg::Keyword(key, _) => {
+                if let Some(i) = params.iter().position(|p| p.name.name == key.name) {
+                    slots[i] = Some(a);
+                }
+            }
+        }
+    }
+    slots
+}
+
+/// Whether a `dyn` value can call the trait method `m`: one taking `self` not as `inout`, generic
+/// over nothing and naming `Self` nowhere else.
+fn dyn_callable(m: &Method) -> bool {
+    let rest = &m.sig.params[usize::from(m.receiver.is_some())..];
+    m.sig.type_params.is_empty()
+        && m.receiver.is_some_and(|c| c != ast::Convention::Inout)
+        && !rest.iter().any(|p| mentions(&p.ty, "Self"))
+        && !mentions(&call_ret(&m.sig), "Self")
+}
+
+/// The C name of the instance `index` of the generic function or method `base`.
+fn instance_name(base: &str, index: usize) -> String {
+    format!("li{index}_{base}")
 }
 
 /// The C name of the method `method` of the type `owner`.
@@ -57,6 +207,11 @@ pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, 
         lambdas: Vec::new(),
         fn_refs: BTreeSet::new(),
         methods: HashMap::new(),
+        trait_fns: HashMap::new(),
+        instances: HashMap::new(),
+        pending: Vec::new(),
+        vtables: Vec::new(),
+        vtable_ids: HashMap::new(),
         diagnostics: Vec::new(),
     };
     for item in &module.items {
@@ -67,8 +222,13 @@ pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, 
             Item::Impl(imp) => {
                 if let ast::TypeKind::Named { name, .. } = &imp.target.kind {
                     for m in &imp.methods {
-                        cx.methods.insert((name.name.clone(), m.name.name.clone()), m);
+                        cx.methods.insert((name.name.clone(), m.name.name.clone()), (m, false));
                     }
+                }
+            }
+            Item::Trait(t) => {
+                for m in &t.methods {
+                    cx.trait_fns.insert((t.name.name.clone(), m.name.name.clone()), m);
                 }
             }
             Item::Record(r) => {
@@ -85,6 +245,23 @@ pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, 
             _ => {}
         }
     }
+    // A trait's default method is the method of each type implementing it without its own.
+    for item in &module.items {
+        if let Item::Impl(imp) = item
+            && let Some(ast::TypeExpr { kind: ast::TypeKind::Named { name: trait_name, .. }, .. }) = &imp.trait_name
+            && let ast::TypeKind::Named { name, .. } = &imp.target.kind
+        {
+            let defaults: Vec<(String, &FnDef)> = cx
+                .trait_fns
+                .iter()
+                .filter(|((t, _), def)| *t == trait_name.name && def.body.is_some())
+                .map(|((_, m), def)| (m.clone(), *def))
+                .collect();
+            for (m, def) in defaults {
+                cx.methods.entry((name.name.clone(), m)).or_insert((def, true));
+            }
+        }
+    }
     let mut functions = Vec::new();
     for item in &module.items {
         match item {
@@ -98,23 +275,33 @@ pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, 
                     cx.unsupported(imp.span, "this impl");
                     continue;
                 };
+                let generic_owner = matches!(cx.checked.declared.get(&name.name), Some(d) if !d.params().is_empty());
                 for m in &imp.methods {
                     let sig =
                         cx.checked.methods.get(&name.name).and_then(|ms| ms.get(&m.name.name)).map(|m| m.sig.clone());
                     let Some(sig) = sig else { continue };
-                    if !sig.type_params.is_empty()
-                        || matches!(cx.checked.declared.get(&name.name), Some(d) if !d.params().is_empty())
-                    {
-                        cx.unsupported(m.name.span, "a method of a generic type");
+                    // A generic one is compiled per instance, when a call names one.
+                    if generic_owner || !sig.type_params.is_empty() {
                         continue;
                     }
-                    if let Some(function) = cx.lower_function(m, &sig, method_name(&name.name, &m.name.name)) {
+                    let name = method_name(&name.name, &m.name.name);
+                    if let Some(function) = cx.lower_function(m, &sig, name, Subst::default()) {
                         functions.push(function);
                     }
                 }
             }
+            Item::Trait(t) => {
+                if !t.type_params.is_empty() {
+                    cx.unsupported(t.name.span, "a generic trait");
+                }
+            }
             Item::Test(_) | Item::Error(_) | Item::Record(_) | Item::Sum(_) => {}
             other => cx.unsupported(other.span(), "this declaration"),
+        }
+    }
+    while let Some(p) = cx.pending.pop() {
+        if let Some(function) = cx.lower_function(p.def, &p.sig, p.name, p.subst) {
+            functions.push(function);
         }
     }
     if !cx.diagnostics.is_empty() {
@@ -131,6 +318,8 @@ pub fn lower(module: &Module, checked: &Checked, text: &str) -> Result<Lowered, 
         declared: checked.declared.clone(),
         lambdas,
         fn_refs: std::mem::take(&mut cx.fn_refs),
+        traits: checked.traits.iter().map(|(name, methods)| (name.clone(), methods.len())).collect(),
+        vtables: std::mem::take(&mut cx.vtables),
     })
 }
 
@@ -147,8 +336,16 @@ struct Context<'a> {
     defaults: HashMap<(String, Option<usize>), Vec<Option<&'a ast::Expr>>>,
     /// The lambdas lowered so far: each one's function, the types it captures and its type.
     lambdas: Vec<(Function, Vec<Ty>, Ty)>,
-    /// Each method of an `impl`, by its type and name.
-    methods: HashMap<(String, String), &'a FnDef>,
+    /// Each method of a type, by the type and its name, and whether it is a trait's default.
+    methods: HashMap<(String, String), (&'a FnDef, bool)>,
+    /// Each method of a trait, by the trait and its name.
+    trait_fns: HashMap<(String, String), &'a FnDef>,
+    /// The C name of each instance of a generic function, by the generic one's and the types.
+    instances: HashMap<(String, Vec<Ty>), String>,
+    /// The instances named and not yet lowered.
+    pending: Vec<Pending<'a>>,
+    vtables: Vec<VTable>,
+    vtable_ids: HashMap<(String, Ty), usize>,
     fn_refs: BTreeSet<String>,
     diagnostics: Vec<Diagnostic>,
 }
@@ -166,18 +363,78 @@ impl<'a> Context<'a> {
         self.text.get(span.range()).unwrap_or("")
     }
 
+    /// The function `f`, unless it is generic: that one is compiled per instance.
     fn function(&mut self, f: &'a FnDef) -> Option<Function> {
         let sig = self.checked.functions.get(&f.name.name)?.clone();
         if !sig.type_params.is_empty() {
-            self.unsupported(f.name.span, "a generic function");
             return None;
         }
-        self.lower_function(f, &sig, function_name(&f.name.name))
+        self.lower_function(f, &sig, function_name(&f.name.name), Subst::default())
     }
 
-    /// The function `f`, of signature `sig`, as the C function `name`: an `inout` parameter is a
-    /// pointer to the caller's slot.
-    fn lower_function(&mut self, f: &'a FnDef, sig: &FnSig, name: String) -> Option<Function> {
+    /// The C name of `def`, of signature `sig`, for the type arguments of `subst`: `base` itself
+    /// when there are none, else an instance, lowered after the module's own functions.
+    fn instance(&mut self, def: &'a FnDef, sig: &FnSig, base: String, subst: Subst) -> String {
+        if subst.names.is_empty() {
+            return base;
+        }
+        let key = (base, subst.types.clone());
+        if let Some(name) = self.instances.get(&key) {
+            return name.clone();
+        }
+        let name = instance_name(&key.0, self.instances.len());
+        self.instances.insert(key, name.clone());
+        self.pending.push(Pending { def, sig: subst.sig(sig), name: name.clone(), subst });
+        name
+    }
+
+    /// The method `name` of the type `owner[owner_args]`, with the method's own type arguments
+    /// `own`: its C name, and its signature for them.
+    fn method_instance(&mut self, owner: &str, owner_args: &[Ty], name: &str, own: &[Ty]) -> Option<(String, FnSig)> {
+        let method = self.checked.methods.get(owner)?.get(name)?.clone();
+        let &(def, default) = self.methods.get(&(owner.to_string(), name.to_string()))?;
+        let mut subst = Subst { names: method.owner_params.clone(), types: owner_args.to_vec() };
+        subst.names.extend(method.sig.type_params.iter().map(|(n, _)| n.clone()));
+        subst.types.extend(own.iter().cloned());
+        if default {
+            subst.names.push("Self".to_string());
+            subst.types.push(Ty::Adt(owner.to_string(), owner_args.to_vec()));
+        }
+        let sig = subst.sig(&method.sig);
+        let c_name = self.instance(def, &method.sig, method_name(owner, name), subst);
+        Some((c_name, sig))
+    }
+
+    /// The table of `ty`'s methods for the trait `trait_name`, made the first time it is needed.
+    fn vtable(&mut self, trait_name: &str, ty: &Ty) -> Option<usize> {
+        let key = (trait_name.to_string(), ty.clone());
+        if let Some(&index) = self.vtable_ids.get(&key) {
+            return Some(index);
+        }
+        let Ty::Adt(owner, owner_args) = ty else { return None };
+        let methods = self.checked.traits.get(trait_name)?.clone();
+        let mut slots = Vec::new();
+        for (name, m) in &methods {
+            let slot = if dyn_callable(m) {
+                self.method_instance(owner, owner_args, name, &[]).map(|(function, sig)| VSlot {
+                    function,
+                    params: sig.params[1..].iter().map(|p| p.ty.clone()).collect(),
+                    ret: call_ret(&sig),
+                })
+            } else {
+                None
+            };
+            slots.push(slot);
+        }
+        let index = self.vtables.len();
+        self.vtables.push(VTable { trait_name: trait_name.to_string(), ty: ty.clone(), slots });
+        self.vtable_ids.insert(key, index);
+        Some(index)
+    }
+
+    /// The function `f`, of signature `sig`, as the C function `name`, its expressions' types
+    /// read through `subst`: an `inout` parameter is a pointer to the caller's slot.
+    fn lower_function(&mut self, f: &'a FnDef, sig: &FnSig, name: String, subst: Subst) -> Option<Function> {
         let line = self.line(f.span.start);
         let ret = match &sig.error {
             Some(error) => Ty::Result(Box::new(sig.ret.clone()), Box::new(error.clone())),
@@ -197,6 +454,7 @@ impl<'a> Context<'a> {
             vars: HashMap::new(),
             blocks: vec![Vec::new()],
             line,
+            subst,
         };
         for p in &sig.params {
             let local = b.declare(p.span, &p.name, p.ty.clone());
@@ -226,6 +484,8 @@ struct Builder<'c, 'a> {
     vars: HashMap<Span, Local>,
     blocks: Vec<Block>,
     line: u32,
+    /// The type arguments of the instance being lowered.
+    subst: Subst,
 }
 
 /// What a loop gives its body: the element, and its type.
@@ -308,7 +568,7 @@ impl<'c, 'a> Builder<'c, 'a> {
     }
 
     fn ty(&self, e: &ast::Expr) -> Ty {
-        self.cx.checked.types.get(&e.span).cloned().unwrap_or(Ty::Error)
+        self.subst.apply(self.cx.checked.types.get(&e.span).cloned().unwrap_or(Ty::Error))
     }
 
     fn local_ty(&self, operand: &Operand) -> Ty {
@@ -421,7 +681,7 @@ impl<'c, 'a> Builder<'c, 'a> {
 
     /// The type a `var` or annotated local was declared with, as the checker resolved it.
     fn var_type(&self, span: Span) -> Option<Ty> {
-        self.cx.checked.types.get(&span).cloned()
+        self.cx.checked.types.get(&span).cloned().map(|t| self.subst.apply(t))
     }
 
     /// `target = value`: a name declared or assigned again, a tuple unpacked, an element set.
@@ -633,6 +893,21 @@ impl<'c, 'a> Builder<'c, 'a> {
                 }
                 let v = self.coerce(op, inner);
                 self.hold(to.clone(), Expr::OptNew { ty: to.clone(), value: Some(v) })
+            }
+            Ty::Dyn(trait_name) if matches!(from, Ty::Adt(..)) => match self.cx.vtable(trait_name, &from) {
+                Some(vtable) => self.hold(to.clone(), Expr::ToDyn { value: op, ty: to.clone(), vtable }),
+                None => op,
+            },
+            Ty::List(to_elem)
+                if matches!(**to_elem, Ty::Dyn(_)) && matches!(&from, Ty::List(e) if matches!(**e, Ty::Adt(..))) =>
+            {
+                let (to_elem, from_elem) = ((**to_elem).clone(), element(&from));
+                let list = self.new_list(&to_elem);
+                self.indexed(&[(op, from_elem)], false, &mut |b, x, _| {
+                    let d = b.coerce(x, &to_elem);
+                    b.push_element(list, d, &to_elem);
+                });
+                Operand::Local(list)
             }
             _ if matches!(&from, Ty::Optional(inner) if **inner == *to) => self.hold(to.clone(), Expr::OptValue(op)),
             _ => op,
@@ -1256,10 +1531,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 }
                 None => match self.cx.variant_of.get(name).cloned() {
                     Some((_, variant)) => Value::Expr(Expr::UnitVariant { ty: self.ty(e), variant }),
-                    None if self.cx.fns.contains_key(name.as_str()) => {
-                        self.cx.fn_refs.insert(name.clone());
-                        Value::Expr(Expr::FnRef(name.clone()))
-                    }
+                    None if self.cx.fns.contains_key(name.as_str()) => self.fn_ref(e, name),
                     None => Value::Done(self.unsupported(e.span, &format!("the value `{name}`"))),
                 },
             },
@@ -1648,7 +1920,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             return Value::Done(self.unsupported(func.span, "a call of this value"));
         };
         if let Some(f) = self.cx.fns.get(name.as_str()).copied() {
-            return self.call_function(name, f, args);
+            return self.call_function(whole, name, f, args);
         }
         if matches!(self.cx.checked.declared.get(name), Some(TypeDef::Record { .. })) {
             let ty = self.ty(whole);
@@ -1967,6 +2239,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             vars: HashMap::new(),
             blocks: vec![Vec::new()],
             line,
+            subst: self.subst.clone(),
         };
         let closure = b.new_local(ty.clone(), Some("self"));
         b.function.params.push(closure);
@@ -2003,9 +2276,20 @@ impl<'c, 'a> Builder<'c, 'a> {
             }
             ExprKind::Name(name) if self.local_of(func.span).is_none() => {
                 if let Some(sig) = self.cx.checked.functions.get(name).cloned() {
+                    let f = self.cx.fns[name.as_str()];
+                    let names: Vec<String> = sig.type_params.iter().map(|(n, _)| n.clone()).collect();
+                    let mut map = HashMap::new();
+                    for ((_, t), p) in args.iter().zip(&sig.params) {
+                        bind(&p.ty, t, &names, &mut map);
+                    }
+                    let Some(subst) = self.subst_for(names, &map) else {
+                        return (self.unsupported(func.span, "this generic function here"), Ty::Error);
+                    };
+                    let c_name = self.cx.instance(f, &sig, function_name(name), subst.clone());
+                    let sig = subst.sig(&sig);
                     let operands = args.into_iter().zip(&sig.params).map(|((a, _), p)| self.coerce(a, &p.ty)).collect();
                     let ty = sig.ret.clone();
-                    return (self.hold(ty.clone(), Expr::Call(function_name(name), operands)), ty);
+                    return (self.hold(ty.clone(), Expr::Call(c_name, operands)), ty);
                 }
                 let Some((a, t)) = args.into_iter().next() else {
                     return (self.unsupported(func.span, "this function"), Ty::Error);
@@ -2070,7 +2354,15 @@ impl<'c, 'a> Builder<'c, 'a> {
             ExprKind::Lambda { body, .. } => self.ty(body),
             ExprKind::Name(name) if self.local_of(func.span).is_none() => {
                 if let Some(sig) = self.cx.checked.functions.get(name) {
-                    return sig.ret.clone();
+                    let names: Vec<String> = sig.type_params.iter().map(|(n, _)| n.clone()).collect();
+                    let mut map = HashMap::new();
+                    if let Some(p) = sig.params.first() {
+                        bind(&p.ty, arg, &names, &mut map);
+                    }
+                    return match self.subst_for(names, &map) {
+                        Some(subst) => subst.apply(sig.ret.clone()),
+                        None => Ty::Error,
+                    };
                 }
                 match name.as_str() {
                     "len" | "ord" | "int" => INT,
@@ -2131,10 +2423,11 @@ impl<'c, 'a> Builder<'c, 'a> {
         let ty = self.ty(object);
         let owner = match &ty {
             Ty::Adt(owner, _) | Ty::TypeName(owner) => Some(owner.clone()),
+            Ty::Dyn(trait_name) => return self.dyn_method(whole, object, trait_name, name, args),
             _ => None,
         };
         if let Some(owner) = owner
-            && let Some(value) = self.user_method(object, &owner, name, args)
+            && let Some(value) = self.user_method(whole, object, &owner, name, args)
         {
             return value;
         }
@@ -2581,11 +2874,62 @@ impl<'c, 'a> Builder<'c, 'a> {
         Value::Done(Operand::Const(Const::Unit))
     }
 
-    fn call_function(&mut self, name: &str, f: &'a FnDef, args: &[AstArg]) -> Value {
+    fn call_function(&mut self, whole: &ast::Expr, name: &str, f: &'a FnDef, args: &[AstArg]) -> Value {
         let Some(sig) = self.cx.checked.functions.get(name).cloned() else {
             return Value::Done(self.unsupported(f.name.span, "this function"));
         };
-        self.call_with(function_name(name), &f.params, &sig.params, None, args)
+        let names: Vec<String> = sig.type_params.iter().map(|(n, _)| n.clone()).collect();
+        let mut map = HashMap::new();
+        if !names.is_empty() {
+            self.bind_args(&f.params, &sig.params, args, &names, &mut map);
+            bind(&call_ret(&sig), &self.ty(whole), &names, &mut map);
+        }
+        let Some(subst) = self.subst_for(names, &map) else {
+            return Value::Done(self.unsupported(whole.span, "this call of a generic function"));
+        };
+        let c_name = self.cx.instance(f, &sig, function_name(name), subst.clone());
+        let sig = subst.sig(&sig);
+        self.call_with(c_name, &f.params, &sig.params, None, args)
+    }
+
+    /// The type arguments the arguments of a call give its type parameters `names`.
+    fn bind_args(
+        &self,
+        params: &[ast::Param],
+        sigs: &[ParamSig],
+        args: &[AstArg],
+        names: &[String],
+        map: &mut HashMap<String, Ty>,
+    ) {
+        for (slot, sig) in arg_slots(params, args).into_iter().zip(sigs) {
+            if let Some(a) = slot {
+                bind(&sig.ty, &self.ty(a.expr()), names, map);
+            }
+        }
+    }
+
+    /// The instance `map` makes of the type parameters `names`, if it gives each a type.
+    fn subst_for(&self, names: Vec<String>, map: &HashMap<String, Ty>) -> Option<Subst> {
+        let types = names.iter().map(|n| map.get(n).cloned()).collect::<Option<Vec<Ty>>>()?;
+        Some(Subst { names, types })
+    }
+
+    /// The module's function `name` as a value: an instance of a generic one for the function
+    /// type it is used as.
+    fn fn_ref(&mut self, e: &ast::Expr, name: &str) -> Value {
+        let (Some(&f), Some(sig)) = (self.cx.fns.get(name), self.cx.checked.functions.get(name).cloned()) else {
+            return Value::Done(self.unsupported(e.span, &format!("the value `{name}`")));
+        };
+        let names: Vec<String> = sig.type_params.iter().map(|(n, _)| n.clone()).collect();
+        let mut map = HashMap::new();
+        let pattern = Ty::Func(sig.params.iter().map(|p| p.ty.clone()).collect(), Box::new(call_ret(&sig)));
+        bind(&pattern, &self.ty(e), &names, &mut map);
+        let Some(subst) = self.subst_for(names, &map) else {
+            return Value::Done(self.unsupported(e.span, "this generic function as a value"));
+        };
+        let c_name = self.cx.instance(f, &sig, function_name(name), subst);
+        self.cx.fn_refs.insert(c_name.clone());
+        Value::Expr(Expr::FnRef(c_name))
     }
 
     /// A call of the C function `c_name`, whose lotml parameters are `params` (`sigs` their
@@ -2599,23 +2943,7 @@ impl<'c, 'a> Builder<'c, 'a> {
         receiver: Option<Arg>,
         args: &[AstArg],
     ) -> Value {
-        let mut slots: Vec<Option<&AstArg>> = vec![None; params.len()];
-        let mut next = 0;
-        for a in args {
-            match a {
-                AstArg::Positional(_) | AstArg::Inout(..) => {
-                    if next < slots.len() {
-                        slots[next] = Some(a);
-                    }
-                    next += 1;
-                }
-                AstArg::Keyword(key, _) => {
-                    if let Some(i) = params.iter().position(|p| p.name.name == key.name) {
-                        slots[i] = Some(a);
-                    }
-                }
-            }
-        }
+        let slots = arg_slots(params, args);
         let mut all: Vec<Arg> = receiver.into_iter().collect();
         for (i, (slot, param)) in slots.iter().zip(params).enumerate() {
             let ty = sigs.get(i).map(|s| s.ty.clone()).unwrap_or(Ty::Error);
@@ -2645,26 +2973,79 @@ impl<'c, 'a> Builder<'c, 'a> {
     }
 
     /// `object.name(args)` where `object` is a value or the type of a declared record or sum
-    /// type with that method.
-    fn user_method(&mut self, object: &ast::Expr, owner: &str, name: &str, args: &[AstArg]) -> Option<Value> {
+    /// type with that method: the instance for the receiver's type arguments and the method's.
+    fn user_method(
+        &mut self,
+        whole: &ast::Expr,
+        object: &ast::Expr,
+        owner: &str,
+        name: &str,
+        args: &[AstArg],
+    ) -> Option<Value> {
         let method = self.cx.checked.methods.get(owner)?.get(name)?.clone();
-        let f = *self.cx.methods.get(&(owner.to_string(), name.to_string()))?;
-        let c_name = method_name(owner, name);
-        let (params, sigs, receiver) = match method.receiver {
-            None => (&f.params[..], &method.sig.params[..], None),
-            Some(convention) => {
-                let receiver = if convention == ast::Convention::Inout {
-                    match self.place(object) {
-                        Some(place) => Arg::Slot(place),
-                        None => return Some(Value::Done(self.unsupported(object.span, "this receiver"))),
-                    }
-                } else {
-                    Arg::Value(self.value(object))
-                };
-                (&f.params[1..], &method.sig.params[1..], Some(receiver))
+        let (f, _) = *self.cx.methods.get(&(owner.to_string(), name.to_string()))?;
+        let mut names = method.owner_params.clone();
+        names.extend(method.sig.type_params.iter().map(|(n, _)| n.clone()));
+        let mut map = HashMap::new();
+        if let Ty::Adt(_, owner_args) = self.ty(object) {
+            for (p, a) in method.owner_params.iter().zip(owner_args) {
+                map.insert(p.clone(), a);
             }
+        }
+        let skip = usize::from(method.receiver.is_some());
+        self.bind_args(&f.params[skip..], &method.sig.params[skip..], args, &names, &mut map);
+        bind(&call_ret(&method.sig), &self.ty(whole), &names, &mut map);
+        let Some(subst) = self.subst_for(names, &map) else {
+            return Some(Value::Done(self.unsupported(whole.span, "this call of a generic method")));
         };
-        Some(self.call_with(c_name, params, sigs, receiver, args))
+        let (owner_args, own) = subst.types.split_at(method.owner_params.len());
+        let (c_name, sig) = self.cx.method_instance(owner, owner_args, name, own)?;
+        let receiver = match method.receiver {
+            None => None,
+            Some(ast::Convention::Inout) => match self.place(object) {
+                Some(place) => Some(Arg::Slot(place)),
+                None => return Some(Value::Done(self.unsupported(object.span, "this receiver"))),
+            },
+            Some(_) => Some(Arg::Value(self.value(object))),
+        };
+        Some(self.call_with(c_name, &f.params[skip..], &sig.params[skip..], receiver, args))
+    }
+
+    /// `object.name(args)` where `object` is a `dyn trait_name`: a call through its table.
+    fn dyn_method(
+        &mut self,
+        whole: &ast::Expr,
+        object: &ast::Expr,
+        trait_name: &str,
+        name: &str,
+        args: &[AstArg],
+    ) -> Value {
+        let found = self.cx.checked.traits.get(trait_name).and_then(|methods| {
+            let slot = methods.keys().position(|k| k == name)?;
+            Some((slot, methods[name].clone()))
+        });
+        let def = self.cx.trait_fns.get(&(trait_name.to_string(), name.to_string())).copied();
+        let (Some((slot, method)), Some(def)) = (found, def) else {
+            return Value::Done(self.unsupported(whole.span, "this method of a `dyn` value"));
+        };
+        if !dyn_callable(&method) {
+            return Value::Done(self.unsupported(whole.span, "this call through `dyn`"));
+        }
+        let ty = self.ty(object);
+        let receiver = self.value(object);
+        let sigs = &method.sig.params[1..];
+        match self.call_with(String::new(), &def.params[1..], sigs, None, args) {
+            Value::Expr(Expr::Call(_, args)) => Value::Expr(Expr::CallDyn {
+                receiver,
+                ty,
+                slot,
+                args,
+                params: sigs.iter().map(|p| p.ty.clone()).collect(),
+                ret: call_ret(&method.sig),
+            }),
+            Value::Expr(_) => Value::Done(self.unsupported(whole.span, "an `inout` argument through `dyn`")),
+            done => done,
+        }
     }
 }
 

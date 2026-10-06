@@ -24,17 +24,21 @@ enum Shape {
     Record(String, Vec<Field>),
     /// Each variant: its name, and its fields, `None` for a variant written without them.
     Sum(Vec<(String, Option<Vec<Field>>)>),
+    /// A `dyn` value of the trait: the cell, and the table of its type's methods.
+    Dyn(String),
 }
 
 pub struct Types<'d> {
     order: Vec<Ty>,
     pub ids: HashMap<Ty, usize>,
     declared: &'d BTreeMap<String, TypeDef>,
+    /// How many methods each trait's table holds.
+    traits: &'d BTreeMap<String, usize>,
 }
 
 impl<'d> Types<'d> {
-    pub fn new(declared: &'d BTreeMap<String, TypeDef>) -> Types<'d> {
-        Types { order: Vec::new(), ids: HashMap::new(), declared }
+    pub fn new(declared: &'d BTreeMap<String, TypeDef>, traits: &'d BTreeMap<String, usize>) -> Types<'d> {
+        Types { order: Vec::new(), ids: HashMap::new(), declared, traits }
     }
 
     pub fn register(&mut self, ty: &Ty) {
@@ -65,6 +69,7 @@ impl<'d> Types<'d> {
                 self.register(e);
                 self.add(ty);
             }
+            Ty::Dyn(_) => self.add(ty),
             Ty::Adt(..) => {
                 if self.ids.contains_key(ty) {
                     return;
@@ -97,6 +102,7 @@ impl<'d> Types<'d> {
             Ty::Tuple(items) => Shape::Tuple(items.clone()),
             Ty::Optional(t) => Shape::Optional((**t).clone()),
             Ty::Result(t, e) => Shape::Result((**t).clone(), (**e).clone()),
+            Ty::Dyn(name) => Shape::Dyn(name.clone()),
             Ty::Adt(name, args) => {
                 let fields = |fields: &[lotml_check::FieldSig], params: &[String]| {
                     fields.iter().map(|f| Field { name: f.name.clone(), ty: f.ty.substitute(params, args) }).collect()
@@ -135,7 +141,7 @@ impl<'d> Types<'d> {
             Ty::Dict(..) => "lt_dict *".into(),
             Ty::Set(_) => "lt_set *".into(),
             Ty::Func(..) => "lt_closure *".into(),
-            Ty::Tuple(_) | Ty::Optional(_) | Ty::Result(..) => format!("lt_t{}", self.ids[ty]),
+            Ty::Tuple(_) | Ty::Optional(_) | Ty::Result(..) | Ty::Dyn(_) => format!("lt_t{}", self.ids[ty]),
             Ty::Adt(..) => format!("lt_t{} *", self.ids[ty]),
             _ => "uint8_t".into(),
         }
@@ -143,7 +149,7 @@ impl<'d> Types<'d> {
 
     /// Whether a value of `ty` is a struct held by value, which C zero-initialises with `{0}`.
     pub fn by_value(&self, ty: &Ty) -> bool {
-        matches!(ty, Ty::Tuple(_) | Ty::Optional(_) | Ty::Result(..))
+        matches!(ty, Ty::Tuple(_) | Ty::Optional(_) | Ty::Result(..) | Ty::Dyn(_))
     }
 
     /// The descriptor of `ty`, as a C pointer.
@@ -164,7 +170,9 @@ impl<'d> Types<'d> {
             Ty::Dict(..) => "&lt_type_dict".into(),
             Ty::Set(_) => "&lt_type_set".into(),
             Ty::Func(..) => "&lt_type_closure".into(),
-            Ty::Tuple(_) | Ty::Optional(_) | Ty::Result(..) | Ty::Adt(..) => format!("&lt_type_t{}", self.ids[ty]),
+            Ty::Tuple(_) | Ty::Optional(_) | Ty::Result(..) | Ty::Adt(..) | Ty::Dyn(_) => {
+                format!("&lt_type_t{}", self.ids[ty])
+            }
             _ => "&lt_type_none".into(),
         }
     }
@@ -201,6 +209,13 @@ impl<'d> Types<'d> {
     /// The structs, functions and descriptors of the program's types.
     pub fn definitions(&self) -> String {
         let mut out = String::new();
+        for (name, &n) in self.traits {
+            let _ = writeln!(
+                out,
+                "typedef struct lt_vt_{name} {{ const lt_type *type; void (*m[{}])(void); }} lt_vt_{name};",
+                n.max(1)
+            );
+        }
         for (id, ty) in self.order.iter().enumerate() {
             if matches!(ty, Ty::Adt(..)) {
                 let _ = writeln!(out, "typedef struct lt_t{id} lt_t{id};");
@@ -219,6 +234,7 @@ impl<'d> Types<'d> {
                         format!("{} error;", self.c_type(&e)),
                     ]
                 }
+                Shape::Dyn(name) => vec!["void *cell;".to_string(), format!("const lt_vt_{name} *v;")],
                 Shape::Record(..) | Shape::Sum(_) => continue,
             };
             let _ = writeln!(out, "typedef struct lt_t{id} {{ {} }} lt_t{id};", fields.join(" "));
@@ -286,6 +302,7 @@ impl<'d> Types<'d> {
                 Shape::Result(t, e) => self.result_functions(&mut out, id, &t, &e),
                 Shape::Record(name, fields) => self.record_functions(&mut out, id, &name, &fields),
                 Shape::Sum(variants) => self.sum_functions(&mut out, id, &variants),
+                Shape::Dyn(name) => dyn_functions(&mut out, id, &name),
             }
         }
         out.push('\n');
@@ -607,4 +624,32 @@ impl<'d> Types<'d> {
              lt_dec_t{id}(slot); return NULL; }}"
         );
     }
+}
+
+/// The functions of a `dyn` type: each one passes the cell to its type's own.
+fn dyn_functions(out: &mut String, id: usize, name: &str) {
+    let get = format!("lt_t{id} *v = (lt_t{id} *)p; if (v->cell == NULL) return;");
+    let _ = writeln!(out, "static void lt_inc_t{id}(void *p) {{ {get} v->v->type->inc(&v->cell); }}");
+    let _ = writeln!(out, "static void lt_dec_t{id}(void *p) {{ {get} v->v->type->dec(&v->cell); }}");
+    let _ = writeln!(out, "static void lt_share_t{id}(void *p) {{ {get} v->v->type->share(&v->cell); }}");
+    let both = format!("const lt_t{id} *x = (const lt_t{id} *)a, *y = (const lt_t{id} *)b;");
+    let _ = writeln!(
+        out,
+        "static bool lt_eq_t{id}(const void *a, const void *b) {{ {both} \
+         return x->v->type == y->v->type && x->v->type->eq(&x->cell, &y->cell); }}"
+    );
+    let _ = writeln!(
+        out,
+        "static int lt_cmp_t{id}(const void *a, const void *b, lt_at at) {{ {both} \
+         if (x->v->type != y->v->type) lt_unorderable(at, \"dyn {}\"); return x->v->type->cmp(&x->cell, &y->cell, at); }}",
+        c_string_text(name.as_bytes())
+    );
+    let _ = writeln!(
+        out,
+        "static int64_t lt_hash_t{id}(const void *p) {{ const lt_t{id} *v = (const lt_t{id} *)p; return v->v->type->hash(&v->cell); }}"
+    );
+    let _ = writeln!(
+        out,
+        "static void lt_repr_t{id}(lt_buf *b, const void *p) {{ const lt_t{id} *v = (const lt_t{id} *)p; v->v->type->repr(b, &v->cell); }}"
+    );
 }

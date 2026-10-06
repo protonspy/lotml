@@ -317,8 +317,24 @@ pub enum Expr {
         ty: Ty,
         captures: Vec<Operand>,
     },
-    /// The module's function `name` as a value.
+    /// The module's function `name`, its C name, as a value.
     FnRef(String),
+    /// The record or sum value `value` as the `dyn` type `ty`, calling through the table `vtable`.
+    ToDyn {
+        value: Operand,
+        ty: Ty,
+        vtable: usize,
+    },
+    /// A call of the method in slot `slot` of the `dyn` value `receiver`, of type `ty`, whose
+    /// other parameters are `params` and result `ret`; the receiver and the arguments taken over.
+    CallDyn {
+        receiver: Operand,
+        ty: Ty,
+        slot: usize,
+        args: Vec<Operand>,
+        params: Vec<Ty>,
+        ret: Ty,
+    },
     /// A call of the closure `callee`, of type `ty`; the closure and the arguments taken over.
     CallClosure {
         callee: Operand,
@@ -375,6 +391,11 @@ impl Expr {
             Expr::OptNew { value, .. } => value.iter().for_each(f),
             Expr::Closure { captures, .. } => captures.iter().for_each(f),
             Expr::FnRef(_) => {}
+            Expr::ToDyn { value, .. } => f(value),
+            Expr::CallDyn { receiver, args, .. } => {
+                f(receiver);
+                args.iter().for_each(f);
+            }
             Expr::CallClosure { callee, args, .. } => {
                 f(callee);
                 args.iter().for_each(f);
@@ -545,7 +566,13 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
         | Expr::Len(_, ty)
         | Expr::Closure { ty, .. }
         | Expr::CallClosure { ty, .. }
+        | Expr::ToDyn { ty, .. }
         | Expr::Compare(_, _, _, ty) => f(ty),
+        Expr::CallDyn { ty, params, ret, .. } => {
+            f(ty);
+            params.iter().for_each(&mut *f);
+            f(ret);
+        }
         Expr::Rt { args, .. } | Expr::CallSlots(_, args) => arg_types(args, f),
         Expr::RtValue { args, ty, .. } => {
             arg_types(args, f);
@@ -559,7 +586,9 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
 /// Whether a value of `ty` holds a count: a cell, or a struct holding one.
 pub fn counted(ty: &Ty) -> bool {
     match ty {
-        Ty::Str | Ty::List(_) | Ty::Set(_) | Ty::Dict(..) | Ty::Heap(_) | Ty::Adt(..) | Ty::Func(..) => true,
+        Ty::Str | Ty::List(_) | Ty::Set(_) | Ty::Dict(..) | Ty::Heap(_) | Ty::Adt(..) | Ty::Func(..) | Ty::Dyn(_) => {
+            true
+        }
         Ty::Tuple(items) => items.iter().any(counted),
         Ty::Optional(t) => counted(t),
         Ty::Result(t, e) => counted(t) || counted(e),

@@ -89,6 +89,9 @@ pub struct Checked {
     pub foreign: BTreeMap<String, BTreeMap<String, FnSig>>,
     /// The methods of each type the module declares, by type and by name.
     pub methods: BTreeMap<String, BTreeMap<String, Method>>,
+    /// The methods of each trait the module declares, by trait and by name; `self` is of the
+    /// type `Self`.
+    pub traits: BTreeMap<String, BTreeMap<String, Method>>,
 }
 
 impl Checked {
@@ -171,6 +174,7 @@ pub fn check_resolved_with(module: &Module, text: &str, interfaces: &Interfaces)
         .filter(|(n, _)| checked.declared.contains_key(*n))
         .map(|(n, m)| (n.clone(), m.clone()))
         .collect();
+    checked.traits = program.traits;
     checked.foreign = program.foreign;
     checked
 }

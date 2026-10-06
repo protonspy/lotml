@@ -17,7 +17,14 @@ use crate::types::Types;
 pub fn program(lowered: &Lowered, file: &str) -> String {
     let file = c_string_text(file.as_bytes());
     let mut literals = BTreeMap::new();
-    let mut types = Types::new(&lowered.declared);
+    let mut types = Types::new(&lowered.declared, &lowered.traits);
+    for vtable in &lowered.vtables {
+        types.register(&vtable.ty);
+        for slot in vtable.slots.iter().flatten() {
+            slot.params.iter().for_each(|t| types.register(t));
+            types.register(&slot.ret);
+        }
+    }
     for f in &lowered.functions {
         block_operands(&f.body, &mut |o| {
             if let Operand::Const(Const::Str(text)) = o {
@@ -49,6 +56,7 @@ pub fn program(lowered: &Lowered, file: &str) -> String {
         let _ = writeln!(out, "{};", signature(f, &types));
     }
     out.push('\n');
+    vtables(&mut out, lowered, &types);
     closures(&mut out, lowered, &types);
     for f in &lowered.functions {
         Writer {
@@ -97,6 +105,45 @@ fn closure_call_type(ty: &Ty, types: &Types) -> String {
     format!("{ret} (*)({})", all.join(", "))
 }
 
+/// Each table of a type's methods for a trait: a function per slot taking the cell untyped and
+/// calling the type's method.
+fn vtables(out: &mut String, lowered: &Lowered, types: &Types) {
+    for (k, vtable) in lowered.vtables.iter().enumerate() {
+        let mut slots = Vec::new();
+        for (i, slot) in vtable.slots.iter().enumerate() {
+            let Some(slot) = slot else {
+                slots.push("NULL".to_string());
+                continue;
+            };
+            let params: Vec<&Ty> = slot.params.iter().filter(|t| !is_unit(t)).collect();
+            let mut declared = vec!["void *self".to_string()];
+            declared.extend(params.iter().enumerate().map(|(i, t)| format!("{} a{i}", types.c_type(t))));
+            let mut passed = vec![format!("({})self", types.c_type(&vtable.ty))];
+            passed.extend((0..params.len()).map(|i| format!("a{i}")));
+            let ret = c_ret(&slot.ret, types);
+            let call = format!("{}({})", slot.function, passed.join(", "));
+            let body = if ret == "void" { format!("{call};") } else { format!("return {call};") };
+            let _ = writeln!(out, "static {ret} lt_vm{k}_{i}({}) {{ {body} }}", declared.join(", "));
+            slots.push(format!("(void (*)(void))lt_vm{k}_{i}"));
+        }
+        if slots.is_empty() {
+            slots.push("NULL".to_string());
+        }
+        let _ = writeln!(
+            out,
+            "static const lt_vt_{} lt_vt{k} = {{{}, {{{}}}}};",
+            vtable.trait_name,
+            types.desc(&vtable.ty),
+            slots.join(", ")
+        );
+    }
+}
+
+/// The C result type of a function returning `ty`: `void` for a unit or one that never returns.
+fn c_ret(ty: &Ty, types: &Types) -> String {
+    if is_unit(ty) || matches!(ty, Ty::Never) { "void".to_string() } else { types.c_type(ty) }
+}
+
 /// Each lambda's closure struct and the function dropping what it captured; each function used
 /// as a value, a static closure calling it through a function taking the closure first.
 fn closures(out: &mut String, lowered: &Lowered, types: &Types) {
@@ -118,7 +165,7 @@ fn closures(out: &mut String, lowered: &Lowered, types: &Types) {
         );
     }
     for name in &lowered.fn_refs {
-        let Some(f) = lowered.functions.iter().find(|f| f.name == function_name(name)) else { continue };
+        let Some(f) = lowered.functions.iter().find(|f| f.name == *name) else { continue };
         let params: Vec<&Local> = f.params.iter().filter(|&&p| !is_unit(&f.locals[p].ty)).collect();
         let declared: Vec<String> =
             params.iter().enumerate().map(|(i, &&p)| format!("{} a{i}", types.c_type(&f.locals[p].ty))).collect();
@@ -647,6 +694,22 @@ impl Writer<'_> {
             Expr::ReadPlace(place) => format!("(*{})", self.place(place).1),
             Expr::Closure { .. } => "0 /* written by its Let */".to_string(),
             Expr::FnRef(name) => format!("((lt_closure *)&lt_fnref_{name})"),
+            Expr::ToDyn { value, ty, vtable } => {
+                format!("(({}){{(void *){}, &lt_vt{vtable}}})", self.c_type(ty), self.operand(value))
+            }
+            Expr::CallDyn { receiver, slot, args, params, ret, .. } => {
+                let r = self.operand(receiver);
+                let mut types = vec!["void *".to_string()];
+                let mut passed = vec![format!("{r}.cell")];
+                for (a, t) in args.iter().zip(params) {
+                    if !is_unit(t) {
+                        types.push(self.c_type(t));
+                        passed.push(self.operand(a));
+                    }
+                }
+                let ret = c_ret(ret, self.types);
+                format!("(({ret} (*)({})){r}.v->m[{slot}])({})", types.join(", "), passed.join(", "))
+            }
             Expr::Capture { closure, lambda, index } => {
                 format!("((lt_c{lambda} *)({}))->c{index}", self.operand(closure))
             }

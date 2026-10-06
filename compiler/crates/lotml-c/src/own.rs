@@ -244,6 +244,8 @@ impl Pass {
                 | Expr::SetNew { .. }
                 | Expr::Closure { .. }
                 | Expr::CallClosure { .. }
+                | Expr::ToDyn { .. }
+                | Expr::CallDyn { .. }
         );
         if let Expr::CallSlots(_, args) = e {
             for a in args {
