@@ -2,7 +2,8 @@
 autonomy: auto
 ci: wait
 branch: feat/agent-harness
-delivery: in-progress
+delivery: in-review
+pr: 11
 ---
 
 # Agent harness — requirements
