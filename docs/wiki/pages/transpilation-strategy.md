@@ -100,6 +100,15 @@ classes become a sum type, `Optional` becomes `T?`). What is not mechanical is d
 functions fail: it requires following `raise` statements transitively. The workable design is
 hybrid — rules for the mechanical part, an LLM for the rest, tests to validate.
 
+The pipeline exists (`harness/lotml_harness/corpus/`): the rules write an expression as Python
+writes it, where variant B's syntax is Python's, and rewrite what differs by rule — `def` to
+`fn` with the task's types, `var` for a local assigned again or changed in place and for a
+parameter the body changes, the `typing` imports dropped, a collection's or a number's truth
+compared explicitly. What they leave — `re`, a tuple assigned to names that change, a nested
+function, an untyped helper — goes to a frontier model with the reason, then the compiler's
+diagnostics or the failing tests. A program is kept only when it passes the task's hidden
+tests, and is stored with them as a `test` block ([[training-prior]] has the counts).
+
 ## The phase 1 backend
 
 `compiler/crates/lotml-py` writes Python's syntax tree as JSON, every node at its lotml position,

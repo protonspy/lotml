@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: 7f677a9e384c96d530d5bc89a3323ad2f30d8689176c4416c44dfd1d2d2fdf1f
+checksum: 19f7aacb4a732171553e3f06318c9a70bedc3c915c09b4e21150e7cbe0e3bb2b
 ---
 
 # lotml roadmap
@@ -105,7 +105,7 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 3.1_
 - [x] 3.3 (Unit) Make lotml callable from Python and generate typed bindings from typeshed's `.pyi` stubs, every call into Python returning `T ! PyError` (R14, R27; docs/wiki/pages/transpilation-strategy.md)
   _Depends 2.13_
-- [ ] 3.4 (Unit) Build the Python→lotml corpus pipeline: rules for the mechanical part, a frontier model with the compiler for the rest, tests to validate (docs/wiki/pages/training-prior.md, docs/wiki/pages/transpilation-strategy.md)
+- [x] 3.4 (Unit) Build the Python→lotml corpus pipeline: rules for the mechanical part, a frontier model with the compiler for the rest, tests to validate (docs/wiki/pages/training-prior.md, docs/wiki/pages/transpilation-strategy.md)
   _Depends 2.13_
 - [ ] 3.5 (Unit) Implement colorless concurrency on the Python target with values marked shared when handed to a task, and blocking calls on dedicated threads (R20; docs/wiki/pages/colorless-concurrency.md)
   _Depends 2.13_
