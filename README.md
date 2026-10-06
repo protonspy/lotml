@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/assets/banner.png" alt="lotml — a robot writes indented code, a person reviews it, a green check between them" width="100%">
+  <img src=".github/assets/banner.png" alt="lotml — a glowing pixel-art lotus with a code chevron at its heart, on a pond at night" width="100%">
 </p>
 
 <h1 align="center">
