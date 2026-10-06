@@ -44,8 +44,14 @@ ROOMY = Budget(str.split, 10_000, 512)
 
 def test_the_target_is_the_changed_declarations_the_kind_and_the_edit():
     diff = {
-        "declarations": [{"symbol": f"f{i}", "kind": "function", "lines": [i, i]} for i in range(5)],
-        "edit": {"tool": "replace", "kind": "body", "arguments": {"symbol": "f0", "path": "a.lotml"}},
+        "declarations": [
+            {"symbol": f"f{i}", "kind": "function", "lines": [i, i]} for i in range(5)
+        ],
+        "edit": {
+            "tool": "replace",
+            "kind": "body",
+            "arguments": {"symbol": "f0", "path": "a.lotml"},
+        },
     }
     found = target(diff, "a.lotml")
     assert [loc["symbol"] for loc in found["locations"]] == ["f0", "f1", "f2"]
@@ -63,7 +69,9 @@ def test_a_repair_becomes_a_chat_example_with_and_without_its_task():
     with_task, without = made
     roles = [m["role"] for m in with_task["messages"]]
     assert roles == ["system", "user", "assistant"]
-    assert with_task["messages"][1]["content"].startswith("Task: Write `add`.\n\nFile solution.lotml:")
+    assert with_task["messages"][1]["content"].startswith(
+        "Task: Write `add`.\n\nFile solution.lotml:"
+    )
     assert not without["messages"][1]["content"].startswith("Task:")
     assert "error E0201 at 2:16" in with_task["messages"][1]["content"]
     answer = json.loads(with_task["messages"][2]["content"])
