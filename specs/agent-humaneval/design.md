@@ -2,14 +2,15 @@
 
 ## What changes
 
-Serves R1.1–R1.9, R2.1–R2.4.
+Serves R1.1–R1.8, R2.1–R2.5.
 
-A module `harness/lotml_harness/agent/humaneval.py`, three options on `python -m
-lotml_harness.agent` — `--source humaneval` (the benchmark's tasks stay the default), and with it
-`--sample N` and `--seed S` (default 0); `--task humaneval-<n>` names one — and the report
-`harness/results/agent-humaneval.md` of what was read, typed, kept and refused. Pass rates per
-source and the arms' comparison go to `harness/results/agent.md`, which `report.markdown` already
-writes.
+A module `harness/lotml_harness/agent/humaneval.py` with a child-process recorder, three options on
+`python -m lotml_harness.agent` — `--source humaneval` (the benchmark's tasks stay the default), and
+with it `--sample N` and `--seed S` (default 0); `--task humaneval-<n>` names one — and the report
+`harness/results/agent-humaneval.md` of what was read, kept and refused. Pass rates per source and
+the arms' comparison go to `harness/results/agent.md`, which `report.markdown` already writes.
+adr:0015-pose-humaneval-untyped decides the shape; the task set's translator is not used, since it
+needs the types the release lacks.
 
 **Reading** (R1.1, R2.2). `tasks.sources.download` fetches
 `https://raw.githubusercontent.com/openai/human-eval/<commit>/data/HumanEval.jsonl.gz` into
@@ -19,79 +20,83 @@ file unchecked and moves a fresh one into place before anything could check it, 
 optional digest: the `.part` file's bytes are checked before the rename, a cached file is checked
 on every read, and one that differs is removed and stops the run. Decompression is bounded in bytes.
 
-**Typing** (R1.2, R1.3; adr:0015-infer-humaneval-types-from-its-own-tests). Measured on the
-release: 30 of 164 entry points are fully annotated, the rest not at all or in part
-(`def get_positive(l):`). For each unannotated parameter, the literal arguments at its position
-across the `check`'s assertions are mapped to lotml types — `bool` before `int`; `int` with `float`
-widens to `f64`; a list, set or dict takes the join of its elements, empty ones contributing
-nothing; a tuple, its positions; `None` among values makes the join optional — and the join must be
-one type, else `no single type`. The return type joins the canonical solution's results on those
-arguments, run in a child process as `tasks.canonical` runs solutions, and the assertions'
-expected literals. A declared annotation is never overridden. The inferred types are written into
-the `def` line, so the text handed on is the one the translator already reads.
+**Cases** (R1.2). A child process, as `tasks.canonical` runs solutions — memory-limited, with a
+timeout, since this is code from a dataset — executes the prompt and the canonical solution, then
+the record's `test` with `random.seed(0)`, calling `check(recorder)`. The recorder calls the
+canonical function, deep-copies the arguments before the call (some solutions change them), and
+appends `(arguments, result)`. Every assertion in `check`, loops and random inputs included, thus
+becomes a case whose expected value is the canonical solution's own — consistent by construction,
+since the canonical solution passes its `check`. Duplicates are dropped and the first 50 kept.
 
-**Translating** (R1.4, R1.8). Each JSONL record (`task_id`, `prompt` with its typed `def`,
-`canonical_solution`, `test`, `entry_point`) is joined into the text MultiPL-E's typed originals
-hold — the prompt, then `### Canonical solution below ###` and the solution, then `### Unit tests
-below ###` and the `check` — and handed to `tasks.build.translate` and `tasks.build.validate` as
-they are; `validate` runs the canonical solution on the translated cases under the given types, the
-check that catches an inference too narrow. The source is named `humaneval-original`, apart from
-the task set's `humaneval`, so the two never mix. Every refusal is counted by reason (R1.9). How
-many tasks survive is measured by task 1.3 and recorded in the report and the plan, not assumed.
+**Literals** (R1.5, R1.6). A value becomes a lotml literal by its Python type: `bool` as `True` and
+`False`, `int`, `float` by `repr` (`7.5`, `1.0`), `str` quoted as `values.render` quotes, `None` as
+`None`, lists, tuples, sets and dicts element by element. A list mixing `int` and `float` writes
+its integers as floats, since lotml has no implicit conversion and Python's list was numbers. A
+value with no lotml form — a list of mixed kinds, an object — refuses the task. An expected value
+holding a float compares as `compare.matches` does, within 1e-6 relative or absolute; others with
+`==`.
 
-**From `Task` to `AgentTask`** (R1.5, R1.6). `AgentTask` today reads a directory and its
-`hidden(file)` method reads `hidden/<file>`; these tasks have none on disk, and committing 164
+**Satisfiable tests** (R1.6). A hidden block only measures the agent if some signature accepts
+its literals. A witness is derived from the recorded values — each parameter's and the result's
+types joined as lotml would type the literals: `[int]`, `str?` where `None` occurs, `f64` where a
+float occurs — and `lotml check` runs on the witness signature with `todo()` and the hidden blocks
+appended. A task they do not check against is refused as `unsatisfiable`. The witness is never
+shown to the agent nor stored as an answer: it proves the tests can be met, nothing more.
+
+**From the record to `AgentTask`** (R1.3, R1.4, R1.7). `AgentTask` today reads a directory and
+its `hidden(file)` method reads `hidden/<file>`; these tasks have none on disk, and committing 164
 directories would put HumanEval's text in the repository for no gain. So `AgentTask` carries its
 files as data: `workspace_files`, `hidden_files` and `solution_files`, each `dict[str, str]`, and
 `directory` becomes optional. `hidden(file)` stays, reading `hidden_files`; `bench.load` fills the
-three from a directory as now, the only caller of `directory`. A HumanEval task has
-`graded = ("solution.lotml",)` and an empty `solution_files`. The dataclass stays frozen and is
+three from a directory as now, the only caller of `directory`. The dataclass stays frozen and is
 never hashed; holding dictionaries, it cannot be.
 
-`humaneval.agent_task(task)` fills them from a `Task`:
+A HumanEval task has kind `implement`, id `humaneval-<n>`, `graded = ("solution.lotml",)`, empty
+`solution_files`, and `solution.lotml`:
 
-- `solution.lotml`: `task.prompt("b")` and `    return todo()`;
-- hidden — one `test "hidden: case <i>":` per case, the arguments and the expected value rendered
-  with `values.render`, compared with `==` for `eq`; for `approx`, as `compare.matches` does,
-  `abs(got - want) <= 1e-6` or within 1e-6 of the larger magnitude; `set(got) == set(want)` for
-  `set`;
-- kind `implement`, id `humaneval-<n>`.
+```
+fn has_close_elements(numbers, threshold):
+    """ Check if in given list of numbers, are any two numbers closer to each other than
+    given threshold. ... """
+    return todo()
+```
 
-`lay` writes the dictionaries instead of copying a tree, for both kinds of task, refusing a name
-that is absolute, holds `..`, or resolves outside the target.
-
-**Prompt** (R1.7): "Implement `<name>` in `solution.lotml` as its docstring says. Keep its
-signature." — fixed, so the arms differ only in their context.
+It does not check — lotml needs the types — and that is the task. The prompt (R1.4): "Write
+`<name>` in `solution.lotml`: give its parameters and its return their lotml types, and implement it
+as its docstring says." — fixed, so the arms differ only in their context. `lay` writes the
+dictionaries instead of copying a tree, for both kinds of task, refusing a name that is absolute,
+holds `..`, or resolves outside the target.
 
 **Sampling** (R2.1): `random.Random(seed)` shuffles the kept ids, sorted first, and takes N; the
-draw depends on the seed and the file's contents only, so a run next month gets the same tasks.
-`--sample` without `--source humaneval` is an error.
+draw depends on the seed and the file's contents only. `--sample` without `--source humaneval` is
+an error.
 
-**Rows and report** (R2.3, R2.4): every row, `error_row` included, gains `source`; a row written
+**Rows and report** (R2.3–R2.5): every row, `error_row` included, gains `source`; a row written
 before this change, without one, is reported as `bench` — every run before it was. The report
-groups pass@1 by source and, for every model with both arms, pairs the arms on each task's attempt
-0 and gives the discordant pairs and McNemar's p with `variants.mcnemar`, which the earlier
-experiments already use.
+groups pass@1 by source; for every model with both arms it pairs the arms on each task's attempt 0
+and gives the discordant pairs and McNemar's p with `variants.mcnemar`. A failed HumanEval run is
+counted as `signature` when the graded file checks alone but not with the hidden blocks appended —
+the agent's types refused the values — and as `behaviour` otherwise; the grader records which.
 
 ## Alternatives considered
 
-- MultiPL-E's typed HumanEval, which the task set already holds: the same problems, but its
-  licence forbids training on them, and its types are part of what it restricts.
-- Typing the 134 signatures by hand: as good where it is done carefully, but 134 judgements nobody
-  re-checks, against an inference the canonical solution verifies on every case.
-- Keeping only the 30 annotated functions: too few to compare the arms.
+- Inferring the types ourselves and posing typed signatures: measures less (the agent never types
+  anything) and puts a decision of ours in every task; the witness keeps only its useful half,
+  proving the tests can be met.
+- MultiPL-E's typed HumanEval, which the task set already holds: its licence forbids training on
+  it, and its types are part of what it restricts.
+- Translating `check`'s assertions statically, as the task set's extractor does: it refuses loops
+  and random inputs, and needs the types; running `check` against a recorder takes every case.
 - Committing a directory per task under `harness/agent_bench/`: 164 copies of what one pinned,
   digested file already gives.
-- Grading with `compare.matches` in Python instead of lotml `test` blocks: the hidden tests would
-  leave the compiler's path the benchmark's tasks take.
 
 ## Risks
 
-- Sample size: the kept count is unmeasured until task 1.3; if it falls below the 168 paired tasks
-  a 10-point difference needs at 80% power (docs/wiki/pages/evaluation-harness.md), the report says
-  what difference it can detect, and MBPP's original, typed the same way, is the next source.
-- Inference too narrow or too wide: a list seen only as `[1, 2]` is typed `[int]` where the
-  docstring meant numbers; `validate` catches a type the canonical solution breaks, not one that
-  is merely narrower than intended. The report lists every inferred signature for review.
+- Stricter than `check`: a case compares with the canonical solution's exact result, where `check`
+  may have accepted more (an order it did not test, a tolerance). The report counts cases per task;
+  a task every run fails is reviewed for this before it is believed.
+- Literal typing: a test passing `5` where the docstring meant a number becomes an `int` argument,
+  and an agent that typed `f64` fails it as `signature`. That is how lotml behaves, and R2.5 keeps
+  it apart from wrong behaviour.
 - Contamination: HumanEval is in most models' training data in Python; a lotml pass rate here is
   partly recall translated, which matters more for comparing languages than the two arms.
