@@ -12,6 +12,10 @@ pub struct LocalInfo {
     pub ty: Ty,
     /// The lotml name, when the local is one; the C name is made from it.
     pub name: Option<String>,
+    /// An `inout` parameter: a pointer to the caller's slot, every use of it through the pointer.
+    /// The callee holds no count of its own: what it reads it copies, what it assigns replaces
+    /// the caller's value.
+    pub by_ref: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -151,6 +155,8 @@ pub enum Arg {
     Desc(Ty),
     /// The offset of the second field of a pair type: where a dict's value goes in an item.
     Offset(Ty),
+    /// A pointer to the slot of a place: an `inout` argument.
+    Slot(Place),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -203,6 +209,8 @@ pub enum Expr {
         ty: Ty,
     },
     Call(String, Vec<Operand>),
+    /// A call of the module's function `name` passing `inout` arguments as slots.
+    CallSlots(String, Vec<Arg>),
     Print {
         args: Vec<(Operand, Ty)>,
         sep: Option<Operand>,
@@ -345,7 +353,7 @@ impl Arg {
     pub fn operand(&self) -> Option<&Operand> {
         match self {
             Arg::Value(o) | Arg::Address(o, _) => Some(o),
-            Arg::Out(..) | Arg::Desc(_) | Arg::Offset(_) => None,
+            Arg::Out(..) | Arg::Desc(_) | Arg::Offset(_) | Arg::Slot(_) => None,
         }
     }
 }
@@ -403,6 +411,17 @@ impl Expr {
                 args.iter().for_each(f);
             }
             Expr::Rt { args, .. } | Expr::RtValue { args, .. } => args.iter().filter_map(Arg::operand).for_each(f),
+            Expr::CallSlots(_, args) => {
+                for a in args {
+                    match a {
+                        Arg::Slot(place) => {
+                            f(&Operand::Local(place.local));
+                            place_operands(place, f);
+                        }
+                        other => other.operand().into_iter().for_each(&mut *f),
+                    }
+                }
+            }
             Expr::Print { args, sep, end } => {
                 args.iter().for_each(|(a, _)| f(a));
                 sep.iter().chain(end).for_each(f);
@@ -504,7 +523,7 @@ fn arg_types(args: &[Arg], f: &mut impl FnMut(&Ty)) {
     for a in args {
         match a {
             Arg::Address(_, ty) | Arg::Out(_, ty) | Arg::Desc(ty) | Arg::Offset(ty) => f(ty),
-            Arg::Value(_) => {}
+            Arg::Value(_) | Arg::Slot(_) => {}
         }
     }
 }
@@ -527,7 +546,7 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
         | Expr::Closure { ty, .. }
         | Expr::CallClosure { ty, .. }
         | Expr::Compare(_, _, _, ty) => f(ty),
-        Expr::Rt { args, .. } => arg_types(args, f),
+        Expr::Rt { args, .. } | Expr::CallSlots(_, args) => arg_types(args, f),
         Expr::RtValue { args, ty, .. } => {
             arg_types(args, f);
             f(ty);

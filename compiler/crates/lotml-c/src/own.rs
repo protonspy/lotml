@@ -77,16 +77,24 @@ struct Pass {
     locals: Vec<LocalInfo>,
 }
 
-/// How a statement uses each counted local: the uses that store it and those that only read it.
+/// How a statement uses each counted local: the uses that store it and those that only read it,
+/// and the `inout` parameters it stores, which always need a count of their own.
 #[derive(Default)]
 struct Uses {
     stored: Vec<Local>,
     read: Vec<Local>,
+    by_ref_stored: Vec<Local>,
 }
 
 impl Pass {
+    /// Whether the local holds a count of its own: an `inout` parameter does not.
     fn counted(&self, l: Local) -> bool {
-        counted(&self.locals[l].ty)
+        counted(&self.locals[l].ty) && !self.locals[l].by_ref
+    }
+
+    /// Whether the local is an `inout` parameter of a counted type.
+    fn by_ref(&self, l: Local) -> bool {
+        counted(&self.locals[l].ty) && self.locals[l].by_ref
     }
 
     fn add(&self, set: &mut Set, operand: &Operand) {
@@ -237,11 +245,23 @@ impl Pass {
                 | Expr::Closure { .. }
                 | Expr::CallClosure { .. }
         );
+        if let Expr::CallSlots(_, args) = e {
+            for a in args {
+                match a {
+                    Arg::Slot(place) => self.place_uses(place, &mut uses),
+                    Arg::Value(o) => self.local_uses(&[o], true, &mut uses),
+                    _ => {}
+                }
+            }
+            return uses;
+        }
         e.operands(&mut |o| {
-            if let Operand::Local(l) = o
-                && self.counted(*l)
-            {
-                if stores { uses.stored.push(*l) } else { uses.read.push(*l) }
+            if let Operand::Local(l) = o {
+                if self.counted(*l) {
+                    if stores { uses.stored.push(*l) } else { uses.read.push(*l) }
+                } else if stores && self.by_ref(*l) {
+                    uses.by_ref_stored.push(*l);
+                }
             }
         });
         uses
@@ -262,10 +282,12 @@ impl Pass {
 
     fn local_uses(&self, operands: &[&Operand], stored: bool, uses: &mut Uses) {
         for o in operands {
-            if let Operand::Local(l) = o
-                && self.counted(*l)
-            {
-                if stored { uses.stored.push(*l) } else { uses.read.push(*l) }
+            if let Operand::Local(l) = o {
+                if self.counted(*l) {
+                    if stored { uses.stored.push(*l) } else { uses.read.push(*l) }
+                } else if stored && self.by_ref(*l) {
+                    uses.by_ref_stored.push(*l);
+                }
             }
         }
     }
@@ -312,6 +334,7 @@ impl Pass {
                     match a {
                         Arg::Address(o, _) => self.local_uses(&[o], stores, &mut uses),
                         Arg::Value(o) => self.local_uses(&[o], false, &mut uses),
+                        Arg::Slot(p) => self.place_uses(p, &mut uses),
                         Arg::Out(..) | Arg::Desc(_) | Arg::Offset(_) => {}
                     }
                 }
@@ -402,6 +425,9 @@ impl Pass {
     ) {
         let at = |kind| Stmt { line, kind };
         let target = defined.map(|(x, _)| x);
+        for &l in &uses.by_ref_stored {
+            out.push(at(StmtKind::Inc(l)));
+        }
         let mut seen: Vec<Local> = uses.stored.iter().chain(&uses.read).copied().collect();
         seen.sort_unstable();
         seen.dedup();
@@ -419,12 +445,29 @@ impl Pass {
             }
         }
         match defined {
+            Some((x, borrowed)) if self.by_ref(x) => {
+                // An `inout` parameter assigned: the new value replaces the caller's, which is
+                // dropped once the new one is computed.
+                let StmtKind::Let(_, e) = kind else { unreachable!("a definition is a Let") };
+                let ty = self.locals[x].ty.clone();
+                self.locals.push(LocalInfo { ty, name: None, by_ref: false });
+                let t = self.locals.len() - 1;
+                out.push(at(StmtKind::Let(t, e)));
+                if borrowed {
+                    out.push(at(StmtKind::Inc(t)));
+                }
+                for l in dying {
+                    out.push(at(StmtKind::Dec(l)));
+                }
+                out.push(at(StmtKind::Dec(x)));
+                out.push(at(StmtKind::Let(x, Expr::Use(Operand::Local(t)))));
+            }
             Some((x, borrowed)) if self.counted(x) && dying.contains(&x) => {
                 // `x = f(x)` where f only reads x: the old value is dropped once the new one is
                 // computed, and the new one moved into x.
                 let StmtKind::Let(_, e) = kind else { unreachable!("a definition is a Let") };
                 let ty = self.locals[x].ty.clone();
-                self.locals.push(LocalInfo { ty, name: None });
+                self.locals.push(LocalInfo { ty, name: None, by_ref: false });
                 let t = self.locals.len() - 1;
                 out.push(at(StmtKind::Let(t, e)));
                 if borrowed {

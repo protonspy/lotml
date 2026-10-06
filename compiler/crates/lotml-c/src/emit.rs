@@ -139,7 +139,10 @@ fn signature(f: &Function, types: &Types) -> String {
         .params
         .iter()
         .filter(|&&p| !is_unit(&f.locals[p].ty))
-        .map(|&p| format!("{} {}", types.c_type(&f.locals[p].ty), local_name(f, p)))
+        .map(|&p| {
+            let star = if f.locals[p].by_ref { "*" } else { "" };
+            format!("{} {star}{}", types.c_type(&f.locals[p].ty), local_name(f, p))
+        })
         .collect();
     let params = if params.is_empty() { "void".to_string() } else { params.join(", ") };
     let ret = if is_unit(&f.ret) || matches!(f.ret, Ty::Never) { "void".to_string() } else { types.c_type(&f.ret) };
@@ -215,8 +218,10 @@ impl Writer<'_> {
         let _ = writeln!(self.out, "#line {line} \"{}\"", self.file);
     }
 
+    /// The local as a C lvalue: an `inout` parameter through its pointer.
     fn name(&self, local: Local) -> String {
-        local_name(self.function, local)
+        let name = local_name(self.function, local);
+        if self.function.locals[local].by_ref { format!("(*{name})") } else { name }
     }
 
     fn fresh(&mut self, prefix: &str) -> String {
@@ -564,6 +569,7 @@ impl Writer<'_> {
             Arg::Out(local, _) => format!("&{}", self.name(*local)),
             Arg::Desc(ty) => self.types.desc(ty),
             Arg::Offset(ty) => format!("offsetof({}, f1)", self.c_type(ty)),
+            Arg::Slot(place) => self.place(place).1,
         }
     }
 
@@ -593,6 +599,14 @@ impl Writer<'_> {
                     (_, false) => format!("({b} < {a} ? {b} : {a})"),
                     (_, true) => format!("({b} > {a} ? {b} : {a})"),
                 }
+            }
+            Expr::CallSlots(name, args) => {
+                let args: Vec<String> = args
+                    .iter()
+                    .filter(|a| !matches!(a, Arg::Value(Operand::Const(Const::Unit))))
+                    .map(|a| self.arg(a))
+                    .collect();
+                format!("{name}({})", args.join(", "))
             }
             Expr::Call(name, args) => {
                 let args: Vec<String> = args

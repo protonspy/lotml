@@ -19,6 +19,8 @@ impl Counter:
 
 type Point(x: int, y: int)
 
+type Box(c: Counter)
+
 impl Point:
     fn moved(self, dx: int) -> Point:
         return Point(self.x + dx, self.y)
@@ -58,3 +60,9 @@ fn main():
     var pts = [Point(0, 0)]
     pts[0] = pts[0].moved(5)
     print(pts)
+    var grid = [[1], [2]]
+    shared = grid
+    add_all(&grid[1], [5])
+    var box = Box(Counter.new())
+    box.c.bump(by=2)
+    print(grid, shared, box)

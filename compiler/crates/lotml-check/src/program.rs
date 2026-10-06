@@ -55,7 +55,7 @@ impl TypeDef {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Method {
     pub sig: FnSig,
     /// None for a function called on the type: `Counter.new()`.
