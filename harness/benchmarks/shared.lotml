@@ -1,0 +1,13 @@
+fn part(data: [int], start: int, stop: int) -> int:
+    var s = 0
+    for rep in range(5):
+        for i in range(start, stop):
+            s += (data[i] + rep) % 7
+    return s
+
+fn main():
+    data = list(range(8000000))
+    var tasks = [lambda: part(data, 0, 2000000)]
+    for k in range(1, 4):
+        tasks.append(lambda: part(data, k * 2000000, (k + 1) * 2000000))
+    print(sum(parallel(tasks)))
