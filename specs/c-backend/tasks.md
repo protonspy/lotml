@@ -23,7 +23,7 @@
 
 ## 3 · Functions
 
-- [ ] 3.1 (TDD) Compile lambdas and function values capturing by copy, and the prelude that takes them — R1.2
+- [x] 3.1 (TDD) Compile lambdas and function values capturing by copy, and the prelude that takes them — R1.2
   _Depends 2.5_
 - [ ] 3.2 (TDD) Compile methods and the `inout`, `sink` and `var` conventions — R1.2, R3.5
   _Depends 2.3_
