@@ -153,6 +153,11 @@ def todo(*_args):
     raise Todo("not written yet")
 
 
+def forbidden(name):
+    """A `__` attribute the checker should have refused; reaching it at run time is a bug."""
+    raise Panic(f"the attribute `{name}` is not reachable from lotml")
+
+
 def i64(value):
     """`value`, an `int`, checked against i64."""
     if not I64_MIN <= value <= I64_MAX:

@@ -109,7 +109,17 @@ pub enum Format {
 /// Why a command could not run.
 pub struct Failure(pub String);
 
+/// The compiler recurses over nested syntax; a deep file is bounded by the parser's depth guard,
+/// but the bound is generous, so the work runs on a thread with a stack large enough for it
+/// rather than the platform default (1 MB on Windows).
+const STACK: usize = 256 * 1024 * 1024;
+
 fn main() -> ExitCode {
+    let worker = std::thread::Builder::new().stack_size(STACK).spawn(run).expect("a worker thread");
+    worker.join().unwrap_or(ExitCode::from(2))
+}
+
+fn run() -> ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
         Command::Check { paths, format, json, all, fix, since, prefix } => {

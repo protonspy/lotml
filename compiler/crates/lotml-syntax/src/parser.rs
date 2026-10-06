@@ -60,11 +60,27 @@ struct Parser<'a> {
     errors: Vec<SyntaxError>,
     /// Set by the first error of a statement, so its cascade is not reported.
     reported: bool,
+    /// How deep the recursive descent is, so pathological nesting is refused, not a stack crash.
+    depth: u32,
 }
+
+/// The deepest nesting of expressions, types or patterns the parser recurses into. Far beyond
+/// anything a program is written with, and well under the stack it would take to overflow.
+const MAX_DEPTH: u32 = 256;
 
 impl<'a> Parser<'a> {
     fn new(text: &'a str, tokens: Vec<Token>, base: u32) -> Parser<'a> {
-        Parser { text, tokens, pos: 0, base, errors: Vec::new(), reported: false }
+        Parser { text, tokens, pos: 0, base, errors: Vec::new(), reported: false, depth: 0 }
+    }
+
+    /// Whether the descent has gone too deep; when it has, report once and let the caller bail
+    /// with an error node, so a deeply nested input is a diagnostic rather than a crash.
+    fn too_deep(&mut self) -> bool {
+        if self.depth >= MAX_DEPTH {
+            self.error_here("this nests too deeply to read");
+            return true;
+        }
+        false
     }
 
     // Tokens ------------------------------------------------------------------------
@@ -633,6 +649,17 @@ impl<'a> Parser<'a> {
     /// After `:`: an indented block, or one simple statement on the same line.
     fn block(&mut self) -> Block {
         let start = self.span();
+        if self.too_deep() {
+            self.skip_line();
+            return Block { span: self.since(start), stmts: vec![] };
+        }
+        self.depth += 1;
+        let block = self.block_inner(start);
+        self.depth -= 1;
+        block
+    }
+
+    fn block_inner(&mut self, start: Span) -> Block {
         if !self.at(T::Newline) {
             let stmt = self.simple_stmt();
             return Block { span: self.since(start), stmts: vec![stmt] };
@@ -803,6 +830,10 @@ impl<'a> Parser<'a> {
 
     fn pattern(&mut self) -> Pattern {
         let start = self.span();
+        if self.too_deep() {
+            return Pattern { span: self.span(), kind: PatternKind::Error };
+        }
+        self.depth += 1;
         let kind = match self.peek() {
             T::Name => {
                 let name = self.name("a pattern");
@@ -840,6 +871,7 @@ impl<'a> Parser<'a> {
                 PatternKind::Error
             }
         };
+        self.depth -= 1;
         Pattern { span: self.since(start), kind }
     }
 
@@ -1067,6 +1099,18 @@ impl<'a> Parser<'a> {
     }
 
     fn test(&mut self) -> Expr {
+        // Every sub-expression — a paren's content, a call argument, a subscript, an operand —
+        // comes through here, so the depth guard sits here and bounds the whole recursion.
+        if self.too_deep() {
+            return Expr { span: self.span(), kind: ExprKind::Error };
+        }
+        self.depth += 1;
+        let expr = self.test_inner();
+        self.depth -= 1;
+        expr
+    }
+
+    fn test_inner(&mut self) -> Expr {
         if self.at(T::Lambda) {
             return self.lambda();
         }
@@ -1552,10 +1596,15 @@ impl<'a> Parser<'a> {
 
     fn type_expr(&mut self) -> TypeExpr {
         let start = self.span();
+        if self.too_deep() {
+            return TypeExpr { span: self.span(), kind: TypeKind::Error };
+        }
+        self.depth += 1;
         let mut ty = self.base_type();
         while self.eat(T::Question) {
             ty = TypeExpr { span: self.since(start), kind: TypeKind::Optional(Box::new(ty)) };
         }
+        self.depth -= 1;
         ty
     }
 

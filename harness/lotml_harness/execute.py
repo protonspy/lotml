@@ -60,7 +60,10 @@ SOLUTION_MODULES = frozenset(
         "__future__",
     }
 )
-"""What a Python solution may import: computation, no files, no processes, no network."""
+"""The modules a Python solution may import. A denylist and an import list are a convenience that
+keeps an honest answer to the common modules, not a boundary: Python introspection
+(`().__class__`, a traceback's frames, `typing.sys`) walks around both. The boundary is the
+machine — see the module docstring."""
 BLOCKED_BUILTINS = frozenset(
     {"open", "eval", "exec", "compile", "input", "breakpoint", "help", "exit", "quit"}
 )
@@ -198,7 +201,9 @@ def load_compiled(stub: str):
 
 
 def load_solution(source: str, path: str):
-    """A model's Python, with the builtins that touch nothing outside the process."""
+    """A model's typed Python, with the common builtins and modules of computation. This narrows
+    an honest answer, not a hostile one: a model's Python is native code, and like every mode it
+    runs on a machine you can throw away (see the module docstring), not inside a sandbox."""
     try:
         code = compile(source, path, "exec")
     except SyntaxError as error:

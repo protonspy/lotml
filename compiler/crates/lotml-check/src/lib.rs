@@ -141,6 +141,25 @@ fn function(
     body.diagnostics
 }
 
+/// Whether a name belongs to the compiler: everything the backend generates starts with `__`,
+/// so a program may neither declare nor shadow such a name.
+pub(crate) fn reserved(name: &str) -> bool {
+    name.starts_with("__")
+}
+
+/// Report a declared name that is reserved for the compiler; true when it was.
+pub(crate) fn report_reserved(diagnostics: &mut Vec<Diagnostic>, name: &lotml_syntax::ast::Ident) -> bool {
+    if reserved(&name.name) {
+        diagnostics.push(lotml_diag::Diagnostic::error(
+            "E0220",
+            name.span,
+            format!("`{}` starts with `__`, which is reserved for the compiler", name.name),
+        ));
+        return true;
+    }
+    false
+}
+
 /// The names closest to `name`, for "did you mean": by edit distance with transpositions,
 /// and names one contains the other of, nearest first.
 pub(crate) fn closest(name: &str, candidates: &[String]) -> Vec<String> {

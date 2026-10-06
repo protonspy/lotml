@@ -209,6 +209,12 @@ pub const ALL: &[Code] = &[
         result drops its error, which is never what a failure is for.",
     },
     Code {
+        code: "E0220",
+        title: "a name reserved for the compiler",
+        explanation: "A name starting with `__` is the compiler's: it marks the runtime, the test list and \
+        the generated helpers a program must not reach or shadow. Name your own values without the leading `__`.",
+    },
+    Code {
         code: "E0301",
         title: "an immutable reassigned",
         explanation: "A local declared with `x = …` cannot be assigned again. Declare it `var x = …` if it changes:\n\n\

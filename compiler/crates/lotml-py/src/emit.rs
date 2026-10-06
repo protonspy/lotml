@@ -83,6 +83,16 @@ fn target(id: &str) -> Value {
     node("Name", vec![("id", id.into()), ("ctx", store())])
 }
 
+/// A program's own attribute access. The checker rejects any name it did not type, so this is
+/// defence in depth: a `__` name the checker somehow let through becomes a call that raises,
+/// never a live attribute of an interpreter object.
+fn member(value: Value, name: &str) -> Value {
+    if name.starts_with("__") {
+        return call(rt("forbidden"), vec![constant(name.into())]);
+    }
+    attr(value, name)
+}
+
 fn attr(value: Value, attr: &str) -> Value {
     node("Attribute", vec![("value", value), ("attr", attr.into()), ("ctx", load())])
 }
@@ -1055,7 +1065,7 @@ impl<'a> Emitter<'a> {
             }
             ExprKind::Attr { object, name: field } => {
                 let o = self.expr(object);
-                attr(o, &field.name)
+                member(o, &field.name)
             }
             ExprKind::Try(inner) => {
                 let value = self.expr(inner);

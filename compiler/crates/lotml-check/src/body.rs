@@ -154,6 +154,7 @@ impl<'p> Body<'p> {
         if name.name.is_empty() {
             return;
         }
+        crate::report_reserved(&mut self.diagnostics, name);
         let scope = self.scopes.last_mut().expect("a scope");
         scope.narrowed.remove(&name.name);
         let origin = if mutable || declared_at.is_some() { Origin::Declared } else { Origin::Bound };
@@ -1790,7 +1791,20 @@ impl<'p> Body<'p> {
                 );
                 Ty::Error
             }),
-            Ty::Error | Ty::Never | Ty::Var(_) => Ty::Error,
+            Ty::Error | Ty::Never => Ty::Error,
+            Ty::Var(_) => {
+                // The value's type was never pinned, so its fields are not known either. Reading
+                // one anyway is how a lambda parameter reached `.__class__`.
+                self.report(
+                    Diagnostic::error(
+                        "E0205",
+                        name.span,
+                        format!("the type here is not known, so the field `{}` cannot be read", name.name),
+                    )
+                    .note("annotate the value, or let where a lambda is used pin its parameter's type"),
+                );
+                Ty::Error
+            }
             other => {
                 let mut names: Vec<String> = builtins::methods_of(other).iter().map(ToString::to_string).collect();
                 if let Ty::Adt(n, _) = other {
@@ -2404,8 +2418,20 @@ impl<'p> Body<'p> {
                 self.trait_method(bound.as_deref(), &receiver, name, args, span)
             }
             Ty::Dyn(trait_name) => self.trait_method(Some(&trait_name), &receiver, name, args, span),
-            Ty::Error | Ty::Never | Ty::Var(_) => {
+            Ty::Error | Ty::Never => {
                 self.arg_types(args, &[]);
+                Ty::Error
+            }
+            Ty::Var(_) => {
+                self.arg_types(args, &[]);
+                self.report(
+                    Diagnostic::error(
+                        "E0205",
+                        name.span,
+                        format!("the type here is not known, so the method `{}` cannot be called", name.name),
+                    )
+                    .note("annotate the value, or let where a lambda is used pin its parameter's type"),
+                );
                 Ty::Error
             }
             builtin => {

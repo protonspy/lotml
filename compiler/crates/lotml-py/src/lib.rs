@@ -48,10 +48,11 @@ pub fn compile(source: &str, path: &Path) -> Result<String, Vec<Diagnostic>> {
     let module = emit::module(source, &parsed.module, &types);
     let payload = serde_json::json!({"source": source, "module": module}).to_string();
     let file = path.display().to_string();
+    // The path goes in as a JSON string, never into the comment: a file name may hold a newline,
+    // which in a comment would start a line of Python.
     Ok(format!(
-        "# Compiled by lotml from {name}: edit that file, not this one.\nimport lotml_rt\n\nlotml_rt.load(globals(), {file}, {payload})\n",
-        name = path.file_name().map_or(file.clone(), |n| n.to_string_lossy().into_owned()),
-        file = serde_json::Value::String(file.clone()),
+        "# Compiled by lotml: edit the .lotml source, not this file.\nimport lotml_rt\n\nlotml_rt.load(globals(), {file}, {payload})\n",
+        file = serde_json::Value::String(file),
         payload = serde_json::Value::String(payload),
     ))
 }

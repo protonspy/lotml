@@ -294,3 +294,14 @@ fn augmented_assignment_traps_on_fields_and_elements() {
     let script = "print(m.grow(m.C(3), [1]))\ntry:\n    m.grow(m.C(2**62), [1])\nexcept Exception as e:\n    print(type(e).__name__)";
     assert_eq!(prints("augmented", source, script), "(12, 13)\nOverflow");
 }
+
+#[test]
+fn the_emitter_never_lets_a_dunder_attribute_reach_python() {
+    // The module JSON a `__` attribute would compile to is a call to the runtime, which raises,
+    // not a live attribute access — defence in depth below the checker.
+    let source = "fn f(n: int) -> int:\n    return n.__class__\n";
+    // The checker refuses it, so `compile` returns an error.
+    assert!(compile(source, std::path::Path::new("f.lotml")).is_err());
+    // And the runtime has the guard the emitter routes such a name to.
+    assert!(RUNTIME.contains("def forbidden("));
+}

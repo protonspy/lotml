@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lotml_harness import ROOT
-from lotml_harness.execute import Result, isolated
+from lotml_harness.execute import Result, child_environment, isolated
 from lotml_harness.experiments import variants
 from lotml_harness.experiments.models import Model, ModelError, from_spec
 from lotml_harness.tasks import Task, build, types, values
@@ -36,6 +36,8 @@ RUNS = RESULTS / "phase1"
 REPORT = RESULTS / "phase1.md"
 ROUNDS = 3
 """Answers per task: the first, and two after feedback."""
+COMPILER_TIMEOUT = 60
+"""Seconds the checker or the backend may take on one answer before it is given up on."""
 LANGUAGES = ("lotml", "python")
 FAILURES_SHOWN = 3
 """Failing hidden tests a feedback message describes: small reports repair better."""
@@ -125,11 +127,28 @@ def test_feedback(task: Task, result: Result, language: str) -> str:
 class Lotml:
     """The lotml arm: `lotml check`, then the compiled program on the hidden tests."""
 
-    def __init__(self, compiler: Path = COMPILER):
-        self.compiler = compiler
+    def __init__(self, binary: Path = COMPILER):
+        self.binary = binary
 
     def prompt(self, task: Task) -> tuple[str, str]:
         return variants.prompt(task, "b")
+
+    def compiler(self, args: list[str], directory: str) -> subprocess.CompletedProcess | None:
+        """Run the compiler on model code in `directory`: a clean environment so it inherits no
+        token, a wall clock so a pathological input cannot stall the run. None on timeout."""
+        try:
+            return subprocess.run(  # noqa: S603
+                [str(self.binary), *args],
+                cwd=directory,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=child_environment(),
+                timeout=COMPILER_TIMEOUT,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return None
 
     def judge(self, task: Task, code: str) -> Verdict:
         with tempfile.TemporaryDirectory(prefix="lotml-phase1-") as directory:
@@ -137,27 +156,16 @@ class Lotml:
             source.write_text(code, encoding="utf-8")
             # Run in the directory with a relative path, so the report names `solution.lotml`
             # as the model knows it, not the scratch directory.
-            check = subprocess.run(  # noqa: S603
-                [str(self.compiler), "check", source.name],
-                cwd=directory,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                check=False,
-            )
+            check = self.compiler(["check", source.name], directory)
+            if check is None:
+                return Verdict(False, "does not check", "`lotml check` did not finish in time.")
             if check.returncode != 0:
                 return Verdict(False, "does not check", "`lotml check` reports:\n\n" + check.stdout)
-            built = subprocess.run(  # noqa: S603
-                [str(self.compiler), "build", "-o", ".", source.name],
-                cwd=directory,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                check=False,
-            )
+            built = self.compiler(["build", "-o", ".", source.name], directory)
             stub = Path(directory) / "solution_lotml.py"
-            if built.returncode != 0 or not stub.exists():
-                return Verdict(False, "does not run", built.stdout + built.stderr)
+            if built is None or built.returncode != 0 or not stub.exists():
+                report = (built.stdout + built.stderr) if built else "build timed out"
+                return Verdict(False, "does not run", report)
             result = isolated(stub.read_text(encoding="utf-8"), mode="compiled", task=task)
         return verdict(task, result, "lotml")
 

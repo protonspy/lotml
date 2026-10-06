@@ -90,6 +90,7 @@ impl Program {
             if name.name.is_empty() {
                 return;
             }
+            crate::report_reserved(&mut program.diagnostics, name);
             if let Some(first) = seen.get(&name.name) {
                 program.diagnostics.push(
                     Diagnostic::error("E0210", name.span, format!("`{}` is declared twice", name.name))
@@ -174,6 +175,9 @@ impl Program {
     }
 
     fn field(&mut self, field: &ast::Field, scope: &[String]) -> FieldSig {
+        if let Some(name) = &field.name {
+            crate::report_reserved(&mut self.diagnostics, name);
+        }
         FieldSig {
             name: field.name.as_ref().map(|n| n.name.clone()),
             ty: self.lower(&field.ty, scope),
@@ -302,6 +306,9 @@ impl Program {
         scope.extend(f.type_params.iter().map(|p| p.name.name.clone()));
         let mut params = Vec::new();
         for p in &f.params {
+            if p.name.name != "self" {
+                crate::report_reserved(&mut self.diagnostics, &p.name);
+            }
             if p.name.name == "self"
                 && p.ty.is_none()
                 && let Some(ty) = self_ty
