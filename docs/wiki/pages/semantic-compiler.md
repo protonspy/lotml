@@ -190,3 +190,27 @@ immutable with `var` suggested, `raise` with `fail` suggested, truthiness with t
 comparison suggested, an argument treated as a reference with `inout` suggested ([[memory-model]]) —
 and the C family's, such as `else if` with `elif` suggested ([[editing-robustness]]). The grammar
 published for constrained generation is in [[constrained-decoding]].
+
+## What phase 1 built
+
+The `lotml` command in `compiler/` (adr:0006-compiler-written-in-rust) has every row of the table
+above except `rename` and `refs`, over Salsa queries:
+
+- **`check`** — text, versioned JSON or SARIF; root causes first across files (syntax, then names
+  and declarations, then types, then mutability) and five shown unless `--all`; every code has an
+  `explain` page. On the 645 variant B answers that passed their hidden tests in phase 0, it
+  reports 15, each a real departure from the reference (`int(str)`, `int ** f64`, `fail` in a
+  function that cannot fail, an optional used unchecked).
+- **`check --fix`** applies the machine-applicable fixes; the neighbours' habits — `var`,
+  truthiness, `raise`, `&`, `else if`, `def`, `true`/`false`/`null`, `let`, `&&`/`||`/`!`, `x++`,
+  the `typing` spellings — each come with one, and applying them leaves a program that checks.
+- **`check --since <rev>`** keeps the diagnostics an edit introduced, matched against the file at
+  that revision by code, message and line text, and says "no errors introduced" when there are none.
+- **`check --prefix`** answers completable, error or unknown. An error stands only if it is there
+  without the unfinished last line too, so a signature still being typed does not condemn its
+  callers; on the 706 stored programs that check clean, none of 268,030 prefixes was an error.
+- **`digest`** prints the types in full and every signature with its documentation as comments
+  above it — never a bodiless stub; **`show`** prints a symbol as written and what it uses.
+- **`test --json`** reports each `test` block: pass, fail with the value each side of the
+  comparison had, an error passed on by `?`, or a panic with its line.
+- **`fmt`** is the canonical form; on 1,509 stored programs it changes no tree and loses no comment.
