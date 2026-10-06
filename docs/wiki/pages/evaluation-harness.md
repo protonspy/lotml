@@ -99,7 +99,8 @@ comparison, independent ones — repeated samples of the same task are not indep
 ## Gates
 
 Each gate is a measured criterion; if it does not pass, the next phase does not start and the
-syntax is revisited ([[requirements-and-roadmap]]):
+syntax is revisited ([[requirements-and-roadmap]]), unless an ADR records why the roadmap proceeds
+anyway:
 
 | gate | criterion |
 | --- | --- |
@@ -117,7 +118,9 @@ on 192 to 200 paired tasks. "Not worse" is read as no model significantly worse 
 adr:0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate.
 
 The phase 1 gate did not pass (`harness/results/phase1.md`, from `python -m
-lotml_harness.experiments.phase1`), so phase 2 has not started. Each of four models wrote the
+lotml_harness.experiments.phase1`); phase 2 proceeds past it by
+adr:0011-proceed-to-phase-2-past-the-failed-phase-1-gate, which keeps the result as failed and the
+syntax as it is. Each of four models wrote the
 same 200 tasks in lotml, with `lotml check` and the hidden tests' feedback for up to three
 answers, and in typed Python. Rounds to green (median 1 for every model) and tokens (lotml/Python
 0.99, median of models) pass; pass@1 does not:
