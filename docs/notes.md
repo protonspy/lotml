@@ -90,3 +90,5 @@ over this file answers with the example above as well as with the notes. -->
 - n-0050 2026-10-06 #ceiling @compiler/crates/lotml/src/files.rs — interfaces_for walks to the filesystem root when no .git is above the file, so a bindings/ planted in a shared ancestor (/tmp, C:\) is read; stop also at home or a fixed depth if it matters
 - n-0051 2026-10-06 #ceiling @harness/lotml_harness/experiments/awaits.py — the awaits judge reads its report from the last stdout line of the process running the model's code, so an answer could print a forged report and exit; a report on a separate fd the parent names closes it, as for the older judges
 - n-0052 2026-10-06 #gotcha @compiler/crates/lotml/src/exec.rs — lotml bind takes ASCII module names only: Windows reserves COM¹ and LPT¹ too, and every name typeshed binds is ASCII
+- n-0053 2026-10-06 #gotcha @compiler/crates/lotml-fmt — lotml fmt puts a blank line before a comment that opens a function body; the guide keeps such comments above the fn
+- n-0054 2026-10-06 #gotcha @compiler/crates/lotml-check — a result of None compared with == Ok(None) is E0204 (Ok(None) types as an optional); a test unwraps it with ? instead

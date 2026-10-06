@@ -1,0 +1,388 @@
+# lotml, by example — written by `lotml init`, rewritten by the next one; do not edit.
+#
+# lotml is Python's syntax wherever the meaning is Python's, statically typed, with errors as
+# values and value semantics. Every section below checks and its tests pass:
+# `lotml test lotml.guide.lotml` proves the guide against the compiler you have.
+# A comment marked NOT PYTHON is where the same Python would mean something else.
+
+from math import sqrt, pi
+import math
+
+# --- Functions and locals ---------------------------------------------------------------------
+# Every parameter and the return type are annotated; no `-> T` returns None.
+# A string on the first line of a body documents the function.
+
+fn area(width: f64, height: f64) -> f64:
+    return width * height
+
+fn greet(name: str, punctuation: str = "!") -> str:
+    """Say hello; `punctuation` closes the sentence."""
+    return f"hello, {name}{punctuation}"
+
+# NOT PYTHON: only a `var` may be reassigned or mutated. `x = 1` then `x = 2` is an error,
+# not a new binding: declare `var x = 1` at the first assignment.
+fn total(prices: [int]) -> int:
+    var sum = 0
+    for p in prices:
+        sum += p
+    return sum
+
+# NOT PYTHON: there is no global mutable state. Top-level items are `fn`, `type`, `trait`,
+# `impl`, `import`/`from` and `test`.
+
+test "functions and locals":
+    assert area(2.0, 3.0) == 6.0
+    assert greet("ana") == "hello, ana!"
+    assert greet("ana", "?") == "hello, ana?"
+    assert total([1, 2, 3]) == 6
+    label: str = "annotated local"
+    assert len(label) == 15
+
+# --- Numbers ------------------------------------------------------------------------------------
+# `int` is i64; also i8 i16 i32 u8 u16 u32 u64 f32 f64. `1.0` and `1e9` are f64.
+
+test "numbers":
+    n = 7
+    assert n / 2 == 3.5  # `/` always returns f64, as in Python
+    assert n // 2 == 3  # floor division
+    assert -7 % 2 == 1  # the sign of the divisor, as in Python
+    assert int(3.9) == 3  # truncates toward zero
+    assert float(n) + 2.0 == 9.0
+    # NOT PYTHON: no implicit conversion except `/`. `1 + 2.0` is a type error:
+    # write `float(1) + 2.0`.
+    # NOT PYTHON: `int` does not grow; overflow stops the program. For modular arithmetic:
+    assert wrapping_add(9223372036854775807, 1) == -9223372036854775807 - 1
+    limit: u8 = 200  # a literal takes the sized type expected where it fits
+    assert int(limit) == 200
+    assert 6 & 3 | 1 << 4 == 18
+    assert 0 <= n < 10  # comparisons chain as in Python
+    assert abs(-3) == 3 and min(2, 5) == 2 and round(2.6) == 3
+    assert "42".to_int() == 42  # text converts with to_int() and to_float()
+
+# --- Strings ------------------------------------------------------------------------------------
+
+test "strings":
+    s = "Hello, World"
+    assert s.lower() == "hello, world"
+    assert s.split(", ") == ["Hello", "World"]
+    assert ", ".join(["a", "b"]) == "a, b"
+    assert s[0] == "H"  # indexing a str gives a str
+    assert s[1:4] == "ell"
+    ratio = 0.5
+    assert f"{s[0]} is {ratio:.2f}" == "H is 0.50"
+    # `find`, `to_int` and `split_once` return an optional: None when absent.
+    assert s.find("World") == 7
+    assert s.find("xyz") is None
+    assert "x".to_int() is None
+    assert "k=v".split_once("=") == ("k", "v")
+    assert ord("a") == 97 and chr(98) == "b" and "ell" in s
+
+# --- Collections --------------------------------------------------------------------------------
+# [T] list, {K: V} dict, {T} set, (A, B) tuple. The empty set is `set()`.
+
+test "collections":
+    xs: [int] = [3, 1, 2]
+    var ys = [1, 2]
+    ys.append(3)
+    assert ys == [1, 2, 3]
+    assert ys.pop() == 3  # pop, last, find and index return an optional
+    assert xs.index(9) is None
+    ages: {str: int} = {"ana": 30}
+    assert ages.get("bob") is None
+    assert ages.get("bob", 0) == 0  # `d[k]` would stop the program: absent key
+    var seen: {int} = set()
+    seen.add(4)
+    assert 4 in seen
+    pair: (str, int) = ("ana", 30)
+    name, age = pair
+    assert name == "ana" and age == 30
+    assert [x * x for x in xs if x > 1] == [9, 4]
+    assert {w: len(w) for w in ["ab", "c"]} == {"ab": 2, "c": 1}
+    # NOT PYTHON: collections are values. Assigning copies; changing the copy never changes
+    # the original.
+    var copy = xs
+    copy.append(9)
+    assert xs == [3, 1, 2]
+
+# --- Records ------------------------------------------------------------------------------------
+# One line declares a record; build it positionally or by name.
+
+type Point(x: f64, y: f64)
+
+type User(name: str, age: int, email: str? = None)
+
+test "records":
+    p = Point(1.0, 2.0)
+    u = User(name="ana", age=30)
+    assert u.email is None
+    # NOT PYTHON: records are values: `q = p` copies, and a field changes only through a `var`.
+    var q = p
+    q.x = 5.0
+    assert p.x == 1.0
+    assert p == Point(1.0, 2.0)  # records compare field by field
+
+# --- Sum types and match ------------------------------------------------------------------------
+
+type Shape = Circle(r: f64) | Rect(w: f64, h: f64) | Empty
+
+type Expr = Num(int) | Add(Expr, Expr) | Neg(Expr)
+
+fn shape_area(s: Shape) -> f64:
+    # NOT PYTHON: `match` must cover every case; a missing variant is a compile error.
+    match s:
+        case Circle(r):
+            return 3.0 * r * r
+        case Rect(w, h):
+            return w * h
+        case Empty:
+            return 0.0
+
+fn eval(e: Expr) -> int:
+    match e:
+        case Num(n):
+            return n
+        case Add(a, b):
+            return eval(a) + eval(b)
+        case Neg(inner):
+            return -eval(inner)
+
+fn describe_number(n: int) -> str:
+    match n:
+        case 0:
+            return "zero"
+        case _:
+            return "other"
+
+test "sum types":
+    assert shape_area(Rect(2.0, 3.0)) == 6.0
+    assert shape_area(Empty) == 0.0
+    assert eval(Add(Num(2), Neg(Num(5)))) == -3
+    assert describe_number(0) == "zero"
+
+# --- Optionals ----------------------------------------------------------------------------------
+# `T?` is a T or None, the only type that admits None.
+
+fn find_email(users: [User], name: str) -> str?:
+    for u in users:
+        if u.name == name:
+            return u.email
+    return None
+
+# `x is not None` narrows `x` to T inside the block.
+fn shout(email: str?) -> str:
+    if email is not None:
+        return email.upper()
+    return "-"
+
+test "optionals":
+    users = [User("ana", 30, "a@x.io"), User("bob", 40)]
+    assert find_email(users, "ana") == "a@x.io"
+    assert find_email(users, "bob") is None
+    assert (find_email(users, "eve") ?? "no email") == "no email"  # the value, or the default
+    assert shout(find_email(users, "ana")) == "A@X.IO"
+    # NOT PYTHON: no truthiness. `if` and `while` take only bool: write `len(xs) > 0`,
+    # `s != ""`, `x is not None`, `n != 0`. `and`, `or`, `not` take and return bool.
+    xs: [int] = []
+    assert not (len(xs) > 0)
+
+# --- Errors as values ---------------------------------------------------------------------------
+# `T ! E` is a T, or an error of type E. `fail e` returns the error.
+# NOT PYTHON: there are no exceptions: no `raise`, `try` or `except`.
+
+type ParseErr = Blank | NotNumber(text: str) | Negative(value: int)
+
+fn parse(s: str) -> int ! ParseErr:
+    if s == "":
+        fail Blank
+    n = s.to_int() ?? fail NotNumber(s)  # unwrap an optional, or fail
+    if n < 0:
+        fail Negative(n)
+    return n
+
+fn double(s: str) -> int ! ParseErr:
+    n = parse(s)?  # unwrap, or return the error from here
+    return n * 2
+
+# A function that can fail with no value to return ends with no `return`.
+fn validate(s: str) -> None ! ParseErr:
+    parse(s)?
+
+fn describe(s: str) -> str:
+    match parse(s):
+        case Ok(n):
+            return f"number {n}"
+        case Err(NotNumber(text)):
+            return f"not a number: {text}"
+        case Err(_):
+            return "invalid"
+
+test "errors as values":
+    assert parse("42") == Ok(42)
+    assert parse("") == Err(Blank)
+    assert parse("-3") == Err(Negative(-3))
+    assert double("21")? == 42  # in a test, `?` fails the test on an error
+    validate("7")?
+    assert describe("x") == "not a number: x"
+    # The program stops only on a broken invariant: an index out of range, an absent dict
+    # key, overflow, division by zero, a failed `assert`, `todo()`.
+
+# --- Unfinished code ----------------------------------------------------------------------------
+# `todo()` fills any hole, so an unfinished program still compiles; running it stops the
+# program with "not implemented".
+
+fn schedule(jobs: [str]) -> [str]:
+    return todo()
+
+# --- Parameters: read, inout, sink --------------------------------------------------------------
+# NOT PYTHON: a function gets a copy of a plain parameter and cannot change its caller's value.
+# To change it, declare the parameter `inout` and pass `&x`, where `x` is a `var`.
+
+fn add_all(inout xs: [int], values: [int]):
+    for v in values:
+        xs.append(v)
+
+fn appended(xs: [int], v: int) -> [int]:
+    var mine = xs  # to change a copy, declare a var
+    mine.append(v)
+    return mine
+
+# `sink` takes the value over: the caller may not use it after the call.
+fn consume(sink log: [str]) -> int:
+    return len(log)
+
+test "parameters":
+    var xs = [1]
+    add_all(&xs, [2, 3])
+    assert xs == [1, 2, 3]
+    assert appended(xs, 4) == [1, 2, 3, 4]
+    assert xs == [1, 2, 3]
+    lines = ["a", "b"]
+    assert consume(lines) == 2
+
+# --- Methods and traits -------------------------------------------------------------------------
+# NOT PYTHON: no classes and no inheritance. Methods live in `impl Type:`.
+
+type Counter(count: int)
+
+impl Counter:
+    fn new() -> Counter:  # no `self`: called on the type
+        return Counter(0)
+
+    fn get(self) -> int:
+        return self.count
+
+    fn bump(inout self):  # changes the receiver, which must be a var
+        self.count += 1
+
+trait Show:
+    fn show(self) -> str
+
+impl Show for Counter:
+    fn show(self) -> str:
+        return f"Counter({self.count})"
+
+impl Show for Point:
+    fn show(self) -> str:
+        return f"({self.x}, {self.y})"
+
+fn show_all[T: Show](items: [T]) -> str:
+    return "\n".join([i.show() for i in items])
+
+fn show_mixed(items: [dyn Show]) -> str:
+    return " ".join([i.show() for i in items])
+
+test "methods and traits":
+    var c = Counter.new()
+    c.bump()
+    assert c.get() == 1
+    assert c.show() == "Counter(1)"
+    assert show_all([Counter(1), Counter(2)]) == "Counter(1)\nCounter(2)"
+    assert show_mixed([Counter(3), Point(1.0, 2.0)]) == "Counter(3) (1.0, 2.0)"
+
+# --- Generics -----------------------------------------------------------------------------------
+# Type parameters go in brackets; a bound names a trait: Ord, Eq, Hash, Show, or your own.
+
+type Stack[T](items: [T])
+
+impl Stack[T]:
+    fn push(inout self, item: T):
+        self.items.append(item)
+
+    fn pop(inout self) -> T?:
+        return self.items.pop()
+
+fn first[T](xs: [T]) -> T?:
+    if len(xs) == 0:
+        return None
+    return xs[0]
+
+fn largest[T: Ord](xs: [T]) -> T?:
+    return max(xs) if len(xs) > 0 else None
+
+test "generics":
+    var s = Stack([1])
+    s.push(2)
+    assert s.pop() == 2
+    assert first(["a"]) == "a"
+    assert largest([3, 9, 2]) == 9
+
+# --- Control flow -------------------------------------------------------------------------------
+
+fn collatz_steps(start: int) -> int:
+    var n = start
+    var steps = 0
+    while n > 1:
+        n = n // 2 if n % 2 == 0 else 3 * n + 1
+        steps += 1
+    return steps
+
+test "control flow":
+    var kept: [int] = []
+    for i, x in enumerate([5, -1, 200, 7]):
+        if x < 0:
+            continue
+        elif x > 100:
+            break
+        else:
+            kept.append(i)
+    assert kept == [0]
+    assert collatz_steps(6) == 8
+    ages = {"bo": 40, "al": 30}
+    assert [k for k, v in sorted(ages.items())] == ["al", "bo"]
+    users = [User("ana", 30), User("bob", 20)]
+    assert [u.name for u in sorted(users, key=lambda u: u.age)] == ["bob", "ana"]
+    # NOT PYTHON: a lambda captures copies of the values it uses.
+
+# --- Concurrency --------------------------------------------------------------------------------
+# NOT PYTHON: no function is marked async and nothing is awaited. `parallel(tasks)` runs each
+# task, a function with no parameters, at once and returns their results in order.
+
+fn squares(xs: [int]) -> [int]:
+    return parallel([lambda: x * x for x in xs])
+
+test "concurrency":
+    assert squares([1, 2, 3]) == [1, 4, 9]
+
+# --- Modules and the prelude --------------------------------------------------------------------
+# `from m import a, b` or `import m`; no `import *`. A project's files do not import each
+# other: each module stands alone. The prelude needs no import: print len range enumerate zip
+# sorted reversed sum min max abs any all round int float str bool ord chr set list Heap todo
+# Ok Err parallel PyError. A Python module is imported after `lotml bind <module>`, each of
+# its functions returning `T ! PyError`; a C library through `bindings/c.<library>.lotmli`.
+
+test "modules and the prelude":
+    assert sqrt(4.0) == 2.0
+    assert math.floor(2.5) == 2
+    assert pi > 3.14
+    var h = Heap([5, 1, 3])
+    h.push(0)
+    assert h.pop_min() == 0
+    assert sum([1, 2]) == 3 and any([False, True]) and all([True])
+
+# --- Tests --------------------------------------------------------------------------------------
+# `test "name":` blocks sit next to the code. `assert` takes a bool; a result compares with
+# `== Ok(v)` or `== Err(e)`. `lotml test --json` reports the values a failed comparison saw.
+#
+# Not in the language: class def raise try except finally with yield decorators async await
+# global nonlocal *args **kwargs isinstance Any Optional[...] List[...] dunder names, and the
+# truthiness of anything not bool.

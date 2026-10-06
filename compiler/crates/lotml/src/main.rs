@@ -7,6 +7,7 @@ mod check;
 mod exec;
 mod files;
 mod index;
+mod init;
 mod lsp;
 mod mcp;
 mod rpc;
@@ -111,6 +112,18 @@ enum Command {
         #[arg(long, default_value = "bindings")]
         out: PathBuf,
     },
+    /// Set a project up for coding agents: AGENTS.md, the guide, and the MCP server in each harness.
+    Init {
+        /// The project's root.
+        #[arg(default_value = ".")]
+        dir: PathBuf,
+        /// The harnesses to set up, `claude,codex,cursor` or `none`, instead of the checklist.
+        #[arg(long, value_enum, value_delimiter = ',')]
+        harness: Option<Vec<init::Named>>,
+        /// Set up the harnesses found in the project, without the checklist.
+        #[arg(long)]
+        yes: bool,
+    },
     /// Serve the Language Server Protocol on standard input and output.
     Lsp,
     /// Serve the compiler's tools to an agent over MCP, on standard input and output.
@@ -162,6 +175,7 @@ fn run() -> ExitCode {
         Command::Run { path } => return status(exec::run(&path)),
         Command::Test { paths, json } => return status(exec::test(&paths, json)),
         Command::Bind { module, stub, out } => exec::bind(&module, stub.as_deref(), &out),
+        Command::Init { dir, harness, yes } => return status(init::run(&dir, harness.as_deref(), yes)),
         Command::Lsp => return status(lsp::serve()),
         Command::Mcp { root } => return status(mcp::serve(&root)),
         Command::Show { symbol, paths } => sources(&paths).map(|s| match index::show(&symbol, &s) {
