@@ -94,3 +94,4 @@ over this file answers with the example above as well as with the notes. -->
 - n-0054 2026-10-06 #gotcha @compiler/crates/lotml-check — a result of None compared with == Ok(None) is E0204 (Ok(None) types as an optional); a test unwraps it with ? instead
 - n-0055 2026-10-06 #gotcha @harness/lotml_harness/agent/run.py — ChatOpenRouter's request_timeout is in milliseconds (the SDK's timeout_ms): 180 meant 180 ms, and its retry backoff then ran 300 s before a ReadTimeout
 - n-0056 2026-10-06 #gotcha @compiler/crates/lotml-check/src — the checker types a tuple literal by its own elements, even under an annotation: (None, 1) is (_?, int) and never (int?, int?), so hidden blocks compare such results element by element
+- n-0057 2026-10-06 #ceiling @harness/lotml_harness/guide/seeded.py — drop-var mutants are mostly dropped as fixable (51 of 64), since check --fix adds the var; the mutability family's share of each program's budget is spent judging them

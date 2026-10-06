@@ -43,7 +43,7 @@ class AgentTask:
         paths = {name: inside(target, name) for name in files}
         for name, path in paths.items():
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(files[name], encoding="utf-8")
+            path.write_text(files[name], encoding="utf-8", newline="")
 
 
 def inside(target: Path, name: str) -> Path:

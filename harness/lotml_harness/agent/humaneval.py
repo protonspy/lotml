@@ -456,17 +456,11 @@ def solution_file(entry: str, names: list[str], doc: str) -> str:
     return f'fn {entry}({", ".join(names)}):\n    """{written}"""\n    return todo()\n'
 
 
-def pose(
-    ident: str,
-    entry: str,
-    names: list[str],
-    doc: str,
-    recorded: Recorded,
-    lotml: Lotml | None = None,
-) -> AgentTask:
-    """An `implement` task graded on `solution.lotml`, its hidden blocks the recorded cases, once
-    a witness signature shows they can be met. No reference solution: the cases are the canonical
-    solution's own results."""
+def typed(
+    entry: str, names: list[str], recorded: Recorded, lotml: Lotml | None = None
+) -> tuple[list[types.Type], types.Type, str]:
+    """The witness's parameter and return types and the hidden blocks, once the witness shows the
+    blocks can be met; `Refused` otherwise."""
     if recorded.error is not None:
         raise Refused("record", recorded.error)
     if not recorded.cases:
@@ -482,6 +476,21 @@ def pose(
     reason = satisfiable(witness(entry, names, params, returns, blocks), lotml)
     if reason is not None:
         raise Refused("unsatisfiable", reason)
+    return params, returns, blocks
+
+
+def pose(
+    ident: str,
+    entry: str,
+    names: list[str],
+    doc: str,
+    recorded: Recorded,
+    lotml: Lotml | None = None,
+) -> AgentTask:
+    """An `implement` task graded on `solution.lotml`, its hidden blocks the recorded cases, once
+    a witness signature shows they can be met. No reference solution: the cases are the canonical
+    solution's own results."""
+    _, _, blocks = typed(entry, names, recorded, lotml)
     return AgentTask(
         id=ident,
         kind="implement",
