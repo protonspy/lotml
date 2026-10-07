@@ -65,12 +65,13 @@ fn installer_clang() -> PathBuf {
 }
 
 /// The first of `variable`, `clang` in a directory of `path`, and `installer` that is a file. A
-/// bare name in `variable` is looked up on `path`; the working directory is never searched.
+/// bare name in `variable` is looked up on `path`, the working directory never searched; a path
+/// in it must be absolute.
 fn locate(variable: Option<&OsStr>, path: Option<&OsStr>, installer: Option<PathBuf>) -> Option<PathBuf> {
     if let Some(given) = variable.filter(|v| !v.is_empty()) {
         let given = Path::new(given);
         if given.components().count() > 1 {
-            return given.is_file().then(|| given.to_path_buf());
+            return (given.is_absolute() && given.is_file()).then(|| given.to_path_buf());
         }
         return on_path(&given.to_string_lossy(), path);
     }
@@ -105,7 +106,8 @@ impl Clang {
     }
 
     /// `build`, the runtime reporting at exit, when `counting`, the cells still live and the cells
-    /// allocated: what the leak tests read (specs/llvm-parity R3.1).
+    /// allocated: what the leak tests read (specs/llvm-parity R3.1). With `LOTML_SANITIZE` set, as
+    /// CI sets it, the program is built under AddressSanitizer and UndefinedBehaviorSanitizer.
     pub fn build_with(
         &self,
         ll: &Path,
@@ -122,6 +124,9 @@ impl Clang {
         }
         if counting {
             command.arg("-DLT_COUNT_CELLS");
+        }
+        if std::env::var_os("LOTML_SANITIZE").is_some() {
+            command.args(["-fsanitize=address,undefined", "-fno-sanitize-recover=undefined"]);
         }
         command.arg("-w").arg("-o").arg(exe).arg(ll).arg(runtime_dir.join("lotml.c"));
         command.arg("-I").arg(runtime_dir);
@@ -209,6 +214,16 @@ mod tests {
     fn a_relative_directory_on_path_is_never_searched() {
         let path = std::env::join_paths([Path::new("."), Path::new("bin")]).unwrap();
         assert_eq!(locate(None, Some(&path), None), None);
+    }
+
+    #[test]
+    fn a_relative_path_in_lotml_clang_is_not_run_from_the_working_directory() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/tmp/relative-clang");
+        std::fs::create_dir_all(&dir).unwrap();
+        file(&dir, "my-clang");
+        let relative = Path::new("../../target/tmp/relative-clang/my-clang");
+        assert!(relative.is_file(), "the test runs in the crate's directory");
+        assert_eq!(locate(Some(relative.as_os_str()), None, None), None);
     }
 
     #[test]

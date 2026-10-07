@@ -734,7 +734,6 @@ fn rt_args(op: Builtin, args: Vec<Arg>, at: bool) -> Expr {
     Expr::Rt { op, args, at }
 }
 
-/// The type of what iterating a value of `ty` gives.
 /// Whether the checker left `ty` to infer: a type, or the element of a list, it did not settle.
 fn unknown(ty: &Ty) -> bool {
     match ty {
@@ -744,6 +743,7 @@ fn unknown(ty: &Ty) -> bool {
     }
 }
 
+/// The type of what iterating a value of `ty` gives.
 fn element(ty: &Ty) -> Ty {
     match ty {
         Ty::List(t) | Ty::Set(t) | Ty::Heap(t) => (**t).clone(),

@@ -34,6 +34,11 @@ jobs:
           major=$(clang --version | sed -n 's/.*clang version \([0-9]*\).*/\1/p' | head -1)
           command -v "llvm-dwarfdump-$major" || command -v llvm-dwarfdump || ls "/usr/lib/llvm-$major/bin/llvm-dwarfdump"
       - name: Test
+        # The LLVM target's programs built under AddressSanitizer and UndefinedBehaviorSanitizer;
+        # leaks are the counting builds' to report.
+        env:
+          LOTML_SANITIZE: "1"
+          ASAN_OPTIONS: detect_leaks=0
         run: cargo test --manifest-path compiler/Cargo.toml --locked
 
   harness:

@@ -170,11 +170,20 @@ fn ffi(ty: &Ty) -> &'static str {
     }
 }
 
+/// The type a value of `ty` comes back from a C library as: an attribute before the type, where
+/// LLVM wants a return attribute.
+fn ffi_returned(ty: &Ty) -> String {
+    match ffi(ty).split_once(' ') {
+        Some((ty, attribute)) => format!("{attribute} {ty}"),
+        None => ffi(ty).to_string(),
+    }
+}
+
 /// The C library functions the program calls, declared as their interfaces declare them.
 fn c_functions(module: &mut Module, lowered: &Lowered) {
     for (symbol, (params, ret)) in &lowered.c_functions {
         let params: Vec<&str> = params.iter().filter(|t| !matches!(t, Ty::Unit)).map(ffi).collect();
-        module.declare(&format!("declare {} @{symbol}({})", ffi(ret), params.join(", ")));
+        module.declare(&format!("declare {} @{symbol}({})", ffi_returned(ret), params.join(", ")));
     }
 }
 
@@ -816,7 +825,7 @@ impl Writer<'_, '_> {
                     BinOp::FloorDiv => self.runtime2("lt_floordiv_f64", &x, &y),
                     BinOp::Mod => self.runtime2("lt_mod_f64", &x, &y),
                     BinOp::Pow => self.runtime2("lt_pow_f64", &x, &y),
-                    _ => self.value(format!("fadd double {x}, {y}")),
+                    other => return self.refuse(format!("`{other:?}` on a float")),
                 };
                 Ok(Value { text, ty: F64 })
             }
@@ -1414,6 +1423,12 @@ impl Writer<'_, '_> {
                             let bytes = self.value(format!("getelementptr i8, ptr {s}, i64 {STR_BYTES}"));
                             passed.push(format!("ptr {bytes}"));
                         }
+                        Ty::Float(FloatKind::F32) => {
+                            let v = self.operand(a)?;
+                            let v = self.convert(v, &F64)?.text;
+                            let narrow = self.value(format!("fptrunc double {v} to float"));
+                            passed.push(format!("float {narrow}"));
+                        }
                         _ => {
                             let v = self.operand(a)?;
                             let v = self.convert(v, t)?;
@@ -1421,7 +1436,7 @@ impl Writer<'_, '_> {
                         }
                     }
                 }
-                let ret_ffi = ffi(ret);
+                let ret_ffi = ffi_returned(ret);
                 let call = format!("call {ret_ffi} @{symbol}({})", passed.join(", "));
                 if ret_ffi == "void" {
                     self.emit(call);
@@ -2102,7 +2117,6 @@ fn zero(ty: &str) -> String {
         "double" => "0.0".into(),
         "ptr" => "null".into(),
         t if t.starts_with('i') && t[1..].chars().all(|c| c.is_ascii_digit()) => "0".into(),
-        "i1" => "false".into(),
         _ => "zeroinitializer".into(),
     }
 }

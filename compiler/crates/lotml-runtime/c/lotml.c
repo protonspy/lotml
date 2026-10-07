@@ -151,8 +151,9 @@ void lt_main_error(const lt_type *type, const void *error) {
     lt_buf b = LT_BUF;
     lt_buf_puts(&b, "error: ");
     type->repr(&b, error);
+    lt_buf_puts(&b, "\n");
     lt_flush();
-    fprintf(stderr, "%.*s\n", (int)b.len, b.data);
+    fwrite(b.data, 1, b.len, stderr);
     lt_buf_free(&b);
 }
 

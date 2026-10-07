@@ -82,8 +82,15 @@ pub fn build_and_run(clang: &driver::Clang, name: &str, source: &str, level: Lev
     clang
         .build_with(&ll_path, &dir, &exe, level, &program.libraries, build == Build::Counting)
         .unwrap_or_else(|e| panic!("{e}\n--- the IR ---\n{ll}"));
-    let out = Command::new(&exe).current_dir(&dir).output().expect("the program runs");
-    finish(out, ll)
+    let out =
+        Command::new(&exe).current_dir(&dir).env("ASAN_OPTIONS", "detect_leaks=0").output().expect("the program runs");
+    let run = finish(out, ll);
+    assert!(
+        !run.stderr.contains("Sanitizer") && !run.stderr.contains("runtime error:"),
+        "{name}: the sanitizer stopped the program\n{}",
+        run.stderr
+    );
+    run
 }
 
 /// `source` on the LLVM target at both levels, counting cells: it prints what the Python target

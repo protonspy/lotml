@@ -102,6 +102,29 @@ fn a_c_function_is_called_directly_as_on_the_python_target() {
 }
 
 #[test]
+fn a_c_function_taking_f32_or_returning_a_byte_or_bool_is_called_as_c_declares_it() {
+    let Some(clang) = clang() else { return };
+    let (library, math) = (libc(), libm());
+    let source = format!(
+        "from {library} import toupper, isdigit\nfrom {math} import sqrtf\n\n\
+         fn main():\n    print(sqrtf(f32(2.25)), toupper(98))\n    if isdigit(55) or True:\n        print(\"called\")\n"
+    );
+    let text = "fn toupper(c: i32) -> u8\nfn isdigit(c: i32) -> bool\n";
+    let maths = "fn sqrtf(x: f32) -> f32\n";
+    let both = format!("{text}{maths}");
+    let read = if library == math {
+        interfaces(&[(library, both.as_str())])
+    } else {
+        interfaces(&[(library, text), (math, maths)])
+    };
+    let exe = build(&clang, "narrow", &source, &read).unwrap_or_else(|e| panic!("{e}"));
+    let native = stdout_of(&exe);
+    assert_eq!(native, "1.5 66\ncalled\n");
+    let python = run_python_with("c-libraries-narrow", &source, &read);
+    assert_eq!(native, python.stdout, "{}", python.stderr);
+}
+
+#[test]
 fn a_missing_library_stops_the_build() {
     let Some(clang) = clang() else { return };
     let source = "from c.no_such_library_here import f\n\nfn main():\n    print(f(1))\n";
