@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: 9817fa389c66c5c9c21e1000d98ec81e7d69cc071151253591a73a680f403013
+checksum: cba98f17f20fb90bb6f7cc1cfc5ea36c5662033ee6ad832323c75407606f1ffe
 ---
 
 # IR architecture
@@ -71,7 +71,7 @@ makes an executable.
 
 - [x] 1.1 (Unit) Move the C runtime out of `lotml-c` into a crate both native backends write it
   from, the parity run unchanged
-- [ ] 1.2 (Unit) Write and build the spec shared-ir, the C target's output, parity and benchmarks
+- [x] 1.2 (Unit) Write and build the spec shared-ir, the C target's output, parity and benchmarks
   unchanged
   _Depends 1.1_
 - [ ] 1.3 (Unit) Write and build the spec python-on-ir, the parity suite unchanged
