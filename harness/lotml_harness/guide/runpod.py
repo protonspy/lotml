@@ -20,6 +20,17 @@ GONE = {"TERMINATED"}
 """Statuses a pod that is not billing reports, besides answering 404."""
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Follow no redirect: urllib would carry the Authorization header to wherever it points."""
+
+    def redirect_request(self, *_: object) -> None:
+        return None
+
+
+urlopen = urllib.request.build_opener(_NoRedirect).open
+"""The opener every request goes through; a redirect comes back as the HTTP error it is."""
+
+
 class RunPodError(RuntimeError):
     """A refusal from RunPod, or a pod that would not go away."""
 
@@ -53,7 +64,7 @@ def call(method: str, path: str, body: dict | None = None) -> dict | None:
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:  # noqa: S310
+        with urlopen(request, timeout=TIMEOUT) as response:
             data = response.read()
     except urllib.error.HTTPError as error:
         raise RunPodError(_problem(error.code, error.read())) from None
@@ -119,11 +130,16 @@ def create(request: dict) -> dict:
     return found
 
 
+def pods() -> list[dict]:
+    """Every pod of the account, as RunPod lists them."""
+    found = retried(lambda: call("GET", "/pods"))
+    listed = found.get("pods", []) if isinstance(found, dict) else found or []
+    return [p for p in listed if isinstance(p, dict) and p.get("id")]
+
+
 def named(name: str) -> str | None:
     """The id of the pod called `name`, for a pod RunPod created whose id never came back."""
-    found = call("GET", "/pods")
-    listed = found.get("pods", []) if isinstance(found, dict) else found or []
-    return next((p["id"] for p in listed if isinstance(p, dict) and p.get("name") == name), None)
+    return next((p["id"] for p in pods() if p.get("name") == name), None)
 
 
 def status(pod: str, sleep: Callable[[float], None] = time.sleep) -> dict | None:
@@ -144,11 +160,15 @@ def terminate(
     pod: str, wait: float = 300, poll: float = 5, sleep: Callable[[float], None] = time.sleep
 ) -> None:
     """Terminate the pod and return once RunPod no longer reports it; RunPodError if it still does
-    after `wait` seconds, so a pod is never left billing in silence."""
-    if status(pod, sleep) is None:
-        return
+    after `wait` seconds, so a pod is never left billing in silence. The termination is always
+    asked for — a pod one look found gone is confirmed gone by a second — and a 404 to it means
+    the pod is already gone."""
     path = f"/pods/{urllib.parse.quote(pod, safe='')}/action"
-    retried(lambda: call("POST", path, {"action": "terminate"}), sleep)
+    try:
+        retried(lambda: call("POST", path, {"action": "terminate"}), sleep)
+    except RunPodError as error:
+        if not str(error).startswith("RunPod answered 404"):
+            raise
     waited = 0.0
     while status(pod, sleep) is not None:
         if waited >= wait:

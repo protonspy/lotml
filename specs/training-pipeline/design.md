@@ -29,16 +29,20 @@ download GGUF
 ## Pods (R1)
 
 `guide/runpod.py` speaks RunPod's REST API v2 (`https://api.runpod.io/v2`) through `urllib`, as the
-harness already speaks OpenRouter: `price(gpu, cloud)` reads `GET /catalog/gpus/{id}`,
+harness already speaks OpenRouter, following no redirect, which would carry the key with it: `price(gpu, cloud)` reads `GET /catalog/gpus/{id}`,
 `create(request)` posts `/pods`, `status(id)` gets `/pods/{id}`, `terminate(id)` posts
 `/pods/{id}/action` with `terminate` and then polls until `GET` answers 404. Errors arrive in RFC
 9457 form; the `detail` is raised, never the request, since the request carries the token.
 
-**The cap** (R1.2, R1.3) lives in `harness/results/runpod.jsonl`, one row per pod, and
-`harness/results/runpod.md`, built from it. Spent is the sum of the rows' costs; a row's cost is
+**The cap** (R1.2, R1.3) is held by a ledger in the user's home, `~/.lotml/runpod.jsonl`, one
+row per pod, changed under a lock file: outside every checkout, so a branch, a worktree or a reset
+cannot lower what was spent. Its committed copy, `harness/results/runpod.jsonl`, and
+`harness/results/runpod.md`, built from it, are the record; the spend counts the rows of both. Spent is the sum of the rows' costs; a row's cost is
 the price times the time from creation to the confirmed termination, rounded up to the minute. The
 estimate uses the deadline, not a guess at the duration, so a run that hangs still fits. The cap
-is `--cap`, default 25.00 USD, the amount the user approved on 2026-10-07. As soon as RunPod
+is 25.00 USD, the amount the user approved on 2026-10-07, and no flag raises it; the estimate
+covers the deadline, the watcher's ten minutes of grace and the five a termination may wait, and
+a deadline is more than zero and at most twelve hours. As soon as RunPod
 returns the pod's id a row is written with `ended: null`, and the watcher completes it; a row left
 open by a crash is counted at its full deadline until `pipeline reconcile` closes it — a pod still
 there terminated and closed now, a pod gone closed at its deadline or now, whichever is sooner.
@@ -51,8 +55,9 @@ which the pod's own environment authorizes; so a laptop that sleeps does not lea
 **The pod** is `runpod/pytorch` at a pinned tag with CUDA 12.8, community cloud first, 40 GB of
 container disk, no volume (R2 holds what must outlive it), no ports. Its environment carries
 `HF_TOKEN`, the run's id, the commit, the stages and the deadline; the RunPod key is not passed in.
-The bootstrap clones the public repository at the commit (R1.6), installs rustup and builds the
-release `lotml`, `uv sync --locked --group train`, and fetches llama.cpp b11450's Linux release and
+The clone of the public repository at the commit (R1.6) runs under the deadline with the rest.
+The bootstrap holds the token aside while it installs uv (a pinned version) and rustup over https
+only and builds the release `lotml`, `uv sync --locked --group train`, and fetches llama.cpp b11450's Linux release and
 `convert_hf_to_gguf.py` from its source archive.
 
 ## Artifacts (R2)

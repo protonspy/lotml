@@ -33,13 +33,15 @@ gone() {
          "https://api.runpod.io/v2/pods/$RUNPOD_POD_ID/action"
 }
 trap gone EXIT
-root="${LOTML_ROOT:-/lotml}"
-git clone --quiet "$LOTML_REPOSITORY" "$root" \\
-  && git -C "$root" checkout --quiet "$LOTML_COMMIT" \\
-  && timeout --kill-after=60 "$LOTML_SECONDS" bash "$root/harness/pod/run.sh"
+export LOTML_ROOT="${LOTML_ROOT:-/lotml}"
+timeout --kill-after=60 "$LOTML_SECONDS" \\
+  bash -c 'git clone --quiet "$LOTML_REPOSITORY" "$LOTML_ROOT" \\
+  && git -C "$LOTML_ROOT" checkout --quiet "$LOTML_COMMIT" \\
+  && bash "$LOTML_ROOT/harness/pod/run.sh"'
 """
-"""The pod's command under `bash -c`: the trap is set before anything can fail, so a clone that
-fails, a stage that crashes, a run past its deadline and a run that ends all remove the pod."""
+"""The pod's command under `bash -c`: the trap is set before anything can fail, and the clone runs
+under the deadline with the rest, so a clone that fails or hangs, a stage that crashes, a run past
+its deadline and a run that ends all remove the pod."""
 
 COMMIT = re.compile(r"[0-9a-f]{40}")
 

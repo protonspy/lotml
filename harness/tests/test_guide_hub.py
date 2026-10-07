@@ -74,6 +74,7 @@ def test_records_are_uploaded_once_under_their_digest(tmp_path: Path):
     uploads = [c for c in api.calls if c[0] == "upload_folder"]
     assert [u[1] for u in uploads] == [f"records/{first}"]
     assert uploads[0][2]["token"] == TOKEN
+    assert uploads[0][2]["allow_patterns"] == ["*.jsonl"], "only the records the digest covers"
 
 
 def test_a_run_s_lineage_names_its_records_commit_and_inputs():

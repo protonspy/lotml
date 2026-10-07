@@ -56,13 +56,17 @@ The other options were these:
 
 - **Keys.** Training needs `RUNPOD_API_KEY` and an `HF_TOKEN` that can write the repository. Both
   are read from the user's environment and written nowhere. The pod receives the token but not
-  the RunPod key, and removes itself with its own pod-scoped credentials.
-- **Committed records of every run.** `harness/results/runpod.md` and its ledger hold every pod and
-  its cost. `harness/results/training/<run>.md` holds every run's report. Spend past the cap needs
+  the RunPod key, and removes itself with its own pod-scoped credentials. The token should be a
+  fine-grained one, scoped to the one repository: inside the pod it is held aside while the
+  installers and builds run, but the stages that use it run third-party code.
+- **Committed records of every run.** The ledger that holds the cap lives in `~/.lotml/`, outside
+  every checkout, and `harness/results/runpod.md` with its committed copy holds every pod and its
+  cost. `harness/results/training/<run>.md` holds every run's report. Spend past the cap needs
   the user's approval of a new cap.
 - **What a pod depends on.** The pod clones the public GitHub repository, so a run needs its
   commit pushed. It also downloads llama.cpp b11450's CUDA build and source, checked by SHA-256,
-  and the base model from Hugging Face.
+  and the base model from Hugging Face. uv's installer is pinned to a version and rustup's is
+  not; both come over https only, and are trusted as the harness's own setup trusts them.
 - **The guidance records leave the machine.** They are bench and HumanEval-derived content under
   MIT, and go to the private repository under their digest. The pipeline refuses a repository that
   is not private.

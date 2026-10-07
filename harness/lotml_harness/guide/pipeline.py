@@ -37,6 +37,10 @@ GRACE = 600
 """Seconds past the deadline the watcher waits for the pod to remove itself before it does."""
 TERMINATION = 300
 """Seconds `runpod.terminate` waits for a pod to go."""
+MAX_HOURS = 12.0
+"""The longest deadline a run may ask for."""
+PREFIX = "lotml-guide-"
+"""Every pod the pipeline creates is named with it, and `reconcile` looks for it."""
 
 
 class Refused(RuntimeError):
@@ -119,6 +123,8 @@ def prepare(
     unknown = [s for s in plan.stages if s not in STAGES]
     if not plan.stages or unknown:
         raise Refused(f"unknown stages: {', '.join(unknown) or 'none named'}")
+    if not 0 < plan.hours <= MAX_HOURS:
+        raise Refused(f"a run's deadline is more than 0 and at most {MAX_HOURS:g} hours")
     records = plan.records or latest(RECORDS)
     if records is None:
         raise Refused("no guidance records: build them with guide.seeded and guide.records")
@@ -132,7 +138,7 @@ def prepare(
     run = now().strftime("%Y%m%d-%H%M%S")
     seconds = int(plan.hours * 3600)
     env = pod.environment(run, commit, plan.stages, seconds, plan.hub, "", plan.inputs)
-    name = f"lotml-guide-{run}"
+    name = f"{PREFIX}{run}"
     if dry:
         shown = env | {"HF_TOKEN": "<redacted>"}
         request = runpod.pod_request(
@@ -222,9 +228,11 @@ def finish(
     try:
         runpod.terminate(pod_id)
     except runpod.RunPodError:
+        ledger.commit()
         ledgers.REPORT.write_text(ledger.markdown(plan.cap), encoding="utf-8")
         raise
     row = ledger.close(pod_id, now())
+    ledger.commit()
     ledgers.REPORT.write_text(ledger.markdown(plan.cap), encoding="utf-8")
     found = fetched(store, ready.run)
     REPORTS.mkdir(parents=True, exist_ok=True)
@@ -329,7 +337,7 @@ def run(plan: Plan, store: Hub, ledger: ledgers.Ledger, dry: bool = False) -> Pa
 def reconcile(ledger: ledgers.Ledger) -> None:
     """Close every row a crash left open: a pod still there is terminated and closed now; a pod
     gone is closed at its deadline, or now if that is sooner, which can only overstate what it
-    cost."""
+    cost. Then terminate and record any pod the pipeline named that the ledger never saw."""
     for row in ledger.rows():
         if row["ended"] is not None:
             continue
@@ -342,6 +350,20 @@ def reconcile(ledger: ledgers.Ledger) -> None:
             )
             ended = min(deadline, now())
         ledger.close(row["pod"], ended)
+    recorded = {row["pod"] for row in ledger.every()}
+    for found in runpod.pods():
+        if not str(found.get("name", "")).startswith(PREFIX) or found["id"] in recorded:
+            continue
+        runpod.terminate(found["id"])
+        started = datetime.datetime.fromisoformat(
+            str(found.get("createdAt") or now().isoformat()).replace("Z", "+00:00")
+        )
+        gpu = (found.get("gpu") or {}).get("id", "unknown")
+        hourly = Decimal(str(found.get("cost") or 0))
+        run_id = str(found["name"]).removeprefix(PREFIX)
+        ledger.open(run_id, found["id"], [], gpu, str(found.get("cloud", "")), hourly, 0, started)
+        ledger.close(found["id"], now())
+    ledger.commit()
     ledgers.REPORT.write_text(ledger.markdown(ledgers.CAP), encoding="utf-8")
 
 

@@ -55,13 +55,16 @@ class Hub:
             raise HubError(f"{self.repo} is not private: the pipeline writes nothing to it")
         self._private = True
 
-    def put(self, local: Path, remote: str, message: str) -> None:
-        """Upload a file or a directory to `remote`, after checking the repository is private."""
+    def put(
+        self, local: Path, remote: str, message: str, patterns: list[str] | None = None
+    ) -> None:
+        """Upload a file or a directory — only its files matching `patterns`, when given — to
+        `remote`, after checking the repository is private."""
         self.ensure_private()
         if local.is_dir():
             self.api.upload_folder(
                 folder_path=str(local), path_in_repo=remote, repo_id=self.repo,
-                commit_message=message, token=token(),
+                commit_message=message, token=token(), allow_patterns=patterns,
             )  # fmt: skip
         else:
             self.api.upload_file(
@@ -86,7 +89,7 @@ class Hub:
         """Upload a records directory once, under `records/<digest>/`; its digest."""
         found = digest(records)
         if not self.files(f"records/{found}"):
-            self.put(records, f"records/{found}", f"records {found[:12]}")
+            self.put(records, f"records/{found}", f"records {found[:12]}", ["*.jsonl"])
         return found
 
     def put_lineage(self, run: str, records: str, inputs: dict[str, str], commit: str) -> None:

@@ -38,7 +38,7 @@ def api(monkeypatch: pytest.MonkeyPatch):
 
     def install(*replies: tuple[int, object]) -> Api:
         fake = Api(*replies)
-        monkeypatch.setattr(runpod.urllib.request, "urlopen", fake)
+        monkeypatch.setattr(runpod, "urlopen", fake)
         return fake
 
     return install
@@ -87,20 +87,25 @@ def test_a_pod_that_answers_404_or_terminated_is_gone(api):
 
 def test_terminate_waits_until_the_pod_is_gone(api):
     fake = api(
-        (200, {"id": "pod_1", "status": "RUNNING"}),
         (200, None),
         (200, {"id": "pod_1", "status": "RUNNING"}),
         (404, {"title": "Not Found"}),
     )
     slept = []
     runpod.terminate("pod_1", wait=60, poll=5, sleep=slept.append)
-    assert fake.sent[1][:3] == ("POST", f"{runpod.API}/pods/pod_1/action", {"action": "terminate"})
+    assert fake.sent[0][:3] == ("POST", f"{runpod.API}/pods/pod_1/action", {"action": "terminate"})
     assert slept == [5]
+
+
+def test_a_pod_already_gone_is_confirmed_gone_by_the_termination_itself(api):
+    fake = api((404, {"title": "Not Found"}), (404, {"title": "Not Found"}))
+    runpod.terminate("pod_1", sleep=lambda _: None)
+    assert [s[0] for s in fake.sent] == ["POST", "GET"]
 
 
 def test_a_pod_that_will_not_go_is_an_error(api):
     running = (200, {"id": "pod_1", "status": "RUNNING"})
-    api(running, (200, None), *[running] * 5)
+    api((200, None), *[running] * 5)
     with pytest.raises(RunPodError, match="still exists"):
         runpod.terminate("pod_1", wait=10, poll=5, sleep=lambda _: None)
 
@@ -121,7 +126,7 @@ def test_an_error_carries_the_problem_and_never_the_key(api):
 
 def test_no_key_no_request(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("RUNPOD_API_KEY", raising=False)
-    monkeypatch.setattr(runpod.urllib.request, "urlopen", lambda *_: pytest.fail("no request"))
+    monkeypatch.setattr(runpod, "urlopen", lambda *_, **__: pytest.fail("no request"))
     with pytest.raises(RunPodError, match="RUNPOD_API_KEY is not set"):
         runpod.price("NVIDIA GeForce RTX 4090")
 
@@ -137,13 +142,11 @@ def test_a_network_failure_is_transient_and_a_read_is_asked_again(api, monkeypat
             raise failure
         return real(request, timeout)
 
-    monkeypatch.setattr(runpod.urllib.request, "urlopen", flaky)
+    monkeypatch.setattr(runpod, "urlopen", flaky)
     slept = []
     assert runpod.status("pod_1", sleep=slept.append)["status"] == "RUNNING"
     assert slept == [5]
-    monkeypatch.setattr(
-        runpod.urllib.request, "urlopen", lambda *_, **__: (_ for _ in ()).throw(TimeoutError())
-    )
+    monkeypatch.setattr(runpod, "urlopen", lambda *_, **__: (_ for _ in ()).throw(TimeoutError()))
     with pytest.raises(runpod.Transient, match="could not be reached: TimeoutError"):
         runpod.status("pod_1", sleep=lambda _: None)
 
@@ -158,3 +161,43 @@ def test_a_pod_is_found_by_its_name(api):
     assert runpod.named("lotml-guide-r1") == "pod_2"
     api((200, {"pods": []}))
     assert runpod.named("lotml-guide-r1") is None
+
+
+def test_a_redirect_is_not_followed_with_the_key(monkeypatch: pytest.MonkeyPatch):
+    import http.server
+    import threading
+
+    seen = []
+
+    class Target(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            seen.append(self.headers.get("Authorization"))
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *_):
+            pass
+
+    target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Target)
+
+    class Redirect(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(302)
+            self.send_header("Location", f"http://127.0.0.1:{target.server_port}/stolen")
+            self.end_headers()
+
+        def log_message(self, *_):
+            pass
+
+    source = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Redirect)
+    for server in (target, source):
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+    monkeypatch.setenv("RUNPOD_API_KEY", KEY)
+    monkeypatch.setattr(runpod, "API", f"http://127.0.0.1:{source.server_port}")
+    try:
+        with pytest.raises(RunPodError, match="302"):
+            runpod.call("GET", "/pods")
+        assert seen == []
+    finally:
+        source.shutdown()
+        target.shutdown()

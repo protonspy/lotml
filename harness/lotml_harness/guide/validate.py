@@ -30,11 +30,13 @@ PORT = 8091
 @contextlib.contextmanager
 def served(gguf: Path, llama_cpp: Path, port: int = PORT, slots: int = 4) -> Iterator[str]:
     """`llama-server` from `llama_cpp` serving `gguf` on the GPU, every layer offloaded, until the
-    block ends; its URL once it answers its health check."""
+    block ends; its URL once it answers its health check. It gets only the path and its libraries
+    from the environment, never the token."""
     server = train._tool(llama_cpp, ("llama-server",))
     libraries = sorted({str(p.parent) for p in llama_cpp.rglob("*.so*")})
-    env = os.environ | {
-        "LD_LIBRARY_PATH": ":".join([*libraries, os.environ.get("LD_LIBRARY_PATH", "")])
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "LD_LIBRARY_PATH": ":".join([*libraries, os.environ.get("LD_LIBRARY_PATH", "")]),
     }
     command = [str(server), "-m", str(gguf), "--host", "127.0.0.1", "--port", str(port),
                "-c", "8192", "-ngl", "99", "-np", str(slots)]  # fmt: skip
