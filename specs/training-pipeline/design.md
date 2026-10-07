@@ -23,8 +23,10 @@ download GGUF
 ```
 
 `python -m lotml_harness.guide.pipeline run --stages sft,rl,export --gpu "NVIDIA GeForce RTX 4090"
---hours 3` is the whole interface. `--from <run>` names the run whose outputs the first stage reads
-(R3.5); `--dry-run` prints the estimate and the pod's request without creating it.
+--hours 3` is the whole interface. `--gpu` takes GPU types, comma separated, tried in order until RunPod has
+a card — it often has none of one type — and the cap is checked at the dearest of them. `--from
+<run>` names the run whose outputs the first stage reads (R3.5); `--dry-run` prints the estimate
+and the pod's request without creating it.
 
 ## Pods (R1)
 

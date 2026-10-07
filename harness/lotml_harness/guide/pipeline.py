@@ -93,13 +93,15 @@ class Plan:
 
 @dataclass
 class Ready:
-    """A run checked, priced and uploaded, its pod's request built, not yet created."""
+    """A run checked, priced and uploaded, a pod's request built for each GPU it may run on, in
+    the order they are tried; `gpu` and `hourly` are the one RunPod had a card for, once created."""
 
     run: str
-    request: dict
-    hourly: Decimal
+    options: list[tuple[str, Decimal, dict]]
     hours: float
     """The hours the pod can bill at most: the deadline, its grace, and the termination."""
+    gpu: str = ""
+    hourly: Decimal = Decimal(0)
 
 
 def billed(hours: float) -> float:
@@ -131,7 +133,9 @@ def prepare(
     checked(records)
     if not (on_github or pushed)(commit):
         raise Refused(f"{commit[:12]} is on no remote branch: push it, the pod clones it")
-    hourly = Decimal(str(runpod.price(plan.gpu, plan.cloud)))
+    gpus = [g.strip() for g in plan.gpu.split(",") if g.strip()]
+    prices = {gpu: Decimal(str(runpod.price(gpu, plan.cloud))) for gpu in gpus}
+    hourly = max(prices.values())
     hours = billed(plan.hours)
     estimated = ledgers.estimate(hourly, hours)
     ledger.check(plan.cap, estimated)
@@ -142,28 +146,52 @@ def prepare(
     if dry:
         shown = env | {"HF_TOKEN": "<redacted>"}
         request = runpod.pod_request(
-            name, pod.IMAGE, plan.gpu, plan.cloud, pod.DISK, shown, pod.WRAPPER
+            name, pod.IMAGE, gpus[0], plan.cloud, pod.DISK, shown, pod.WRAPPER
         )
-        printed = {"estimate_usd": str(estimated), "hourly_usd": str(hourly), "request": request}
+        printed = {
+            "estimate_usd": str(estimated),
+            "hourly_usd": {gpu: str(price) for gpu, price in prices.items()},
+            "request": request,
+        }
         print(json.dumps(printed, indent=2))
         return None
     digest = store.put_records(records)
     store.put_lineage(run, digest, plan.inputs, commit)
     env["LOTML_RECORDS"] = digest
-    request = runpod.pod_request(name, pod.IMAGE, plan.gpu, plan.cloud, pod.DISK, env, pod.WRAPPER)
-    return Ready(run, request, hourly, hours)
+    options = [
+        (
+            gpu,
+            prices[gpu],
+            runpod.pod_request(name, pod.IMAGE, gpu, plan.cloud, pod.DISK, env, pod.WRAPPER),
+        )
+        for gpu in gpus
+    ]
+    return Ready(run, options, hours)
+
+
+UNAVAILABLE = "no longer any instances available"
+"""RunPod's word for a GPU it has no card of right now, which the next one in the list may have."""
 
 
 def create(ready: Ready) -> str:
-    """Create the pod; its id. A creation RunPod may have made though its answer never came back
-    is looked for by the pod's name, unique to the run, so it is terminated like any other."""
-    try:
-        return runpod.create(ready.request)["id"]
-    except runpod.RunPodError:
-        found = runpod.named(ready.request["name"])
-        if found is None:
-            raise
-        return found
+    """Create the pod on the first GPU RunPod has a card for, in the order given; its id, with
+    `ready.gpu` and `ready.hourly` set. A creation RunPod may have made though its answer never
+    came back is looked for by the pod's name, unique to the run, so it is terminated like any
+    other."""
+    failure: runpod.RunPodError | None = None
+    for gpu, hourly, request in ready.options:
+        ready.gpu, ready.hourly = gpu, hourly
+        try:
+            return runpod.create(request)["id"]
+        except runpod.RunPodError as error:
+            if UNAVAILABLE in str(error):
+                failure = error
+                continue
+            found = runpod.named(request["name"])
+            if found is None:
+                raise
+            return found
+    raise failure or runpod.RunPodError("no GPU was named")
 
 
 def status(store: Hub, run: str) -> dict | None:
@@ -223,7 +251,14 @@ def finish(
     raised after the ledger's report is written."""
     if not any(r["pod"] == pod_id for r in ledger.rows()):
         ledger.open(
-            ready.run, pod_id, plan.stages, plan.gpu, plan.cloud, ready.hourly, ready.hours, created
+            ready.run,
+            pod_id,
+            plan.stages,
+            ready.gpu,
+            plan.cloud,
+            ready.hourly,
+            ready.hours,
+            created,
         )
     try:
         runpod.terminate(pod_id)
@@ -325,7 +360,14 @@ def run(plan: Plan, store: Hub, ledger: ledgers.Ledger, dry: bool = False) -> Pa
     try:
         pod_id = create(ready)
         ledger.open(
-            ready.run, pod_id, plan.stages, plan.gpu, plan.cloud, ready.hourly, ready.hours, created
+            ready.run,
+            pod_id,
+            plan.stages,
+            ready.gpu,
+            plan.cloud,
+            ready.hourly,
+            ready.hours,
+            created,
         )
         seen = watch(store, ready.run, pod_id, created + datetime.timedelta(hours=plan.hours))
     finally:
@@ -373,7 +415,11 @@ def main(argv: list[str] | None = None) -> None:
     go = sub.add_parser("run")
     go.add_argument("--stages", required=True, help="comma separated: sft, rl, export")
     go.add_argument("--hub", required=True, help="the private repository, <user>/<name>")
-    go.add_argument("--gpu", default="NVIDIA GeForce RTX 4090")
+    go.add_argument(
+        "--gpu",
+        default="NVIDIA GeForce RTX 4090,NVIDIA RTX A6000,NVIDIA GeForce RTX 3090,NVIDIA RTX A5000",
+        help="GPU types, comma separated, tried in order until RunPod has a card",
+    )
     go.add_argument("--cloud", default="COMMUNITY", choices=("COMMUNITY", "SECURE"))
     go.add_argument("--hours", type=float, required=True, help="the run's deadline")
     go.add_argument("--from", dest="inputs", action="append", default=[], help="stage=run")

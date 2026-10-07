@@ -89,7 +89,7 @@ def fake(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 def plan(tmp_path: Path, stages: list[str] | None = None, **kwargs) -> Plan:
     found = kwargs.pop("records", None) or records(tmp_path / "records")
     hours = kwargs.pop("hours", 2)
-    gpu = "NVIDIA GeForce RTX 4090"
+    gpu = kwargs.pop("gpu", "NVIDIA GeForce RTX 4090")
     return Plan(stages or ["sft", "rl"], "me/guide", gpu, hours, records=found, **kwargs)
 
 
@@ -304,3 +304,32 @@ def test_reconcile_ends_and_records_a_pod_it_named_that_the_ledger_never_saw(
     )
     assert row["ended"] is not None
     assert {r["pod"] for r in Ledger(tmp_path / "committed.jsonl", None).rows()} == {"pod_8"}
+
+
+def test_the_next_gpu_is_tried_when_runpod_has_no_card_and_the_cap_uses_the_dearest(
+    fake, tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr(pipeline, "head", lambda: COMMIT)
+    monkeypatch.setattr(pipeline, "pushed", lambda _: True)
+    monkeypatch.setattr(pipeline, "watch", lambda *_, **__: None)
+    prices = {"A": 0.30, "B": 0.50}
+    monkeypatch.setattr(pipeline.runpod, "price", lambda gpu, cloud: prices[gpu])
+    asked = []
+
+    def scarce(request):
+        asked.append(request["gpu"]["id"])
+        if request["gpu"]["id"] == "A":
+            raise pipeline.runpod.RunPodError(
+                "RunPod answered 400: Bad Request: There are no longer any instances available"
+            )
+        return {"id": "pod_b"}
+
+    monkeypatch.setattr(pipeline.runpod, "create", scarce)
+    ledger = Ledger(tmp_path / "runpod.jsonl", None)
+    pipeline.run(plan(tmp_path, gpu="A,B"), Store(), ledger)
+    assert asked == ["A", "B"]
+    [row] = ledger.rows()
+    assert (row["pod"], row["gpu"], row["hourly"]) == ("pod_b", "B", "0.5")
+    with pytest.raises(CapExceeded):
+        pipeline.prepare(plan(tmp_path / "c", gpu="A,B", cap=Decimal("1.00")), Store(), ledger,
+                         COMMIT, on_github=lambda _: True)  # fmt: skip
