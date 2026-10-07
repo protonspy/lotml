@@ -5,6 +5,8 @@
 pub mod ir;
 pub mod lower;
 pub mod symbol;
+pub mod text;
+pub mod verify;
 
 mod hoist;
 mod own;
@@ -15,7 +17,10 @@ mod reuse;
 pub fn native(lowered: &mut lower::Lowered) {
     for f in &mut lowered.functions {
         own::insert_counts(f);
+        verify::assert_valid(f, "counting");
         reuse::insert_reuse(f);
+        verify::assert_valid(f, "reuse");
         hoist::hoist_uniqueness(f);
+        verify::assert_valid(f, "hoisting");
     }
 }

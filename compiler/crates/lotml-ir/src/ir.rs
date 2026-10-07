@@ -379,13 +379,38 @@ pub enum Panic {
     Value(String),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Operand {
     Local(Local),
     Const(Const),
 }
 
-#[derive(Clone, Debug)]
+/// `%3` for a local, a constant as `Const` shows it: the form the IR's text writes (R1.5).
+impl std::fmt::Debug for Operand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Operand::Local(l) => write!(f, "%{l}"),
+            Operand::Const(c) => write!(f, "{c:?}"),
+        }
+    }
+}
+
+/// A constant as the IR's text writes it: `7_i64`, `1.5`, `true`, `()`, `"text"`, `null`, `'^'`.
+impl std::fmt::Debug for Const {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Const::Int(v, kind) => write!(f, "{v}_{}", format!("{kind:?}").to_lowercase()),
+            Const::Float(v) => write!(f, "{v:?}"),
+            Const::Bool(b) => write!(f, "{b}"),
+            Const::Unit => write!(f, "()"),
+            Const::Str(s) => write!(f, "{s:?}"),
+            Const::Null => write!(f, "null"),
+            Const::Char(c) => write!(f, "{c:?}"),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub enum Const {
     Int(i128, IntKind),
     Float(f64),

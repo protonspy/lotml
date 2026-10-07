@@ -119,3 +119,21 @@ fn each_python_import_is_kept_with_its_span_for_a_target_without_python() {
     assert_eq!(module, "textwrap");
     assert!(source[span.start as usize..span.end as usize].starts_with("from textwrap import dedent"));
 }
+
+#[test]
+fn the_ir_prints_one_statement_per_line_with_where_it_came_from() {
+    let lowered = lowered("fn add(a: f64, b: f64) -> f64:\n    return a + b\n");
+    assert_eq!(
+        lowered.text(),
+        "fn lf_add(%0 a: f64, %1 b: f64) -> f64 @1:1\n  let %2: f64 = Binary(Add, %0, %1, Float(F64)) @2:5\n  return %2 @2:5\n"
+    );
+}
+
+#[test]
+fn nested_blocks_print_indented_under_the_statement_that_holds_them() {
+    let lowered = lowered("fn f(x: int) -> int:\n    if x > 0:\n        return 1\n    return 0\n");
+    let text = lowered.text();
+    assert!(text.contains("\n  if %"), "{text}");
+    assert!(text.contains("\n    return 1_i64 @3:9\n"), "{text}");
+    assert!(text.contains("\n  return 0_i64 @4:5\n"), "{text}");
+}

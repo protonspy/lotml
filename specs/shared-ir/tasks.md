@@ -11,7 +11,7 @@
   _Reason the LLVM backend reads only the monomorphic IR lowering already makes; the split serves the Python backend first and moves to specs/python-on-ir/ (plan reorder, 823750a)_
 - [x] 1.4 (Unit) Move counting, reuse and uniqueness hoisting into `lotml-ir` behind `lotml_ir::native` — R3.1, R3.2
   _Depends 1.2_
-- [ ] 1.5 (Unit) Print the IR as text and verify it after every pass in test builds — R1.5, R1.6
+- [x] 1.5 (Unit) Print the IR as text and verify it after every pass in test builds — R1.5, R1.6
   _Depends 1.1_
 
 ## 2 · The C backend on it

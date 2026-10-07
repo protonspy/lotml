@@ -438,6 +438,9 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
         functions.push(function);
         lambdas.push((captures, ty));
     }
+    for f in &functions {
+        crate::verify::assert_valid(f, "lowering");
+    }
     Ok(Lowered {
         main: cx.fns.contains_key("main"),
         functions,
