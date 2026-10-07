@@ -67,3 +67,12 @@ fn recovery_reads_a_file_with_windows_line_endings() {
     let source = "fn first() -> int:\n    x = total(1, 2,\n\nfn second() -> int:\n    return 2\n".replace('\n', "\r\n");
     assert_eq!(names(&source), ["first", "second"]);
 }
+
+#[test]
+fn a_run_of_unclosed_brackets_is_one_mistake() {
+    let source = format!("fn first() -> int:\n    x = {}1\n\nfn second() -> int:\n    return 2\n", "(".repeat(100));
+    let parsed = parse(&source);
+    let unclosed = parsed.errors.iter().filter(|e| e.message.contains("never closed")).count();
+    assert_eq!(unclosed, 1, "{:?}", &parsed.errors[..parsed.errors.len().min(3)]);
+    assert_eq!(names(&source), ["first", "second"]);
+}

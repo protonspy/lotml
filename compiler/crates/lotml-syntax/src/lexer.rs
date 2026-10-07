@@ -471,10 +471,12 @@ impl Lexer<'_> {
         })
     }
 
-    /// Report each bracket still open as never closed, and close them, so the line ahead is read
-    /// as the start of a definition rather than as more of the expression.
+    /// Close every bracket still open, reporting the outermost as never closed, so the line ahead
+    /// is read as the start of a definition rather than as more of the expression. One report
+    /// however many are open: a run of brackets is one mistake, not one per bracket.
     fn close_unclosed(&mut self) {
-        for (bracket, start) in std::mem::take(&mut self.open) {
+        let open = std::mem::take(&mut self.open);
+        if let Some(&(bracket, start)) = open.first() {
             self.error(start, start + 1, format!("this `{}` is never closed", bracket as char), None);
         }
     }
