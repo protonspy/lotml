@@ -171,7 +171,8 @@ typedef struct lt_failure {
     int outcome;
     const char *kind;
     char message[512];
-    const lt_at *at;
+    /* A copy: the place a panic was given may live in a frame the jump out of a test unwinds. */
+    lt_at at;
     const char *expression;
     const char *op;
     char *left;
@@ -207,8 +208,8 @@ static LT_NORETURN void lt_raise(lt_failure *f) {
     if (f->left != NULL && f->right != NULL) {
         fprintf(stderr, "  left:  %s\n  right: %s\n", f->left, f->right);
     }
-    if (f->at->file != NULL) {
-        fprintf(stderr, "  File \"%s\", line %d, in %s\n", f->at->file, f->at->line, f->at->function);
+    if (f->at.file != NULL) {
+        fprintf(stderr, "  File \"%s\", line %d, in %s\n", f->at.file, f->at.line, f->at.function);
     }
     fflush(stderr);
     exit(101);
@@ -220,7 +221,7 @@ void lt_panic(const lt_at *at, const char *kind, const char *message) {
     f.outcome = LT_PANICKED;
     f.kind = kind;
     snprintf(f.message, sizeof f.message, "%s", message != NULL ? message : "");
-    f.at = at;
+    f.at = *at;
     lt_raise(&f);
 }
 
@@ -239,7 +240,7 @@ void lt_assert_fail(const lt_at *at, const char *expression, const char *op, con
     f.outcome = LT_FAILED;
     f.kind = "TestFailure";
     snprintf(f.message, sizeof f.message, "%s", expression);
-    f.at = at;
+    f.at = *at;
     f.expression = expression;
     f.op = op;
     if (op != NULL) {
@@ -262,7 +263,7 @@ void lt_test_error(const lt_type *type, const void *error, const lt_at *at) {
     memset(&f, 0, sizeof f);
     f.outcome = LT_ERRED;
     f.kind = "Fail";
-    f.at = at;
+    f.at = *at;
     f.error = lt_shown(type, error);
     snprintf(f.message, sizeof f.message, "%s", f.error);
     lt_raise(&f);
@@ -352,7 +353,7 @@ void lt_test_report(void) {
             lt_buf_puts(&b, ", \"outcome\": \"pass\"}");
             continue;
         }
-        int line = f->at->file != NULL ? f->at->line : 0;
+        int line = f->at.file != NULL ? f->at.line : 0;
         if (f->outcome == LT_FAILED) {
             lt_json_field(&b, "outcome", "fail");
             lt_json_field(&b, "expression", f->expression);
@@ -373,9 +374,9 @@ void lt_test_report(void) {
             lt_json_field(&b, "message", f->message);
             lt_json_line(&b, line);
             lt_buf_puts(&b, ", \"trace\": [");
-            if (f->at->file != NULL) {
+            if (f->at.file != NULL) {
                 lt_buf_puts(&b, "{\"function\": ");
-                lt_buf_json(&b, f->at->function, strlen(f->at->function));
+                lt_buf_json(&b, f->at.function, strlen(f->at.function));
                 lt_json_line(&b, line);
                 lt_buf_puts(&b, "}");
             }
