@@ -4,7 +4,7 @@
 - [x] 1.2 (Unit) Keep each guidance record's state beside its messages, as a delta to specs/guide-records/ — R4.2
 - [x] 1.3 (TDD) Score answers through the judge: zero outside the schema or on a failed judgment, else the mean of the location and edit parts — R4.1, R4.2, R4.3, R4.4
   _Depends 1.1, 1.2_
-- [ ] 2.1 (Unit) Speak RunPod's REST API: price from the catalog, create, status, terminate and confirm gone, the key from the environment — R1.1, R1.4
+- [x] 2.1 (Unit) Speak RunPod's REST API: price from the catalog, create, status, terminate and confirm gone, the key from the environment — R1.1, R1.4
 - [ ] 2.2 (TDD) Hold runs to the cap: estimate from price and deadline, refuse past the cap, record every pod in the ledger and reconcile an open row — R1.2, R1.3
   _Depends 2.1_
 - [ ] 2.3 (Unit) Keep artifacts in a private Hugging Face repository: refuse a public one, put and get, records by digest, a run's lineage — R2.1, R2.2, R2.4
