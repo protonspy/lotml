@@ -2,7 +2,8 @@
 autonomy: auto
 ci: wait
 branch: feat/llvm-backend
-delivery: in-progress
+delivery: in-review
+pr: 31
 ---
 
 # LLVM parity — requirements
