@@ -1,6 +1,9 @@
 ---
 autonomy: auto
 ci: wait
+branch: feat/shared-ir
+delivery: in-review
+pr: 30
 ---
 
 # Shared IR — requirements
