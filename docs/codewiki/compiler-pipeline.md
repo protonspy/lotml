@@ -36,6 +36,10 @@ without; the lowering itself compiles a Python call, which the Python target nee
 
 [compiler/crates/lotml-ir/src/lower.rs:3800-3825]()
 
+[compiler/crates/lotml-ir/src/lower.rs:3936-3950]()
+
+[compiler/crates/lotml-ir/src/lower.rs:3984-3986]()
+
 Lowering writes a generic function once, its types naming its parameters, and a call of it — or a
 method of a generic type, or of a type parameter through its trait bound — as `CallGeneric`
 carrying the type arguments. That is what lets the Python target write one Python function per
@@ -84,7 +88,9 @@ is per part (`lotml_rt.copy`), since a value holding one list twice holds two li
 
 [compiler/crates/lotml-runtime/src/abi.rs:84-100]()
 
-[compiler/crates/lotml-llvm/src/layout.rs:155-170]()
+[compiler/crates/lotml-runtime/c/lotml.h:58-68]()
+
+[compiler/crates/lotml-llvm/src/layout.rs:211-221]()
 
 The LLVM IR calls the C runtime by name, so each declaration it writes must say what `lotml.h`
 says. Rather than a second list of signatures, `abi` parses the header the runtime ships, and
@@ -114,6 +120,10 @@ target turns the same spans into a `DISubprogram` per function and a `!dbg` per 
 The functions a library exports are chosen from the checker's signatures before lowering, so the
 warning for one left out points at its declaration
 (adr:0024-c-abi-exports-chosen-by-signature-without-new-syntax). Each wrapper is the only external
-symbol: it marks the runtime as called from a host, which locks the output buffer from then on,
-copies each `str` argument after checking it is UTF-8 — the module's function takes it over, as
-any callee does — and writes out what the function printed before returning.
+symbol: it marks the runtime as called from a host, which from then on writes the output buffer
+under its lock — the state of the runtime calls from two threads share, since every value a call
+makes is its own and no literal is ever counted, but for the count of running `parallel` calls
+(n-0087) — copies each `str` argument
+after checking it is UTF-8, stopping the host process, as a LotML program stops, when it is NULL
+or is not, and writes out what the function printed before returning; the module's function takes
+the strings over, as any callee does.
