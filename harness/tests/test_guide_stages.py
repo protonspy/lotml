@@ -107,3 +107,32 @@ def test_a_status_that_cannot_be_written_does_not_hide_the_stage_s_failure(tmp_p
 
     with pytest.raises(RuntimeError, match="the real failure"):
         execute(run(tmp_path, Broken()), ["sft"], {"sft": crashed})
+
+
+def test_diagnostics_hold_the_gpu_setup_and_no_secret(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("HF_TOKEN", "hf_secret_value_123456")
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
+    monkeypatch.setattr(stages, "_output", lambda command, env=None: " ".join(command)[:20])
+    found = stages.diagnostics()
+    assert set(found) == {
+        "nvidia-smi",
+        "environment",
+        "libcuda",
+        "torch",
+        "torch_without_ld_library_path",
+    }
+    assert found["environment"]["CUDA_VISIBLE_DEVICES"] == "0"
+    assert "HF_TOKEN" not in found["environment"]
+
+
+def test_a_failed_stage_leaves_its_diagnostics(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(stages, "diagnostics", lambda: {"nvidia-smi": "no devices"})
+    store = Store()
+
+    def crashed(_: Run) -> None:
+        raise RuntimeError("CUDA unknown error")
+
+    with pytest.raises(RuntimeError):
+        execute(run(tmp_path, store), ["sft"], {"sft": crashed})
+    assert "runs/r2/diagnostics.json" in store.puts
+    assert store.statuses[-1]["state"] == "failed"

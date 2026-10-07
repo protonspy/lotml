@@ -15,13 +15,15 @@ import datetime
 import json
 import os
 import re
+import subprocess
+import sys
 import tempfile
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from lotml_harness.agent.secrets import anonymised, scrub
+from lotml_harness.agent.secrets import anonymised, scrub, scrub_value
 from lotml_harness.guide import hub as hubs
 from lotml_harness.guide.hub import Hub
 
@@ -180,7 +182,55 @@ def export(run: Run) -> None:
     run.hub.put(out / "report.json", f"runs/{run.run}/report.json", f"run {run.run}: report")
 
 
-STAGES: dict[str, Callable[[Run], None]] = {"sft": sft, "rl": rl, "export": export}
+GPU_ENVIRONMENT = re.compile(r"^(CUDA|NVIDIA|LD_LIBRARY_PATH$|PATH$)")
+"""The variables a GPU's setup reads: none of them holds a secret."""
+PROBE = (
+    "import torch; print(torch.__version__, torch.version.cuda); "
+    "print('available', torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
+)
+
+
+def _output(command: list[str], env: dict[str, str] | None = None) -> str:
+    try:
+        done = subprocess.run(  # noqa: S603
+            command, capture_output=True, text=True, timeout=120, env=env, check=False
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        return f"{type(error).__name__}: {error}"
+    return (done.stdout + done.stderr)[-4000:]
+
+
+def diagnostics() -> dict:
+    """What the pod's GPU setup looks like, for a failure that names no cause: the driver and the
+    card, the variables a GPU's setup reads, where libcuda comes from, and whether torch reaches
+    the GPU with LD_LIBRARY_PATH as the image sets it and without it."""
+    without = {k: v for k, v in os.environ.items() if k != "LD_LIBRARY_PATH"}
+    return {
+        "nvidia-smi": _output(["nvidia-smi"]),
+        "environment": {k: v for k, v in os.environ.items() if GPU_ENVIRONMENT.match(k)},
+        "libcuda": _output(
+            ["bash", "-c", "ldconfig -p | grep -i libcuda; ls -la /usr/local/cuda/compat 2>&1"]
+        ),
+        "torch": _output([sys.executable, "-c", PROBE]),
+        "torch_without_ld_library_path": _output([sys.executable, "-c", PROBE], without),
+    }
+
+
+def diagnose(run: Run) -> None:
+    """Upload `runs/<run>/diagnostics.json`, scrubbed: a stage of its own, and what a failed stage
+    leaves behind."""
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "diagnostics.json"
+        path.write_text(json.dumps(scrub_value(diagnostics()), indent=2), encoding="utf-8")
+        run.hub.put(path, f"runs/{run.run}/diagnostics.json", f"run {run.run}: diagnostics")
+
+
+STAGES: dict[str, Callable[[Run], None]] = {
+    "diagnose": diagnose,
+    "sft": sft,
+    "rl": rl,
+    "export": export,
+}
 
 
 def execute(run: Run, stages: list[str], known: dict[str, Callable[[Run], None]]) -> None:
@@ -195,8 +245,11 @@ def execute(run: Run, stages: list[str], known: dict[str, Callable[[Run], None]]
         try:
             known[stage](run)
         except Exception:
+            failure = traceback.format_exc()
             with contextlib.suppress(Exception):
-                status(run, stage, "failed", traceback.format_exc())
+                diagnose(run)
+            with contextlib.suppress(Exception):
+                status(run, stage, "failed", failure)
             raise
         run.done.append(stage)
     status(run, stages[-1] if stages else "", "done")
