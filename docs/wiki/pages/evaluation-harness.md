@@ -101,6 +101,38 @@ The approximation is 5–9% short: at Connor's n the exact test has 76–78% pow
 exact test's power is a sawtooth in n. Settling a syntax question takes a few hundred tasks per
 comparison, independent ones — repeated samples of the same task are not independent pairs.
 
+**More samples per task narrow what a gate can see, but tasks still count most.** In Miller's
+worked example ([arXiv 2411.00640](https://arxiv.org/abs/2411.00640)), 198 paired questions at one
+sample each can detect about 13 points, and at ten samples each about 7.5, under his assumed
+variances. With several samples per task, an interval clusters by task: a Wilson interval over
+pooled runs, as `harness/lotml_harness/agent/report.py` computes it, treats repeated runs of one
+task as independent and comes out too narrow. Exact McNemar stays the test for one sample per
+task, the only one with acceptable type I error by Dietterich's comparison. A gate stated as "not
+significantly worse" at about 200 pairs cannot exclude a 10-point loss. Gates written from now
+on name a non-inferiority margin before their run; gates already decided stand
+(adr:0011-proceed-to-phase-2-past-the-failed-phase-1-gate forbids rewriting one after its result).
+
+**The tasks carry known flaws.**
+- **Contamination survives translation.** 18.9% of HumanEval's and 20.8% of MBPP's solutions
+  appear in The Stack ([arXiv 2403.04811](https://arxiv.org/abs/2403.04811)), and refactoring did
+  not reliably lower scores. The paired difference against Python still isolates the language,
+  but an absolute lotml pass@1 overstates problem solving.
+- **Some canonical solutions are wrong.** EvalPlus found 18 defective canonical solutions in
+  HumanEval. adr:0015-pose-humaneval-untyped takes the canonical solution's own results as the
+  oracle, so those tasks need checking against EvalPlus's corrections.
+
+Other harnesses offer practice worth borrowing:
+- **Aider** reports three numbers per run: the first answer, the answer after feedback, and
+  whether the output was well formed.
+- **Terminal-Bench** packages a task with its limits and a reference solution that proves it
+  solvable, and runs an adversarial pass that tries to satisfy the tests without solving the
+  task.
+- **CRUXEval** asks the model to predict a program's output. Built from lotml programs, such a
+  probe measures whether a model reads lotml's semantics apart from whether it writes them.
+
+On harness design itself, see [[agent-harness-design]]; the sources are in
+`research/llm-landscape/evaluation-and-adaptation.md`.
+
 ## Gates
 
 Each gate is a measured criterion; if it does not pass, the next phase does not start and the

@@ -143,9 +143,12 @@ documentation and model cards are cited by link, without numbers.
    SmolLM3-3B's climb from 1–2% to 8%; a model has to sample some correct answers before RL has
    anything to reinforce. RL is a polishing stage of a few points, judged at pass@k and against a
    random-reward control ([[rl-environment]]).
-3. **The phase 2 corpus is the seed.** 509 HumanEval and MBPP tasks translated by rules and by a
-   model with the compiler, each kept only with its passing tests (`harness/results/corpus.md`) —
-   MultiPL-T's recipe at a hundredth of its size. In PyLang, going from half to all of 2,250
+3. **The seed has to be rebuilt before it can be trained on.** The phase 2 corpus, 509 HumanEval
+   and MBPP tasks translated by rules and by a model with the compiler, each kept only with its
+   passing tests (`harness/results/corpus.md`), translates MultiPL-E's typed copies, whose licence
+   forbids training (`harness/lotml_harness/agent/licences.toml`, `harness/results/NOTICE.md`). The
+   same recipe run on openai/human-eval (MIT) and MBPP's original release (CC BY 4.0) gives a seed
+   that can be trained on — MultiPL-T's recipe at a hundredth of its size. In PyLang, going from half to all of 2,250
    examples still added 4.3 points at 4B and 1.8 at 8B, and nothing larger was tried; MultiPL-T's
    sets hold 37,592 to 48,194 items. Growth comes from more Python sources, more solutions per
    problem and deduplication, every item checked by `lotml check` and `lotml test`.
@@ -158,8 +161,17 @@ documentation and model cards are cited by link, without numbers.
    distilled model; at 0.5B the evidence is repair behind a checker ([[repair-training]]).
 6. **Measure the shipped artifact.** The guide ships quantized to Q4_K_M; drift toward Python, or
    any other language, is measured on that file.
-7. **Open.** No study found trains a model on a language absent from its pretraining with a compiler
-   as the reward, at 0.5B–1.5B.
+7. **RL at this size needs a non-zero start, built on purpose.** Qwen2.5-Coder-0.5B under GRPO
+   learned nothing on Prolog zero-shot (0.00), and reached 0.13 with one example in the prompt as a
+   syntax anchor ([arXiv 2506.11027](https://arxiv.org/abs/2506.11027)). On Q, a language the base
+   models scored 0.0% on from 1.5B to 7B, GRPO at 1.5B made pass rates decline, and solutions and
+   tests written by one model were gamed ([arXiv 2508.06813](https://arxiv.org/abs/2508.06813)).
+   Agnostics needed only 0.09% base accuracy at 4B to start learning. The order this asks for: SFT
+   first; a curriculum that has RL complete only the tail of a reference program at first
+   (StepCoder); prompts filtered to a pass rate strictly between 0 and 1; a one-shot anchor while
+   the pass rate is near zero. Expect a few points over SFT, not new ability: Lean +1.2 after
+   +20.7 from SFT, Verilog +4 to +11 after +34. Sources:
+   `research/llm-landscape/evaluation-and-adaptation.md`.
 
 ## Not machine-checked
 
