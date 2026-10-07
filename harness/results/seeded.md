@@ -1,7 +1,7 @@
 # Seeded failures
 
-Written by `python -m lotml_harness.guide.seeded` on 2026-10-06 with `lotml 0.1.0`; the
-records are in `harness/cache/guide/seeded/2026-10-06/`, git-ignored.
+Written by `python -m lotml_harness.guide.seeded` on 2026-10-07 with `lotml 0.1.0`; the
+records are in `harness/cache/guide/seeded/2026-10-07/`, git-ignored.
 
 ## Programs
 
@@ -12,7 +12,7 @@ records are in `harness/cache/guide/seeded/2026-10-06/`, git-ignored.
 
 | split | records |
 |---|---:|
-| train | 2137 |
+| train | 2136 |
 | validation | 402 |
 
 ## Weights
@@ -46,7 +46,7 @@ Codes no operator aims at: E0001 1, E0003 92, E0101 2, E0110 3, E0111 11, E0206 
 | calls | duplicate-argument | 244 | 161 | 120 | 35 | 6 | 0 | 0 | 0 | 0 |
 | mutability | drop-var | 64 | 64 | 13 | 0 | 0 | 51 | 0 | 0 | 0 |
 | meaning | change-constant | 270 | 258 | 0 | 231 | 26 | 0 | 1 | 0 | 0 |
-| meaning | drop-statement | 196 | 188 | 1 | 82 | 102 | 0 | 3 | 0 | 0 |
+| meaning | drop-statement | 196 | 188 | 1 | 81 | 102 | 0 | 4 | 0 | 0 |
 | meaning | move-bound | 62 | 56 | 0 | 38 | 18 | 0 | 0 | 0 | 0 |
 | meaning | negate-condition | 110 | 97 | 1 | 95 | 0 | 0 | 1 | 0 | 0 |
 | meaning | swap-arguments | 29 | 28 | 0 | 22 | 6 | 0 | 0 | 0 | 0 |
@@ -54,4 +54,4 @@ Codes no operator aims at: E0001 1, E0003 92, E0101 2, E0110 3, E0111 11, E0206 
 | meaning | swap-comparison | 138 | 124 | 0 | 102 | 19 | 0 | 3 | 0 | 0 |
 | meaning | swap-logical | 21 | 20 | 0 | 19 | 1 | 0 | 0 | 0 | 0 |
 
-Kept 2539 of 2791 drawn: 1791 refused by `check`, 748 failing a test.
+Kept 2538 of 2791 drawn: 1791 refused by `check`, 747 failing a test.
