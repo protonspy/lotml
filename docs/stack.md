@@ -66,11 +66,12 @@ A Cargo workspace, Rust 1.97 and edition 2024 (adr:0006-compiler-written-in-rust
 file. Each crate is a stage: `lotml-syntax` (lexer, tolerant parser), `lotml-diag` (diagnostics
 and their codes), `lotml-check` (types, mutability, errors as values), `lotml-db` (the queries),
 `lotml-fmt` (the formatter), `lotml-ir` (the IR every backend reads, its lowering and its native
-passes, adr:0020-one-ir-between-the-checker-and-every-backend), `lotml-py` (the Python backend and its
-runtime), `lotml-c` (the C backend, adr:0016-c-target-as-monomorphic-c-over-a-counting-runtime),
-`lotml-runtime` (the C runtime native programs run on, apart from the backend that writes them), `lotml-ide` (what
-each name refers to, and the workspace an editor or agent queries), `lotml` (the command, with
-its language and MCP servers — JSON-RPC written over `serde_json`, with no protocol library).
+passes, adr:0020-one-ir-between-the-checker-and-every-backend), `lotml-py` (the Python backend and
+its runtime), `lotml-llvm` (the LLVM backend and its `clang` driver,
+adr:0025-two-targets-python-for-run-llvm-for-build), `lotml-runtime` (the C runtime native programs
+run on, adr:0016-c-target-as-monomorphic-c-over-a-counting-runtime), `lotml-ide` (what each name
+refers to, and the workspace an editor or agent queries), `lotml` (the command, with its language
+and MCP servers — JSON-RPC written over `serde_json`, with no protocol library).
 
 - **salsa** 0.28 — incremental queries over source files, the property the under-100 ms check
   rests on ([[transpilation-strategy]]); chosen over a hand-rolled cache because rust-analyzer
@@ -86,12 +87,11 @@ its language and MCP servers — JSON-RPC written over `serde_json`, with no pro
   mypy or jedi when no `--stub` is given, never installed by lotml.
 - **CPython** 3.11 or later — runs what the Python backend writes (`lotml run`, `lotml test`);
   found as `LOTML_PYTHON`, `python3`, `python` or `py -3`. Not a library the compiler links.
-- **A C11 compiler** — builds what the C backend writes (`--target c`): the first of `LOTML_CC`,
-  `CC`, `cc`, `gcc` and `clang`, then Visual Studio's `cl` on Windows. Not a library the compiler
-  links; gcc is what CI runs.
-- **find-msvc-tools** 0.1 (Windows only) — locates Visual Studio's `cl` and the environment it
-  needs (`INCLUDE`, `LIB`, `PATH`), from the rust-lang project that maintains `cc`; chosen over
-  running `vcvars64.bat` through `cmd`, which depends on the shell and on one install layout.
+- **clang** 17 or later — compiles the LLVM IR the LLVM backend writes, with the C runtime, into
+  an executable (`--target llvm`, adr:0021-compiler-in-rust-with-llvm-as-its-native-code-generator):
+  found as `LOTML_CLANG`, `clang` on `PATH`, then where the LLVM installer for Windows puts it.
+  Not a library the compiler links; textual IR keeps the compiler's own build free of LLVM's
+  libraries. On Windows it links with Visual Studio's linker and libraries.
 
 ## Editors (`editors/`)
 

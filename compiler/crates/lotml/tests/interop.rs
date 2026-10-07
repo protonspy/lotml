@@ -163,7 +163,7 @@ fn grow(xs: [int], by: int = 1) -> [int]:
 #[test]
 fn python_calls_a_compiled_module_through_a_checked_boundary() {
     let dir = scratch("python-calls", &[("library.lotml", LIBRARY)]);
-    let built = lotml(&["build", "library.lotml", "-o", "out"], &dir);
+    let built = lotml(&["build", "--target", "python", "library.lotml", "-o", "out"], &dir);
     assert!(built.status.success(), "{}", stdout(&built));
     let stub = std::fs::read_to_string(dir.join("out").join("library_lotml.pyi")).unwrap();
     assert!(stub.contains("def area(s: Shape) -> float: ..."));

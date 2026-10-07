@@ -47,7 +47,7 @@ int64_t lt_hash_f64(double value) {
 
 /* The hash of one part of a tuple: a type that has none cannot be in a set or a dict key. */
 int64_t lt_hash_part(const lt_type *type, const void *value) {
-    if (type->hash == NULL) lt_panic((lt_at){NULL, 0, NULL}, "TypeError", "unhashable type");
+    if (type->hash == NULL) lt_panic(&(lt_at){NULL, 0, NULL}, "TypeError", "unhashable type");
     return type->hash(value);
 }
 
@@ -69,7 +69,7 @@ int64_t lt_hash_tuple(const int64_t *lanes, int64_t n) {
 
 /* The runtime's own types -------------------------------------------------------------------- */
 
-void lt_unorderable(lt_at at, const char *type) {
+void lt_unorderable(const lt_at *at, const char *type) {
     lt_panicf(at, "TypeError", "'<' not supported between instances of '%s' and '%s'", type, type);
 }
 
@@ -77,7 +77,7 @@ void lt_unorderable(lt_at at, const char *type) {
     static bool lt_v_eq_##NAME(const void *a, const void *b) {                                                \
         return *(const CTYPE *)a == *(const CTYPE *)b;                                                       \
     }                                                                                                        \
-    static int lt_v_cmp_##NAME(const void *a, const void *b, lt_at at) {                                      \
+    static int lt_v_cmp_##NAME(const void *a, const void *b, const lt_at *at) {                                      \
         (void)at;                                                                                            \
         CTYPE x = *(const CTYPE *)a, y = *(const CTYPE *)b;                                                  \
         return x < y ? -1 : x > y ? 1 : 0;                                                                   \
@@ -103,7 +103,7 @@ LT_INT_TYPE(u64, uint64_t, uint64_t, lt_buf_u64, lt_hash_u64)
 static bool lt_eq_f64(const void *a, const void *b) {
     return *(const double *)a == *(const double *)b;
 }
-static int lt_cmp_f64(const void *a, const void *b, lt_at at) {
+static int lt_cmp_f64(const void *a, const void *b, const lt_at *at) {
     (void)at;
     double x = *(const double *)a, y = *(const double *)b;
     return x < y ? -1 : x > y ? 1 : 0;
@@ -119,7 +119,7 @@ const lt_type lt_type_f64 = {sizeof(double), NULL, NULL, lt_eq_f64, lt_cmp_f64, 
 static bool lt_eq_bool(const void *a, const void *b) {
     return *(const bool *)a == *(const bool *)b;
 }
-static int lt_cmp_bool(const void *a, const void *b, lt_at at) {
+static int lt_cmp_bool(const void *a, const void *b, const lt_at *at) {
     (void)at;
     return (int)*(const bool *)a - (int)*(const bool *)b;
 }
@@ -136,7 +136,7 @@ static bool lt_eq_none(const void *a, const void *b) {
     (void)b;
     return true;
 }
-static int lt_cmp_none(const void *a, const void *b, lt_at at) {
+static int lt_cmp_none(const void *a, const void *b, const lt_at *at) {
     (void)a;
     (void)b;
     lt_unorderable(at, "NoneType");
@@ -160,7 +160,7 @@ static void lt_dec_str(void *a) {
 static bool lt_eq_str(const void *a, const void *b) {
     return lt_str_eq(*(lt_str *const *)a, *(lt_str *const *)b);
 }
-static int lt_cmp_str(const void *a, const void *b, lt_at at) {
+static int lt_cmp_str(const void *a, const void *b, const lt_at *at) {
     (void)at;
     return lt_str_compare(*(lt_str *const *)a, *(lt_str *const *)b);
 }
@@ -192,7 +192,7 @@ lt_str *lt_str_of_value(const lt_type *type, const void *value) {
     return lt_str_from_buf(&b);
 }
 
-void lt_format_value(lt_buf *b, const lt_type *type, const void *value, const char *spec, size_t size, lt_at at) {
+void lt_format_value(lt_buf *b, const lt_type *type, const void *value, const char *spec, size_t size, const lt_at *at) {
     (void)spec;
     if (size != 0) lt_panic(at, "TypeError", "unsupported format string passed to this value's __format__");
     type->str(b, value);
@@ -200,7 +200,7 @@ void lt_format_value(lt_buf *b, const lt_type *type, const void *value, const ch
 
 /* Lists ------------------------------------------------------------------------------------ */
 
-void lt_index_error(lt_at at, const char *message) {
+void lt_index_error(const lt_at *at, const char *message) {
     lt_panic(at, "IndexError", message);
 }
 
@@ -237,7 +237,7 @@ static void lt_list_grow(lt_list *l, int64_t need) {
     int64_t cap = l->cap < 4 ? 4 : l->cap > INT64_MAX / 2 ? need : l->cap * 2;
     while (cap < need) cap = cap > INT64_MAX / 2 ? need : cap * 2;
     char *data = realloc(l->data, lt_bytes(cap, l->type->size));
-    if (data == NULL) lt_panic((lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
+    if (data == NULL) lt_panic(&(lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
     l->data = data;
     l->cap = cap;
 }
@@ -302,7 +302,7 @@ static int64_t lt_list_find(const lt_list *l, const void *value) {
     return -1;
 }
 
-void lt_list_remove(lt_list **slot, const void *value, lt_at at) {
+void lt_list_remove(lt_list **slot, const void *value, const lt_at *at) {
     int64_t at_index = lt_list_find(*slot, value);
     if (at_index < 0) lt_value_error(at, "list.remove(x): x not in list");
     lt_list_unique(slot);
@@ -347,7 +347,7 @@ void lt_list_reverse(lt_list **slot) {
 
 /* A stable merge sort of `n` elements of `size` at `data`, by `type->cmp`, descending when
  * `reverse` — every comparison reversed, so equal elements keep their order as Python's do. */
-static void lt_merge_sort(char *data, char *scratch, int64_t n, const lt_type *type, bool reverse, lt_at at) {
+static void lt_merge_sort(char *data, char *scratch, int64_t n, const lt_type *type, bool reverse, const lt_at *at) {
     size_t size = type->size;
     if (n < 2) return;
     if (n <= 8) {
@@ -384,7 +384,7 @@ static void lt_merge_sort(char *data, char *scratch, int64_t n, const lt_type *t
     if (i < half) memcpy(data + (size_t)k * size, scratch + (size_t)i * size, (size_t)(half - i) * size);
 }
 
-void lt_list_sort(lt_list **slot, bool reverse, lt_at at) {
+void lt_list_sort(lt_list **slot, bool reverse, const lt_at *at) {
     lt_list_unique(slot);
     lt_list *l = *slot;
     if (l->len < 2) return;
@@ -394,7 +394,7 @@ void lt_list_sort(lt_list **slot, bool reverse, lt_at at) {
 }
 
 /* The order of `n` keys, a stable merge sort of their indices by `keys->type->cmp`. */
-static void lt_sort_indices(int64_t *order, int64_t *scratch, int64_t n, const lt_list *keys, bool reverse, lt_at at) {
+static void lt_sort_indices(int64_t *order, int64_t *scratch, int64_t n, const lt_list *keys, bool reverse, const lt_at *at) {
     if (n < 2) return;
     int64_t half = n / 2;
     lt_sort_indices(order, scratch, half, keys, reverse, at);
@@ -412,7 +412,7 @@ static void lt_sort_indices(int64_t *order, int64_t *scratch, int64_t n, const l
     while (i < half) order[k++] = scratch[i++];
 }
 
-void lt_list_sort_by_keys(lt_list **slot, const lt_list *keys, bool reverse, lt_at at) {
+void lt_list_sort_by_keys(lt_list **slot, const lt_list *keys, bool reverse, const lt_at *at) {
     lt_list_unique(slot);
     lt_list *l = *slot;
     if (l->len < 2) return;
@@ -429,7 +429,7 @@ void lt_list_sort_by_keys(lt_list **slot, const lt_list *keys, bool reverse, lt_
     free(scratch);
 }
 
-lt_list *lt_list_sorted(const lt_list *l, bool reverse, lt_at at) {
+lt_list *lt_list_sorted(const lt_list *l, bool reverse, const lt_at *at) {
     lt_list *c = lt_list_copy(l);
     lt_list_sort(&c, reverse, at);
     return c;
@@ -441,7 +441,7 @@ lt_list *lt_list_reversed(const lt_list *l) {
     return c;
 }
 
-lt_list *lt_list_slice(const lt_list *l, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step, lt_at at) {
+lt_list *lt_list_slice(const lt_list *l, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step, const lt_at *at) {
     int64_t start, count, by;
     lt_slice_indices(l->len, has_lo, lo, has_hi, hi, has_step, step, &start, &count, &by, at);
     lt_list *c = lt_list_new(l->type, count);
@@ -461,7 +461,7 @@ lt_list *lt_list_concat(const lt_list *a, const lt_list *b) {
 
 /* `xs * times`: the elements copied once, then the copy doubled until it is long enough; each
  * element held once more for each copy of it. */
-lt_list *lt_list_repeat(const lt_list *l, int64_t times, lt_at at) {
+lt_list *lt_list_repeat(const lt_list *l, int64_t times, const lt_at *at) {
     if (times <= 0 || l->len == 0) return lt_list_new(l->type, 0);
     if (times > INT64_MAX / l->len) lt_panic(at, "MemoryError", "the repeated list is too long");
     int64_t n = l->len * times;
@@ -490,7 +490,7 @@ bool lt_list_index(const lt_list *l, const void *value, int64_t *out) {
 }
 
 /* `xs.pop()` and `xs.pop(i)`: the element taken out, its count with it. */
-bool lt_list_pop(lt_list **slot, bool has_index, int64_t index, void *out, lt_at at) {
+bool lt_list_pop(lt_list **slot, bool has_index, int64_t index, void *out, const lt_at *at) {
     memset(out, 0, (*slot)->type->size);
     if ((*slot)->len == 0) return false;
     lt_list_unique(slot);
@@ -503,7 +503,7 @@ bool lt_list_pop(lt_list **slot, bool has_index, int64_t index, void *out, lt_at
 }
 
 /* `a, b = xs`: stops unless `xs` holds exactly `n` elements, as Python's unpacking does. */
-void lt_list_unpack(const lt_list *l, int64_t n, lt_at at) {
+void lt_list_unpack(const lt_list *l, int64_t n, const lt_at *at) {
     if (l->len > n) lt_panicf(at, "ValueError", "too many values to unpack (expected %lld)", (long long)n);
     if (l->len < n) {
         lt_panicf(at, "ValueError", "not enough values to unpack (expected %lld, got %lld)", (long long)n, (long long)l->len);
@@ -532,7 +532,7 @@ int64_t lt_list_count(const lt_list *l, const void *value) {
 }
 
 /* The first smallest element of `l`, or the first largest: `min` and `max`. */
-const void *lt_list_extreme(const lt_list *l, bool max, lt_at at) {
+const void *lt_list_extreme(const lt_list *l, bool max, const lt_at *at) {
     if (l->len == 0) lt_value_error(at, max ? "max() iterable argument is empty" : "min() iterable argument is empty");
     const char *best = l->data;
     for (int64_t i = 1; i < l->len; i++) {
@@ -556,7 +556,7 @@ bool lt_list_all(const lt_list *l) {
     return true;
 }
 
-int64_t lt_sum_i64(const lt_list *l, lt_at at) {
+int64_t lt_sum_i64(const lt_list *l, const lt_at *at) {
     int64_t total = 0;
     size_t size = l->type->size;
     for (int64_t i = 0; i < l->len; i++) {
@@ -571,7 +571,7 @@ int64_t lt_sum_i64(const lt_list *l, lt_at at) {
     return total;
 }
 
-uint64_t lt_sum_u64(const lt_list *l, lt_at at) {
+uint64_t lt_sum_u64(const lt_list *l, const lt_at *at) {
     uint64_t total = 0;
     for (int64_t i = 0; i < l->len; i++) total = lt_add_u64(total, ((const uint64_t *)l->data)[i], at);
     return total;
@@ -598,7 +598,7 @@ double lt_sum_f64(const lt_list *l) {
     return total;
 }
 
-lt_list *lt_range_list(int64_t start, int64_t stop, int64_t step, lt_at at) {
+lt_list *lt_range_list(int64_t start, int64_t stop, int64_t step, const lt_at *at) {
     lt_range r = lt_range_new(start, stop, step, at);
     lt_list *l = lt_list_new(&lt_type_i64, 0);
     int64_t value;
@@ -623,7 +623,7 @@ lt_list *lt_str_chars(const lt_str *s) {
 }
 
 /* `s.split(sep, maxsplit)`: on runs of whitespace when `sep` is NULL, else on each `sep`. */
-lt_list *lt_str_split(const lt_str *s, const lt_str *sep, int64_t maxsplit, lt_at at) {
+lt_list *lt_str_split(const lt_str *s, const lt_str *sep, int64_t maxsplit, const lt_at *at) {
     lt_list *l = lt_list_new(&lt_type_str, 0);
     if (sep == NULL) {
         int64_t i = 0;
@@ -698,7 +698,7 @@ lt_str *lt_str_join(const lt_str *sep, const lt_list *parts) {
 }
 
 /* One part of `s.partition(sep)`: 0 before the first `sep`, 1 the separator, 2 after it. */
-lt_str *lt_str_partition_part(const lt_str *s, const lt_str *sep, int which, lt_at at) {
+lt_str *lt_str_partition_part(const lt_str *s, const lt_str *sep, int which, const lt_at *at) {
     if (sep->size == 0) lt_value_error(at, "empty separator");
     int64_t hit = lt_find_bytes(s, sep, 0);
     if (hit < 0) return which == 0 ? lt_str_new(s->bytes, s->size) : lt_str_new("", 0);
@@ -719,7 +719,7 @@ static bool lt_eq_list(const void *a, const void *b) {
 }
 
 /* Lists order by their first differing element, then by length, as Python's do. */
-static int lt_cmp_list(const void *a, const void *b, lt_at at) {
+static int lt_cmp_list(const void *a, const void *b, const lt_at *at) {
     const lt_list *x = *(lt_list *const *)a;
     const lt_list *y = *(lt_list *const *)b;
     int64_t n = x->len < y->len ? x->len : y->len;
@@ -766,7 +766,7 @@ static bool lt_eq_closure(const void *a, const void *b) {
     return *(lt_closure *const *)a == *(lt_closure *const *)b;
 }
 
-static int lt_cmp_closure(const void *a, const void *b, lt_at at) {
+static int lt_cmp_closure(const void *a, const void *b, const lt_at *at) {
     (void)a;
     (void)b;
     lt_unorderable(at, "function");
@@ -802,7 +802,7 @@ const lt_type lt_type_list = {sizeof(lt_list *), lt_list_inc, lt_list_dec, lt_eq
 
 /* Heaps ----------------------------------------------------------------------------------- */
 
-static bool lt_heap_less(const lt_list *l, int64_t a, int64_t b, lt_at at) {
+static bool lt_heap_less(const lt_list *l, int64_t a, int64_t b, const lt_at *at) {
     return l->type->cmp(LT_AT(l, a), LT_AT(l, b), at) < 0;
 }
 
@@ -824,7 +824,7 @@ static void lt_heap_swap(lt_list *l, int64_t a, int64_t b) {
 }
 
 /* heapq's siftdown: the element at pos moved up past every parent greater than it. */
-static void lt_heap_down(lt_list *l, int64_t start, int64_t pos, lt_at at) {
+static void lt_heap_down(lt_list *l, int64_t start, int64_t pos, const lt_at *at) {
     while (pos > start) {
         int64_t parent = (pos - 1) >> 1;
         if (!lt_heap_less(l, pos, parent, at)) break;
@@ -834,7 +834,7 @@ static void lt_heap_down(lt_list *l, int64_t start, int64_t pos, lt_at at) {
 }
 
 /* heapq's siftup: the smaller child moved up until a leaf, then the element sifted down. */
-static void lt_heap_up(lt_list *l, int64_t pos, lt_at at) {
+static void lt_heap_up(lt_list *l, int64_t pos, const lt_at *at) {
     int64_t end = l->len, start = pos, limit = end >> 1;
     while (pos < limit) {
         int64_t child = 2 * pos + 1;
@@ -854,7 +854,7 @@ static int64_t lt_keep_top_bit(int64_t n) {
     return n << i;
 }
 
-void lt_heapify(lt_list **slot, lt_at at) {
+void lt_heapify(lt_list **slot, const lt_at *at) {
     lt_list_unique(slot);
     lt_list *l = *slot;
     int64_t n = l->len;
@@ -878,12 +878,12 @@ void lt_heapify(lt_list **slot, lt_at at) {
     }
 }
 
-void lt_heap_push(lt_list **slot, const void *value, lt_at at) {
+void lt_heap_push(lt_list **slot, const void *value, const lt_at *at) {
     lt_list_push(slot, value);
     lt_heap_down(*slot, 0, (*slot)->len - 1, at);
 }
 
-bool lt_heap_pop(lt_list **slot, void *out, lt_at at) {
+bool lt_heap_pop(lt_list **slot, void *out, const lt_at *at) {
     if (!lt_list_pop(slot, false, 0, out, at)) return false;
     lt_list *l = *slot;
     if (l->len == 0) return true;
@@ -913,7 +913,7 @@ static bool lt_eq_heap(const void *a, const void *b) {
     const lt_list *y = *(lt_list *const *)b;
     if (x == y) return true;
     if (x->len != y->len) return false;
-    lt_at at = {NULL, 0, NULL};
+    const lt_at *at = &(lt_at){NULL, 0, NULL};
     lt_list *sx = lt_list_sorted(x, false, at), *sy = lt_list_sorted(y, false, at);
     bool same = lt_type_list.eq(&sx, &sy);
     lt_list_drop(sx);
@@ -921,7 +921,7 @@ static bool lt_eq_heap(const void *a, const void *b) {
     return same;
 }
 
-static int lt_cmp_heap(const void *a, const void *b, lt_at at) {
+static int lt_cmp_heap(const void *a, const void *b, const lt_at *at) {
     (void)a;
     (void)b;
     lt_unorderable(at, "Heap");
@@ -934,7 +934,7 @@ static void lt_repr_heap(lt_buf *b, const void *a) {
 
 /* `Heap([…])`: the elements in order. */
 static void lt_show_heap(lt_buf *b, const void *a) {
-    lt_list *sorted = lt_list_sorted(*(lt_list *const *)a, false, (lt_at){NULL, 0, NULL});
+    lt_list *sorted = lt_list_sorted(*(lt_list *const *)a, false, &(lt_at){NULL, 0, NULL});
     lt_buf_puts(b, "Heap(");
     lt_show_list(b, &sorted);
     lt_buf_put(b, ")", 1);
@@ -944,7 +944,7 @@ static void lt_show_heap(lt_buf *b, const void *a) {
 const lt_type lt_type_heap = {sizeof(lt_list *), lt_list_inc, lt_list_dec, lt_eq_heap, lt_cmp_heap, NULL, lt_repr_heap, lt_repr_heap, lt_share_list, lt_show_heap};
 
 /* `hash(x)`: what a set would file x under; a value that has none stops the program. */
-int64_t lt_hash_value(const lt_type *type, const void *value, lt_at at) {
+int64_t lt_hash_value(const lt_type *type, const void *value, const lt_at *at) {
     if (type->hash == NULL) lt_panic(at, "TypeError", "unhashable type");
     return type->hash(value);
 }

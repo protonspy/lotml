@@ -1,6 +1,9 @@
 ---
 autonomy: auto
 ci: wait
+branch: feat/llvm-backend
+delivery: in-review
+pr: 31
 ---
 
 # LLVM backend — requirements

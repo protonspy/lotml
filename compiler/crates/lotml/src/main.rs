@@ -80,16 +80,17 @@ enum Command {
         #[arg(required = true)]
         paths: Vec<PathBuf>,
     },
-    /// Compile files to Python modules, written with the runtime they import, or to executables.
+    /// Compile files to native executables, or, with `--target python`, to Python modules written
+    /// with the runtime they import (adr:0022).
     Build {
         /// Files, or directories searched for `.lot` and `.lotml` files.
         #[arg(required = true)]
         paths: Vec<PathBuf>,
-        /// Where to write the modules.
+        /// Where to write the executables or the modules.
         #[arg(short, long, default_value = "build")]
         out: PathBuf,
         /// What to compile to.
-        #[arg(long, value_enum, default_value = "python")]
+        #[arg(long, value_enum, default_value = "llvm")]
         target: Target,
     },
     /// Run a program's `fn main()`.
@@ -201,12 +202,12 @@ enum Dev {
     },
 }
 
-/// What a program is compiled to: Python modules run by Python, or C built by a C compiler
-/// (adr:0014).
+/// What a program is compiled to: Python modules run by CPython, or native code through LLVM
+/// (adr:0025-two-targets-python-for-run-llvm-for-build).
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum Target {
     Python,
-    C,
+    Llvm,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]

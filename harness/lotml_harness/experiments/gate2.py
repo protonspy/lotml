@@ -87,7 +87,15 @@ def python_calls_lotml(entries: list[dict], tasks: dict[str, Task]) -> Check:
             (root / f"p{i}.lotml").write_text(entry["lotml"], encoding="utf-8")
             jobs.append({"module": f"p{i}_lotml", "task": tasks[entry["task"]].to_json()})
         built = compiler(
-            ["build", "-o", "out", *(f"p{i}.lotml" for i in range(len(entries)))], root
+            [
+                "build",
+                "--target",
+                "python",
+                "-o",
+                "out",
+                *(f"p{i}.lotml" for i in range(len(entries))),
+            ],
+            root,
         )
         if built.returncode != 0:
             return Check(len(entries), 0, [built.stdout[:500]])

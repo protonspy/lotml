@@ -1,5 +1,6 @@
 ---
-status: accepted
+status: superseded
+superseded-by: 0025-two-targets-python-for-run-llvm-for-build
 ---
 
 # 0023 · Native programs load CPython at run time through its stable ABI

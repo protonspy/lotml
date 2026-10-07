@@ -1,4 +1,4 @@
-"""The phase 3 suite: every corpus program's `test` blocks on the Python and the C target, which
+"""The parity suite: every corpus program's `test` blocks on the Python and the LLVM target, which
 must report the same."""
 
 import json
@@ -39,19 +39,19 @@ def test_a_different_outcome_is_named_with_both_rows():
     assert '"outcome": "pass"' in outcome.detail and '"outcome": "fail"' in outcome.detail
 
 
-def test_a_python_import_refused_on_the_c_target_is_set_apart():
+def test_a_python_import_refused_on_the_llvm_target_is_set_apart():
     refused = "prog.lotml:1:1: error[E0401]: `textwrap` is a Python module, and …\n"
     assert parity.compare("t/1", ran(report(PASS)), ran(refused, 1)).verdict == "refused"
 
 
-def test_a_program_the_c_backend_does_not_compile_names_why():
-    unsupported = "prog.lotml:3:5: error[E0402]: the C backend does not compile this yet\n"
+def test_a_program_the_llvm_backend_does_not_compile_names_why():
+    unsupported = "prog.lotml:3:5: error[E0402]: `--target llvm` does not compile this yet\n"
     outcome = parity.compare("t/1", ran(report(PASS)), ran(unsupported, 1))
     assert outcome.verdict == "not compiled"
     assert "E0402" in outcome.detail
 
 
-def test_a_c_program_that_did_not_report_is_a_failure_of_its_own():
+def test_a_native_program_that_did_not_report_is_a_failure_of_its_own():
     assert parity.compare("t/1", ran(report(PASS)), ran("", 2)).verdict == "no report"
 
 

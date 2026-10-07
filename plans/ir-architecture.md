@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: cba98f17f20fb90bb6f7cc1cfc5ea36c5662033ee6ad832323c75407606f1ffe
+checksum: c4adae1955d4a1b2b563d64602d114391085b779363894db2d9188951c94536d
 ---
 
 # IR architecture
@@ -78,39 +78,54 @@ makes an executable.
   _Depends 1.2_
   _Status removed_
   _Reason reorder after analysing the research report: the LLVM target needs only the monomorphic IR, so the first executable lands before the Python backend's rewrite; re-added as 3.3_
-- [ ] 2.1 (Unit) Write and build the spec llvm-backend: `add`, `fib`, `collatz` and `mandelbrot`
+- [x] 2.1 (Unit) Write and build the spec llvm-backend: `add`, `fib`, `collatz` and `mandelbrot`
   print on `--target llvm` what they print on the Python target
   _Depends 1.2_
-- [ ] 2.2 (Unit) Write and build the spec llvm-parity: the parity suite identical on the Python,
+- [ ] 2.2 (Unit) Write and build the spec llvm-parity: the parity suite identical on the
+      Python,
   C and LLVM targets, and the benchmarks run on LLVM recorded beside the C run
   _Depends 2.1_
-- [ ] 2.3 (Unit) Make `--target llvm` the default of `lotml build` (adr:0022), correcting what
+  _Status removed_
+  _Reason re-added as 2.6 with two targets (adr:0025-two-targets-python-for-run-llvm-for-build)_
+- [x] 2.3 (Unit) Make `--target llvm` the default of `lotml build` (adr:0022),
+      correcting what
   describes `build` as writing Python
-  _Depends 2.2_
-- [ ] 3.1 (Unit) Write and build the spec python-bridge, lifting the native refusal of Python
+  _Depends 2.6_
+- [ ] 3.1 (Unit) Write and build the spec python-bridge, lifting the native refusal of
+      Python
   imports on the LLVM target
   _Depends 2.5_
+  _Status removed_
+  _Reason dropped: native programs do not load CPython; a program importing Python runs under lotml run (adr:0025-two-targets-python-for-run-llvm-for-build)_
 - [ ] 3.2 (Unit) Write and build the spec c-abi-export: a C program calling a function from a
   library `lotml build` wrote
   _Depends 2.5_
-- [ ] 4.1 (Unit) Narrate the pipeline in `docs/codewiki/` and bring the README's architecture and
+- [ ] 4.1 (Unit) Narrate the pipeline in `docs/codewiki/` and bring the README's
+      architecture and
   status, `docs/stack.md` and the wiki's transpilation strategy up to date
-  _Depends 2.3, 3.1, 3.2, 3.3_
-- [ ] 2.4 (Unit) Pass `--target python` where the harness experiments call `lotml build`
+  _Depends 2.3, 3.2, 3.3_
+- [x] 2.4 (Unit) Pass `--target python` where the harness experiments call `lotml build`
       and import the module it wrote (`gate2.py`, `phase1.py`), so moving the default
       does not change what they run
-  _Depends 2.2_
+  _Depends 2.6_
   _Reason review of the plan: adr:0022's context missed these two callers of build_
-- [ ] 2.5 (Unit) Retire the C target: remove `--target c`, the C emitter and its compiler
+- [x] 2.5 (Unit) Retire the C target: remove `--target c`, the C emitter and its
+      compiler
       discovery, keep the runtime crate `clang` compiles, run the parity suite on the Python and
       LLVM targets, and fold specs/c-backend into specs/llvm-parity
-  _Depends 2.3, 2.4_
+  _Depends 2.1_
+  _Priority 1_
   _Reason the user chose LLVM as the only native target (adr:0021)_
 - [ ] 3.3 (Unit) Write and build the spec python-on-ir: one lowering from the syntax
       tree to the IR, read with generics intact by the Python backend and after
       monomorphization by the native ones, the parity suite unchanged
   _Depends 1.2_
   _Reason reorder after analysing the research report: the LLVM target needs only the monomorphic IR, so the first executable lands before the Python backend's rewrite; replaces 1.3_
+- [x] 2.6 (Unit) Write and build the spec llvm-parity: the parity suite identical on the
+      Python and LLVM targets, and the benchmarks run on LLVM recorded beside the C
+      target's last run
+  _Depends 2.5_
+  _Reason replaces 2.2, which named the C target that adr:0025-two-targets-python-for-run-llvm-for-build retires first_
 
 ## Done when
 
