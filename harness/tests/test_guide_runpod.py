@@ -73,6 +73,8 @@ def test_a_pod_is_created_with_one_gpu_bash_and_no_ports(api):
     _, url, body, _ = fake.sent[0]
     assert url == f"{runpod.API}/pods"
     assert body["gpu"] == {"id": "NVIDIA GeForce RTX 4090", "count": 1}
+    with_cuda = runpod.pod_request("n", "i", "g", "COMMUNITY", 40, {}, "c", cuda="12.8")
+    assert with_cuda["gpu"] == {"id": "g", "count": 1, "minCudaVersion": "12.8"}
     assert (body["entrypoint"], body["cmd"]) == (["bash", "-c"], ["echo hi"])
     assert "ports" not in body and "mounts" not in body
 

@@ -146,7 +146,7 @@ def prepare(
     if dry:
         shown = env | {"HF_TOKEN": "<redacted>"}
         request = runpod.pod_request(
-            name, pod.IMAGE, gpus[0], plan.cloud, pod.DISK, shown, pod.WRAPPER
+            name, pod.IMAGE, gpus[0], plan.cloud, pod.DISK, shown, pod.WRAPPER, pod.CUDA
         )
         printed = {
             "estimate_usd": str(estimated),
@@ -162,7 +162,9 @@ def prepare(
         (
             gpu,
             prices[gpu],
-            runpod.pod_request(name, pod.IMAGE, gpu, plan.cloud, pod.DISK, env, pod.WRAPPER),
+            runpod.pod_request(
+                name, pod.IMAGE, gpu, plan.cloud, pod.DISK, env, pod.WRAPPER, pod.CUDA
+            ),
         )
         for gpu in gpus
     ]

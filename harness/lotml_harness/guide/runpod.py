@@ -110,14 +110,22 @@ def price(gpu: str, cloud: str = "COMMUNITY") -> float:
 
 
 def pod_request(
-    name: str, image: str, gpu: str, cloud: str, disk: int, env: dict[str, str], command: str
+    name: str,
+    image: str,
+    gpu: str,
+    cloud: str,
+    disk: int,
+    env: dict[str, str],
+    command: str,
+    cuda: str | None = None,
 ) -> dict:
     """The body that creates a one-GPU pod running `command` under bash, with no ports and no
-    volume: what must outlive the pod goes to the Hugging Face repository."""
+    volume: what must outlive the pod goes to the Hugging Face repository. `cuda`, as `12.8`, is
+    the lowest CUDA version the host's driver must support."""
     return {
         "name": name,
         "image": image,
-        "gpu": {"id": gpu, "count": 1},
+        "gpu": {"id": gpu, "count": 1} | ({"minCudaVersion": cuda} if cuda else {}),
         "cloud": cloud,
         "disk": disk,
         "env": env,

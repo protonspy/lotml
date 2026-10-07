@@ -14,6 +14,9 @@ from lotml_harness.guide import hub
 REPOSITORY = "https://github.com/protonspy/lotml"
 IMAGE = "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404"
 """CUDA 12.8 for the card; the training environment brings its own torch through uv."""
+CUDA = "12.8"
+"""The lowest CUDA version the host's driver must support: the image's and torch's. A host with an
+older driver fails `torch.cuda`'s initialization with an unknown error."""
 DISK = 40
 """GB of container disk: the toolchains, the environment, the base model and the run's outputs."""
 LLAMA = "b11450"
