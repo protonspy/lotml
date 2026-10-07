@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/guide-tool
-delivery: in-review
+delivery: merged
 pr: 20
 ---
 
