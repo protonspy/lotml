@@ -53,6 +53,9 @@ there terminated and closed now, a pod gone closed at its deadline or now, which
 `status.json` says `done` or `failed`, or when the deadline passes. Inside the pod, the bootstrap
 runs the stages under `timeout`, and on any exit calls `runpodctl remove pod "$RUNPOD_POD_ID"`,
 which the pod's own environment authorizes; so a laptop that sleeps does not leave a pod billing.
+Before it does, it uploads the run's output, the token replaced, to `runs/<run>/pod.log`: a
+failure before the stages leaves no status, and a failed stage also leaves
+`runs/<run>/diagnostics.json`, the GPU's setup.
 
 **The pod** is `runpod/pytorch` at a pinned tag with CUDA 12.8, community cloud first, 40 GB of
 container disk, no volume (R2 holds what must outlive it), no ports. Its environment carries

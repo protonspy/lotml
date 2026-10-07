@@ -34,9 +34,12 @@ def test_the_environment_carries_the_run_and_the_token_and_not_the_runpod_key(
 
 
 def test_the_command_interpolates_nothing():
-    assert "{" not in pod.WRAPPER.replace("${RUNPOD_API_KEY:-}", "").replace(
-        "${LOTML_ROOT:-/lotml}", ""
-    ).replace('{"action":"terminate"}', "").replace("gone() {", "")
+    expanded = ("${RUNPOD_API_KEY:-}", "${LOTML_ROOT:-/lotml}", "${LOTML_LOG:-/tmp/lotml-pod.log}",
+                "${HF_TOKEN:-no-token}", '{"action":"terminate"}', "gone() {")  # fmt: skip
+    text = pod.WRAPPER
+    for known in expanded:
+        text = text.replace(known, "")
+    assert "{" not in text
 
 
 def stubs(tmp_path: Path, git_fails: bool) -> tuple[Path, dict[str, str]]:
@@ -58,6 +61,7 @@ def stubs(tmp_path: Path, git_fails: bool) -> tuple[Path, dict[str, str]]:
         "LOTML_REPOSITORY": "https://example.invalid/lotml",
         "LOTML_COMMIT": COMMIT,
         "LOTML_SECONDS": "1",
+        "LOTML_LOG": str(tmp_path / "pod.log"),
     }
     return calls, env
 

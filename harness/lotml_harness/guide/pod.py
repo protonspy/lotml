@@ -29,7 +29,14 @@ LLAMA_SOURCE_SHA256 = "bc717d30da4d3c0546aded0f254349fd272a65fd1c87638ab06b98f78
 """The tag's source archive, for `convert_hf_to_gguf.py` and `gguf-py`."""
 
 WRAPPER = """set -uo pipefail
+log="${LOTML_LOG:-/tmp/lotml-pod.log}"
 gone() {
+  uvx="$HOME/.local/bin/uvx"
+  if [ -s "$log" ] && [ -x "$uvx" ]; then
+    sed "s|${HF_TOKEN:-no-token}|<redacted>|g" "$log" > "$log.public"
+    timeout 300 "$uvx" --from huggingface_hub==1.33.0 hf upload "$LOTML_HUB" "$log.public" \\
+      "runs/$LOTML_RUN/pod.log" --commit-message "run $LOTML_RUN: pod log" > /dev/null 2>&1
+  fi
   runpodctl remove pod "$RUNPOD_POD_ID" \\
     || curl -fsS -X POST -H "Authorization: Bearer ${RUNPOD_API_KEY:-}" \\
          -H "Content-Type: application/json" -d '{"action":"terminate"}' \\
@@ -40,11 +47,13 @@ export LOTML_ROOT="${LOTML_ROOT:-/lotml}"
 timeout --kill-after=60 "$LOTML_SECONDS" \\
   bash -c 'git clone --quiet "$LOTML_REPOSITORY" "$LOTML_ROOT" \\
   && git -C "$LOTML_ROOT" checkout --quiet "$LOTML_COMMIT" \\
-  && bash "$LOTML_ROOT/harness/pod/run.sh"'
+  && bash "$LOTML_ROOT/harness/pod/run.sh"' 2>&1 | tee "$log"
 """
 """The pod's command under `bash -c`: the trap is set before anything can fail, and the clone runs
 under the deadline with the rest, so a clone that fails or hangs, a stage that crashes, a run past
-its deadline and a run that ends all remove the pod."""
+its deadline and a run that ends all remove the pod. Before it does, the run's output, the token
+replaced, goes to `runs/<run>/pod.log` once uv is there to upload it: a failure before the stages
+leaves no status, and this is what says why."""
 
 COMMIT = re.compile(r"[0-9a-f]{40}")
 
