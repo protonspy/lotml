@@ -1,8 +1,8 @@
 """Run a program: its `test` blocks, or a task's hidden tests, under a step budget.
 
 The program is lotml run by the phase 0 transpiler (`mode` "lotml", or "python" for the same
-program read with Python's semantics), lotml compiled by `lotml build` ("compiled": the module
-stub the compiler wrote), or a model's typed Python ("solution").
+program read with Python's semantics), lotml compiled by `lotml build --target python`
+("compiled": the module stub the compiler wrote), or a model's typed Python ("solution").
 
 `run` executes in this process and is what the child process calls; `isolated` starts that
 child, so a program that hangs past the step budget's reach, exhausts memory or kills its
@@ -171,7 +171,7 @@ def report(error: BaseException, path: str) -> str:
 
 
 def compiler_runtime():
-    """`lotml_rt`, the runtime modules compiled by `lotml build` import."""
+    """`lotml_rt`, the runtime modules compiled by `lotml build --target python` import."""
     if str(COMPILER_RUNTIME) not in sys.path:
         sys.path.insert(0, str(COMPILER_RUNTIME))
     import lotml_rt
@@ -186,7 +186,7 @@ def solution_import(name, globals_=None, locals_=None, fromlist=(), level=0):
 
 
 def load_compiled(stub: str):
-    """A module compiled by `lotml build`, run from the stub the compiler wrote."""
+    """A module compiled by `lotml build --target python`, run from the stub the compiler wrote."""
     lotml_rt = compiler_runtime()
     try:
         path, payload = lotml_rt.stub_arguments(stub)

@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-07 — `lotml build` makes a native executable by default (adr:0022): [[transpilation-strategy]] names `--target python` where `build` writes the module Python imports
 - 2026-10-07 — training a small coder: added [[small-coder-training]], [[grpo]], [[verifiable-rewards]], [[rl-environment]], [[reward-hacking]] and [[repair-training]] from 55 papers checked in [[source-verification]]; corrected Agnostics' model sizes in [[training-prior]] and linked the pages from [[compiler-embedded-model]]
 - 2026-10-07 — `.lot` beside `.lotml` (adr:0018): [[semantic-compiler]] names both extensions and the guide `init` writes as `lotml.guide.lot`
 - 2026-10-06 — the C target built and measured: [[transpilation-strategy]] describes it, [[evaluation-harness]] reports the phase 3 gate, [[memory-model]] the benchmarks against C

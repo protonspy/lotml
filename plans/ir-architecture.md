@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: d5767f25fa0002e2e3820ce41a64691c76393acbace5cac7b7b48f0e7cb95193
+checksum: c4adae1955d4a1b2b563d64602d114391085b779363894db2d9188951c94536d
 ---
 
 # IR architecture
@@ -87,7 +87,7 @@ makes an executable.
   _Depends 2.1_
   _Status removed_
   _Reason re-added as 2.6 with two targets (adr:0025-two-targets-python-for-run-llvm-for-build)_
-- [ ] 2.3 (Unit) Make `--target llvm` the default of `lotml build` (adr:0022),
+- [x] 2.3 (Unit) Make `--target llvm` the default of `lotml build` (adr:0022),
       correcting what
   describes `build` as writing Python
   _Depends 2.6_

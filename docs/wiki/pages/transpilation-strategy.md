@@ -147,9 +147,9 @@ Phase 2 built both directions of R14 and R27 on one checked boundary
   shows Python each function wrapped. The arguments are checked against the lotml signature —
   integer ranges, `int` widened to `f64`, element types, records and variants rebuilt field by
   field — and copied, so a caller's list is never shared. A function returning `T ! E` raises
-  `lotml_rt.LotmlError` carrying the error. `lotml build` writes a `.pyi` beside each module, with
-  records as classes and a sum type as the union of its variants. `lotml run` and `lotml test`
-  still see the program unwrapped.
+  `lotml_rt.LotmlError` carrying the error. `lotml build --target python` writes a `.pyi` beside
+  each module, with records as classes and a sum type as the union of its variants. `lotml run`
+  and `lotml test` still see the program unwrapped.
 - **lotml calling Python.** `lotml bind <module> --stub <file.pyi>` reads a stub with Python's own
   parser — typeshed's, from an installed mypy or jedi, when no stub is given — and writes
   `bindings/<module>.lotmli`, an interface of bodyless signatures each returning `T ! PyError`.

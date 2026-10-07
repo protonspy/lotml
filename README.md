@@ -78,7 +78,8 @@ cargo build --manifest-path compiler/Cargo.toml --locked --release -p lotml
 lotml check stats.lot       # syntax, type and mutability errors
 lotml test  stats.lot       # run the test blocks
 lotml run   main.lot        # run fn main()
-lotml build stats.lot       # compile to a Python module with its runtime
+lotml build stats.lot       # compile to a native executable, through LLVM
+lotml build --target python stats.lot   # or to a Python module with its runtime
 lotml init                  # set a project up for coding agents: AGENTS.md, guide, MCP server
 lotml explain E0204         # explain an error code
 ```

@@ -1,5 +1,6 @@
-//! `--target llvm` on `lotml run` and `build`: the program compiled to LLVM IR and built by
-//! `clang`, `-O0` for `run` and `-O2` for `build` (specs/llvm-backend R1.1, R1.3, R1.4).
+//! `--target llvm` on `lotml run`, `test` and `build`, `build`'s default (adr:0022): the program
+//! compiled to LLVM IR and built by `clang`, `-O0` for `run` and `-O2` for `build`
+//! (specs/llvm-backend R1.1, R1.3, R1.4).
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -51,12 +52,12 @@ fn run_on_the_llvm_target_prints_and_exits_as_python() {
 }
 
 #[test]
-fn build_on_the_llvm_target_writes_an_executable_and_its_ir() {
+fn build_writes_a_native_executable_and_its_ir_by_default() {
     if !has_clang() {
         return;
     }
     let dir = scratch("build", &[("add.lot", ADD)]);
-    let out = lotml(&["build", "--target", "llvm", "add.lot", "-o", "out"], &dir);
+    let out = lotml(&["build", "add.lot", "-o", "out"], &dir);
     assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
     assert!(dir.join("out").join("add.ll").is_file());
     let exe = dir.join("out").join(if cfg!(windows) { "add.exe" } else { "add" });

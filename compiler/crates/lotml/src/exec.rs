@@ -1,5 +1,6 @@
 //! `lotml build`, `lotml run` and `lotml test`: programs compiled to Python and run by CPython, or
-//! compiled to LLVM IR and built by `clang` (`--target llvm`, specs/llvm-backend).
+//! compiled to LLVM IR and built by `clang` (`--target llvm`, specs/llvm-backend), the target
+//! `build` takes unless told otherwise (adr:0022).
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
@@ -190,8 +191,8 @@ impl Drop for Scratch {
     }
 }
 
-/// `lotml build`: each file as `<name>_lotml.py`, next to the runtime, in `out`; for the LLVM
-/// target, as `<name>.ll` and the executable built from it.
+/// `lotml build`: for the LLVM target, each file as `<name>.ll` and the executable built from it,
+/// in `out`; for the Python target, as `<name>_lotml.py`, next to the runtime.
 pub fn build(paths: &[PathBuf], out: &Path, target: Target) -> Result<u8, Failure> {
     if target == Target::Llvm {
         return build_llvm(paths, out);

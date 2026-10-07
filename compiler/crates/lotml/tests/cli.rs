@@ -235,7 +235,7 @@ fn run_calls_main_and_build_writes_the_modules() {
     let out = lotml(&["run", "runs.lotml"], &dir);
     assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
     assert_eq!(stdout(&out).trim_end(), "total 6");
-    let built = lotml(&["build", "-o", "out", "runs.lotml"], &dir);
+    let built = lotml(&["build", "--target", "python", "-o", "out", "runs.lotml"], &dir);
     assert_eq!(built.status.code(), Some(0));
     assert!(dir.join("out").join("runs_lotml.py").is_file() && dir.join("out").join("lotml_rt.py").is_file());
 }
