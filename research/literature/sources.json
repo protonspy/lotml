@@ -662,5 +662,445 @@
     "year": 2026,
     "url": "https://arxiv.org/pdf/2609.03086v1",
     "sha256": "ea965f3906bfd9f3e52d7eb6953d32a4e90fc2bf4a57cc0733ecf87b7d0c3f52"
+  },
+  {
+    "id": "2402.03300",
+    "title": "DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models",
+    "authors": "Zhihong Shao et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2402.03300v3",
+    "sha256": "6cc20b3c5b8d25b8b53868fc4ec1792c144f07d67bdf7395138efd4422197e7b"
+  },
+  {
+    "id": "2503.14476",
+    "title": "DAPO: An Open-Source LLM Reinforcement Learning System at Scale",
+    "authors": "Qiying Yu et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2503.14476v2",
+    "sha256": "f01e4fd347530cadd68e5c36b1998532a6d1adb272c817e73b927453c26e9d79"
+  },
+  {
+    "id": "2503.20783",
+    "title": "Understanding R1-Zero-Like Training: A Critical Perspective",
+    "authors": "Zichen Liu et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2503.20783v2",
+    "sha256": "98243d51297f011fb5baad8a70a972d061ffbef618f1d7cfc10deea37c5887d0"
+  },
+  {
+    "id": "2504.13837",
+    "title": "Does Reinforcement Learning Really Incentivize Reasoning Capacity in LLMs Beyond the Base Model?",
+    "authors": "Yang Yue et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2504.13837v5",
+    "sha256": "76139ea0ba0e9155569c7aa7b8153502f6a5b23fed717af0ca9934ec9d764f9a"
+  },
+  {
+    "id": "2505.22312",
+    "title": "Skywork Open Reasoner 1 Technical Report",
+    "authors": "Jujie He et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2505.22312v2",
+    "sha256": "5e49b9aa7237b38d8c0305aedca3687fe6ebe7e5d7c1b95ef8a7c111ab58f508"
+  },
+  {
+    "id": "2510.26788",
+    "title": "Defeating the Training-Inference Mismatch via FP16",
+    "authors": "Penghui Qi et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2510.26788v1",
+    "sha256": "edeb1ff8a3250f55dc0273213477add64590c0a5e05468023917d8bbf9356d7d"
+  },
+  {
+    "id": "2510.13786",
+    "title": "The Art of Scaling Reinforcement Learning Compute for LLMs",
+    "authors": "Devvrit Khatri et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2510.13786v1",
+    "sha256": "ddb5eb8f43fa3b3dbb0f7fa14cdf16eb170cee919c0713c7e38aabfa7647c441"
+  },
+  {
+    "id": "2505.24864",
+    "title": "ProRL: Prolonged Reinforcement Learning Expands Reasoning Boundaries in Large Language Models",
+    "authors": "Mingjie Liu et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2505.24864v1",
+    "sha256": "0e4f6a40873159f4b51d0376ef7275bade384a2ce5558933e463353558515276"
+  },
+  {
+    "id": "2506.10947",
+    "title": "Spurious Rewards: Rethinking Training Signals in RLVR",
+    "authors": "Rulin Shao et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2506.10947v2",
+    "sha256": "0a7973ed18d6509d95dc104be79bc3c7c6110cf6e6acba21413d83bc8fd696db"
+  },
+  {
+    "id": "2507.10532",
+    "title": "Reasoning or Memorization? Unreliable Results of Reinforcement Learning Due to Data Contamination",
+    "authors": "Mingqi Wu et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2507.10532v3",
+    "sha256": "dc811ec5ece9c7509fa8219e7909d71306f4f916c2a709e61c0540ce02ba2631"
+  },
+  {
+    "id": "2505.16400",
+    "title": "AceReason-Nemotron: Advancing Math and Code Reasoning through Reinforcement Learning",
+    "authors": "Yang Chen et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2505.16400v3",
+    "sha256": "29e0386797a739eea1c83300f71f02388f33fb9e6e39bacbdd254e2588509dca"
+  },
+  {
+    "id": "2506.03524",
+    "title": "Seed-Coder: Let the Code Model Curate Data for Itself",
+    "authors": "ByteDance Seed et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2506.03524v2",
+    "sha256": "376d3bd899cca65db1d4fe7709bb14f0dd158c549fc2d173ebd0c335f11ef2e5"
+  },
+  {
+    "id": "2501.12948",
+    "title": "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning",
+    "authors": "DeepSeek-AI et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2501.12948v2",
+    "sha256": "b191b0a365a64b4ab2791d117069ed17a2933d03554a662ced58b37df52018f4"
+  },
+  {
+    "id": "2505.09388",
+    "title": "Qwen3 Technical Report",
+    "authors": "An Yang et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2505.09388v1",
+    "sha256": "84a5e2b1fa04bb774bf12ae606d1e6d9dd2147ed2ebe78a4cfeb91ba380ffdd5"
+  },
+  {
+    "id": "2503.16219",
+    "title": "Reinforcement Learning for Reasoning in Small LLMs: What Works and What Doesn't",
+    "authors": "Quy-Anh Dang and Chris Ngo",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2503.16219v2",
+    "sha256": "c6b9ef5daa7bc6d5377c79107128081e026216ae861d5a1804403be597db01b8"
+  },
+  {
+    "id": "2504.15777",
+    "title": "Tina: Tiny Reasoning Models via LoRA",
+    "authors": "Shangshang Wang et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2504.15777v1",
+    "sha256": "bff08df4b6af6cb5684aa175dea428ea3c8b614c70dbd45b8c18470dc55f0ee1"
+  },
+  {
+    "id": "2505.21297",
+    "title": "rStar-Coder: Scaling Competitive Code Reasoning with a Large-Scale Verified Dataset",
+    "authors": "Yifei Liu et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2505.21297v1",
+    "sha256": "d47403cab5a5898ac34bee412d0e467c4503d96e8737e7cfa9851b37f62d8e7a"
+  },
+  {
+    "id": "2502.12143",
+    "title": "Small Models Struggle to Learn from Strong Reasoners",
+    "authors": "Yuetai Li et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2502.12143v3",
+    "sha256": "693adc8fb576db7606d487730e02d7fcfbd69d63f5fd41ed7c14224a94e451d7"
+  },
+  {
+    "id": "2503.16870",
+    "title": "Sparse Logit Sampling: Accelerating Knowledge Distillation in LLMs",
+    "authors": "Anshumann et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2503.16870v2",
+    "sha256": "5a9bdbc5e6951e1c1d277ea276ea4ee7522fc967ccf0ff8d1c08a4e365a3b56e"
+  },
+  {
+    "id": "2506.04178",
+    "title": "OpenThoughts: Data Recipes for Reasoning Models",
+    "authors": "Etash Guha et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2506.04178v2",
+    "sha256": "b18e962b0dea90c45acdb291403b03860e0a85e0b2571b6f1e5be5b436989c0a"
+  },
+  {
+    "id": "2504.01943",
+    "title": "OpenCodeReasoning: Advancing Data Distillation for Competitive Coding",
+    "authors": "Wasi Uddin Ahmad et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2504.01943v2",
+    "sha256": "d78befe4a7d0f5863c5788d382afbd4dc5d85e9e21b626866d13930854a9a992"
+  },
+  {
+    "id": "2410.18957",
+    "title": "Bridge-Coder: Unlocking LLMs' Potential to Overcome Language Gaps in Low-Resource Code",
+    "authors": "Jipeng Zhang et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2410.18957v1",
+    "sha256": "084c1f268a803e5643d890c4d7eb436db0427c562a7d8aa22096fe8e8e6cf725"
+  },
+  {
+    "id": "2410.24198",
+    "title": "SelfCodeAlign: Self-Alignment for Code Generation",
+    "authors": "Yuxiang Wei et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2410.24198v2",
+    "sha256": "7440fe1a4ffcdd6981d0c17ea2b8bf6967fcb3c08ed4d347120971588aec750d"
+  },
+  {
+    "id": "2410.17736",
+    "title": "MojoBench: Language Modeling and Benchmarks for Mojo",
+    "authors": "Nishat Raihan et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2410.17736v1",
+    "sha256": "16801d4dedab9a0916307ffa9ee97cb723715a71eb25d4b84d8e1534f3209d65"
+  },
+  {
+    "id": "2502.01718",
+    "title": "ACECODER: Acing Coder RL via Automated Test-Case Synthesis",
+    "authors": "Huaye Zeng et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2502.01718v4",
+    "sha256": "2438b10af4efe24381fb012bfcc3bc093cde53cd90ca076064c8376f5ad57303"
+  },
+  {
+    "id": "2605.02944",
+    "title": "Exploring Pass-Rate Reward in Reinforcement Learning for Code Generation",
+    "authors": "Xin-Ye Li et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2605.02944v1",
+    "sha256": "8d397866e9e1717894948916534a7fcdf8187b1b2092822fa6a5c08f67b06ec5"
+  },
+  {
+    "id": "2508.07629",
+    "title": "Klear-Reasoner: Advancing Reasoning Capability via Gradient-Preserving Clipping Policy Optimization",
+    "authors": "Zhenpeng Su et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2508.07629v4",
+    "sha256": "419f3a6f3f7ef6bc67af0732cb920a8495f1850b2173d79a2a69cab9492a8912"
+  },
+  {
+    "id": "2601.03525",
+    "title": "Beyond Binary: Turning Partial Success into Dense Verifiable Rewards for Reinforcement Learning in Code Generation",
+    "authors": "Longwen Wang et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2601.03525v3",
+    "sha256": "3c2ffe546482e1040c7bf27f1ae08ca9437fa86ec60c036d78cf49cd0ccb2311"
+  },
+  {
+    "id": "2505.07608",
+    "title": "MiMo: Unlocking the Reasoning Potential of Language Model -- From Pretraining to Posttraining",
+    "authors": "LLM-Core Xiaomi et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2505.07608v2",
+    "sha256": "4ddc38635aac51d404aec9d03952850b7b575619663a827c5bc8ef7d3d4860b6"
+  },
+  {
+    "id": "2207.01780",
+    "title": "CodeRL: Mastering Code Generation through Pretrained Models and Deep Reinforcement Learning",
+    "authors": "Hung Le et al.",
+    "year": 2022,
+    "url": "https://arxiv.org/pdf/2207.01780v3",
+    "sha256": "baac51d227441123433533e5ce3a40b32bd3affd09af4286acc607818d15c599"
+  },
+  {
+    "id": "2505.20315",
+    "title": "Arctic-Text2SQL-R1: Simple Rewards, Strong Reasoning in Text-to-SQL",
+    "authors": "Zhewei Yao et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2505.20315v2",
+    "sha256": "1aa2d14626c3ebd1556529f99fe5bc5db8d41c0ecb5f44697a7a557d140470d8"
+  },
+  {
+    "id": "2505.11849",
+    "title": "VeriReason: Reinforcement Learning with Testbench Feedback for Reasoning-Enhanced Verilog Generation",
+    "authors": "Yiting Wang et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2505.11849v1",
+    "sha256": "7872b790770720a840469ca6db23dd8bb629cdd90a37fbc8282d50da89930011"
+  },
+  {
+    "id": "2410.02089",
+    "title": "RLEF: Grounding Code LLMs in Execution Feedback with Reinforcement Learning",
+    "authors": "Jonas Gehring et al.",
+    "year": 2024,
+    "url": "https://arxiv.org/pdf/2410.02089v2",
+    "sha256": "d0b1575783af2da3860d8deff208e012fc2859aea30d7e319485ba7ba8c10326"
+  },
+  {
+    "id": "2502.18449",
+    "title": "SWE-RL: Advancing LLM Reasoning via Reinforcement Learning on Open Software Evolution",
+    "authors": "Yuxiang Wei et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2502.18449v2",
+    "sha256": "c649093be6913c6b64705bfa96fafa57938f1414e66663c45f750fea0704e8dc"
+  },
+  {
+    "id": "2502.20127",
+    "title": "SoRFT: Issue Resolving with Subtask-oriented Reinforced Fine-Tuning",
+    "authors": "Zexiong Ma et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2502.20127v1",
+    "sha256": "0bcf39fb3d159ed40a80daabc326aec1884be1358e09d5138f879e9f3b6e8738"
+  },
+  {
+    "id": "2502.20380",
+    "title": "Multi-Turn Code Generation Through Single-Step Rewards",
+    "authors": "Arnav Kumar Jain et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2502.20380v2",
+    "sha256": "ad3c1d225e436c8a34952b235ada86410971d2a96cdc1cded67b601b634a886e"
+  },
+  {
+    "id": "2505.23060",
+    "title": "Self-Correcting Code Generation Using Small Language Models",
+    "authors": "Jeonghun Cho et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2505.23060v3",
+    "sha256": "c23b725cd93664eabe81d6efb09df26dfe85f795172e08830187620313684a35"
+  },
+  {
+    "id": "2502.01456",
+    "title": "Process Reinforcement through Implicit Rewards",
+    "authors": "Ganqu Cui et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2502.01456v2",
+    "sha256": "b9b0d4ee041d5f21dec9489a67582e3775c3900a61bad979814522ab8b3faef6"
+  },
+  {
+    "id": "2505.24098",
+    "title": "HardTests: Synthesizing High-Quality Test Cases for LLM Coding",
+    "authors": "Zhongmou He et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2505.24098v1",
+    "sha256": "20ea149712df909a9246caeca3350034bf36f23bdc7972a8b312c50f568544a6"
+  },
+  {
+    "id": "2609.01354",
+    "title": "Where the Verifier Fails: A Category-Level Audit of Reward Signals in RLVR",
+    "authors": "Esther Xin",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2609.01354v1",
+    "sha256": "bec99c27b3efd0f88a4ee57ada0492370984cf6efe2afc27fd87910178657ce7"
+  },
+  {
+    "id": "2503.02951",
+    "title": "KodCode: A Diverse, Challenging, and Verifiable Synthetic Dataset for Coding",
+    "authors": "Zhangchen Xu et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2503.02951v2",
+    "sha256": "1e01ac464ff57a86140dd2a01802665261d088619cf8038b65b1e9afb099f0c5"
+  },
+  {
+    "id": "2504.21798",
+    "title": "SWE-smith: Scaling Data for Software Engineering Agents",
+    "authors": "John Yang et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2504.21798v2",
+    "sha256": "6752df853569104ae2e55cc1bee09dc3f6b335f7eeae300b6e9fee911f3f2897"
+  },
+  {
+    "id": "2510.19898",
+    "title": "BugPilot: Complex Bug Generation for Efficient Learning of SWE Skills",
+    "authors": "Atharv Sonwane et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2510.19898v2",
+    "sha256": "bb49a307a941e5aaeb657b49d03f6fd64d076dbf08c8fc539d57fb7db538199b"
+  },
+  {
+    "id": "2207.00301",
+    "title": "Can we learn from developer mistakes? Learning to localize and repair real bugs from real bug fixes",
+    "authors": "Cedric Richter and Heike Wehrheim",
+    "year": 2022,
+    "url": "https://arxiv.org/pdf/2207.00301v1",
+    "sha256": "a25dfa68fc702f55941102557ef984e3fc9aaed5f1ea0f3ae80e3e88db92c97e"
+  },
+  {
+    "id": "2505.20411",
+    "title": "SWE-rebench: An Automated Pipeline for Task Collection and Decontaminated Evaluation of Software Engineering Agents",
+    "authors": "Ibragim Badertdinov et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2505.20411v2",
+    "sha256": "5d514a4d2bb375763bd12f71140a79e721e29adab8ec192ebd7215d7c93c4d8c"
+  },
+  {
+    "id": "2503.11926",
+    "title": "Monitoring Reasoning Models for Misbehavior and the Risks of Promoting Obfuscation",
+    "authors": "Bowen Baker et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2503.11926v1",
+    "sha256": "2547162c549d70e02beca2687903a8fce75fd950269a3ee479d5b8ebbb53ff38"
+  },
+  {
+    "id": "2510.20270",
+    "title": "ImpossibleBench: Measuring LLMs' Propensity of Exploiting Test Cases",
+    "authors": "Ziqian Zhong et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2510.20270v1",
+    "sha256": "93803f181efdc01b717dcc8c4d81acad29b1a33a2d422f8c13839d7437f65329"
+  },
+  {
+    "id": "2510.17891",
+    "title": "TritonRL: Training LLMs to Think and Code Triton Without Cheating",
+    "authors": "Jiin Woo et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2510.17891v2",
+    "sha256": "c6c75c064c6b8a5a3f844bea3657bce259c59e6264e36a8cae044a30b6ec2b39"
+  },
+  {
+    "id": "2603.00729",
+    "title": "Qwen3-Coder-Next Technical Report",
+    "authors": "Ruisheng Cao et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2603.00729v1",
+    "sha256": "4be52e371e59284a0141eb176e4b489a47885046aed43377500cd0935951886b"
+  },
+  {
+    "id": "2601.01426",
+    "title": "SWE-Lego: Pushing the Limits of Supervised Fine-tuning for Software Issue Resolving",
+    "authors": "Chaofan Tao et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2601.01426v2",
+    "sha256": "d76cd2919b494935feffb98a1a7f6050f95ef6289e7e0e53028f13b1abc989a8"
+  },
+  {
+    "id": "2604.11716",
+    "title": "SWE-AGILE: A Software Agent Framework for Efficiently Managing Dynamic Reasoning Context",
+    "authors": "Shuquan Lian et al.",
+    "year": 2026,
+    "url": "https://arxiv.org/pdf/2604.11716v1",
+    "sha256": "ed318419878241c19b70729662d79eb246f926514ca4806f07dc9b82010dc4c0"
+  },
+  {
+    "id": "2506.11425",
+    "title": "Agent-RLVR: Training Software Engineering Agents via Guidance and Environment Rewards",
+    "authors": "Jeff Da et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2506.11425v2",
+    "sha256": "d9859185b098a7f384843b3d14de9fc40971a8b6008e94d2199a60a81d33d98d"
+  },
+  {
+    "id": "2505.18955",
+    "title": "Co-PatcheR: Collaborative Software Patching with Component(s)-specific Small Reasoning Models",
+    "authors": "Yuheng Tang et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2505.18955v2",
+    "sha256": "0ba452a3ee7e6673ceac2199ba64a0e8f981206da5e151e346ee6f5a1325f439"
+  },
+  {
+    "id": "2505.07849",
+    "title": "SweRank: Software Issue Localization with Code Ranking",
+    "authors": "Revanth Gangi Reddy et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2505.07849v2",
+    "sha256": "766adad6a0f125c3fc8ed6c9e7eb58ed5ba8bcad7696c740014d0562d880b1f7"
+  },
+  {
+    "id": "2503.09089",
+    "title": "LocAgent: Graph-Guided LLM Agents for Code Localization",
+    "authors": "Zhaoling Chen et al.",
+    "year": 2025,
+    "url": "https://arxiv.org/pdf/2503.09089v2",
+    "sha256": "61e5aba684293deb26ef2d5e18731f16e7278ce8600d806a0089bf7eda1a597c"
   }
 ]

@@ -29,3 +29,7 @@ Every avoided synonym is reported wherever it appears as a whole word under `doc
 - **trace dataset** — the training data exported from the agent harness's traces: trajectories of runs that passed and repairs that made `check` clean or a failing test pass, taken only from sources and models the licence registry permits.
 - **problem split** — the assignment of each benchmark problem to train, validation or held-out, shared by every source derived from it, so the harness guide is never scored on a problem it was trained on. Avoid: data split
 - **interface** — a `.lotmli` file declaring the functions of a Python module, written by `lotml bind` from its stub with each returning `T ! PyError`, or of a C library, named `c.<library>` and written by hand. Avoid: binding file
+- **GRPO** — Group Relative Policy Optimization: reinforcement learning that samples a group of answers per prompt and scores each against the group's mean reward, with no learned critic.
+- **verifiable reward** — a reward computed by a program, such as the compiler or a test run, rather than by a learned model.
+- **reward hacking** — a policy raising its reward by exploiting the grader, such as exiting before the tests run or editing them, instead of solving the task.
+- **on-policy distillation** — distillation in which the student samples its own answers and a teacher scores every token of them; it needs the teacher's probabilities and a shared tokenizer.

@@ -42,6 +42,15 @@ fixed documents, not pages, and neither is ever an orphan.
 - [[constrained-decoding]] — grammars for constrained generation and type constraints
 - [[compiler-embedded-model]] — prior work on a small model inside the compiler: repair, explanations, lints
 
+### Training a small coder
+
+- [[small-coder-training]] — distillation, then reinforcement learning: what works at 0.5B–1.5B and for a language no teacher knows
+- [[grpo]] — the algorithm, its variants, what goes wrong and the settings small runs used
+- [[verifiable-rewards]] — rewards from the compiler and the tests, for writing and for repair
+- [[rl-environment]] — the tests, task pools, grader and evaluation around a training run
+- [[reward-hacking]] — how a policy games its grader, and the defences
+- [[repair-training]] — models that fix code and point where: agents, localizers, seeded and real bugs
+
 ### Plan
 
 - [[transpilation-strategy]] — Python and C targets, the Python→lotml corpus
