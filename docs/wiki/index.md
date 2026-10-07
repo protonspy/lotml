@@ -42,6 +42,12 @@ fixed documents, not pages, and neither is ever an orphan.
 - [[constrained-decoding]] — grammars for constrained generation and type constraints
 - [[compiler-embedded-model]] — prior work on a small model inside the compiler: repair, explanations, lints
 
+### Compiler
+
+- [[prior-art-compilers]] — sixteen projects that compile or run Python, read against lotml's compiler: verdict, what is rejected, what may be copied
+- [[target-parity]] — proving `lotml run` and `lotml build` agree: floors, fuzzing, every test in every mode
+- [[compiler-performance]] — where checking, building and running spend time, and what the prior art does about it
+
 ### Training a small coder
 
 - [[small-coder-training]] — distillation, then reinforcement learning: what works at 0.5B–1.5B and for a language no teacher knows

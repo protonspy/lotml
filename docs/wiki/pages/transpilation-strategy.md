@@ -161,7 +161,8 @@ The suite is still the corpus: all 509 programs report the same on the Python an
 (`harness/results/parity-llvm.md`). Against hand-written C built by the same `clang`
 (`harness/results/benchmarks-llvm.md`), mandelbrot takes 0.69x its time, fib 1.74x, sieve 2.26x,
 collatz 2.97x and matmul 5.03x: the numeric gap the phase 3 gate recorded stays open, measured
-rather than closed.
+rather than closed. [[compiler-performance]] lists the runtime paths behind it, and
+[[target-parity]] how the suite that holds the two targets together can be made a gate.
 
 ## Python and lotml calling each other
 

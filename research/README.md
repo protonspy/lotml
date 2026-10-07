@@ -25,6 +25,10 @@ Measurements for the lotml study. The pilot and the corpus use the provisional n
   - `grammar/` — block-structure grammars for constrained decoding, checked with llguidance;
   - `editing/` — the editing pilot: tasks with hidden tests, the prompts the models read
     (`prompt/`), their answers (`runs/`) and the scorer (`editing.py`).
+- `prior-art/` — sixteen compilers and interpreters of Python and its derivatives, read against
+  lotml's compiler: one study per project (`studies/`), the synthesis (`synthesis.md`) and the
+  commits read (`README.md`). It runs nothing; the clones it cites are git-ignored, and are read,
+  never built.
 
 **Running model output executes it.** `transpiler/`, `indentation/` and `editing/` run
 model-written programs and edits in-process. The transpiler refuses imports outside `math` and
