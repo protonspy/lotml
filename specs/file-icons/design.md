@@ -2,7 +2,7 @@
 
 ## What changes
 
-Serves R1.1, R1.2, R2.1–R2.3, R3.1–R3.3.
+Serves R1.1, R1.2, R2.1–R2.3, R3.1–R3.4.
 
 **The icon** (R1.1, R1.2). `python -m lotml_harness.icons` draws it, the way
 `python -m lotml_harness.lang.dialects` writes the published grammars. Each size small enough to
@@ -23,10 +23,12 @@ writes under `HKCU\Software\Classes` only, so no administrator is needed:
   icon copied to `%LOCALAPPDATA%\LotML\lotml-file.ico`.
 
 A copy is used so the icon survives the checkout being moved or deleted. Explorer is told with
-`SHChangeNotify(SHCNE_ASSOCCHANGED)`. An extension whose default value already names another type
-is left alone, and the script says which, unless `-Force` is given. `-Remove` deletes
-`LotML.Source`, deletes each extension key whose default is still `LotML.Source`, and deletes the
-copied icon. `-Root` and `-IconHome` move both places for the tests, which run the script on
+`SHChangeNotify(SHCNE_ASSOCCHANGED)`. An extension whose default value already names another type,
+under `HKCU` or under `HKLM`, is left alone and the script says which, unless `-Force` is given.
+`-Force` records the user's type it displaces as `Displaced<ext>` on `LotML.Source`. `-Remove`
+gives each extension still pointing at `LotML.Source` back to its recorded type, or clears its
+default value and deletes the key once it is empty, then deletes `LotML.Source` and the copied
+icon. `HKLM` is only read. `-Root`, `-MachineRoot` and `-IconHome` move those places for the tests, which run the script on
 Windows against a throwaway key.
 
 **VS Code** (R3.1–R3.3). The extension lives in `editors/vscode/`: `package.json`,
@@ -34,9 +36,15 @@ Windows against a throwaway key.
 `contributes.languages` declares `lotml`, aliased `LotML`, for `.lot` and `.lotml`, with the icon
 for both themes. VS Code shows that icon wherever the file icon theme has none of its own for the
 language. `extension.js` starts `vscode-languageclient`'s `LanguageClient` on `<lotml.path> lsp`
-over standard input and output, selecting `file` documents of the language. If `start()` fails,
-the extension shows one error naming the path it tried and does nothing else. `npm ci` and
-`npx @vscode/vsce package` build `lotml-<version>.vsix`, which is not committed;
+over standard input and output, selecting `file` documents of the language. The client shows an
+error of its own when the process fails, so the compiler is first run with `--version`, without
+blocking: when that fails, the extension shows one error naming the setting and starts no
+client (R3.3). The setting's scope is `machine`, so only the user's settings choose the program,
+and the manifest declares no support for untrusted workspaces. A bare name is looked up in the
+`PATH`'s absolute directories by the extension itself, because a process started by a bare name
+on Windows is looked for in the current directory first, which an opened repository could fill
+(R3.4). `npm ci` and
+`npm run package`, through the pinned `@vscode/vsce`, build `lotml-<version>.vsix`, which is not committed;
 `code --install-extension` installs it.
 
 ## Alternatives considered

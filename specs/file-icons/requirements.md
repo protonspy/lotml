@@ -1,6 +1,8 @@
 ---
 autonomy: auto
 ci: wait
+branch: feat/file-icons
+delivery: in-progress
 ---
 
 # File icons — requirements
@@ -21,14 +23,15 @@ the icon marks get their diagnostics, definitions and fixes in the editor.
 ## R2 · Windows Explorer
 
 - **R2.1** When the user runs the Windows registration script, the script shall associate `.lot` and `.lotml` with a LotML file type for the current user only, whose icon is a copy of the icon file under the user's local application data, and shall refresh Explorer's icons.
-- **R2.2** If an extension is already associated with a file type other than LotML's, then the script shall leave that association as it is and say so, unless it is run with `-Force`.
-- **R2.3** When the script runs with `-Remove`, the script shall delete the keys and the icon copy it wrote, and nothing else.
+- **R2.2** If an extension is already associated with a file type other than LotML's, for the user or for the machine, then the script shall leave that association as it is and say so, unless it is run with `-Force`, which records the type it displaces.
+- **R2.3** When the script runs with `-Remove`, the script shall delete the keys and the icon copy it wrote, give a displaced extension back to its type, and change nothing else.
 
 ## R3 · VS Code
 
 - **R3.1** The VS Code extension shall declare the language LotML for `.lot` and `.lotml` files, with the file icon for light and dark themes, `#` line comments, the bracket pairs and an indent after a line ending in `:`.
 - **R3.2** When a LotML file is opened, the extension shall start `lotml lsp` from the `lotml.path` setting, `lotml` by default, for the workspace's LotML files.
 - **R3.3** If the language server cannot be started, then the extension shall say so once and keep the language and the icon.
+- **R3.4** The extension shall read `lotml.path` from the user's settings only, look a bare name up in the `PATH`'s directories only, and stay inactive in a workspace VS Code does not trust.
 
 ## Out of scope
 

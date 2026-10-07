@@ -15,6 +15,8 @@
   _Depends 1.1_
 - [x] 3.2 (Unit) Start `lotml lsp` from `lotml.path` with `vscode-languageclient`, report a failed start once, and build the `.vsix` — R3.2, R3.3
   _Depends 3.1_
+- [x] 3.3 (Unit) Take `lotml.path` from the user's settings only, look a bare name up in the `PATH`'s directories only, and declare no support for untrusted workspaces — R3.4
+  _Depends 3.2_
 
 ## 4 · The record
 

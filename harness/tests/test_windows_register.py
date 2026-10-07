@@ -20,12 +20,15 @@ SCRIPT = ROOT / "editors" / "windows" / "register.ps1"
 POWERSHELL = shutil.which("powershell")
 TEST_KEY = rf"Software\LotML-test-{os.getpid()}"
 CLASSES = rf"{TEST_KEY}\Classes"
+MACHINE = rf"{TEST_KEY}\Machine"
+"""Stands for HKLM's classes, which the script reads and never writes."""
 
 
 def run(icon_home: Path, *flags: str) -> subprocess.CompletedProcess:
     assert POWERSHELL, "Windows PowerShell"
     args = [POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SCRIPT)]
-    args += ["-Root", rf"HKCU:\{CLASSES}", "-IconHome", str(icon_home), *flags]
+    args += ["-Root", rf"HKCU:\{CLASSES}", "-MachineRoot", rf"HKCU:\{MACHINE}"]
+    args += ["-IconHome", str(icon_home), *flags]
     done = subprocess.run(args, capture_output=True, text=True, check=False)  # noqa: S603
     assert done.returncode == 0, done.stderr
     return done
@@ -92,6 +95,26 @@ def test_another_type_keeps_its_extension_unless_forced(classes, tmp_path: Path)
     assert default(rf"{classes}\.lot") == "LotML.Source", "the other extension is still taken"
     run(tmp_path / "LotML", "-Force")
     assert default(rf"{classes}\.lotml") == "LotML.Source"
+
+
+def test_an_extension_the_machine_gives_another_type_is_left_unless_forced(classes, tmp_path):
+    set_value(rf"{MACHINE}\.lot", "", "Machine.Type")
+    done = run(tmp_path / "LotML")
+    assert default(rf"{classes}\.lot") is None, "no user default to shadow the machine's"
+    assert "belongs to Machine.Type" in done.stdout + done.stderr
+    run(tmp_path / "LotML", "-Force")
+    assert default(rf"{classes}\.lot") == "LotML.Source"
+    assert default(rf"{MACHINE}\.lot") == "Machine.Type", "the machine's is read, never written"
+
+
+def test_remove_gives_an_extension_force_took_back_to_its_type(classes, tmp_path: Path):
+    set_value(rf"{classes}\.lotml", "", "Other.Type")
+    home = tmp_path / "LotML"
+    run(home, "-Force")
+    run(home, "-Force")
+    run(home, "-Remove")
+    assert default(rf"{classes}\.lotml") == "Other.Type"
+    assert default(rf"{classes}\.lot") is None
 
 
 def test_remove_takes_back_what_it_wrote_and_nothing_else(classes, tmp_path: Path):

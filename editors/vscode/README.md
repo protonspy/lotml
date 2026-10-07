@@ -15,5 +15,7 @@ Build it from this directory, then install the file it writes:
     npm run package
     code --install-extension lotml-0.1.0.vsix
 
-The language server is `lotml lsp`. Set `lotml.path` when `lotml` is not on the `PATH`, for example
-to `compiler/target/release/lotml.exe` in a checkout of the repository.
+The language server is `lotml lsp`, found on the `PATH`. Set `lotml.path` in your user settings
+when it is not there, for example to `compiler/target/release/lotml.exe` in a checkout of the
+repository. A workspace's settings cannot choose it, and the extension does not run in a
+workspace VS Code does not trust, since it runs the compiler.

@@ -6,8 +6,9 @@ Shows the LotML file icon on .lot and .lotml files in Windows Explorer, for the 
 .DESCRIPTION
 Writes a LotML.Source file type under HKCU\Software\Classes, with the icon copied to
 %LOCALAPPDATA%\LotML, and points .lot and .lotml at it. No administrator is needed. An extension
-another type already claims is left as it is unless -Force is given. -Remove takes back exactly
-what this script wrote.
+another type already claims, for the user or for the machine, is left as it is unless -Force is
+given; the type -Force displaces is recorded. -Remove takes back exactly what this script wrote
+and gives a displaced extension back to its type.
 
 .EXAMPLE
 powershell -ExecutionPolicy Bypass -File editors\windows\register.ps1
@@ -20,6 +21,8 @@ param(
     [switch]$Force,
     # Where the file type and the extensions are written; the tests point it at a throwaway key.
     [string]$Root = 'HKCU:\Software\Classes',
+    # Where the machine's own associations are read, never written; the tests move it too.
+    [string]$MachineRoot = 'HKLM:\Software\Classes',
     # Where the icon is copied; the tests point it at a scratch directory.
     [string]$IconHome = (Join-Path $env:LOCALAPPDATA 'LotML')
 )
@@ -54,10 +57,21 @@ public static extern void SHChangeNotify(int eventId, uint flags, IntPtr item1, 
     [LotML.Shell]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
 }
 
+$TypeKey = Join-Path $Root $Type
+
 if ($Remove) {
     foreach ($extension in $Extensions) {
         $key = Join-Path $Root $extension
         if ((Get-Default $key) -ne $Type) { continue }
+        # A type -Force displaced was recorded on LotML's own type, and is given back.
+        $displaced = if (Test-Path -LiteralPath $TypeKey) {
+            (Get-Item -LiteralPath $TypeKey).GetValue("Displaced$extension")
+        }
+        if ($displaced) {
+            Set-Item -LiteralPath $key -Value $displaced
+            Write-Output "${extension}: given back to $displaced"
+            continue
+        }
         $writable = (Get-Item -LiteralPath $key).OpenSubKey('', $true)
         $writable.DeleteValue('')
         $writable.Close()
@@ -65,8 +79,7 @@ if ($Remove) {
         if ($item.SubKeyCount -eq 0 -and $item.ValueCount -eq 0) { Remove-Item -LiteralPath $key }
         Write-Output "${extension}: association removed"
     }
-    $typeKey = Join-Path $Root $Type
-    if (Test-Path -LiteralPath $typeKey) { Remove-Item -LiteralPath $typeKey -Recurse }
+    if (Test-Path -LiteralPath $TypeKey) { Remove-Item -LiteralPath $TypeKey -Recurse }
     if (Test-Path -LiteralPath $Icon) { Remove-Item -LiteralPath $Icon }
     if ((Test-Path -LiteralPath $IconHome) -and -not (Get-ChildItem -LiteralPath $IconHome -Force)) {
         Remove-Item -LiteralPath $IconHome
@@ -77,14 +90,18 @@ if ($Remove) {
 
 New-Item -ItemType Directory -Path $IconHome -Force | Out-Null
 Copy-Item -LiteralPath $Source -Destination $Icon -Force
-Set-Default (Join-Path $Root $Type) 'LotML source file'
+Set-Default $TypeKey 'LotML source file'
 Set-Default (Join-Path $Root "$Type\DefaultIcon") $Icon
 foreach ($extension in $Extensions) {
     $key = Join-Path $Root $extension
-    $current = Get-Default $key
-    if ($current -and $current -ne $Type -and -not $Force) {
-        Write-Warning "$extension belongs to $current; left as it is, -Force gives it to LotML"
+    $mine = Get-Default $key
+    $owner = if ($mine) { $mine } else { Get-Default (Join-Path $MachineRoot $extension) }
+    if ($owner -and $owner -ne $Type -and -not $Force) {
+        Write-Warning "$extension belongs to $owner; left as it is, -Force gives it to LotML"
         continue
+    }
+    if ($mine -and $mine -ne $Type) {
+        Set-ItemProperty -LiteralPath $TypeKey -Name "Displaced$extension" -Value $mine
     }
     Set-Default $key $Type
     $choice = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\$extension\UserChoice"

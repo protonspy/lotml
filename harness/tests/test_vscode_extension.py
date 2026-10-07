@@ -45,11 +45,17 @@ def test_the_server_is_lotml_path_and_lotml_by_default():
     assert (setting["type"], setting["default"]) == ("string", "lotml")
 
 
+def test_a_workspace_can_neither_choose_the_compiler_nor_run_it_untrusted():
+    setting = manifest()["contributes"]["configuration"]["properties"]["lotml.path"]
+    assert setting["scope"] == "machine", "read from user settings only (R3.4)"
+    assert manifest()["capabilities"]["untrustedWorkspaces"]["supported"] is False
+
+
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node runs the extension's own tests")
 def test_the_extension_starts_the_server_and_says_once_when_it_cannot():
     node = shutil.which("node")
     done = subprocess.run(  # noqa: S603
-        [node, "--test", "test/*.test.js"],
+        [node, "--test", "test/extension.test.js"],
         cwd=EXTENSION,
         capture_output=True,
         text=True,
