@@ -14,6 +14,8 @@ import urllib.request
 from collections.abc import Callable
 
 API = "https://api.runpod.io/v2"
+AGENT = "lotml-harness (+https://github.com/protonspy/lotml)"
+"""Sent as the User-Agent: RunPod's edge refuses urllib's own with a 403 (Error 1010)."""
 TIMEOUT = 60
 """Seconds one request may take."""
 GONE = {"TERMINATED"}
@@ -61,6 +63,7 @@ def call(method: str, path: str, body: dict | None = None) -> dict | None:
             "Authorization": f"Bearer {key()}",
             "Content-Type": "application/json",
             "Accept": "application/json",
+            "User-Agent": AGENT,
         },
     )
     try:

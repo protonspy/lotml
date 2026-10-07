@@ -52,6 +52,7 @@ def test_the_price_comes_from_the_catalog_for_the_cloud_asked(api):
     method, url, _, headers = fake.sent[0]
     assert (method, url) == ("GET", f"{runpod.API}/catalog/gpus/NVIDIA%20GeForce%20RTX%204090")
     assert headers["Authorization"] == f"Bearer {KEY}"
+    assert headers["User-agent"] == runpod.AGENT, "urllib's own is refused at RunPod's edge"
     api((200, {"price": {"secure": 0.69, "community": None}}))
     with pytest.raises(RunPodError, match="no community price"):
         runpod.price("NVIDIA GeForce RTX 4090")
