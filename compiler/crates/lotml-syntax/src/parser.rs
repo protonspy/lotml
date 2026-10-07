@@ -812,6 +812,22 @@ impl<'a> Parser<'a> {
         branches.push((test, body));
         let mut orelse = None;
         loop {
+            let another = self.at(T::Elif) || (self.at(T::Else) && self.peek_at(1) == T::If);
+            if another && branches.len() == MAX_DEPTH as usize {
+                // Each `elif` nests the rest of the chain one level deeper in what every target
+                // runs: the Python target stops a few hundred levels down.
+                let span = self.span();
+                self.report(
+                    span,
+                    format!(
+                        "this `if` has more than {MAX_DEPTH} branches, more than lotml nests; look the value up in a \
+                         dict, or split the chain between functions"
+                    ),
+                    vec![],
+                    None,
+                    "E0003",
+                );
+            }
             if self.at(T::Elif) {
                 self.bump();
                 let test = self.test();
