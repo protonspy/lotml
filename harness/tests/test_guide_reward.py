@@ -10,7 +10,9 @@ from lotml_harness.guide.reward import Judged, Reward, judge, score
 
 BROKEN = "fn count() -> int:\n    n = 0\n    n += 1\n    return n\n"
 STATE = {"task": None, "path": "solution.lotml", "text": BROKEN, "diagnostics": [], "failing": None}
-WRONG = "fn add(a: int, b: int) -> int:\n    return a - b\n\ntest \"adds\":\n    assert add(1, 2) == 3\n"
+WRONG = (
+    'fn add(a: int, b: int) -> int:\n    return a - b\n\ntest "adds":\n    assert add(1, 2) == 3\n'
+)
 FAILING = {
     "task": None,
     "path": "solution.lotml",

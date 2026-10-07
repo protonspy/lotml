@@ -124,6 +124,11 @@ not score. Every text written there and to the ledger passes `secrets.scrub` and
   the harness already keeps its HTTP clients to the standard library.
 - **A network volume** for checkpoints: billed by the month and bound to one data center, so a run
   could not move to whichever has a card free; the user chose a private Hugging Face repository.
+- **PPO** instead of group-relative policy optimization: GRPO keeps PPO's clipped objective and
+  its KL penalty to the reference model, and replaces the learned value model with the mean reward
+  of the group sampled for the same failure. The compiler scores a whole answer once, at its end,
+  so a per-token value estimate adds little, and a value model the size of the policy is a second
+  network to train, tune and pay GPU hours for.
 - **vLLM for generation in GRPO**: faster, but a second runtime with its own CUDA pins.
 - **Similarity of the edit to the reference**, SLMFix's second term: the compiler's verdict already
   says whether the edit fixes the file, and a textual similarity would reward copying the broken
