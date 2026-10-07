@@ -9,7 +9,7 @@
   _Depends 1.2_
 - [x] 1.4 (Unit) Print numbers, `bool` and string literals through the runtime — R2.1, R2.5
   _Depends 1.2_
-- [ ] 1.5 (Unit) Refuse every construct outside the first ones at the construct — R2.6
+- [x] 1.5 (Unit) Refuse every construct outside the first ones at the construct — R2.6
   _Depends 1.3_
 - [x] 1.6 (Unit) Make every function of the runtime take the place it stops at as `const lt_at *`, the C target passing the address of its static sites — R2.7
   _Depends 1.1_

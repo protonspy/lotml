@@ -334,7 +334,7 @@ impl<'a> Writer<'a> {
 
     fn function(mut self) -> Result<String, Refusal> {
         let f = self.f;
-        let ret = ret_ty(&f.ret).map_or_else(|| self.refuse(format!("a function returning {}", f.ret)), Ok)?;
+        let ret = ret_ty(&f.ret).map_or_else(|| self.refuse(format!("a function returning {}", kind(&f.ret))), Ok)?;
         let mut params = Vec::new();
         for &p in &f.params {
             let info = &f.locals[p];
@@ -344,7 +344,8 @@ impl<'a> Writer<'a> {
             if is_unit(&info.ty) {
                 continue;
             }
-            let ty = value_ty(&info.ty).map_or_else(|| self.refuse(format!("a parameter of type {}", info.ty)), Ok)?;
+            let ty = value_ty(&info.ty)
+                .map_or_else(|| self.refuse(format!("a parameter that is {}", kind(&info.ty))), Ok)?;
             params.push(format!("{ty} %p{p}"));
         }
         for (i, info) in f.locals.iter().enumerate() {
@@ -386,7 +387,7 @@ impl<'a> Writer<'a> {
         if is_unit(&ty) {
             return Ok(Value { text: String::new(), ty });
         }
-        let memory = memory_ty(&ty).map_or_else(|| self.refuse(format!("a value of type {ty}")), Ok)?;
+        let memory = memory_ty(&ty).map_or_else(|| self.refuse(kind(&ty)), Ok)?;
         let loaded = self.value(format!("load {memory}, ptr %l{l}"));
         if matches!(ty, Ty::Bool) {
             let bit = self.value(format!("trunc i8 {loaded} to i1"));
@@ -402,7 +403,7 @@ impl<'a> Writer<'a> {
             return Ok(());
         }
         let v = self.convert(v, &ty)?;
-        let memory = memory_ty(&ty).map_or_else(|| self.refuse(format!("a value of type {ty}")), Ok)?;
+        let memory = memory_ty(&ty).map_or_else(|| self.refuse(kind(&ty)), Ok)?;
         let text = if matches!(ty, Ty::Bool) { self.value(format!("zext i1 {} to i8", v.text)) } else { v.text };
         self.emit(format!("store {memory} {text}, ptr %l{l}"));
         Ok(())
@@ -422,6 +423,7 @@ impl<'a> Writer<'a> {
             }
             Operand::Const(Const::Bool(b)) => Ok(Value { text: b.to_string(), ty: Ty::Bool }),
             Operand::Const(Const::Unit) => Ok(Value { text: String::new(), ty: Ty::Unit }),
+            Operand::Const(Const::Str(_)) => self.refuse("a `str` value"),
             Operand::Const(other) => self.refuse(format!("the constant {other:?} here")),
         }
     }
@@ -1155,6 +1157,25 @@ impl<'a> Writer<'a> {
         self.block(exit)?;
         self.label(&out);
         Ok(())
+    }
+}
+
+/// What to call a value of `ty` this backend does not compile, in a refusal.
+fn kind(ty: &Ty) -> String {
+    match ty {
+        Ty::Str => "a `str` value".into(),
+        Ty::Bytes => "a `bytes` value".into(),
+        Ty::List(_) => "a list".into(),
+        Ty::Heap(_) => "a heap".into(),
+        Ty::Dict(..) => "a dict".into(),
+        Ty::Set(_) => "a set".into(),
+        Ty::Tuple(_) => "a tuple".into(),
+        Ty::Optional(_) => "an optional".into(),
+        Ty::Result(..) => "a result".into(),
+        Ty::Adt(..) => "a record or a variant".into(),
+        Ty::Func(..) => "a closure".into(),
+        Ty::Dyn(_) => "a `dyn` value".into(),
+        other => format!("a value of type {other}"),
     }
 }
 
