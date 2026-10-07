@@ -47,7 +47,7 @@ impl Silence {
 /// sorts an object's keys, and a runtime that compiles the schema to a grammar — llama.cpp's does —
 /// writes the properties in the order they come, so this order is the order the guide was trained
 /// to answer in: `locations` before `kind` before `edit`, `path` before `symbol` before `lines`.
-pub const ANSWER_SCHEMA: &str = r#"{
+const ANSWER_SCHEMA: &str = r#"{
     "type": "object",
     "additionalProperties": false,
     "required": ["locations", "kind", "edit"],

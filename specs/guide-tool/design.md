@@ -80,10 +80,10 @@ alternatives per token, some 2 KB each, and a 1024-token answer overruns the bod
 it returns no log-probabilities at all. The schema goes in as text rather than through
 `serde_json`, which sorts an object's keys: llama-server compiles the schema to a grammar that
 writes the properties in the order they come, so a sorted schema makes the guide write `edit`
-before `locations`, out of the order it was trained in, and it degenerates until `max_tokens`. The request carries a fixed `Host`,
-`Content-Length`, `Connection: close` and `Accept-Encoding: identity`; the response is read with
-the headers capped at 16 KiB and 64 lines, the body at 1 MiB by `Content-Length` or by a chunked
-decoder held to the same cap. A status other than 200 is a silence — no redirect is followed. The
+before `locations`, out of the order it was trained in, and it degenerates until `max_tokens`.
+The request carries a fixed `Host`, `Content-Length`, `Connection: close` and
+`Accept-Encoding: identity`; the response is read with the headers capped at 16 KiB and 64 lines,
+the body at 1 MiB by `Content-Length` or by a chunked decoder held to the same cap. A status other than 200 is a silence — no redirect is followed. The
 server counts the prompt with the model's own tokenizer and refuses one longer than its context;
 that refusal is a silence too, and the records builder drops the same records by the same rule
 (specs/guide-records/). A rendered state over 256 KiB is not sent.
