@@ -35,6 +35,8 @@ POLL = 60.0
 """Seconds between looks at a running pod."""
 GRACE = 600
 """Seconds past the deadline the watcher waits for the pod to remove itself before it does."""
+TERMINATION = 300
+"""Seconds `runpod.terminate` waits for a pod to go."""
 
 
 class Refused(RuntimeError):
@@ -85,17 +87,35 @@ class Plan:
     records: Path | None = None
 
 
-def start(
+@dataclass
+class Ready:
+    """A run checked, priced and uploaded, its pod's request built, not yet created."""
+
+    run: str
+    request: dict
+    hourly: Decimal
+    hours: float
+    """The hours the pod can bill at most: the deadline, its grace, and the termination."""
+
+
+def billed(hours: float) -> float:
+    """The hours a pod with this deadline can bill at most: the watcher waits `GRACE` past it,
+    and a termination may take `runpod.terminate`'s wait."""
+    return hours + (GRACE + TERMINATION) / 3600
+
+
+def prepare(
     plan: Plan,
     store: Hub,
     ledger: ledgers.Ledger,
     commit: str,
     dry: bool = False,
     on_github: Callable[[str], bool] | None = None,
-) -> tuple[str, dict] | None:
-    """Everything before the pod runs: the run's id, and its pod as created — or, dry, the request
-    it would send with the token hidden, printed. Refused when the stages are unknown, the records
-    unusable, the commit not pushed, or the estimate past the cap (R1.2, R1.6, R2.5, R3.1)."""
+) -> Ready | None:
+    """Everything before a pod exists: the run checked, priced and uploaded, its request built —
+    or, dry, that request printed with the token hidden. Refused when the stages are unknown, the
+    records unusable, the commit not pushed, or the estimate past the cap (R1.2, R1.6, R2.5,
+    R3.1)."""
     unknown = [s for s in plan.stages if s not in STAGES]
     if not plan.stages or unknown:
         raise Refused(f"unknown stages: {', '.join(unknown) or 'none named'}")
@@ -106,32 +126,38 @@ def start(
     if not (on_github or pushed)(commit):
         raise Refused(f"{commit[:12]} is on no remote branch: push it, the pod clones it")
     hourly = Decimal(str(runpod.price(plan.gpu, plan.cloud)))
-    estimated = ledgers.estimate(hourly, plan.hours)
+    hours = billed(plan.hours)
+    estimated = ledgers.estimate(hourly, hours)
     ledger.check(plan.cap, estimated)
     run = now().strftime("%Y%m%d-%H%M%S")
     seconds = int(plan.hours * 3600)
     env = pod.environment(run, commit, plan.stages, seconds, plan.hub, "", plan.inputs)
+    name = f"lotml-guide-{run}"
     if dry:
         shown = env | {"HF_TOKEN": "<redacted>"}
         request = runpod.pod_request(
-            f"lotml-guide-{run}", pod.IMAGE, plan.gpu, plan.cloud, pod.DISK, shown, pod.WRAPPER
+            name, pod.IMAGE, plan.gpu, plan.cloud, pod.DISK, shown, pod.WRAPPER
         )
-        print(
-            json.dumps(
-                {"estimate_usd": str(estimated), "hourly_usd": str(hourly), "request": request},
-                indent=2,
-            )
-        )
+        printed = {"estimate_usd": str(estimated), "hourly_usd": str(hourly), "request": request}
+        print(json.dumps(printed, indent=2))
         return None
     digest = store.put_records(records)
     store.put_lineage(run, digest, plan.inputs, commit)
     env["LOTML_RECORDS"] = digest
-    request = runpod.pod_request(
-        f"lotml-guide-{run}", pod.IMAGE, plan.gpu, plan.cloud, pod.DISK, env, pod.WRAPPER
-    )
-    created = runpod.create(request)
-    ledger.open(run, created["id"], plan.stages, plan.gpu, plan.cloud, hourly, plan.hours, now())
-    return run, created
+    request = runpod.pod_request(name, pod.IMAGE, plan.gpu, plan.cloud, pod.DISK, env, pod.WRAPPER)
+    return Ready(run, request, hourly, hours)
+
+
+def create(ready: Ready) -> str:
+    """Create the pod; its id. A creation RunPod may have made though its answer never came back
+    is looked for by the pod's name, unique to the run, so it is terminated like any other."""
+    try:
+        return runpod.create(ready.request)["id"]
+    except runpod.RunPodError:
+        found = runpod.named(ready.request["name"])
+        if found is None:
+            raise
+        return found
 
 
 def status(store: Hub, run: str) -> dict | None:
@@ -152,16 +178,22 @@ def watch(
     say: Callable[[str], None] = print,
 ) -> dict | None:
     """Look at the run until it says it is done or failed, its pod is gone, or the deadline and
-    its grace pass; the last status seen."""
+    its grace pass; the last status seen. A look that fails — the network, the repository — is
+    said and looked again at, the deadline still bounding it."""
     seen: dict | None = None
     while True:
-        found = status(store, run)
+        try:
+            found = status(store, run)
+            gone = runpod.status(pod_id) is None
+        except Exception as error:  # noqa: BLE001 - a failed look must not end the watch early
+            say(f"{run}: could not look ({type(error).__name__}), looking again")
+            found, gone = seen, False
         if found is not None and found != seen:
             say(f"{run}: {found['stage']} {found['state']}")
             seen = found
         if seen is not None and seen["state"] in ("done", "failed"):
             return seen
-        if runpod.status(pod_id) is None:
+        if gone:
             say(f"{run}: pod {pod_id} is gone")
             return seen
         if now() > deadline + datetime.timedelta(seconds=GRACE):
@@ -171,17 +203,35 @@ def watch(
 
 
 def finish(
-    store: Hub, ledger: ledgers.Ledger, run: str, pod_id: str, plan: Plan, seen: dict | None
+    store: Hub,
+    ledger: ledgers.Ledger,
+    ready: Ready,
+    pod_id: str,
+    created: datetime.datetime,
+    plan: Plan,
+    seen: dict | None,
 ) -> Path:
-    """Terminate the pod, confirm it gone, close its ledger row, and commit the ledger's report and
-    the run's (R1.3, R1.4, R5.1)."""
-    runpod.terminate(pod_id)
+    """Terminate the pod and confirm it gone, close its ledger row — written here if it never
+    was — and commit the ledger's report and the run's (R1.3, R1.4, R5.1). A pod that would not
+    go keeps its row open, counted at its full deadline until `reconcile`, and the failure is
+    raised after the ledger's report is written."""
+    if not any(r["pod"] == pod_id for r in ledger.rows()):
+        ledger.open(
+            ready.run, pod_id, plan.stages, plan.gpu, plan.cloud, ready.hourly, ready.hours, created
+        )
+    try:
+        runpod.terminate(pod_id)
+    except runpod.RunPodError:
+        ledgers.REPORT.write_text(ledger.markdown(plan.cap), encoding="utf-8")
+        raise
     row = ledger.close(pod_id, now())
     ledgers.REPORT.write_text(ledger.markdown(plan.cap), encoding="utf-8")
-    found = fetched(store, run)
+    found = fetched(store, ready.run)
     REPORTS.mkdir(parents=True, exist_ok=True)
-    path = REPORTS / f"{run}.md"
-    path.write_text(anonymised(scrub(markdown(run, plan, row, seen, found))), encoding="utf-8")
+    path = REPORTS / f"{ready.run}.md"
+    path.write_text(
+        anonymised(scrub(markdown(ready.run, plan, row, seen, found))), encoding="utf-8"
+    )
     return path
 
 
@@ -258,18 +308,21 @@ def markdown(run: str, plan: Plan, row: dict, seen: dict | None, found: dict) ->
 
 
 def run(plan: Plan, store: Hub, ledger: ledgers.Ledger, dry: bool = False) -> Path | None:
-    """One run end to end; the report's path. The pod is terminated whatever happens once it
-    exists."""
-    started = start(plan, store, ledger, head(), dry)
-    if started is None:
+    """One run end to end; the report's path. From the moment a pod may exist, whatever happens,
+    it is terminated and recorded."""
+    ready = prepare(plan, store, ledger, head(), dry)
+    if ready is None:
         return None
-    run_id, created = started
-    seen = None
+    pod_id, created, seen = None, now(), None
     try:
-        deadline = now() + datetime.timedelta(hours=plan.hours)
-        seen = watch(store, run_id, created["id"], deadline)
+        pod_id = create(ready)
+        ledger.open(
+            ready.run, pod_id, plan.stages, plan.gpu, plan.cloud, ready.hourly, ready.hours, created
+        )
+        seen = watch(store, ready.run, pod_id, created + datetime.timedelta(hours=plan.hours))
     finally:
-        path = finish(store, ledger, run_id, created["id"], plan, seen)
+        if pod_id is not None:
+            path = finish(store, ledger, ready, pod_id, created, plan, seen)
     return path
 
 
@@ -302,7 +355,6 @@ def main(argv: list[str] | None = None) -> None:
     go.add_argument("--cloud", default="COMMUNITY", choices=("COMMUNITY", "SECURE"))
     go.add_argument("--hours", type=float, required=True, help="the run's deadline")
     go.add_argument("--from", dest="inputs", action="append", default=[], help="stage=run")
-    go.add_argument("--cap", type=Decimal, default=ledgers.CAP)
     go.add_argument("--records", type=Path)
     go.add_argument("--dry-run", action="store_true")
     sub.add_parser("reconcile")
@@ -314,7 +366,7 @@ def main(argv: list[str] | None = None) -> None:
     plan = Plan(
         stages=[s for s in args.stages.split(",") if s], hub=args.hub, gpu=args.gpu,
         hours=args.hours, cloud=args.cloud, inputs=dict(i.split("=", 1) for i in args.inputs),
-        cap=args.cap, records=args.records,
+        records=args.records,
     )  # fmt: skip
     path = run(plan, Hub(args.hub), ledger, args.dry_run)
     if path is not None:

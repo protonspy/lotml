@@ -96,14 +96,14 @@ def test_a_run_is_refused_before_any_pod_exists(fake, tmp_path: Path):
     ledger = Ledger(tmp_path / "runpod.jsonl")
     yes = lambda _: True  # noqa: E731
     with pytest.raises(Refused, match="unknown stages: ppo"):
-        pipeline.start(plan(tmp_path, ["ppo"]), Store(), ledger, COMMIT, on_github=yes)
+        pipeline.prepare(plan(tmp_path, ["ppo"]), Store(), ledger, COMMIT, on_github=yes)
     old = records(tmp_path / "old", state=False)
     with pytest.raises(Refused, match="build them again"):
-        pipeline.start(plan(tmp_path, records=old), Store(), ledger, COMMIT, on_github=yes)
+        pipeline.prepare(plan(tmp_path, records=old), Store(), ledger, COMMIT, on_github=yes)
     with pytest.raises(Refused, match="on no remote branch"):
-        pipeline.start(plan(tmp_path / "a"), Store(), ledger, COMMIT, on_github=lambda _: False)
+        pipeline.prepare(plan(tmp_path / "a"), Store(), ledger, COMMIT, on_github=lambda _: False)
     with pytest.raises(CapExceeded):
-        pipeline.start(
+        pipeline.prepare(
             plan(tmp_path / "b", cap=Decimal("0.50")), Store(), ledger, COMMIT, on_github=yes
         )
     assert fake["create"] == []
@@ -111,7 +111,7 @@ def test_a_run_is_refused_before_any_pod_exists(fake, tmp_path: Path):
 
 def test_a_dry_run_prints_the_request_with_the_token_hidden(fake, tmp_path: Path, capsys):
     store = Store()
-    found = pipeline.start(
+    found = pipeline.prepare(
         plan(tmp_path),
         store,
         Ledger(tmp_path / "l.jsonl"),
@@ -121,7 +121,7 @@ def test_a_dry_run_prints_the_request_with_the_token_hidden(fake, tmp_path: Path
     )
     assert found is None and fake["create"] == [] and store.puts == []
     printed = json.loads(capsys.readouterr().out)
-    assert printed["estimate_usd"] == "0.6800"
+    assert printed["estimate_usd"] == "0.7650", "the deadline, its grace and the termination"
     assert printed["request"]["env"]["HF_TOKEN"] == "<redacted>"  # noqa: S105 - the placeholder
 
 
@@ -161,21 +161,84 @@ def test_a_run_is_watched_terminated_recorded_and_reported(fake, tmp_path: Path,
     assert (tmp_path / "runpod.md").exists()
 
 
-def test_a_failure_while_watching_still_terminates_and_records_the_pod(
+def test_a_look_that_fails_is_looked_again_at_and_the_pod_still_ends_recorded(
+    fake, tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr(pipeline, "head", lambda: COMMIT)
+    monkeypatch.setattr(pipeline, "pushed", lambda _: True)
+    monkeypatch.setattr(pipeline.time, "sleep", lambda _: None)
+    looks = []
+
+    def flaky(store, run):
+        looks.append(run)
+        if len(looks) == 1:
+            raise ConnectionError("the network went away")
+        return None
+
+    monkeypatch.setattr(pipeline, "status", flaky)
+    monkeypatch.setattr(pipeline.runpod, "status", lambda pod: None if len(looks) > 2 else {})
+    ledger = Ledger(tmp_path / "runpod.jsonl")
+    pipeline.run(plan(tmp_path), Store(), ledger)
+    assert fake["terminate"] == ["pod_1"]
+    assert ledger.rows()[0]["ended"] is not None
+
+
+def test_a_pod_whose_creation_answer_was_lost_is_found_by_name_and_ended(
     fake, tmp_path: Path, monkeypatch
 ):
     monkeypatch.setattr(pipeline, "head", lambda: COMMIT)
     monkeypatch.setattr(pipeline, "pushed", lambda _: True)
 
-    def broken(store, run):
-        raise ConnectionError("the network went away")
+    def lost(request):
+        raise pipeline.runpod.Transient("RunPod could not be reached: TimeoutError")
 
-    monkeypatch.setattr(pipeline, "status", broken)
+    monkeypatch.setattr(pipeline.runpod, "create", lost)
+    monkeypatch.setattr(
+        pipeline.runpod, "named", lambda name: "pod_7" if name.startswith("lotml-guide-") else None
+    )
+    monkeypatch.setattr(pipeline, "watch", lambda *_, **__: None)
     ledger = Ledger(tmp_path / "runpod.jsonl")
-    with pytest.raises(ConnectionError):
+    pipeline.run(plan(tmp_path), Store(), ledger)
+    assert fake["terminate"] == ["pod_7"]
+    assert ledger.rows()[0]["pod"] == "pod_7" and ledger.rows()[0]["ended"] is not None
+
+
+def test_a_ledger_that_fails_right_after_creation_still_gets_the_pod_ended_and_recorded(
+    fake, tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr(pipeline, "head", lambda: COMMIT)
+    monkeypatch.setattr(pipeline, "pushed", lambda _: True)
+    ledger = Ledger(tmp_path / "runpod.jsonl")
+    real, calls = ledger.open, []
+
+    def once_broken(*args):
+        calls.append(args)
+        if len(calls) == 1:
+            raise OSError("disk full")
+        return real(*args)
+
+    monkeypatch.setattr(ledger, "open", once_broken)
+    with pytest.raises(OSError, match="disk full"):
         pipeline.run(plan(tmp_path), Store(), ledger)
     assert fake["terminate"] == ["pod_1"]
-    assert ledger.rows()[0]["ended"] is not None
+    [row] = ledger.rows()
+    assert row["ended"] is not None
+
+
+def test_a_pod_that_will_not_go_keeps_its_row_open_and_says_so(fake, tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(pipeline, "head", lambda: COMMIT)
+    monkeypatch.setattr(pipeline, "pushed", lambda _: True)
+    monkeypatch.setattr(pipeline, "watch", lambda *_, **__: None)
+
+    def stuck(pod):
+        raise pipeline.runpod.RunPodError("pod pod_1 still exists 300 s after it was terminated")
+
+    monkeypatch.setattr(pipeline.runpod, "terminate", stuck)
+    ledger = Ledger(tmp_path / "runpod.jsonl")
+    with pytest.raises(pipeline.runpod.RunPodError, match="still exists"):
+        pipeline.run(plan(tmp_path), Store(), ledger)
+    assert ledger.rows()[0]["ended"] is None, "counted at its full deadline until reconciled"
+    assert "open, counted at its" in (tmp_path / "runpod.md").read_text(encoding="utf-8")
 
 
 def test_watching_stops_when_the_pod_is_gone(fake, tmp_path: Path, monkeypatch):

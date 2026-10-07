@@ -94,3 +94,16 @@ def test_records_are_checked_against_their_digest(tmp_path: Path, monkeypatch: p
     monkeypatch.setattr(stages.hubs, "digest", lambda _: "other")
     with pytest.raises(ValueError, match="hash to other, not abc"):
         stages.records(Store(), "abc", tmp_path)
+
+
+def test_a_status_that_cannot_be_written_does_not_hide_the_stage_s_failure(tmp_path: Path):
+    class Broken(Store):
+        def put(self, local, remote, message):
+            if "failed" in message:
+                raise ConnectionError("the hub went away")
+
+    def crashed(_: Run) -> None:
+        raise RuntimeError("the real failure")
+
+    with pytest.raises(RuntimeError, match="the real failure"):
+        execute(run(tmp_path, Broken()), ["sft"], {"sft": crashed})

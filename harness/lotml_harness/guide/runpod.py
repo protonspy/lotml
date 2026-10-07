@@ -24,6 +24,14 @@ class RunPodError(RuntimeError):
     """A refusal from RunPod, or a pod that would not go away."""
 
 
+class Transient(RunPodError):
+    """RunPod could not be reached: the network or a timeout, worth asking again."""
+
+
+ATTEMPTS = 3
+"""Times a read or a termination is tried before a transient failure is raised."""
+
+
 def key() -> str:
     found = os.environ.get("RUNPOD_API_KEY")
     if not found:
@@ -49,7 +57,23 @@ def call(method: str, path: str, body: dict | None = None) -> dict | None:
             data = response.read()
     except urllib.error.HTTPError as error:
         raise RunPodError(_problem(error.code, error.read())) from None
+    except OSError as error:
+        raise Transient(f"RunPod could not be reached: {type(error).__name__}") from None
     return json.loads(data) if data.strip() else None
+
+
+def retried(
+    action: Callable[[], object], sleep: Callable[[float], None] = time.sleep, wait: float = 5
+) -> object:
+    """`action`, asked again after a transient failure, up to `ATTEMPTS` times."""
+    for attempt in range(ATTEMPTS):
+        try:
+            return action()
+        except Transient:
+            if attempt == ATTEMPTS - 1:
+                raise
+            sleep(wait)
+    raise AssertionError("unreachable")
 
 
 def _problem(status: int, data: bytes) -> str:
@@ -95,10 +119,18 @@ def create(request: dict) -> dict:
     return found
 
 
-def status(pod: str) -> dict | None:
-    """The pod as RunPod reports it, or None when it is gone: a 404, or a terminated status."""
+def named(name: str) -> str | None:
+    """The id of the pod called `name`, for a pod RunPod created whose id never came back."""
+    found = call("GET", "/pods")
+    listed = found.get("pods", []) if isinstance(found, dict) else found or []
+    return next((p["id"] for p in listed if isinstance(p, dict) and p.get("name") == name), None)
+
+
+def status(pod: str, sleep: Callable[[float], None] = time.sleep) -> dict | None:
+    """The pod as RunPod reports it, or None when it is gone: a 404, or a terminated status. A
+    transient failure is asked again before it is raised."""
     try:
-        found = call("GET", f"/pods/{urllib.parse.quote(pod, safe='')}")
+        found = retried(lambda: call("GET", f"/pods/{urllib.parse.quote(pod, safe='')}"), sleep)
     except RunPodError as error:
         if str(error).startswith("RunPod answered 404"):
             return None
@@ -113,11 +145,12 @@ def terminate(
 ) -> None:
     """Terminate the pod and return once RunPod no longer reports it; RunPodError if it still does
     after `wait` seconds, so a pod is never left billing in silence."""
-    if status(pod) is None:
+    if status(pod, sleep) is None:
         return
-    call("POST", f"/pods/{urllib.parse.quote(pod, safe='')}/action", {"action": "terminate"})
+    path = f"/pods/{urllib.parse.quote(pod, safe='')}/action"
+    retried(lambda: call("POST", path, {"action": "terminate"}), sleep)
     waited = 0.0
-    while status(pod) is not None:
+    while status(pod, sleep) is not None:
         if waited >= wait:
             raise RunPodError(f"pod {pod} still exists {wait:.0f} s after it was terminated")
         sleep(poll)

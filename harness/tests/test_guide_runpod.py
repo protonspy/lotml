@@ -124,3 +124,37 @@ def test_no_key_no_request(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(runpod.urllib.request, "urlopen", lambda *_: pytest.fail("no request"))
     with pytest.raises(RunPodError, match="RUNPOD_API_KEY is not set"):
         runpod.price("NVIDIA GeForce RTX 4090")
+
+
+def test_a_network_failure_is_transient_and_a_read_is_asked_again(api, monkeypatch):
+    fake = api((200, {"id": "pod_1", "status": "RUNNING"}))
+    real = fake.__call__
+    failures = iter([urllib.error.URLError("reset"), None])
+
+    def flaky(request, timeout):
+        failure = next(failures)
+        if failure is not None:
+            raise failure
+        return real(request, timeout)
+
+    monkeypatch.setattr(runpod.urllib.request, "urlopen", flaky)
+    slept = []
+    assert runpod.status("pod_1", sleep=slept.append)["status"] == "RUNNING"
+    assert slept == [5]
+    monkeypatch.setattr(
+        runpod.urllib.request, "urlopen", lambda *_, **__: (_ for _ in ()).throw(TimeoutError())
+    )
+    with pytest.raises(runpod.Transient, match="could not be reached: TimeoutError"):
+        runpod.status("pod_1", sleep=lambda _: None)
+
+
+def test_a_pod_is_found_by_its_name(api):
+    api(
+        (
+            200,
+            {"pods": [{"id": "pod_1", "name": "other"}, {"id": "pod_2", "name": "lotml-guide-r1"}]},
+        )
+    )
+    assert runpod.named("lotml-guide-r1") == "pod_2"
+    api((200, {"pods": []}))
+    assert runpod.named("lotml-guide-r1") is None

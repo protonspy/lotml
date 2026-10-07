@@ -10,6 +10,7 @@ downloaded to resume lands where the trainer looks for it.
 """
 
 import argparse
+import contextlib
 import datetime
 import json
 import os
@@ -184,7 +185,8 @@ STAGES: dict[str, Callable[[Run], None]] = {"sft": sft, "rl": rl, "export": expo
 
 def execute(run: Run, stages: list[str], known: dict[str, Callable[[Run], None]]) -> None:
     """Run `stages` in order, the run's status written before and after each; on a failure the
-    status says which stage and why, and the failure is raised again for the pod to end."""
+    status says which stage and why, when it can be written, and the failure itself is raised
+    again for the pod to end."""
     unknown = [s for s in stages if s not in known]
     if unknown:
         raise ValueError(f"unknown stages: {', '.join(unknown)}")
@@ -193,7 +195,8 @@ def execute(run: Run, stages: list[str], known: dict[str, Callable[[Run], None]]
         try:
             known[stage](run)
         except Exception:
-            status(run, stage, "failed", traceback.format_exc())
+            with contextlib.suppress(Exception):
+                status(run, stage, "failed", traceback.format_exc())
             raise
         run.done.append(stage)
     status(run, stages[-1] if stages else "", "done")
