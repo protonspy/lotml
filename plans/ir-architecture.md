@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: d7ca5ee3d0a3b28e0ee726260795985fe620cd872374792fec82b01d79d8d30a
+checksum: 73feff1668d3684eb8162e86dd43b1030de3ca883eebee02ea0716e8c3599d62
 ---
 
 # IR architecture
@@ -29,7 +29,7 @@ makes an executable.
 ## Paths
 
 - `compiler/crates/lotml-ir/` — the IR, its lowering and its passes (new)
-- `compiler/crates/lotml-c/` — the C backend, re-based on the IR
+- `compiler/crates/lotml-c/` — the C backend, re-based on the IR, then retired once LLVM passes parity
 - `compiler/crates/lotml-py/` — the Python backend, re-based on the IR
 - `compiler/crates/lotml-llvm/` — the LLVM backend (new)
 - `compiler/crates/lotml/src/exec.rs` — how `build`, `run` and `test` drive each target
@@ -43,7 +43,7 @@ makes an executable.
 - `specs/llvm-parity/` — the LLVM target compiling everything the C target does
 - `specs/python-bridge/` — native programs importing Python modules through an embedded CPython
 - `specs/c-abi-export/` — a shared library and its C header for the functions a program exports
-- `specs/c-backend/` — the C target, its runtime and its parity contract, re-based here
+- `specs/c-backend/` — the C target, its runtime and its parity contract, folded into llvm-parity
 - `plans/lotml-roadmap.md` — the phases this re-scopes from task 5.1 on
 - adr:0019-proceed-to-phase-4-past-the-failed-phase-3-gate
 - adr:0020-one-ir-between-the-checker-and-every-backend
@@ -52,6 +52,8 @@ makes an executable.
 - adr:0016-c-target-as-monomorphic-c-over-a-counting-runtime
 - adr:0012-python-interop-through-checked-boundaries-and-interface-files
 - adr:0013-c-libraries-through-interfaces-named-c
+- adr:0023-native-programs-load-cpython-at-run-time-through-its-stable-abi
+- adr:0024-c-abi-exports-chosen-by-signature-without-new-syntax
 
 ## Out of scope
 
@@ -59,7 +61,8 @@ makes an executable.
   adr:0002-errors-as-values and adr:0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate
   settled them.
 - Cranelift, dropped by adr:0021-compiler-in-rust-with-llvm-as-its-native-code-generator.
-- Retiring the C target: it stays beside LLVM on the same IR.
+- A C fallback when `clang` is missing, or the C target kept behind a flag of its own
+  (adr:0021-compiler-in-rust-with-llvm-as-its-native-code-generator).
 - Closing phase 3's numeric gap: measured again on the LLVM target here, fixed separately.
 - Another memory model: counting with reuse stays
   (adr:0008-value-semantics-with-reuse-before-borrowing).
@@ -82,12 +85,12 @@ makes an executable.
 - [ ] 2.3 (Unit) Make `--target llvm` the default of `lotml build` (adr:0022), correcting what
   describes `build` as writing Python
   _Depends 2.2_
-- [ ] 3.1 (Unit) Write and build the spec python-bridge, lifting the C target's refusal of Python
-  imports on both native targets
-  _Depends 2.2_
+- [ ] 3.1 (Unit) Write and build the spec python-bridge, lifting the native refusal of Python
+  imports on the LLVM target
+  _Depends 2.5_
 - [ ] 3.2 (Unit) Write and build the spec c-abi-export: a C program calling a function from a
   library `lotml build` wrote
-  _Depends 2.2_
+  _Depends 2.5_
 - [ ] 4.1 (Unit) Narrate the pipeline in `docs/codewiki/` and bring the README's architecture and
   status, `docs/stack.md` and the wiki's transpilation strategy up to date
   _Depends 1.3, 2.3, 3.1, 3.2_
@@ -96,11 +99,17 @@ makes an executable.
       does not change what they run
   _Depends 2.2_
   _Reason review of the plan: adr:0022's context missed these two callers of build_
+- [ ] 2.5 (Unit) Retire the C target: remove `--target c`, the C emitter and its compiler
+      discovery, keep the runtime crate `clang` compiles, run the parity suite on the Python and
+      LLVM targets, and fold specs/c-backend into specs/llvm-parity
+  _Depends 2.3, 2.4_
+  _Reason the user chose LLVM as the only native target (adr:0021)_
 
 ## Done when
 
 - No backend crate imports `lotml_syntax::ast`; each reads `lotml-ir`.
-- `harness/results/parity.md` shows the same rows on the Python, C and LLVM targets.
+- `harness/results/parity.md` shows the same rows on the Python and LLVM targets, and
+  `--target c` is gone.
 - `lotml build add.lot` with no flag writes an executable through `clang`.
 - A natively built program calls a Python module, and a C program calls a LotML function.
 - `scc validate` exits 0.

@@ -1,40 +1,56 @@
 # Python bridge — design
 
-<!-- The design must fit the decision being made. Every heading below except
-     "What changes" is OPTIONAL: delete the ones this change does not decide.
-
-     A heading filled with "N/A", or with prose written to satisfy the heading, is
-     worse than an absent heading — the next session reads invented architecture as
-     a decision somebody made, and honors it. Filler becomes binding.
-
-     Delete this comment too. -->
-
 ## What changes
 
-Serves R1.1.
+Serves R1.1, R1.2, R2.2, R2.5.
 
-<!-- Required. What changes, where, and why. For a change that decides nothing
-     structural, this section is the whole design and that is the correct outcome.
+Three places, the decision itself recorded in
+adr:0023-native-programs-load-cpython-at-run-time-through-its-stable-abi:
 
-     Keep the "Serves" line above and make it real: the design has to name the
-     requirements it answers, or the trace from what to how is unreadable — and
-     `scc spec validate` says so. -->
+- **The runtime crate** gains `lotml_py.c`, compiled into a program only when it imports a Python
+  module (R2.5). It loads the library (`LoadLibraryExW` with `LOAD_LIBRARY_SEARCH_DEFAULT_DIRS`
+  plus the library's own directory on Windows, `dlopen` with `RTLD_NOW | RTLD_GLOBAL` elsewhere),
+  resolves the stable-ABI functions it uses into a table of function pointers, initialises the
+  interpreter, sets `sys.path` to the recorded search path, imports the modules, and releases the
+  lock. Built with `Py_LIMITED_API` set to 3.10's value; it includes no Python header, declaring
+  the few signatures it calls itself, so building a program needs no Python development files.
+- **The LLVM emitter** compiles `CallPython` (`specs/shared-ir/`), which it refuses today: the
+  arguments go through the runtime's converters, then a call to the bridge, then the result's
+  conversion back into `T ! PyError`.
+- **The driver** asks the found Python, once per build, for
+  `sysconfig`'s shared library path (`LDLIBRARY` in `LIBDIR` on Unix, `python3XY.dll` beside
+  `sys.base_prefix` on Windows), `sys.path`, `sys.version_info` and `Py_GIL_DISABLED` (R2.1,
+  R2.4), and emits the first two as constant strings the bridge reads.
 
-## Boundaries and contracts <!-- optional -->
+## Converting values
 
-<!-- Only if this change moves a boundary or an external contract, and only for the
-     parts that actually move. -->
+Serves R1.3, R1.4, R1.6.
 
-## Data <!-- optional -->
+Conversion is driven by the type descriptors the runtime already has: each descriptor gains a
+shape (integer of a width and signedness, float, bool, str, unit, optional, list, tuple, dict,
+set) so one pair of functions, `lt_py_from(desc, value)` and `lt_py_to(desc, object, out)`,
+converts any value R1.4 lists. Going to Python copies; coming back checks as it copies — an
+integer out of its type's range, or a value of the wrong type, is the `PyError` the Python
+target's `lotml_rt.foreign` returns, with the same kind and message text, which the parity tests
+compare. An exception is fetched, its type's `__name__` and `str()` taken, and cleared. Every
+reference the bridge takes is released on every path; the test build counts objects created and
+released, as it counts cells.
 
-<!-- Only if a data shape changes. -->
+## The interpreter lock
 
-## Alternatives considered <!-- optional -->
+Serves R1.5.
 
-<!-- Only where there were real alternatives with trade-offs. Say which won and why.
-     If the decision is hard to reverse, write an ADR under docs/adr/ and cite it
-     here instead of arguing it twice. -->
+The bridge holds the lock only inside a call: `PyGILState_Ensure` before converting the
+arguments, `PyGILState_Release` after converting the result. A task of `parallel` calling Python
+waits for the lock while the others run native code.
 
-## Risks <!-- optional -->
+## Risks
 
-<!-- What could go wrong that the task list does not already cover. -->
+- A Windows interpreter found through the `py` launcher or the Microsoft Store has its DLL in
+  places a plain search misses; the driver records the path the interpreter itself reports, never
+  a guess, and R2.3's message names it.
+- A virtual environment's packages come from the recorded `sys.path`, so an executable moved to a
+  machine without that environment fails at R2.3, naming the module. Distribution with Python
+  packages is a later decision.
+- The text of a conversion error must match `lotml_rt`'s byte for byte for R1.3; the parity tests
+  for the bridge call the same functions on both targets.

@@ -1,40 +1,61 @@
-# Llvm backend — design
-
-<!-- The design must fit the decision being made. Every heading below except
-     "What changes" is OPTIONAL: delete the ones this change does not decide.
-
-     A heading filled with "N/A", or with prose written to satisfy the heading, is
-     worse than an absent heading — the next session reads invented architecture as
-     a decision somebody made, and honors it. Filler becomes binding.
-
-     Delete this comment too. -->
+# LLVM backend — design
 
 ## What changes
 
-Serves R1.1.
+Serves R1.1, R2.1, R2.2.
 
-<!-- Required. What changes, where, and why. For a change that decides nothing
-     structural, this section is the whole design and that is the correct outcome.
+A new crate, `compiler/crates/lotml-llvm`, and `llvm` as a value of the CLI's `Target`. The crate
+reads `lotml_ir::native`'s output and writes one `.ll` file; it links nothing from LLVM.
 
-     Keep the "Serves" line above and make it real: the design has to name the
-     requirements it answers, or the trace from what to how is unreadable — and
-     `scc spec validate` says so. -->
+```
+counted IR (lotml-ir)
+  └─ emit.rs    one walk per function: structured statements to basic blocks, textual LLVM IR
+runtime crate (plan task 1.1)   the C runtime, compiled by the same clang
+driver.rs   finds clang, checks its version, compiles .ll + runtime, links, runs
+```
 
-## Boundaries and contracts <!-- optional -->
+**Structured to blocks.** Each IR function becomes one `define`. A local becomes an `alloca` in
+the entry block, read and written with `load`/`store`; `-O2`'s `mem2reg` turns them into SSA
+values, so the emitter builds no phi nodes. `If` writes a then-block, an else-block and a join;
+`Loop` writes a header and an exit, with a stack of (continue, break) targets for `Continue` and
+`Break`; `ForRange` is a loop over a counter with its `exit` block after the test fails. A block
+that ends in `ret`, `br` or `unreachable` takes no fall-through branch.
 
-<!-- Only if this change moves a boundary or an external contract, and only for the
-     parts that actually move. -->
+**Types.** Integers are `iN`, the signedness decided per operation (`sdiv`/`udiv`, `icmp
+slt`/`ult`, `sext`/`zext`); `f64` is `double`, `f32` `float`, `bool` `i1`. Pointers are written in
+the opaque `ptr` form, which sets the oldest supported `clang` at 17; the driver reads
+`clang --version` and refuses older ones (R1.3).
 
-## Data <!-- optional -->
+**Checks and panics.** `+`, `-` and `*` on integers call `llvm.{s,u}{add,sub,mul}.with.overflow`
+and branch on the flag to a cold block that calls the runtime's panic function with the file,
+line and function, then `unreachable` (R2.3, R2.4). Division tests the divisor, and the
+`INT_MIN / -1` case, before dividing. `//` and `%` round toward negative infinity, as the C
+target writes them. The runtime keeps the stack of active function names it keeps for the C
+target, and the emitter calls the same push and pop.
 
-<!-- Only if a data shape changes. -->
+**Printing.** `print` calls the runtime functions the built-in table names for each type, so a
+float is written by the runtime's CPython `repr`, never by `printf` (R2.5).
 
-## Alternatives considered <!-- optional -->
+**Entry.** The emitter writes `define i32 @main()`, which initialises the runtime and calls the
+program's `main`, returning the exit status `lotml run` expects.
 
-<!-- Only where there were real alternatives with trade-offs. Say which won and why.
-     If the decision is hard to reverse, write an ADR under docs/adr/ and cite it
-     here instead of arguing it twice. -->
+## Driving `clang`
 
-## Risks <!-- optional -->
+Serves R1.2, R1.3, R1.4, R1.5.
 
-<!-- What could go wrong that the task list does not already cover. -->
+`clang` is the first of `LOTML_CLANG`, `clang` on `PATH`, and on Windows
+`%ProgramFiles%\LLVM\bin\clang.exe`, which the LLVM installer writes without adding to `PATH`.
+adr:0021 names the variable and `PATH`; the fixed install directory is added here for the same
+reason `find-msvc-tools` locates `cl`, and it is never the working directory. The command is
+`clang <prog>.ll <runtime>.c… -o <exe> -O0|-O2`, plus `-lm` and threads on Unix; on Windows
+`clang` drives MSVC's linker and the Windows SDK, and a link that fails for want of them is
+reported with that cause. A `clang` error on the `.ll` keeps the file and reports R1.5's message.
+
+## Risks
+
+- Textual IR is not checked before `clang` reads it (adr:0021), so the tests compile and run
+  everything the emitter writes; `add` keeps a checked-in `.ll` to compare against, so a change
+  to the emitter shows in review.
+- `-O0` and `-O2` must agree. The end-to-end tests run each program at both levels.
+- Tests skip, saying so, on a machine without `clang`; CI installs it on Ubuntu and Windows so
+  they never skip there.

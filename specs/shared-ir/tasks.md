@@ -1,25 +1,18 @@
-# Shared ir — tasks
+# Shared IR — tasks
 
-<!-- Grammar, per task, all four parts required:
+## 1 · The crate
 
-       - [ ] <number> (Unit|TDD) <description> — <requirement ids>
+- [ ] 1.1 (Unit) Create `lotml-ir` with the C backend's intermediate form moved into it, a span on every statement, built-ins as an enum, and symbols made by `lotml_ir::symbol` — R1.1, R1.2, R1.3
+- [ ] 1.2 (Unit) Move lowering into `lotml-ir`, generic functions and types kept generic, and calls into Python modules lowered to `CallPython` — R1.1, R1.3, R1.4, R2.1
+  _Depends 1.1_
+- [ ] 1.3 (Unit) Split instantiation out of lowering into the `mono` pass, with the refusal of generics that need instances without end — R3.1, R3.3
+  _Depends 1.2_
+- [ ] 1.4 (Unit) Move counting, reuse and uniqueness hoisting into `lotml-ir` behind `lotml_ir::native` — R3.1, R3.2
+  _Depends 1.3_
 
-     (Unit) writes the code, then a unit test per function, immediately, asserting
-     the requirement rather than the implementation. (TDD) writes the failing test
-     first and watches it fail — mandatory for money, complex algorithms, and
-     hypothesis validation.
+## 2 · The C backend on it
 
-     A task is the right size when it can be verified on its own.
-
-     Every requirement must reach at least one task, and every task must cite a
-     requirement that exists. `scc spec validate` checks both directions.
-     Delete this comment. -->
-
-## 1 · <group name>
-
-- [ ] 1.1 (Unit) <description> — R1.1
-- [ ] 1.2 (TDD) <description> — R1.2, R1.3
-
-## 2 · <group name>
-
-- [ ] 2.1 (Unit) <description> — R1.1
+- [ ] 2.1 (Unit) Compile C from the counted IR, removing the lowering and passes from `lotml-c`, and assert that `lotml check` lowers nothing — R4.1, R2.2
+  _Depends 1.4_
+- [ ] 2.2 (Unit) Run the parity suite and the C benchmarks and record both unchanged — R4.2, R4.3
+  _Depends 2.1_

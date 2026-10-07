@@ -33,8 +33,13 @@ build, `-O2` for release. Cranelift is dropped. Rejected: Cranelift for debug bu
 the frontend, not the backend, decides); linking LLVM through `inkwell` or `llvm-sys` (every
 compiler build tied to one LLVM release's libraries, and checked IR construction is not worth that
 here, since the IR is written from a typed program and malformed output is a backend bug the
-tests find); and the C target as the only native target, which leaves overflow checks, layout and
-optimisation to whichever C compiler is found. The C target stays beside LLVM, on the same IR.
+tests find); the C target as the only native target, which leaves overflow checks, layout and
+optimisation to whichever C compiler is found; and keeping the C target beside LLVM, as the
+default's alternative or behind a flag of its own, which is a second emitter every construct of the
+language has to reach and a second native result to hold in parity, for a fallback
+adr:0022-lotml-build-makes-a-native-executable-by-default already rejects. The C target is retired
+once the LLVM target passes the parity suite; its runtime stays, compiled by `clang` with the IR
+the LLVM backend writes.
 
 ## Consequences
 
@@ -49,7 +54,9 @@ optimisation to whichever C compiler is found. The C target stays beside LLVM, o
   error; the backend's tests compile and run what it writes.
 - Textual IR changes between LLVM releases; the backend writes the opaque-pointer form and names
   the oldest `clang` it supports.
-- Two native targets share one counted IR and one C runtime, and differ only in their emitters;
-  the parity suite runs on both.
+- Until it is retired, the C target shares the counted IR and the C runtime with LLVM and the
+  parity suite runs on both, so the LLVM emitter is checked against a native target that already
+  passes. Retiring it removes `--target c`, the C emitter and its C compiler discovery; the
+  runtime stays C, compiled by `clang`.
 - The roadmap's task 5.1 and the wiki's account of Cranelift for debug builds describe a plan
   this record replaces.

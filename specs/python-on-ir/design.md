@@ -1,40 +1,35 @@
-# Python on ir — design
-
-<!-- The design must fit the decision being made. Every heading below except
-     "What changes" is OPTIONAL: delete the ones this change does not decide.
-
-     A heading filled with "N/A", or with prose written to satisfy the heading, is
-     worse than an absent heading — the next session reads invented architecture as
-     a decision somebody made, and honors it. Filler becomes binding.
-
-     Delete this comment too. -->
+# Python on IR — design
 
 ## What changes
 
-Serves R1.1.
+Serves R1.1, R1.2, R2.1, R3.1.
 
-<!-- Required. What changes, where, and why. For a change that decides nothing
-     structural, this section is the whole design and that is the correct outcome.
+`compiler/crates/lotml-py/src/emit.rs` is rewritten against `lotml_ir::lower`'s output; nothing
+else in the crate moves. The output keeps its shape: a stub module that hands
+`lotml_rt.load_module` the program as a Python syntax tree in JSON, every node at a LotML
+position, so `lotml_rt.py`, `boundary.rs` and the `.pyi` writer are untouched.
 
-     Keep the "Serves" line above and make it real: the design has to name the
-     requirements it answers, or the trace from what to how is unreadable — and
-     `scc spec validate` says so. -->
+- **Statements.** Each IR statement becomes Python statements at its span. A `Let` of an
+  intermediate value becomes an assignment to a Python local named for the IR local (`_t12`),
+  carrying the span of the expression it computed — which is what gives a traceback its
+  underline (R2.1).
+- **Control flow.** `If` and `Loop` with `Break`/`Continue` map one to one; `ForRange` and
+  `ForStr` become `for` over `range` and over the string, their `exit` block the loop's `else`.
+  A `match` arrives as a test of the tag and the field reads that take the value apart, and is
+  written as that.
+- **Built-ins.** One table maps each `lotml_ir::Builtin` to the `lotml_rt` function or Python
+  operation that performs it. The argument forms that only the native runtime needs (`Desc`,
+  `Offset`) are dropped, and the operand is read out of the others.
+- **Generics.** The IR before `mono` keeps them generic (R1.2); Python needs no instances, so
+  type arguments are read only where the checker's types decide a behaviour — which arithmetic
+  traps outside its integer type, which values are copied.
+- **Foreign calls.** `CallPython` becomes the call to `lotml_rt.foreign` it is today, and
+  `CallC` the `ctypes` call (R3.1, R3.2).
 
-## Boundaries and contracts <!-- optional -->
+## Risks
 
-<!-- Only if this change moves a boundary or an external contract, and only for the
-     parts that actually move. -->
-
-## Data <!-- optional -->
-
-<!-- Only if a data shape changes. -->
-
-## Alternatives considered <!-- optional -->
-
-<!-- Only where there were real alternatives with trade-offs. Say which won and why.
-     If the decision is hard to reverse, write an ADR under docs/adr/ and cite it
-     here instead of arguing it twice. -->
-
-## Risks <!-- optional -->
-
-<!-- What could go wrong that the task list does not already cover. -->
+- The tree written today places some positions at sub-expressions the IR has no statement for,
+  such as an operand inside an f-string. Where a traceback test fails for that reason, the fix is
+  a span on the IR's operand, made as a delta to `specs/shared-ir/`.
+- Building and running gain the lowering the Python target did not have (adr:0020). If the
+  agent harness's per-iteration time moves, it is measured before the old emitter is removed.

@@ -1,25 +1,16 @@
-# C abi export — tasks
+# C ABI export — tasks
 
-<!-- Grammar, per task, all four parts required:
+## 1 · Choosing and declaring
 
-       - [ ] <number> (Unit|TDD) <description> — <requirement ids>
+- [ ] 1.1 (Unit) Choose the exported functions from the checker's signatures, warning for each one left out and stopping when none is left — R1.2, R1.4, R1.5
+- [ ] 1.2 (Unit) Write the C header for the chosen functions, compiled as C11 and as C++ in a test — R1.3
+  _Depends 1.1_
 
-     (Unit) writes the code, then a unit test per function, immediately, asserting
-     the requirement rather than the implementation. (TDD) writes the failing test
-     first and watches it fail — mandatory for money, complex algorithms, and
-     hypothesis validation.
+## 2 · The library
 
-     A task is the right size when it can be verified on its own.
-
-     Every requirement must reach at least one task, and every task must cite a
-     requirement that exists. `scc spec validate` checks both directions.
-     Delete this comment. -->
-
-## 1 · <group name>
-
-- [ ] 1.1 (Unit) <description> — R1.1
-- [ ] 1.2 (TDD) <description> — R1.2, R1.3
-
-## 2 · <group name>
-
-- [ ] 2.1 (Unit) <description> — R1.1
+- [ ] 2.1 (Unit) Emit a wrapper per exported function that initialises the runtime once, converts `str` arguments with UTF-8 validation and names the function in panics — R2.1, R2.2, R2.3
+  _Depends 1.1_
+- [ ] 2.2 (Unit) Give `lotml build` the `--shared` option, linking a shared library on Windows and Linux — R1.1
+  _Depends 2.1, 1.2_
+- [ ] 2.3 (Unit) Build a C program against the library and header, call the exported functions from two threads, and check their results and a panic's status — R2.1, R2.2
+  _Depends 2.2_
