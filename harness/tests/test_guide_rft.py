@@ -24,7 +24,8 @@ def test_passing_answers_are_kept_distinct_and_capped_and_a_target_stands_in_for
     rows = [
         {"index": 0, "answers": [answer("a", True, "passes"), answer("a", True, "passes"),
                                  answer("b", True, "passes"), answer("c", True, "passes")]},
-        {"index": 1, "answers": [answer("x", True, "edit-fails-check"), answer("y", False, "passes")]},
+        {"index": 1, "answers": [answer("x", True, "edit-fails-check"),
+                                 answer("y", False, "passes")]},
         {"index": 2, "answers": [answer("z", True, "passes")]},
     ]  # fmt: skip
     found, counts = rft.examples(records, rows, keep=2)
