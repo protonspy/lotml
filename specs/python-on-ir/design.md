@@ -5,13 +5,25 @@
 Serves R4.1, R4.2, R4.3.
 
 `specs/shared-ir/` moved lowering into `lotml-ir` still instantiating as it goes. This spec splits
-it: `lotml_ir::lower` keeps each generic function and type generic, a call carrying its type
-arguments (`Call { callee, type_args, args }`), and a pass, `lotml_ir::mono`, makes one instance
-per set of arguments before the native passes, refusing a generic that needs instances without
-end. A decision lowering takes today from a concrete type — which comparison, which runtime
-function, which trait method — becomes, on a type parameter, a node carrying the type, which
-`mono` resolves once the type is known; the native targets' parity and benchmarks hold through
-the split (R4.3).
+it: `lotml_ir::lower` keeps each generic function, method and lambda generic — a `Function`
+carries its `type_params`, its types naming them as `Ty::Param` — and a pass, `lotml_ir::mono`,
+makes one instance per set of type arguments before the native passes, refusing a generic that
+needs instances without end. Three nodes carry what only the type arguments decide, and `mono`
+resolves each once they are known:
+
+- `CallGeneric { callee, args }`: a call of a generic function (`Callee::Function` with its type
+  arguments), or of a method of a generic type or of a type parameter bound by a trait
+  (`Callee::Method`, whose owner is the type); it becomes a `Call` or a `CallSlots` of the
+  instance.
+- `FnRefGeneric`: a generic function used as a value; it becomes a `FnRef` of the instance.
+- `ToDynOf`: a value made a `dyn` from a type `mono` builds the table of; it becomes a `ToDyn`.
+  The tables are made by `mono`, which reads each trait's callable methods from `dyn_methods`.
+
+A trait's default method is lowered once per type implementing the trait without its own, `Self`
+standing for that type; a lambda of a generic function is generic over its parameters and made
+once per instance of it. Every other decision lowering takes from a type — which comparison, which
+runtime function — is a node already carrying the type, which the native emitter reads after the
+substitution. The native targets' parity and benchmarks hold through the split (R4.3).
 
 ```
 lotml-ir::lower    generic IR       ──► Python backend

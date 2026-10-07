@@ -16,6 +16,7 @@ fn function(params: usize, locals: Vec<Ty>, body: Vec<Stmt>) -> Function {
     Function {
         name: "lf_f".to_string(),
         source_name: "f".to_string(),
+        type_params: Vec::new(),
         params: (0..params).collect(),
         ret: INT,
         locals: locals.into_iter().map(|ty| LocalInfo { ty, name: None, by_ref: false }).collect(),

@@ -69,7 +69,7 @@ fn lowered<T>(
         })
         .collect();
     let inspected = inspect(&parsed.module, &checked);
-    let mut lowered = match lower::lower(&parsed.module, &checked, source, tests) {
+    let lowered = match lower::lower(&parsed.module, &checked, source, tests) {
         Ok(lowered) => lowered,
         Err(errors) => return Err(refused.into_iter().chain(errors).collect()),
     };
@@ -77,6 +77,7 @@ fn lowered<T>(
         return Err(refused);
     }
     let inspected = inspected?;
+    let mut lowered = lotml_ir::mono::mono(lowered)?;
     lotml_ir::native(&mut lowered);
     Ok((lowered, inspected))
 }

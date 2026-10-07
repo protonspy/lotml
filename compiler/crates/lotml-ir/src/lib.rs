@@ -4,6 +4,7 @@
 
 pub mod ir;
 pub mod lower;
+pub mod mono;
 pub mod symbol;
 pub mod text;
 pub mod verify;

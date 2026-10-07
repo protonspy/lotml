@@ -11,8 +11,8 @@
 
 ## 3 · The generic IR
 
-- [ ] 3.1 (Unit) Keep generic functions and types generic in lowering, every use carrying its type arguments — R4.1
-- [ ] 3.2 (Unit) Split instantiation out of lowering into the `mono` pass, with the refusal of generics that need instances without end, the native targets' parity and benchmarks unchanged — R4.2, R4.3
+- [x] 3.1 (Unit) Keep generic functions and types generic in lowering, every use carrying its type arguments — R4.1
+- [x] 3.2 (Unit) Split instantiation out of lowering into the `mono` pass, with the refusal of generics that need instances without end, the native targets' parity and benchmarks unchanged — R4.2, R4.3
   _Depends 3.1_
 
 ## 2 · The switch

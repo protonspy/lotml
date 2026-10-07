@@ -1,6 +1,8 @@
 ---
 autonomy: auto
 ci: wait
+branch: feat/c-abi-export
+delivery: in-progress
 ---
 
 # Python on IR — requirements
