@@ -7,26 +7,26 @@ git-ignored.
 
 | origin | records |
 |---|---:|
-| seeded | 5076 |
+| seeded | 5374 |
 
 | split | records |
 |---|---:|
-| train | 4272 |
+| train | 4570 |
 | validation | 804 |
 
 | kind | records |
 |---|---:|
 | arm | 112 |
-| body | 3386 |
+| body | 3388 |
 | definition | 1026 |
-| lines | 552 |
+| lines | 848 |
 
 | source | records |
 |---|---:|
-| bench | 832 |
+| bench | 1130 |
 | humaneval-original | 4244 |
 
-5076 records, 2538 of them with the task.
+5374 records, 2687 of them with the task.
 
 | left out | records |
 |---|---:|

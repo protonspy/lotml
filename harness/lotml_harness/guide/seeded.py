@@ -630,10 +630,19 @@ def markdown(tally: Tally, weighting: Weights, compiler: str, day: str) -> str:
         lines.append(
             f"| {key[0]} | {key[1]} | {tally.listed[key]} | {tally.drawn[key]} | {counts} |"
         )
+    paired = Counter()
+    for key, outcome in tally.outcomes.items():
+        if key[0] == "pair":
+            paired.update(outcome)
+    drawn_pairs = sum(n for key, n in tally.drawn.items() if key[0] == "pair")
     totals = Counter()
     for outcome in tally.outcomes.values():
         totals.update(outcome)
     lines += [
+        "",
+        f"Pairs of two mutants in different declarations (R2.8): {drawn_pairs} drawn, "
+        + (", ".join(f"{r} {paired[r]}" for r in REASONS if paired[r]) or "none judged")
+        + ".",
         "",
         f"Kept {totals['check'] + totals['test']} of {sum(tally.drawn.values())} drawn: "
         f"{totals['check']} refused by `check`, {totals['test']} failing a test.",
