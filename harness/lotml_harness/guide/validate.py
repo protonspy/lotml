@@ -27,26 +27,35 @@ DEADLINE = 120.0
 PORT = 8091
 
 
+SYSTEM = ("SYSTEMROOT", "WINDIR", "TEMP", "TMP")
+"""What a server needs from the environment on Windows to open a socket; none is a secret."""
+
+
 @contextlib.contextmanager
 def served(gguf: Path, llama_cpp: Path, port: int = PORT, slots: int = 4) -> Iterator[str]:
     """`llama-server` from `llama_cpp` serving `gguf` on the GPU, every layer offloaded, until the
-    block ends; its URL once it answers its health check. It gets only the path and its libraries
-    from the environment, never the token."""
+    block ends; its URL once it answers its health check. It gets only the path, its libraries
+    and the system's own variables from the environment, never the token; when it fails, the
+    error carries the end of its output."""
     server = train._tool(llama_cpp, ("llama-server", "llama-server.exe"))
     libraries = sorted({str(p.parent) for p in llama_cpp.rglob("*.so*")})
-    env = {
+    env = {k: os.environ[k] for k in SYSTEM if k in os.environ} | {
         "PATH": os.environ.get("PATH", ""),
         "LD_LIBRARY_PATH": ":".join([*libraries, os.environ.get("LD_LIBRARY_PATH", "")]),
     }
     command = [str(server), "-m", str(gguf), "--host", "127.0.0.1", "--port", str(port),
                "-c", "8192", "-ngl", "99", "-np", str(slots)]  # fmt: skip
-    quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
-    with subprocess.Popen(command, env=env, **quiet) as process:  # noqa: S603
+    with (
+        tempfile.TemporaryFile() as output,
+        subprocess.Popen(command, env=env, stdout=output, stderr=output) as process,  # noqa: S603
+    ):
         url = f"http://127.0.0.1:{port}"
         try:
             for _ in range(300):
                 if process.poll() is not None:
-                    raise RuntimeError(f"llama-server exited with {process.returncode}")
+                    output.seek(0)
+                    said = output.read().decode("utf-8", errors="replace")[-2000:]
+                    raise RuntimeError(f"llama-server exited with {process.returncode}: {said}")
                 if healthy(url):
                     break
                 time.sleep(1)
