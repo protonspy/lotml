@@ -61,3 +61,9 @@ fn a_name_that_starts_like_a_keyword_does_not_end_the_bracket() {
     let parsed = parse(source);
     assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
 }
+
+#[test]
+fn recovery_reads_a_file_with_windows_line_endings() {
+    let source = "fn first() -> int:\n    x = total(1, 2,\n\nfn second() -> int:\n    return 2\n".replace('\n', "\r\n");
+    assert_eq!(names(&source), ["first", "second"]);
+}
