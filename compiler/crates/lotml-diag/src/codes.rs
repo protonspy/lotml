@@ -240,6 +240,17 @@ pub const ALL: &[Code] = &[
         type is one part however long it grows.",
     },
     Code {
+        code: "E0223",
+        title: "a format spec the value refuses",
+        explanation: "The spec after `:` in an f-string field follows Python's format mini-language, \
+        `[[fill]align][sign][z][#][0][width][grouping][.precision][type]`, and what it may hold depends on the \
+        value: text takes no sign and no `d`, an integer takes no precision, a float no `x`, and a list, a \
+        dict or a record takes no spec at all.\n\n    f\"{name:>10}\"     # text, right-aligned\n    \
+        f\"{count:,d}\"     # an integer, with thousands separated\n    f\"{ratio:.2%}\"    # a float, as a \
+        percentage\n\nA width or precision is at most 10000, and a spec holds no `{field}`: compute the width \
+        into the text, or pad with `ljust`, `rjust` or `center`.",
+    },
+    Code {
         code: "E0301",
         title: "an immutable reassigned",
         explanation: "A local declared with `x = …` cannot be assigned again. Declare it `var x = …` if it changes:\n\n\

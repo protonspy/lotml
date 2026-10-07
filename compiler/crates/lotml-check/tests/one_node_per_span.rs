@@ -25,11 +25,7 @@ fn checked(text: &str) -> lotml_check::Checked {
 }
 
 #[test]
-fn the_check_asserts_one_expression_per_span() {
-    assert!(cfg!(debug_assertions), "the assertion these tests rely on is a debug build's");
-}
-
-#[test]
+#[cfg_attr(not(debug_assertions), ignore = "the assertion it relies on is a debug build's")]
 fn every_corpus_program_types_each_span_from_one_expression() {
     let programs = corpus();
     assert!(programs.len() > 500, "the corpus holds its programs");

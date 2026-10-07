@@ -1071,6 +1071,26 @@ impl<'p> Body<'p> {
 
     /// `ty`, counted against [`BODY_TYPES`]: an error once the body's types pass it, the first
     /// time reported.
+    /// Report a field's format spec that the value it formats would refuse when the program runs
+    /// (plans/frontend-robustness.md 2.2); a value whose type is not known yet is left to the run.
+    fn format_spec(&mut self, value: &Expr, ty: &Ty, conversion: Option<char>, spec: &[StrPart]) {
+        let text: String = spec
+            .iter()
+            .map(|p| match p {
+                StrPart::Text(t) => t.as_str(),
+                StrPart::Expr { .. } => "{…}",
+            })
+            .collect();
+        let resolved = self.resolve(ty);
+        let Some(kind) = crate::format::kind(&resolved, conversion) else { return };
+        if let Some(why) = crate::format::check(&text, kind) {
+            self.report(
+                Diagnostic::error("E0223", value.span, format!("`{text}` is no format spec for this value: {why}"))
+                    .note("the spec after `:` follows Python's format mini-language for the value's type"),
+            );
+        }
+    }
+
     fn kept(&mut self, span: Span, ty: Ty) -> Ty {
         self.stored = self.stored.saturating_add(ty.size());
         if self.stored <= BODY_TYPES {
@@ -1229,8 +1249,9 @@ impl<'p> Body<'p> {
             ExprKind::Str(literals) => {
                 for literal in literals {
                     for part in &literal.parts {
-                        if let StrPart::Expr { expr, .. } = part {
-                            self.expr(expr, None);
+                        if let StrPart::Expr { expr, conversion, spec } = part {
+                            let ty = self.expr(expr, None);
+                            self.format_spec(expr, &ty, *conversion, spec);
                         }
                     }
                 }

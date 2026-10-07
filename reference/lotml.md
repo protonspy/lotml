@@ -80,6 +80,8 @@ s.find("World")               # 7, or None when absent: the type is int?
   `startswith`, `endswith`, `replace`, `join`, `count`, `isalpha`, `isdigit`, `isspace`,
   `isupper`, `islower`, `find(sub) -> int?`, `split_once(sep) -> (str, str)?`,
   `to_int() -> int?`, `to_float() -> f64?`. `ord(c)`, `chr(n)`, `len(s)`, `c in s`.
+- An f-string field's spec after `:` follows Python's format mini-language for the value's type,
+  and is checked: one the value would refuse, as `{s:d}` for a `str`, is an error (E0223).
 
 ## Collections
 
