@@ -35,6 +35,8 @@ jobs:
           echo "::error::a release is built from main, not $GITHUB_REF"
           exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Read the version
         id: read
         run: |
@@ -77,6 +79,8 @@ jobs:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Toolchain
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
@@ -112,8 +116,12 @@ jobs:
   vscode:
     needs: version
     runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
@@ -122,6 +130,11 @@ jobs:
         # No dependency's install script runs: the extension needs none, and vsce-sign's signs
         # for publishing, which this does not do.
         run: |
+          said=$(node -p 'require("./package.json").version')
+          if [ "$said" != "$VERSION" ]; then
+            echo "::error::editors/vscode/package.json is $said, not $VERSION: bump it with the workspace"
+            exit 1
+          fi
           npm ci --ignore-scripts
           npm test
           npm run package
@@ -134,12 +147,14 @@ jobs:
   release:
     needs: [version, build, vscode]
     runs-on: ubuntu-latest
+    # GitHub creates the environment on the first run; its branch rule and reviewers are where the
+    # repository, not this file, decides who may publish.
+    environment: release
     permissions:
       contents: write
     env:
       VERSION: ${{ needs.version.outputs.version }}
       PRERELEASE: ${{ inputs.prerelease }}
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -151,6 +166,8 @@ jobs:
           sha256sum -- * > SHA256SUMS
           cat SHA256SUMS
       - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           flags=()
           if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
