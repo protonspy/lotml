@@ -69,7 +69,7 @@ pub fn insert_counts(f: &mut Function) {
     let mut out = Vec::new();
     for &p in &f.params {
         if pass.counted(p) && !live_in.contains(p) {
-            out.push(Stmt { span: f.span, kind: StmtKind::Dec(p) });
+            out.push(Stmt { span: f.span, at: f.span, kind: StmtKind::Dec(p) });
         }
     }
     out.extend(pass.block(body, &empty, &empty, &empty));
@@ -300,7 +300,7 @@ impl Pass {
 
     fn stmt(&mut self, stmt: Stmt, live_out: &Set, brk: &Set, cont: &Set, out: &mut Vec<Stmt>) {
         let span = stmt.span;
-        let at = |kind| Stmt { span, kind };
+        let at = |kind| Stmt { span, at: span, kind };
         match stmt.kind {
             StmtKind::Let(x, e) => {
                 let set = e.outs();
@@ -411,13 +411,13 @@ impl Pass {
     fn drop_unused(&self, span: Span, set: &[Local], live_out: &Set, out: &mut Vec<Stmt>) {
         for &l in set {
             if self.counted(l) && !live_out.contains(l) {
-                out.push(Stmt { span, kind: StmtKind::Dec(l) });
+                out.push(Stmt { span, at: span, kind: StmtKind::Dec(l) });
             }
         }
     }
 
     fn decs(&self, span: Span, locals: Vec<Local>) -> Vec<Stmt> {
-        locals.into_iter().map(|l| Stmt { span, kind: StmtKind::Dec(l) }).collect()
+        locals.into_iter().map(|l| Stmt { span, at: span, kind: StmtKind::Dec(l) }).collect()
     }
 
     /// A statement with no blocks: increments before it for what it stores and still needs,
@@ -432,7 +432,7 @@ impl Pass {
         kind: StmtKind,
         out: &mut Vec<Stmt>,
     ) {
-        let at = |kind| Stmt { span, kind };
+        let at = |kind| Stmt { span, at: span, kind };
         let target = defined.map(|(x, _)| x);
         for &l in &uses.by_ref_stored {
             out.push(at(StmtKind::Inc(l)));

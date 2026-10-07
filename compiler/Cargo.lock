@@ -346,6 +346,7 @@ version = "0.1.0"
 dependencies = [
  "lotml-check",
  "lotml-diag",
+ "lotml-ir",
  "lotml-syntax",
  "serde_json",
 ]

@@ -300,4 +300,26 @@ pub const ALL: &[Code] = &[
         explanation: "The LLVM backend does not compile this construct yet. The program checks and runs on the \
         Python target: run it with `lotml run`, or build it with `--target python`.",
     },
+    Code {
+        code: "E0403",
+        title: "a function left out of a C library",
+        explanation: "`lotml build --shared` exports the top-level functions whose parameters and result C can be \
+        given without a rule for who frees them: integers, `f32`, `f64`, `bool`, `None` as the result, and `str` \
+        as a parameter. A function taking or returning anything else — a list, a record, a result, an `inout` \
+        parameter — or a generic one is left out, and this warning names what excluded it. To export it, give it \
+        a signature of those types, perhaps as a small function calling it.",
+    },
+    Code {
+        code: "E0404",
+        title: "a C library with nothing to export",
+        explanation: "`lotml build --shared` found no top-level function, other than `main`, that C can call. \
+        The E0403 warnings beside this error name what left each function out.",
+    },
+    Code {
+        code: "E0405",
+        title: "a C library named like the runtime",
+        explanation: "A library's functions are exported as `<module>_<function>`, `<module>` the file's name. A \
+        library whose names come out starting `lt_` would export them under the names the runtime it carries \
+        gives its own functions, and the two would clash when linked. Name the file otherwise.",
+    },
 ];

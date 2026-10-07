@@ -278,6 +278,9 @@ pub struct Function {
     pub name: String,
     /// The name a panic reports: `in check`.
     pub source_name: String,
+    /// The type parameters the function is generic over, its types naming them as `Ty::Param`:
+    /// empty once `mono` has made the program monomorphic (specs/python-on-ir R4).
+    pub type_params: Vec<String>,
     pub params: Vec<Local>,
     pub ret: Ty,
     pub locals: Vec<LocalInfo>,
@@ -292,6 +295,9 @@ pub type Block = Vec<Stmt>;
 pub struct Stmt {
     /// The span of the source statement this one was lowered from (R1.2).
     pub span: Span,
+    /// The span of the expression the statement computes, the statement's own where it computes
+    /// none: what a Python traceback underlines (specs/python-on-ir R2.1).
+    pub at: Span,
     pub kind: StmtKind,
 }
 
@@ -404,6 +410,7 @@ impl std::fmt::Debug for Const {
             Const::Bool(b) => write!(f, "{b}"),
             Const::Unit => write!(f, "()"),
             Const::Str(s) => write!(f, "{s:?}"),
+            Const::Bytes(b) => write!(f, "b{:?}", String::from_utf8_lossy(b)),
             Const::Null => write!(f, "null"),
             Const::Char(c) => write!(f, "{c:?}"),
         }
@@ -418,6 +425,8 @@ pub enum Const {
     Unit,
     /// A string literal's text.
     Str(String),
+    /// A bytes literal's bytes.
+    Bytes(Vec<u8>),
     /// No value, for an optional argument of the runtime left out: C's `NULL`.
     Null,
     /// A single ASCII character, for an option of the runtime: `'^'`.
@@ -643,6 +652,36 @@ pub enum Expr {
         params: Vec<Ty>,
         ret: Ty,
     },
+    /// A call of a function known once the type arguments are: an instance of a generic
+    /// function, or a method of a generic type or of a type parameter; `mono` makes it a `Call`
+    /// or a `CallSlots`.
+    CallGeneric {
+        callee: Callee,
+        args: Vec<Arg>,
+    },
+    /// The instance of the generic function `name` for `type_args`, as a value: a `FnRef` once
+    /// `mono` has made it.
+    FnRefGeneric {
+        name: String,
+        type_args: Vec<Ty>,
+    },
+    /// The value `value`, of type `from`, as the `dyn` type `ty`: a `ToDyn` through `from`'s
+    /// table once `mono` has made it.
+    ToDynOf {
+        value: Operand,
+        ty: Ty,
+        from: Ty,
+    },
+    /// The built-in method `method` of the value at `place`, of type `ty`, which the IR has no
+    /// operation of its own for: the Python target calls Python's own method, which may change the
+    /// value in place; a native target refuses it.
+    Method {
+        place: Place,
+        ty: Ty,
+        method: String,
+        args: Vec<Operand>,
+        keywords: Vec<(String, Operand)>,
+    },
     /// A call of the closure `callee`, of type `ty`; the closure and the arguments taken over.
     CallClosure {
         callee: Operand,
@@ -665,6 +704,16 @@ pub enum Expr {
     ResultValue(Operand),
     /// The error of an `Err`, read.
     ResultError(Operand),
+}
+
+/// What a `CallGeneric` calls.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Callee {
+    /// The generic function `name`, its LotML name, for `type_args`.
+    Function { name: String, type_args: Vec<Ty> },
+    /// The method `method` of the type `owner` — a record or sum type, or a type parameter whose
+    /// bound declares it — with the method's own type arguments `own`.
+    Method { owner: Ty, method: String, own: Vec<Ty> },
 }
 
 #[derive(Clone, Debug)]
@@ -701,7 +750,14 @@ impl Expr {
             Expr::FnRef(_) => {}
             Expr::Parallel { tasks, .. } => f(tasks),
             Expr::CallC { args, .. } | Expr::CallPython { args, .. } => args.iter().for_each(f),
-            Expr::ToDyn { value, .. } => f(value),
+            Expr::ToDyn { value, .. } | Expr::ToDynOf { value, .. } => f(value),
+            Expr::Method { place, args, keywords, .. } => {
+                f(&Operand::Local(place.local));
+                place_operands(place, f);
+                args.iter().for_each(&mut *f);
+                keywords.iter().for_each(|(_, o)| f(o));
+            }
+            Expr::FnRefGeneric { .. } => {}
             Expr::CallDyn { receiver, args, .. } => {
                 f(receiver);
                 args.iter().for_each(f);
@@ -742,7 +798,7 @@ impl Expr {
                 args.iter().for_each(f);
             }
             Expr::Rt { args, .. } | Expr::RtValue { args, .. } => args.iter().filter_map(Arg::operand).for_each(f),
-            Expr::CallSlots(_, args) => {
+            Expr::CallSlots(_, args) | Expr::CallGeneric { args, .. } => {
                 for a in args {
                     match a {
                         Arg::Slot(place) => {
@@ -896,6 +952,8 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
         | Expr::Closure { ty, .. }
         | Expr::CallClosure { ty, .. }
         | Expr::ToDyn { ty, .. }
+        | Expr::ToDynOf { ty, .. }
+        | Expr::Method { ty, .. }
         | Expr::Compare(_, _, _, ty) => f(ty),
         Expr::CallDyn { ty, params, ret, .. } => {
             f(ty);
@@ -907,7 +965,7 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
             params.iter().for_each(&mut *f);
             f(ret);
         }
-        Expr::Rt { args, .. } | Expr::CallSlots(_, args) => arg_types(args, f),
+        Expr::Rt { args, .. } | Expr::CallSlots(_, args) | Expr::CallGeneric { args, .. } => arg_types(args, f),
         Expr::RtValue { args, ty, .. } => {
             arg_types(args, f);
             f(ty);
@@ -942,5 +1000,137 @@ impl Expr {
             Expr::Rt { args, .. } | Expr::RtValue { args, .. } => outs(args).collect(),
             _ => Vec::new(),
         }
+    }
+}
+
+impl Function {
+    /// Every type the function names, its locals' and its result's among them, given to `f` to
+    /// change: how `mono` writes an instance of a generic function.
+    pub fn types_mut(&mut self, f: &mut impl FnMut(&mut Ty)) {
+        self.locals.iter_mut().for_each(|l| f(&mut l.ty));
+        f(&mut self.ret);
+        block_types_mut(&mut self.body, f);
+    }
+}
+
+fn block_types_mut(block: &mut Block, f: &mut impl FnMut(&mut Ty)) {
+    for stmt in block {
+        match &mut stmt.kind {
+            StmtKind::Let(_, e) | StmtKind::Do(e) => expr_types_mut(e, f),
+            StmtKind::Mutate { args, .. } => args_types_mut(args, f),
+            StmtKind::If(_, then, otherwise) => {
+                block_types_mut(then, f);
+                block_types_mut(otherwise, f);
+            }
+            StmtKind::Loop(body) => block_types_mut(body, f),
+            StmtKind::ForRange { body, exit, .. } | StmtKind::ForStr { body, exit, .. } => {
+                block_types_mut(body, f);
+                block_types_mut(exit, f);
+            }
+            StmtKind::Store(..)
+            | StmtKind::Break
+            | StmtKind::Continue
+            | StmtKind::Return(_)
+            | StmtKind::Panic(_)
+            | StmtKind::Inc(_)
+            | StmtKind::Dec(_)
+            | StmtKind::DropReuse { .. } => {}
+        }
+    }
+}
+
+fn args_types_mut(args: &mut [Arg], f: &mut impl FnMut(&mut Ty)) {
+    for a in args {
+        match a {
+            Arg::Address(_, ty) | Arg::Out(_, ty) | Arg::Desc(ty) | Arg::Offset(ty) => f(ty),
+            Arg::Value(_) | Arg::Slot(_) => {}
+        }
+    }
+}
+
+fn format_types_mut(parts: &mut [FormatPart], f: &mut impl FnMut(&mut Ty)) {
+    for part in parts {
+        if let FormatPart::Value { ty, spec, .. } = part {
+            f(ty);
+            format_types_mut(spec, f);
+        }
+    }
+}
+
+fn expr_types_mut(e: &mut Expr, f: &mut impl FnMut(&mut Ty)) {
+    match e {
+        Expr::Binary(_, _, _, ty)
+        | Expr::Unary(_, _, ty)
+        | Expr::Compare(_, _, _, ty)
+        | Expr::MinMax { ty, .. }
+        | Expr::Contains { ty, .. }
+        | Expr::ToStr(_, ty)
+        | Expr::Len(_, ty)
+        | Expr::ListNew { elem: ty, .. }
+        | Expr::ListGet { elem: ty, .. }
+        | Expr::TupleNew { ty, .. }
+        | Expr::Construct { ty, .. }
+        | Expr::UnitVariant { ty, .. }
+        | Expr::Field { ty, .. }
+        | Expr::OptNew { ty, .. }
+        | Expr::ResultNew { ty, .. }
+        | Expr::SetNew { elem: ty, .. }
+        | Expr::Closure { ty, .. }
+        | Expr::Parallel { result: ty, .. }
+        | Expr::ToDyn { ty, .. }
+        | Expr::Method { ty, .. }
+        | Expr::CallClosure { ty, .. }
+        | Expr::OptIf { ty, .. } => f(ty),
+        Expr::Convert(_, from, to) => {
+            f(from);
+            f(to);
+        }
+        Expr::DictNew { key, value, .. } => {
+            f(key);
+            f(value);
+        }
+        Expr::Print { args, .. } => args.iter_mut().for_each(|(_, ty)| f(ty)),
+        Expr::Rt { args, .. } | Expr::CallSlots(_, args) => args_types_mut(args, f),
+        Expr::RtValue { args, ty, .. } => {
+            args_types_mut(args, f);
+            f(ty);
+        }
+        Expr::Format(parts) => format_types_mut(parts, f),
+        Expr::CallC { params, ret, .. } | Expr::CallPython { params, ret, .. } => {
+            params.iter_mut().for_each(&mut *f);
+            f(ret);
+        }
+        Expr::CallDyn { ty, params, ret, .. } => {
+            f(ty);
+            params.iter_mut().for_each(&mut *f);
+            f(ret);
+        }
+        Expr::CallGeneric { callee, args } => {
+            match callee {
+                Callee::Function { type_args, .. } => type_args.iter_mut().for_each(&mut *f),
+                Callee::Method { owner, own, .. } => {
+                    f(owner);
+                    own.iter_mut().for_each(&mut *f);
+                }
+            }
+            args_types_mut(args, f);
+        }
+        Expr::FnRefGeneric { type_args, .. } => type_args.iter_mut().for_each(&mut *f),
+        Expr::ToDynOf { ty, from, .. } => {
+            f(ty);
+            f(from);
+        }
+        Expr::Use(_)
+        | Expr::Call(..)
+        | Expr::TupleGet { .. }
+        | Expr::Tag(_)
+        | Expr::OptIsSome(_)
+        | Expr::OptValue(_)
+        | Expr::ResultIsOk(_)
+        | Expr::ResultValue(_)
+        | Expr::ResultError(_)
+        | Expr::ReadPlace(_)
+        | Expr::FnRef(_)
+        | Expr::Capture { .. } => {}
     }
 }

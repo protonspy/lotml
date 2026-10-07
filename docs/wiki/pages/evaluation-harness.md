@@ -172,4 +172,7 @@ same rows. Its second half does not. Built by MSVC, three of the five numeric pr
 7.48×. The C versions check nothing, and the lotml ones check every integer operation and index.
 That is where the time goes: matmul reads and writes its rows by index, each access checked, which
 keeps the C compiler from vectorizing the loop as it vectorizes the unchecked C. The other
-programs are reported apart, as [[memory-model]] asks.
+programs are reported apart, as [[memory-model]] asks. The gate was overridden
+(adr:0019-proceed-to-phase-4-past-the-failed-phase-3-gate), and in phase 4 the same suite passes
+on the Python and LLVM targets, each of the 509 programs reporting the same on both
+(`harness/results/parity-llvm.md`).

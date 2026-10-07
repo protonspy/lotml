@@ -321,3 +321,62 @@ fn the_emitter_never_lets_a_dunder_attribute_reach_python() {
         "the attribute `__class__` is not reachable from lotml"
     );
 }
+
+// specs/python-on-ir: the module written from the generic IR --------------------------------
+
+#[test]
+fn a_generic_function_is_one_python_function_whatever_it_is_called_with() {
+    let source = "fn first[T](xs: [T]) -> T:\n    return xs[0]\n\nfn f() -> str:\n    return f\"{first([7, 8])} {first(['a'])}\"\n";
+    let module = compile(source, Path::new("generic.lotml")).expect("compiles");
+    let definitions = module.matches(r#"\"_\":\"FunctionDef\""#).count();
+    let named_first = module.matches(r#"\"name\":\"first\""#).count();
+    assert_eq!((definitions, named_first), (2, 1), "first and f, once each: {module}");
+    assert_eq!(prints("generic-once", source, "print(m.f(), m.first([True]))"), "7 a True");
+}
+
+#[test]
+fn a_value_holding_one_value_twice_holds_two_once_copied() {
+    let source = "type P(xs: [int])\n\nfn mk(p: P) -> [P]:\n    return [p, p]\n\n\
+                  fn f() -> ([[int]], [int], [int]):\n    x = [1]\n    var grid = [x, x]\n    grid[0].append(2)\n    \
+                  p = P([1])\n    var both = mk(p)\n    both[0].xs.append(3)\n    return (grid, both[0].xs, both[1].xs)\n";
+    assert_eq!(prints("shared-parts", source, "print(m.f())"), "([[1, 2], [1]], [1, 3], [1])");
+}
+
+#[test]
+fn methods_of_two_types_whose_names_join_alike_stay_apart() {
+    let source = "type A_b(n: int)\ntype A(n: int)\n\nimpl A_b:\n    fn c(self) -> int:\n        return 1\n\n\
+                  impl A:\n    fn b_c(self) -> int:\n        return 2\n\nfn f() -> (int, int):\n    return (A_b(0).c(), A(0).b_c())\n";
+    assert_eq!(prints("method-names", source, "print(m.f())"), "(1, 2)");
+}
+
+/// Every node of `tree` that names a context, and so must carry one for Python 3.12's `compile`,
+/// whose nodes have no default for it: the kinds of those that lack it.
+fn missing_contexts(tree: &serde_json::Value, out: &mut Vec<String>) {
+    match tree {
+        serde_json::Value::Object(map) => {
+            if let Some(serde_json::Value::String(kind)) = map.get("_")
+                && ["Name", "Attribute", "Subscript", "List", "Tuple", "Starred"].contains(&kind.as_str())
+                && !map.contains_key("ctx")
+            {
+                out.push(kind.clone());
+            }
+            map.values().for_each(|v| missing_contexts(v, out));
+        }
+        serde_json::Value::Array(items) => items.iter().for_each(|v| missing_contexts(v, out)),
+        _ => {}
+    }
+}
+
+#[test]
+fn every_node_with_a_context_carries_one_for_every_python_the_runtime_supports() {
+    for (name, source) in [("rest", REST), ("parse", PARSE)] {
+        let module = compile(source, Path::new("prog.lotml")).expect("compiles");
+        let payload = module.split("lotml_rt.load_module(globals(), ").nth(1).expect("the payload");
+        let payload = payload.split_once(", ").map(|(_, p)| p.trim_end().trim_end_matches(')')).expect("two arguments");
+        let payload: String = serde_json::from_str(payload).expect("a JSON string");
+        let tree: serde_json::Value = serde_json::from_str(&payload).expect("the program as JSON");
+        let mut missing = Vec::new();
+        missing_contexts(&tree["module"], &mut missing);
+        assert!(missing.is_empty(), "{name}: {missing:?}");
+    }
+}

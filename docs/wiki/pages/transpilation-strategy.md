@@ -2,7 +2,10 @@
 
 The original study recommends transpiling to Python first (validate the design in weeks), then to
 C (reach the performance target) and only then writing a native backend; and, separately,
-transpiling Python to lotml to generate a corpus. The order holds. The evidence adds the price of
+transpiling Python to lotml to generate a corpus. The order held until the native step: the C
+target of phase 3 was retired in phase 4 for LLVM, so two targets remain, Python for `run` and
+`test` and native code for `build`, both reading one IR
+(adr:0025-two-targets-python-for-run-llvm-for-build). The evidence adds the price of
 each semantic gap between lotml and Python, and a consequence the study did not draw: the
 transpiler to Python is what lets the harness execute programs. A research transpiler for the
 pilot's subset, in `research/experiments/transpiler/`, now does that, and settles three of the
@@ -117,26 +120,48 @@ With the checker's types it copies only where a `var` or an `inout` is involved 
 or leaving one into a binding, a container, a capture or a call that may keep the value, shallowly
 when the elements cannot change — and traps integer arithmetic inline, after the statement when the
 result is assigned. On the 694 stored variant B answers the checker accepts, it gives the same
-verdict on the hidden tests as the phase 0 transpiler.
+verdict on the hidden tests as the phase 0 transpiler. Since phase 4 it writes that tree from the
+generic IR rather than from the syntax tree, the copies decided by the same rule on the IR's
+locals, and reports what it reported before on the whole corpus.
 
 ## The phase 3 backend
 
-`compiler/crates/lotml-c` compiles a checked module to one C11 file over a reference-counting
-runtime (adr:0016-c-target-as-monomorphic-c-over-a-counting-runtime). Lowering gives a typed,
-monomorphic form, a generic function compiled once per instantiation and a `dyn` value calling
-through a table; counts follow liveness, a dying value is reused in place when it is unique, and
-`#line` directives make the C compiler, a debugger and a panic name the `.lotml` line. `lotml
-run`, `test` and `build` take `--target c`, and `lotml test` reports on it what it reports on the
-Python target, field for field. The suite is the corpus: all 509 programs report the same on both
-targets (`harness/results/parity.md`). A program importing a Python module is refused at the
-import; a C library is called directly and linked
-(adr:0013-c-libraries-through-interfaces-named-c).
+`compiler/crates/lotml-c` compiled a checked module to one C11 file over a reference-counting
+runtime (adr:0016-c-target-as-monomorphic-c-over-a-counting-runtime), until phase 4 retired it
+for the LLVM target. Lowering gave a typed, monomorphic form, a generic function compiled once per
+instantiation and a `dyn` value calling through a table; counts followed liveness, a dying value
+was reused in place when it was unique, and `#line` directives made the C compiler, a debugger and
+a panic name the `.lotml` line. `lotml test` reported on it what it reports on the Python target,
+field for field: all 509 programs of the corpus reported the same on both targets
+(`harness/results/parity.md`). Its lowering, its counting and its runtime outlived it, as the IR
+and the runtime the native target runs on.
 
 The benchmarks against C (`harness/results/benchmarks.md`) found the costs in the C the backend
 writes rather than in counting: the location a failing check reports, built at each use, cost a
 list store ten times its price under gcc until it became a static constant per line, and the
 copy-on-write check moved out of loops that only store into a list. What remains is the checks
 themselves, which the phase 3 gate measures ([[evaluation-harness]]).
+
+## The phase 4 targets
+
+One lowering in `compiler/crates/lotml-ir` turns the checked program into one IR, which both
+targets read (adr:0020-one-ir-between-the-checker-and-every-backend): the Python target as
+lowering leaves it, each generic function once, and the native target after `mono` has made it
+monomorphic and the passes have inserted the counts, reuse and hoisted uniqueness checks of the C
+target. `compiler/crates/lotml-llvm` writes it as textual LLVM IR, which `clang` compiles with the
+same C runtime (adr:0021-compiler-in-rust-with-llvm-as-its-native-code-generator); the runtime's
+signatures are read from its header, and line tables at `-O0` make a debugger name the `.lot`
+line. `lotml build` makes an executable by default (adr:0022), and with `--shared` a library C
+calls, exporting the functions whose signatures C can be given
+(adr:0024-c-abi-exports-chosen-by-signature-without-new-syntax). A native program runs without
+Python, so a Python module's import is refused there; a C library is called directly and linked
+(adr:0013-c-libraries-through-interfaces-named-c).
+
+The suite is still the corpus: all 509 programs report the same on the Python and LLVM targets
+(`harness/results/parity-llvm.md`). Against hand-written C built by the same `clang`
+(`harness/results/benchmarks-llvm.md`), mandelbrot takes 0.69x its time, fib 1.74x, sieve 2.26x,
+collatz 2.97x and matmul 5.03x: the numeric gap the phase 3 gate recorded stays open, measured
+rather than closed.
 
 ## Python and lotml calling each other
 

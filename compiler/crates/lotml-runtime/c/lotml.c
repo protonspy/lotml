@@ -87,18 +87,27 @@ static size_t lt_out_used = 0;
  * lock. Changed before the threads start and after they finish, so a reader never races it. */
 static int64_t lt_tasks_running = 0;
 
+/* Set once a library's exported function is called: its host may call from any thread, so the
+ * output buffer is written under the lock from then on (specs/c-abi-export R2.1). */
+static int32_t lt_called_as_library = 0;
+
+/* Whether the output buffer is written under the lock now. */
+static bool lt_out_shared(void) {
+    return lt_tasks_running > 0 || lt_atomic_add(&lt_called_as_library, 0) > 0;
+}
+
 #ifdef _WIN32
 static SRWLOCK lt_out_lock = SRWLOCK_INIT;
-static void lt_lock_out(void) {
-    if (lt_tasks_running > 0) AcquireSRWLockExclusive(&lt_out_lock);
+static void lt_lock_out(bool locked) {
+    if (locked) AcquireSRWLockExclusive(&lt_out_lock);
 }
 static void lt_unlock_out(bool locked) {
     if (locked) ReleaseSRWLockExclusive(&lt_out_lock);
 }
 #else
 static pthread_mutex_t lt_out_lock = PTHREAD_MUTEX_INITIALIZER;
-static void lt_lock_out(void) {
-    if (lt_tasks_running > 0) pthread_mutex_lock(&lt_out_lock);
+static void lt_lock_out(bool locked) {
+    if (locked) pthread_mutex_lock(&lt_out_lock);
 }
 static void lt_unlock_out(bool locked) {
     if (locked) pthread_mutex_unlock(&lt_out_lock);
@@ -114,15 +123,15 @@ static void lt_flush_unlocked(void) {
 }
 
 void lt_flush(void) {
-    bool locked = lt_tasks_running > 0;
-    lt_lock_out();
+    bool locked = lt_out_shared();
+    lt_lock_out(locked);
     lt_flush_unlocked();
     lt_unlock_out(locked);
 }
 
 void lt_write(const char *bytes, size_t length) {
-    bool locked = lt_tasks_running > 0;
-    lt_lock_out();
+    bool locked = lt_out_shared();
+    lt_lock_out(locked);
     if (length >= sizeof lt_out) {
         lt_flush_unlocked();
         fwrite(bytes, 1, length, stdout);
@@ -140,6 +149,16 @@ void lt_init(void) {
     _setmode(_fileno(stdout), _O_BINARY);
     _setmode(_fileno(stderr), _O_BINARY);
 #endif
+}
+
+void lt_library_call(void) {
+    if (lt_atomic_add(&lt_called_as_library, 0) == 0) lt_atomic_add(&lt_called_as_library, 1);
+}
+
+void lt_library_return(void) {
+    lt_lock_out(true);
+    if (lt_out_used > 0) lt_flush_unlocked();
+    lt_unlock_out(true);
 }
 
 int lt_no_main(void) {

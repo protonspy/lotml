@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: c4adae1955d4a1b2b563d64602d114391085b779363894db2d9188951c94536d
+checksum: a8ca7f36ab7bb753abf04951ff1b12af3f2821d23c2b31b349d08cbe36be69c6
 ---
 
 # IR architecture
@@ -97,10 +97,10 @@ makes an executable.
   _Depends 2.5_
   _Status removed_
   _Reason dropped: native programs do not load CPython; a program importing Python runs under lotml run (adr:0025-two-targets-python-for-run-llvm-for-build)_
-- [ ] 3.2 (Unit) Write and build the spec c-abi-export: a C program calling a function from a
+- [x] 3.2 (Unit) Write and build the spec c-abi-export: a C program calling a function from a
   library `lotml build` wrote
   _Depends 2.5_
-- [ ] 4.1 (Unit) Narrate the pipeline in `docs/codewiki/` and bring the README's
+- [x] 4.1 (Unit) Narrate the pipeline in `docs/codewiki/` and bring the README's
       architecture and
   status, `docs/stack.md` and the wiki's transpilation strategy up to date
   _Depends 2.3, 3.2, 3.3_
@@ -116,7 +116,7 @@ makes an executable.
   _Depends 2.1_
   _Priority 1_
   _Reason the user chose LLVM as the only native target (adr:0021)_
-- [ ] 3.3 (Unit) Write and build the spec python-on-ir: one lowering from the syntax
+- [x] 3.3 (Unit) Write and build the spec python-on-ir: one lowering from the syntax
       tree to the IR, read with generics intact by the Python backend and after
       monomorphization by the native ones, the parity suite unchanged
   _Depends 1.2_

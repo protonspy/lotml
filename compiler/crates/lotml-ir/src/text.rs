@@ -20,7 +20,8 @@ impl Lowered {
     /// The function `f` as text.
     pub fn function_text(&self, f: &Function) -> String {
         let params: Vec<String> = f.params.iter().map(|&p| declared(f, p)).collect();
-        let mut out = format!("fn {}({}) -> {} {}\n", f.name, params.join(", "), f.ret, self.at(f.span.start));
+        let generic = if f.type_params.is_empty() { String::new() } else { format!("[{}]", f.type_params.join(", ")) };
+        let mut out = format!("fn {}{generic}({}) -> {} {}\n", f.name, params.join(", "), f.ret, self.at(f.span.start));
         self.block(f, &f.body, 1, &mut out);
         out
     }

@@ -14,7 +14,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="Compiler in Rust" src="https://img.shields.io/badge/compiler-Rust%202024-orange.svg">
-  <img alt="Target: Python, C in progress" src="https://img.shields.io/badge/target-Python%20%C2%B7%20C%20in%20progress-teal.svg">
+  <img alt="Targets: Python and native through LLVM" src="https://img.shields.io/badge/targets-Python%20%C2%B7%20LLVM-teal.svg">
   <img alt="Status: research preview" src="https://img.shields.io/badge/status-research%20preview-yellow.svg">
   <img alt="File extension .lot" src="https://img.shields.io/badge/extension-.lot-8a2be2.svg">
 </p>
@@ -66,7 +66,7 @@ checker forces you to handle. The full language fits in one example-driven page:
 [Releases](https://github.com/protonspy/lotml/releases) hold `lotml` built for Linux (x86_64),
 Windows (x86_64) and macOS (Apple silicon): each archive holds the binary, this README and the
 licence, beside the VS Code extension's `.vsix` and a `SHA256SUMS`. The binary carries its
-runtimes; running programs needs Python 3.11 or later, and the C target a C compiler.
+runtimes; `run` and `test` need Python 3.11 or later, and a native build `clang` 17 or later.
 
 To build it instead, with Rust 1.97+:
 
@@ -79,6 +79,7 @@ lotml check stats.lot       # syntax, type and mutability errors
 lotml test  stats.lot       # run the test blocks
 lotml run   main.lot        # run fn main()
 lotml build stats.lot       # compile to a native executable, through LLVM
+lotml build --shared stats.lot          # or to a shared library and its C header
 lotml build --target python stats.lot   # or to a Python module with its runtime
 lotml init                  # set a project up for coding agents: AGENTS.md, guide, MCP server
 lotml explain E0204         # explain an error code
@@ -100,13 +101,29 @@ starts the language server for them; its README says how to build and install it
 
 | Path | What lives there |
 |---|---|
-| [`compiler/`](compiler/) | The Rust compiler: syntax, checker, formatter, Python backend, LSP and MCP servers |
+| [`compiler/`](compiler/) | The Rust compiler: syntax, checker, the IR every target reads, the Python and LLVM backends and the C runtime, formatter, LSP and MCP servers |
 | [`reference/`](reference/) | The language reference and the tree-sitter grammar |
 | [`editors/`](editors/) | The file icon, its Windows Explorer association and the VS Code extension |
 | [`harness/`](harness/) | The evaluation harness that measures models writing LotML |
 | [`research/`](research/) | Reproducible experiments: token cost, Python leakage, editing robustness |
 | [`docs/`](docs/) | Knowledge base: wiki, ADRs, glossary, stack |
 | [`plans/`](plans/) · [`specs/`](specs/) | The roadmap and the feature specs it is built from |
+
+## How it compiles
+
+```
+source ─► parser ─► checker ─► IR (lotml-ir) ─┬─► Python backend ─► CPython      lotml run, lotml test
+                                               └─► mono, counts ─► LLVM backend ─► clang ─► native
+                                                                                  lotml build [--shared]
+```
+
+One lowering turns the checked program into one IR, which both targets read
+([adr 0020](docs/adr/0020-one-ir-between-the-checker-and-every-backend.md)). `run` and `test` use
+the Python target, which reaches every Python library; `build` makes a native executable, or with
+`--shared` a library C calls, through LLVM, and a native program runs without Python
+([adr 0025](docs/adr/0025-two-targets-python-for-run-llvm-for-build.md)). Every target is held to
+the same parity suite. [The pipeline, narrated](docs/codewiki/compiler-pipeline.md) says where
+each step lives.
 
 ## Status
 
@@ -116,8 +133,8 @@ LotML is a research project, built phase by phase, each phase closed by a measur
 - [x] **Phase 0** — syntax settled by measurement (variant B, significant indentation)
 - [x] **Phase 1** — v1 on the Python target (gate missed on pass@1 and overridden: [adr 0011](docs/adr/0011-proceed-to-phase-2-past-the-failed-phase-1-gate.md))
 - [x] **Phase 2** — agent tooling: LSP, MCP, symbol-addressed edits, Python interop, colorless concurrency, C FFI, tree-sitter grammar
-- [ ] **Phase 3** — the C target, within 2× C on numeric code *(in progress)*
-- [ ] **Phase 4** — a native backend (Cranelift, LLVM), effects as capabilities, `where` contracts
+- [x] **Phase 3** — a native target within 2× C on numeric code (gate missed and overridden: [adr 0019](docs/adr/0019-proceed-to-phase-4-past-the-failed-phase-3-gate.md))
+- [ ] **Phase 4** — native through LLVM on one IR, `lotml build` native by default, C ABI exports *(done: [plan](plans/ir-architecture.md))*; effects as capabilities, `where` contracts
 
 ## Development
 

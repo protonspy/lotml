@@ -72,6 +72,7 @@ impl Check<'_> {
             Operand::Const(Const::Bool(_)) => Some(Ty::Bool),
             Operand::Const(Const::Unit) => Some(Ty::Unit),
             Operand::Const(Const::Str(_)) => Some(Ty::Str),
+            Operand::Const(Const::Bytes(_)) => Some(Ty::Bytes),
             Operand::Const(Const::Null | Const::Char(_)) => None,
         }
     }
@@ -198,7 +199,10 @@ impl Check<'_> {
 
     fn expr(&mut self, stmt: &Stmt, set: &[bool], e: &Expr) {
         match e {
-            Expr::Rt { args, .. } | Expr::RtValue { args, .. } | Expr::CallSlots(_, args) => self.args(stmt, set, args),
+            Expr::Rt { args, .. }
+            | Expr::RtValue { args, .. }
+            | Expr::CallSlots(_, args)
+            | Expr::CallGeneric { args, .. } => self.args(stmt, set, args),
             other => other.operands(&mut |o| self.read(stmt, set, o)),
         }
         match e {

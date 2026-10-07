@@ -1,6 +1,9 @@
 ---
 autonomy: auto
 ci: wait
+branch: feat/c-abi-export
+delivery: in-review
+pr: 32
 ---
 
 # C ABI export — requirements
@@ -22,7 +25,7 @@ Rust, Zig or any language with a C FFI that want a function written in LotML, co
 
 ## R2 · Calling it
 
-- **R2.1** When an exported function is called from any thread, the library shall return what the same function returns when called from LotML, initialising the runtime on the first call.
+- **R2.1** When an exported function is called from any thread, the library shall return what the same function returns when called from LotML, readying the runtime on the first call for calls from any thread, and leaving the host's standard streams as the host set them.
 - **R2.2** If an exported function panics, then the library shall stop the process with status 101, naming the `.lot` file, line and function, as a LotML program does.
 - **R2.3** If a `str` argument is not valid UTF-8, then the library shall stop the process with status 101, naming the function and the parameter.
 

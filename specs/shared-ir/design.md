@@ -34,8 +34,9 @@ Serves R1.2, R1.3, R1.4.
 
 - `Stmt.line: u32` becomes `Stmt.span: Span` (byte offsets into the source). The C emitter takes
   the line from it for `#line`; the Python backend needs the column, to underline the expression
-  a traceback names. Every intermediate value is a `Let` of its own, so a span per statement is a
-  span per expression.
+  a traceback names. Every intermediate value is a `Let` of its own, and each statement keeps
+  beside its span the span of the expression it computes (`Stmt.at`, added by
+  `specs/python-on-ir/`), so an operand inside a larger statement is underlined on its own.
 - `Expr::Rt { name: &'static str, .. }` and `Mutate { name, .. }` name a C runtime function
   today. They take a `Builtin` enum instead (`ListAppend`, `StrRepr`, `DictGet`, …), one variant
   per operation the language defines.

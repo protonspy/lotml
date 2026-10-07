@@ -144,6 +144,11 @@ void lt_init(void);
 int lt_exit(int status);
 /* A program without `fn main()`: it says so and stops with status 2. */
 int lt_no_main(void);
+/* A library's exported function (specs/c-abi-export R2.1), called from any thread of its host:
+ * `lt_library_call` before the function it wraps runs, `lt_library_return` after, writing out
+ * what the function printed. */
+void lt_library_call(void);
+void lt_library_return(void);
 
 /* Text built up before it is written: `print`, `str`, f-strings. */
 typedef struct lt_buf {
@@ -455,6 +460,9 @@ lt_str *lt_str_new(const char *bytes, int64_t size);
 /* The character of `s` at the byte `*at` as a string of its own, `*at` moved past it: a step of
  * `for c in s`. */
 lt_str *lt_str_char_at(const lt_str *s, int64_t *at);
+/* The NUL-terminated `text` a C caller passed as the parameter `param`, copied into a string; the
+ * program stops at `at` when there is none or it is not UTF-8 (specs/c-abi-export R2.3). */
+lt_str *lt_str_from_c(const char *text, const char *param, const lt_at *at);
 lt_str *lt_str_from_buf(lt_buf *b);
 void lt_str_drop(lt_str *s);
 void lt_buf_str(lt_buf *b, const lt_str *s);

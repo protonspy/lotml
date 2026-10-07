@@ -107,7 +107,8 @@ impl Clang {
 
     /// `build`, the runtime reporting at exit, when `counting`, the cells still live and the cells
     /// allocated: what the leak tests read (specs/llvm-parity R3.1). With `LOTML_SANITIZE` set, as
-    /// CI sets it, the program is built under AddressSanitizer and UndefinedBehaviorSanitizer.
+    /// CI sets it, the program, not a library, is built under AddressSanitizer and
+    /// UndefinedBehaviorSanitizer.
     pub fn build_with(
         &self,
         ll: &Path,
@@ -117,6 +118,32 @@ impl Clang {
         libraries: &[String],
         counting: bool,
     ) -> Result<(), String> {
+        self.link(ll, runtime_dir, exe, libraries, Build { level, counting, shared: false })
+    }
+
+    /// Compile the LLVM IR `ll` of a library with the runtime in `runtime_dir` into the shared
+    /// library `library` at `-O2`, linking `libraries`; on Windows, its import library beside it
+    /// (specs/c-abi-export R1.1). Only the functions the IR exports are exported: elsewhere the
+    /// runtime's are hidden.
+    pub fn build_shared(
+        &self,
+        ll: &Path,
+        runtime_dir: &Path,
+        library: &Path,
+        libraries: &[String],
+    ) -> Result<(), String> {
+        self.link(ll, runtime_dir, library, libraries, Build { level: Level::Release, counting: false, shared: true })
+    }
+
+    fn link(
+        &self,
+        ll: &Path,
+        runtime_dir: &Path,
+        exe: &Path,
+        libraries: &[String],
+        build: Build,
+    ) -> Result<(), String> {
+        let Build { level, counting, shared } = build;
         let mut command = Command::new(&self.program);
         command.arg(if level == Level::Release { "-O2" } else { "-O0" });
         if level == Level::Debug {
@@ -125,7 +152,13 @@ impl Clang {
         if counting {
             command.arg("-DLT_COUNT_CELLS");
         }
-        if std::env::var_os("LOTML_SANITIZE").is_some() {
+        if shared {
+            command.arg("-shared");
+            if !cfg!(windows) {
+                command.args(["-fPIC", "-fvisibility=hidden"]);
+            }
+        }
+        if !shared && std::env::var_os("LOTML_SANITIZE").is_some() {
             command.args(["-fsanitize=address,undefined", "-fno-sanitize-recover=undefined"]);
         }
         command.arg("-w").arg("-o").arg(exe).arg(ll).arg(runtime_dir.join("lotml.c"));
@@ -141,6 +174,14 @@ impl Clang {
         let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
         Err(rejected(&text, ll))
     }
+}
+
+/// How a build compiles and links: its level, whether it counts cells, whether it is a library.
+#[derive(Clone, Copy)]
+struct Build {
+    level: Level,
+    counting: bool,
+    shared: bool,
 }
 
 impl Clang {
