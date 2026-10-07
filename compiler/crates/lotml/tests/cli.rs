@@ -493,7 +493,7 @@ fn answer(symbol: &str, body: &str) -> serde_json::Value {
 fn dev_judge_passes_an_edit_that_makes_the_file_check_and_says_why_another_is_withheld() {
     let broken = "fn count() -> int:\n    n = 0\n    n += 1\n    return n\n";
     let fixed = judged("judge-fix", broken, &answer("count", "    var n = 0\n    n += 1\n    return n"), None);
-    assert_eq!(fixed, serde_json::json!({"valid": true, "symbols": ["count"], "edit": "passes"}));
+    assert_eq!(fixed, serde_json::json!({"valid": true, "symbols": ["count"], "unknown": [], "edit": "passes"}));
     let copied = judged("judge-copy", broken, &answer("count", "    n = 0\n    n += 1\n    return n"), None);
     assert_eq!(copied["edit"], "edit-fails-check", "a copy of the broken body is withheld");
     let elsewhere = serde_json::json!({
@@ -507,7 +507,7 @@ fn dev_judge_passes_an_edit_that_makes_the_file_check_and_says_why_another_is_wi
     });
     assert_eq!(
         judged("judge-none", broken, &silent, None),
-        serde_json::json!({"valid": true, "symbols": [null], "edit": "none"})
+        serde_json::json!({"valid": true, "symbols": [null], "unknown": [], "edit": "none"})
     );
 }
 
@@ -525,7 +525,7 @@ fn dev_judge_reads_an_answer_outside_the_schema_as_invalid() {
     ] {
         assert_eq!(
             judged(name, broken, &found, None),
-            serde_json::json!({"valid": false, "symbols": [], "edit": "none"})
+            serde_json::json!({"valid": false, "symbols": [], "unknown": [], "edit": "none"})
         );
     }
 }

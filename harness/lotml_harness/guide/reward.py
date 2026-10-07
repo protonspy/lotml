@@ -3,7 +3,9 @@
 file (specs/training-pipeline/ R4).
 
 A copy of the failing body, the habit the supervised guide showed on real failures, fails check
-and earns nothing for its edit, while a right location still earns half.
+and earns nothing for its edit, while a right location still earns half. The locations are scored
+by an F-score that favours recall, as SoRFT scores localization: a reward for naming the right
+declaration among others was gamed by naming more (docs/wiki/pages/verifiable-rewards.md).
 """
 
 import json
@@ -19,16 +21,20 @@ DEADLINE = 20.0
 """Seconds one judgment may take, the failing block's run included."""
 PASSES = "passes"
 FILE = "file.lot"
+BETA = 3.0
+"""Recall weighs this many times precision in the locations' F-score."""
 
 
 @dataclass(frozen=True)
 class Judged:
-    """The judge's verdict: within the schema, the locations' symbols in order, and the edit —
-    `none`, `passes`, or the gate's reason for withholding it."""
+    """The judge's verdict: within the schema, the locations' symbols in order, the edit — `none`,
+    `passes`, or the gate's reason for withholding it — and the symbols named that the file does
+    not declare."""
 
     valid: bool
     symbols: list[str | None]
     edit: str
+    unknown: tuple[str, ...] = ()
 
 
 def judge(answer: str, state: dict, deadline: float = DEADLINE) -> Judged | None:
@@ -49,25 +55,33 @@ def judge(answer: str, state: dict, deadline: float = DEADLINE) -> Judged | None
         return None
     try:
         verdict = json.loads(done.stdout.strip().splitlines()[-1])
-        return Judged(bool(verdict["valid"]), list(verdict["symbols"]), str(verdict["edit"]))
+        unknown = tuple(str(u) for u in verdict.get("unknown") or [])
+        return Judged(
+            bool(verdict["valid"]), list(verdict["symbols"]), str(verdict["edit"]), unknown
+        )
     except (json.JSONDecodeError, IndexError, KeyError, TypeError):
         return None
 
 
+def located(judged: Judged, truth: list[str | None]) -> float:
+    """The F-score, with beta `BETA`, of the declarations the answer names against those the fix
+    changed; zero when it names one the file does not declare, or none."""
+    named, wanted = set(judged.symbols), set(truth)
+    if judged.unknown or not named or not wanted:
+        return 0.0
+    hits = len(named & wanted)
+    if hits == 0:
+        return 0.0
+    precision, recall = hits / len(named), hits / len(wanted)
+    return (1 + BETA**2) * precision * recall / (BETA**2 * precision + recall)
+
+
 def score(judged: Judged | None, truth: list[str | None]) -> float:
     """Zero for an answer outside the schema or not judged (R4.1, R4.3); else the mean of its
-    locations — one when the first names a declaration the fix changed, one half when only a later
-    one does — and its edit, one when it passes (R4.2)."""
+    locations' F-score and its edit, one when the edit passes (R4.2)."""
     if judged is None or not judged.valid:
         return 0.0
-    first, later = judged.symbols[:1], judged.symbols[1:]
-    if first and first[0] in truth:
-        located = 1.0
-    elif any(symbol in truth for symbol in later):
-        located = 0.5
-    else:
-        located = 0.0
-    return (located + (1.0 if judged.edit == PASSES else 0.0)) / 2
+    return (located(judged, truth) + (1.0 if judged.edit == PASSES else 0.0)) / 2
 
 
 class Reward:

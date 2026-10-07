@@ -88,17 +88,20 @@ pub fn outline(path: &Path) -> Result<bool, Failure> {
 const TEST_OUTPUT: usize = 4 * 1024 * 1024;
 
 /// Print what the `guide` tool would make of an answer about `file`, shown to the guide as
-/// `path`: whether it is within the answer schema, its locations' symbols in order, and its edit —
+/// `path`: whether it is within the answer schema, its locations' symbols in order, those the file
+/// does not declare, and its edit —
 /// `none`, `passes`, or the reason the tool's gate withholds it, the failing block run in a
 /// scratch directory with `deadline` seconds (specs/training-pipeline/ R4.2).
 pub fn judge(file: &Path, answer: &Path, path: &str, failing: Option<&str>, deadline: u64) -> Result<bool, Failure> {
     let text = files::read(file)?;
     let content = files::read(answer)?;
     let Ok((read, _)) = guide::read_answer(&json!({"choices": [{"message": {"content": content}}]})) else {
-        println!("{}", json!({"valid": false, "symbols": [], "edit": "none"}));
+        println!("{}", json!({"valid": false, "symbols": [], "unknown": [], "edit": "none"}));
         return Ok(true);
     };
     let symbols: Vec<_> = read.locations.iter().map(|l| l.symbol.clone()).collect();
+    let declared: Vec<_> = lotml_ide::diff::declared(&text).into_iter().filter_map(|d| d.symbol).collect();
+    let unknown: Vec<_> = symbols.iter().flatten().filter(|s| !declared.contains(s)).cloned().collect();
     let edit = match &read.edit {
         None => "none",
         Some(edit) if edit.path != path => "edit-fails-check",
@@ -109,7 +112,7 @@ pub fn judge(file: &Path, answer: &Path, path: &str, failing: Option<&str>, dead
             guide::withheld(edit, &text, &clean, candidate).unwrap_or("passes")
         }
     };
-    println!("{}", json!({"valid": true, "symbols": symbols, "edit": edit}));
+    println!("{}", json!({"valid": true, "symbols": symbols, "unknown": unknown, "edit": edit}));
     Ok(true)
 }
 

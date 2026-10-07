@@ -110,14 +110,18 @@ with a 20 s deadline. The score (R4.1–R4.3):
 | the answer | locations | edit | reward |
 |---|---|---|---|
 | outside the schema, or the judge failed | — | — | 0 |
-| first location's symbol among the fix's | 1 | | |
-| a later location's symbol among them, not the first | 0.5 | | |
-| no symbol among them | 0 | | |
+| names a declaration the file does not have, or none | 0 | | |
+| otherwise: F-score, beta 3, of the declarations named against the fix's | 0–1 | | |
 | edit passes | | 1 | |
 | no edit, or one that fails check or the test | | 0 | |
 
 and the reward is the mean of the two parts. A copy of the failing body, the pilot's habit, fails
-check and earns no edit credit, while a location that is right still earns half. Judging fans out
+check and earns no edit credit, while a location that is right still earns half. The F-score favours
+recall, as SoRFT's does; naming more declarations than the fix changed lowers precision, so it
+never scores more than naming the right one — the first reward, which paid half for a right
+declaration listed after a wrong one, was the shape SoRFT saw gamed
+(adr:0020-the-guide-trains-by-fine-tuning-then-rejection-sampling-and-rl-on-what-it-sometimes-solves).
+`dev judge` says which named symbols the file does not declare. Judging fans out
 over a thread pool as wide as the pod's cores, since each answer is a separate `lotml` process.
 
 ## Reports (R5)
