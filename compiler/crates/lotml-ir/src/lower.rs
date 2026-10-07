@@ -735,6 +735,15 @@ fn rt_args(op: Builtin, args: Vec<Arg>, at: bool) -> Expr {
 }
 
 /// The type of what iterating a value of `ty` gives.
+/// Whether the checker left `ty` to infer: a type, or the element of a list, it did not settle.
+fn unknown(ty: &Ty) -> bool {
+    match ty {
+        Ty::Var(_) | Ty::Error => true,
+        Ty::List(t) => matches!(**t, Ty::Var(_) | Ty::Error),
+        _ => false,
+    }
+}
+
 fn element(ty: &Ty) -> Ty {
     match ty {
         Ty::List(t) | Ty::Set(t) | Ty::Heap(t) => (**t).clone(),
@@ -805,14 +814,28 @@ impl<'c, 'a> Builder<'c, 'a> {
 
     fn ty(&self, e: &ast::Expr) -> Ty {
         let ty = self.subst.apply(self.cx.checked.types.get(&e.span).cloned().unwrap_or(Ty::Error));
-        if matches!(ty, Ty::Var(_) | Ty::Error) { self.left_to_infer(e).unwrap_or(ty) } else { ty }
+        if unknown(&ty) { self.left_to_infer(e).unwrap_or(ty) } else { ty }
     }
 
     /// The type of `e` where the checker left it to infer, as for a name unpacked from a list and
-    /// what is computed from it: a name's local's, an operation's from its operands'.
+    /// what is computed from it: a name's local's, an operation's from its operands', a `map` or a
+    /// `sum` over a prelude function's.
     fn left_to_infer(&self, e: &ast::Expr) -> Option<Ty> {
         let ty = match &e.kind {
             ExprKind::Name(_) => self.function.locals[self.local_of(e.span)?].ty.clone(),
+            ExprKind::Call { func, args } => {
+                let ExprKind::Name(name) = &func.kind else { return None };
+                if self.local_of(func.span).is_some() {
+                    return None;
+                }
+                match (name.as_str(), args.as_slice()) {
+                    ("map", [AstArg::Positional(f), AstArg::Positional(xs)]) => {
+                        Ty::list(self.key_type(f, &element(&self.ty(xs))))
+                    }
+                    ("sum", [AstArg::Positional(xs)]) => element(&self.ty(xs)),
+                    _ => return None,
+                }
+            }
             ExprKind::Binary { op, left, right } => {
                 let (l, r) = (self.ty(left), self.ty(right));
                 match (op, &l, &r) {
@@ -825,7 +848,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             ExprKind::Compare { .. } | ExprKind::Not(_) => Ty::Bool,
             _ => return None,
         };
-        (!matches!(ty, Ty::Var(_) | Ty::Error)).then_some(ty)
+        (!unknown(&ty)).then_some(ty)
     }
 
     fn local_ty(&self, operand: &Operand) -> Ty {

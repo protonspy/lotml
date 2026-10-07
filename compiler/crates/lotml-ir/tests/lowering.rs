@@ -139,3 +139,21 @@ fn nested_blocks_print_indented_under_the_statement_that_holds_them() {
     assert!(text.contains("\n    return 1_i64 @3:9\n"), "{text}");
     assert!(text.contains("\n  return 0_i64 @4:5\n"), "{text}");
 }
+
+#[test]
+fn a_map_or_sum_over_a_prelude_function_has_the_type_of_what_it_returns() {
+    let lowered = lowered(
+        "fn digits(n: int) -> int:\n    return sum(map(int, str(n)))\n\n\
+         fn total(rows: [[int]]) -> int:\n    res = sum(map(sum, rows))\n    return res\n\n\
+         fn main():\n    print(digits(123), total([[1, 2], [3]]))\n",
+    );
+    for name in ["digits", "total"] {
+        let f = function(&lowered, name);
+        let unknown: Vec<_> = f
+            .locals
+            .iter()
+            .filter(|l| matches!(l.ty, Ty::Var(_) | Ty::Error) || l.ty.to_string().contains("unknown"))
+            .collect();
+        assert!(unknown.is_empty(), "{name}: {unknown:?}\n{}", lowered.function_text(f));
+    }
+}
