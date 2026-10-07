@@ -6,7 +6,9 @@
 
 use lotml_syntax::span::Span;
 
-use crate::ir::{Arg, Block, Expr, Function, Local, LocalInfo, Operand, Place, Proj, Stmt, StmtKind, counted, outs};
+use crate::ir::{
+    Arg, Block, Builtin, Expr, Function, Local, LocalInfo, Operand, Place, Proj, Stmt, StmtKind, counted, outs,
+};
 
 /// A set of locals, as bits.
 #[derive(Clone, PartialEq, Eq)]
@@ -331,9 +333,11 @@ impl Pass {
                 self.place_uses(&place, &mut uses);
                 self.simple(span, uses, live_out, None, StmtKind::Store(place, v), out);
             }
-            StmtKind::Mutate { name, place, args, at: here, result } => {
-                let stores =
-                    matches!(name, "lt_list_push" | "lt_list_insert" | "lt_dict_set" | "lt_set_add" | "lt_heap_push");
+            StmtKind::Mutate { op, place, args, at: here, result } => {
+                let stores = matches!(
+                    op,
+                    Builtin::ListPush | Builtin::ListInsert | Builtin::DictSet | Builtin::SetAdd | Builtin::HeapPush
+                );
                 let mut uses = Uses::default();
                 for a in &args {
                     match a {
@@ -345,7 +349,7 @@ impl Pass {
                 }
                 self.place_uses(&place, &mut uses);
                 let set: Vec<Local> = outs(&args).collect();
-                let kind = StmtKind::Mutate { name, place, args, at: here, result };
+                let kind = StmtKind::Mutate { op, place, args, at: here, result };
                 self.simple(span, uses, live_out, None, kind, out);
                 self.drop_unused(span, &set, live_out, out);
             }

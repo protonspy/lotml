@@ -360,6 +360,9 @@ dependencies = [
 [[package]]
 name = "lotml-runtime"
 version = "0.1.0"
+dependencies = [
+ "lotml-ir",
+]
 
 [[package]]
 name = "lotml-syntax"

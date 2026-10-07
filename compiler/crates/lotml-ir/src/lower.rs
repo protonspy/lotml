@@ -12,8 +12,8 @@ use lotml_syntax::ast::{
 use lotml_syntax::span::Span;
 
 use crate::ir::{
-    Arg, BinOp, Block, CmpOp, Const, Expr, FormatPart, Function, Local, LocalInfo, Operand, Panic, Place, Proj, Stmt,
-    StmtKind, UnOp, counted,
+    Arg, BinOp, Block, Builtin, CmpOp, Const, Expr, FormatPart, Function, Local, LocalInfo, Operand, Panic, Place,
+    Proj, Stmt, StmtKind, UnOp, counted,
 };
 
 /// The program as functions of the IR.
@@ -717,12 +717,12 @@ fn flag(b: bool) -> Operand {
     Operand::Const(Const::Bool(b))
 }
 
-fn rt(name: &'static str, args: Vec<Operand>, at: bool) -> Expr {
-    Expr::Rt { name, args: args.into_iter().map(Arg::Value).collect(), at }
+fn rt(op: Builtin, args: Vec<Operand>, at: bool) -> Expr {
+    Expr::Rt { op, args: args.into_iter().map(Arg::Value).collect(), at }
 }
 
-fn rt_args(name: &'static str, args: Vec<Arg>, at: bool) -> Expr {
-    Expr::Rt { name, args, at }
+fn rt_args(op: Builtin, args: Vec<Arg>, at: bool) -> Expr {
+    Expr::Rt { op, args, at }
 }
 
 /// The type of what iterating a value of `ty` gives.
@@ -948,7 +948,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                     md,
                     m,
                 ];
-                b.push(StmtKind::Do(rt_args("lt_assert_compared", args, true)));
+                b.push(StmtKind::Do(rt_args(Builtin::AssertCompared, args, true)));
             });
             self.push(StmtKind::If(Operand::Local(result), Vec::new(), fail));
             return;
@@ -959,7 +959,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             Some(_) => {
                 let (md, m) = b.assert_message(message);
                 let args = vec![Arg::Value(text), null(), null(), null(), null(), null(), md, m];
-                b.push(StmtKind::Do(rt_args("lt_assert_compared", args, true)));
+                b.push(StmtKind::Do(rt_args(Builtin::AssertCompared, args, true)));
             }
         });
         self.push(StmtKind::If(ok, Vec::new(), fail));
@@ -1013,7 +1013,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let k = self.coerce(k, &key_ty);
                 let value = self.coerce(value, &value_ty);
                 self.push(StmtKind::Mutate {
-                    name: "lt_dict_set",
+                    op: Builtin::DictSet,
                     place,
                     args: vec![Arg::Address(k, *key_ty), Arg::Address(value, *value_ty)],
                     at: false,
@@ -1223,7 +1223,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             // In a `test` block, which returns nothing: the test ends with this error.
             let error = self.local_ty(&value);
             let args = vec![Arg::Desc(error.clone()), Arg::Address(value, error)];
-            self.push(StmtKind::Do(rt_args("lt_test_error", args, true)));
+            self.push(StmtKind::Do(rt_args(Builtin::TestError, args, true)));
             return;
         };
         let value = self.coerce(value, error);
@@ -1543,7 +1543,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 .collect(),
             Ty::List(elem) => {
                 let elem = (**elem).clone();
-                self.push(StmtKind::Do(rt("lt_list_unpack", vec![value.clone(), int(n as i128)], true)));
+                self.push(StmtKind::Do(rt(Builtin::ListUnpack, vec![value.clone(), int(n as i128)], true)));
                 (0..n)
                     .map(|i| {
                         let get = Expr::ListGet {
@@ -1689,7 +1689,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                     (b.hold(elem.clone(), get), elem.clone())
                 })
                 .collect();
-            let name = if reverse { "lt_wrapping_sub" } else { "lt_wrapping_add" };
+            let name = if reverse { Builtin::WrappingSub } else { Builtin::WrappingAdd };
             b.push(StmtKind::Let(k, rt(name, vec![Operand::Local(k), int(1)], false)));
             if let [(element, ty)] = elements.as_slice() {
                 body(b, element.clone(), ty.clone());
@@ -1733,9 +1733,9 @@ impl<'c, 'a> Builder<'c, 'a> {
                     .collect();
                 self.hold(Ty::list(elem.clone()), Expr::ListNew { elem, items: parts })
             }
-            Ty::Str => self.hold(Ty::list(Ty::Str), rt("lt_str_chars", vec![v], false)),
-            Ty::Dict(k, _) => self.hold(Ty::list((**k).clone()), rt("lt_dict_keys", vec![v], false)),
-            Ty::Set(t) => self.hold(Ty::list((**t).clone()), rt("lt_set_list", vec![v], false)),
+            Ty::Str => self.hold(Ty::list(Ty::Str), rt(Builtin::StrChars, vec![v], false)),
+            Ty::Dict(k, _) => self.hold(Ty::list((**k).clone()), rt(Builtin::DictKeys, vec![v], false)),
+            Ty::Set(t) => self.hold(Ty::list((**t).clone()), rt(Builtin::SetList, vec![v], false)),
             _ => v,
         }
     }
@@ -1749,7 +1749,7 @@ impl<'c, 'a> Builder<'c, 'a> {
 
     fn push_element(&mut self, list: Local, value: Operand, elem: &Ty) {
         self.push(StmtKind::Mutate {
-            name: "lt_list_push",
+            op: Builtin::ListPush,
             place: Place { local: list, proj: Vec::new() },
             args: vec![Arg::Address(value, elem.clone())],
             at: false,
@@ -1759,14 +1759,14 @@ impl<'c, 'a> Builder<'c, 'a> {
 
     /// An optional `ty` from a runtime call that returns whether it found a value and sets it in
     /// an output: `args` and then the output.
-    fn optional_from(&mut self, ty: &Ty, name: &'static str, mut args: Vec<Arg>, at: bool) -> Value {
+    fn optional_from(&mut self, ty: &Ty, op: Builtin, mut args: Vec<Arg>, at: bool) -> Value {
         let inner = match ty {
             Ty::Optional(t) => (**t).clone(),
             other => other.clone(),
         };
         let found = self.temp(inner.clone());
         args.push(Arg::Out(found, inner));
-        let ok = self.hold(Ty::Bool, Expr::Rt { name, args, at });
+        let ok = self.hold(Ty::Bool, Expr::Rt { op, args, at });
         Value::Expr(Expr::OptIf { ty: ty.clone(), cond: ok, value: Operand::Local(found) })
     }
 
@@ -2004,7 +2004,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                     let vv = b.value(value);
                     let vv = b.coerce(vv, &v);
                     b.push(StmtKind::Mutate {
-                        name: "lt_dict_set",
+                        op: Builtin::DictSet,
                         place: Place { local: d, proj: Vec::new() },
                         args: vec![Arg::Address(kv, k.clone()), Arg::Address(vv, v.clone())],
                         at: false,
@@ -2022,7 +2022,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                     let v = b.value(element);
                     let v = b.coerce(v, &t);
                     b.push(StmtKind::Mutate {
-                        name: "lt_set_add",
+                        op: Builtin::SetAdd,
                         place: Place { local: s, proj: Vec::new() },
                         args: vec![Arg::Address(v, t.clone())],
                         at: false,
@@ -2098,7 +2098,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                     Ty::Str => {
                         let o = self.value(object);
                         let i = self.value(index);
-                        Value::Expr(rt("lt_str_index", vec![o, i], true))
+                        Value::Expr(rt(Builtin::StrIndex, vec![o, i], true))
                     }
                     Ty::List(elem) => {
                         let elem = (**elem).clone();
@@ -2112,7 +2112,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                         let i = self.value(index);
                         let i = self.coerce(i, &k);
                         Value::Expr(Expr::RtValue {
-                            name: "lt_dict_get",
+                            op: Builtin::DictGet,
                             args: vec![Arg::Value(o), Arg::Address(i, k)],
                             at: true,
                             ty: v,
@@ -2139,8 +2139,8 @@ impl<'c, 'a> Builder<'c, 'a> {
                     }
                 }
                 match ty {
-                    Ty::Str => Value::Expr(rt("lt_str_slice", args, true)),
-                    Ty::List(_) => Value::Expr(rt("lt_list_slice", args, true)),
+                    Ty::Str => Value::Expr(rt(Builtin::StrSlice, args, true)),
+                    Ty::List(_) => Value::Expr(rt(Builtin::ListSlice, args, true)),
                     _ => Value::Done(self.unsupported(e.span, "slicing this value")),
                 }
             }
@@ -2152,15 +2152,15 @@ impl<'c, 'a> Builder<'c, 'a> {
     /// and repeated.
     fn binary(&mut self, op: ast::BinOp, a: Operand, b: Operand, left: &Ty, right: &Ty) -> Expr {
         match (op, left, right) {
-            (ast::BinOp::Add, Ty::Str, _) => rt("lt_str_concat", vec![a, b], false),
-            (ast::BinOp::Mul, Ty::Str, _) => rt("lt_str_repeat", vec![a, b], true),
-            (ast::BinOp::Mul, _, Ty::Str) => rt("lt_str_repeat", vec![b, a], true),
-            (ast::BinOp::Add, Ty::List(_), _) => rt("lt_list_concat", vec![a, b], false),
-            (ast::BinOp::BitOr, Ty::Set(_), _) => rt("lt_set_union", vec![a, b], false),
-            (ast::BinOp::BitAnd, Ty::Set(_), _) => rt("lt_set_intersection", vec![a, b], false),
-            (ast::BinOp::Sub, Ty::Set(_), _) => rt("lt_set_difference", vec![a, b], false),
-            (ast::BinOp::Mul, Ty::List(_), _) => rt("lt_list_repeat", vec![a, b], true),
-            (ast::BinOp::Mul, _, Ty::List(_)) => rt("lt_list_repeat", vec![b, a], true),
+            (ast::BinOp::Add, Ty::Str, _) => rt(Builtin::StrConcat, vec![a, b], false),
+            (ast::BinOp::Mul, Ty::Str, _) => rt(Builtin::StrRepeat, vec![a, b], true),
+            (ast::BinOp::Mul, _, Ty::Str) => rt(Builtin::StrRepeat, vec![b, a], true),
+            (ast::BinOp::Add, Ty::List(_), _) => rt(Builtin::ListConcat, vec![a, b], false),
+            (ast::BinOp::BitOr, Ty::Set(_), _) => rt(Builtin::SetUnion, vec![a, b], false),
+            (ast::BinOp::BitAnd, Ty::Set(_), _) => rt(Builtin::SetIntersection, vec![a, b], false),
+            (ast::BinOp::Sub, Ty::Set(_), _) => rt(Builtin::SetDifference, vec![a, b], false),
+            (ast::BinOp::Mul, Ty::List(_), _) => rt(Builtin::ListRepeat, vec![a, b], true),
+            (ast::BinOp::Mul, _, Ty::List(_)) => rt(Builtin::ListRepeat, vec![b, a], true),
             _ => Expr::Binary(binop(op), a, b, left.clone()),
         }
     }
@@ -2441,7 +2441,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let elem = result_ty;
                 let list = self.materialize(single);
                 Value::Expr(Expr::RtValue {
-                    name: "lt_list_extreme",
+                    op: Builtin::ListExtreme,
                     args: vec![Arg::Value(list), Arg::Value(flag(name == "max"))],
                     at: true,
                     ty: elem,
@@ -2464,7 +2464,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 }
                 let list = self.hold(Ty::list(ty.clone()), Expr::ListNew { elem: ty.clone(), items });
                 Value::Expr(Expr::RtValue {
-                    name: "lt_list_extreme",
+                    op: Builtin::ListExtreme,
                     args: vec![Arg::Value(list), Arg::Value(flag(name == "max"))],
                     at: true,
                     ty,
@@ -2474,9 +2474,9 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let elem = result_ty;
                 let list = self.materialize(x);
                 let total = match &elem {
-                    Ty::Float(_) => rt("lt_sum_f64", vec![list], false),
-                    Ty::Int(IntKind::U64) => rt("lt_sum_u64", vec![list], true),
-                    _ => rt("lt_sum_i64", vec![list], true),
+                    Ty::Float(_) => rt(Builtin::SumF64, vec![list], false),
+                    Ty::Int(IntKind::U64) => rt(Builtin::SumU64, vec![list], true),
+                    _ => rt(Builtin::SumI64, vec![list], true),
                 };
                 match rest.first() {
                     None => Value::Expr(total),
@@ -2509,7 +2509,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                     return Value::Done(Operand::Local(result));
                 }
                 let list = self.materialize(x);
-                Value::Expr(rt(if any { "lt_list_any" } else { "lt_list_all" }, vec![list], false))
+                Value::Expr(rt(if any { Builtin::ListAny } else { Builtin::ListAll }, vec![list], false))
             }
             ("sorted", [x]) => {
                 let reverse = match keyword("reverse") {
@@ -2518,10 +2518,10 @@ impl<'c, 'a> Builder<'c, 'a> {
                 };
                 let list = self.materialize(x);
                 let Some(key) = keyword("key") else {
-                    return Value::Expr(rt("lt_list_sorted", vec![list, reverse], true));
+                    return Value::Expr(rt(Builtin::ListSorted, vec![list, reverse], true));
                 };
                 let ty = self.local_ty(&list);
-                let Operand::Local(copy) = self.hold(ty, rt("lt_list_copy", vec![list], false)) else {
+                let Operand::Local(copy) = self.hold(ty, rt(Builtin::ListCopy, vec![list], false)) else {
                     unreachable!("a held value")
                 };
                 let place = Place { local: copy, proj: Vec::new() };
@@ -2530,7 +2530,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             }
             ("reversed", [x]) => {
                 let list = self.materialize(x);
-                Value::Expr(rt("lt_list_reversed", vec![list], false))
+                Value::Expr(rt(Builtin::ListReversed, vec![list], false))
             }
             ("range", values) => {
                 let values: Vec<Operand> = values.iter().map(|v| self.value(v)).collect();
@@ -2540,21 +2540,21 @@ impl<'c, 'a> Builder<'c, 'a> {
                     [start, stop, step] => (start.clone(), stop.clone(), step.clone()),
                     _ => return Value::Done(self.unsupported(whole.span, "this `range`")),
                 };
-                Value::Expr(rt("lt_range_list", vec![start, stop, step], true))
+                Value::Expr(rt(Builtin::RangeList, vec![start, stop, step], true))
             }
             ("list", []) => Value::Expr(Expr::ListNew { elem: element(&result_ty), items: Vec::new() }),
             ("set", []) => Value::Expr(Expr::SetNew { elem: element(&result_ty), items: Vec::new(), folded: false }),
             ("set", [x]) => {
                 if let Ty::Set(_) = self.ty(x) {
                     let v = self.value(x);
-                    return Value::Expr(rt("lt_set_copy", vec![v], false));
+                    return Value::Expr(rt(Builtin::SetCopy, vec![v], false));
                 }
                 let elem = element(&result_ty);
                 let list = match &x.kind {
                     ExprKind::Call { .. } | ExprKind::Generator { .. } => self.collect(x, &elem),
                     _ => self.materialize(x),
                 };
-                Value::Expr(rt_args("lt_set_from_list", vec![Arg::Desc(elem), Arg::Value(list)], false))
+                Value::Expr(rt_args(Builtin::SetFromList, vec![Arg::Desc(elem), Arg::Value(list)], false))
             }
             ("dict", []) => {
                 let Ty::Dict(k, v) = result_ty else { return Value::Done(self.unsupported(whole.span, "this dict")) };
@@ -2565,7 +2565,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let pair = Ty::Tuple(vec![(*k).clone(), (*v).clone()]);
                 let list = self.materialize(x);
                 Value::Expr(rt_args(
-                    "lt_dict_from_pairs",
+                    Builtin::DictFromPairs,
                     vec![Arg::Desc(*k), Arg::Desc(*v), Arg::Value(list), Arg::Offset(pair)],
                     false,
                 ))
@@ -2585,7 +2585,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                     let ty = self.ty(x);
                     let v = self.value(x);
                     match ty {
-                        Ty::List(_) => Value::Expr(rt("lt_list_copy", vec![v], false)),
+                        Ty::List(_) => Value::Expr(rt(Builtin::ListCopy, vec![v], false)),
                         _ => Value::Done(self.as_list(v, &ty)),
                     }
                 }
@@ -2609,15 +2609,15 @@ impl<'c, 'a> Builder<'c, 'a> {
             }
             ("ord", [x]) => {
                 let v = self.value(x);
-                Value::Expr(rt("lt_str_ord", vec![v], true))
+                Value::Expr(rt(Builtin::StrOrd, vec![v], true))
             }
             ("chr", [x]) => {
                 let v = self.value(x);
-                Value::Expr(rt("lt_str_chr", vec![v], true))
+                Value::Expr(rt(Builtin::StrChr, vec![v], true))
             }
             ("int" | "float", [x]) if self.ty(x) == Ty::Str => {
                 let v = self.value(x);
-                Value::Expr(rt(if name == "int" { "lt_str_int" } else { "lt_str_float" }, vec![v], true))
+                Value::Expr(rt(if name == "int" { Builtin::StrInt } else { Builtin::StrFloat }, vec![v], true))
             }
             ("int" | "float" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32", [x])
                 if self.ty(x).is_numeric() || self.ty(x) == Ty::Bool =>
@@ -2630,7 +2630,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let ty = self.ty(x);
                 let v = self.value(x);
                 match ty {
-                    Ty::Float(_) => Value::Expr(rt("lt_round_i64", vec![v], true)),
+                    Ty::Float(_) => Value::Expr(rt(Builtin::RoundI64, vec![v], true)),
                     // An integer rounds to itself.
                     _ => Value::Expr(Expr::Convert(v, ty, INT)),
                 }
@@ -2638,7 +2638,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             ("round", [x, digits]) => {
                 let x = self.number(x, &F64);
                 let digits = self.number(digits, &INT);
-                Value::Expr(rt("lt_round_f64", vec![x, digits], false))
+                Value::Expr(rt(Builtin::RoundF64, vec![x, digits], false))
             }
             ("bool", [x]) => {
                 let ty = self.ty(x);
@@ -2648,7 +2648,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             ("hash", [x]) => {
                 let ty = self.ty(x);
                 let v = self.value(x);
-                Value::Expr(rt_args("lt_hash_value", vec![Arg::Desc(ty.clone()), Arg::Address(v, ty)], true))
+                Value::Expr(rt_args(Builtin::HashValue, vec![Arg::Desc(ty.clone()), Arg::Address(v, ty)], true))
             }
             ("pow", [a, b]) => {
                 let (left, right) = (self.ty(a), self.ty(b));
@@ -2657,7 +2657,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             }
             ("pow", [a, b, m]) if [a, b, m].iter().all(|e| matches!(self.ty(e), Ty::Int(_))) => {
                 let (a, b, m) = (self.number(a, &INT), self.number(b, &INT), self.number(m, &INT));
-                Value::Expr(rt("lt_pow_mod", vec![a, b, m], true))
+                Value::Expr(rt(Builtin::PowMod, vec![a, b, m], true))
             }
             ("divmod", [a, b]) => {
                 let (left, right) = (self.ty(a), self.ty(b));
@@ -2671,16 +2671,16 @@ impl<'c, 'a> Builder<'c, 'a> {
             ("wrapping_add" | "wrapping_sub" | "wrapping_mul" | "gcd", [a, b]) => {
                 let (a, b) = (self.number(a, &INT), self.number(b, &INT));
                 let (function, at) = match name.as_str() {
-                    "wrapping_add" => ("lt_wrapping_add", false),
-                    "wrapping_sub" => ("lt_wrapping_sub", false),
-                    "wrapping_mul" => ("lt_wrapping_mul", false),
-                    _ => ("lt_gcd", true),
+                    "wrapping_add" => (Builtin::WrappingAdd, false),
+                    "wrapping_sub" => (Builtin::WrappingSub, false),
+                    "wrapping_mul" => (Builtin::WrappingMul, false),
+                    _ => (Builtin::Gcd, true),
                 };
                 Value::Expr(rt(function, vec![a, b], at))
             }
             ("isqrt", [x]) => {
                 let x = self.number(x, &INT);
-                Value::Expr(rt("lt_isqrt", vec![x], true))
+                Value::Expr(rt(Builtin::Isqrt, vec![x], true))
             }
             ("parallel", [tasks]) => {
                 let tasks = self.value(tasks);
@@ -2692,7 +2692,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let heap = self.temp(result_ty);
                 self.push(StmtKind::Let(heap, Expr::Use(list)));
                 self.push(StmtKind::Mutate {
-                    name: "lt_heapify",
+                    op: Builtin::Heapify,
                     place: Place { local: heap, proj: Vec::new() },
                     args: Vec::new(),
                     at: true,
@@ -2774,27 +2774,27 @@ impl<'c, 'a> Builder<'c, 'a> {
             ("floor" | "ceil" | "trunc", 1) if !matches!(self.ty(exprs[0]), Ty::Float(_)) => {
                 return Value::Done(self.number(exprs[0], &INT));
             }
-            ("sqrt", 1) => "lt_math_sqrt",
-            ("exp", 1) => "lt_math_exp",
-            ("sin", 1) => "lt_math_sin",
-            ("cos", 1) => "lt_math_cos",
-            ("tan", 1) => "lt_math_tan",
-            ("atan", 1) => "lt_math_atan",
-            ("fabs", 1) => "lt_math_fabs",
-            ("log", 1) => "lt_math_ln",
-            ("log2", 1) => "lt_math_log2",
-            ("log10", 1) => "lt_math_log10",
-            ("floor", 1) => "lt_math_floor",
-            ("ceil", 1) => "lt_math_ceil",
-            ("trunc", 1) => "lt_math_trunc",
-            ("pow", 2) => "lt_math_pow",
-            ("atan2", 2) => "lt_math_atan2",
-            ("hypot", 2) => "lt_math_hypot",
-            ("gcd", 2) => "lt_gcd",
-            ("isqrt", 1) => "lt_isqrt",
-            ("factorial", 1) => "lt_factorial",
-            ("comb", 2) => "lt_comb",
-            ("perm", 2) => "lt_perm",
+            ("sqrt", 1) => Builtin::MathSqrt,
+            ("exp", 1) => Builtin::MathExp,
+            ("sin", 1) => Builtin::MathSin,
+            ("cos", 1) => Builtin::MathCos,
+            ("tan", 1) => Builtin::MathTan,
+            ("atan", 1) => Builtin::MathAtan,
+            ("fabs", 1) => Builtin::MathFabs,
+            ("log", 1) => Builtin::MathLn,
+            ("log2", 1) => Builtin::MathLog2,
+            ("log10", 1) => Builtin::MathLog10,
+            ("floor", 1) => Builtin::MathFloor,
+            ("ceil", 1) => Builtin::MathCeil,
+            ("trunc", 1) => Builtin::MathTrunc,
+            ("pow", 2) => Builtin::MathPow,
+            ("atan2", 2) => Builtin::MathAtan2,
+            ("hypot", 2) => Builtin::MathHypot,
+            ("gcd", 2) => Builtin::Gcd,
+            ("isqrt", 1) => Builtin::Isqrt,
+            ("factorial", 1) => Builtin::Factorial,
+            ("comb", 2) => Builtin::Comb,
+            ("perm", 2) => Builtin::Perm,
             _ => return Value::Done(self.unsupported(whole.span, &format!("`math.{name}` here"))),
         };
         let integral = matches!(name, "gcd" | "isqrt" | "factorial" | "comb" | "perm");
@@ -2810,7 +2810,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let v = self.value(x);
                 let v = self.coerce(v, elem);
                 self.push(StmtKind::Mutate {
-                    name: "lt_heap_push",
+                    op: Builtin::HeapPush,
                     place,
                     args: vec![Arg::Address(v, elem.clone())],
                     at: true,
@@ -2824,7 +2824,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let found = self.temp(elem.clone());
                 let ok = self.temp(Ty::Bool);
                 self.push(StmtKind::Mutate {
-                    name: "lt_heap_pop",
+                    op: Builtin::HeapPop,
                     place,
                     args: vec![Arg::Out(found, elem.clone())],
                     at: true,
@@ -2835,7 +2835,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             ("peek", []) => {
                 let heap = self.value(object);
                 let ty = self.ty(whole);
-                self.optional_from(&ty, "lt_heap_peek", vec![Arg::Value(heap)], false)
+                self.optional_from(&ty, Builtin::HeapPeek, vec![Arg::Value(heap)], false)
             }
             _ => Value::Done(self.unsupported(whole.span, &format!("the method `{name}` of a heap"))),
         }
@@ -2937,9 +2937,9 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let (expr, ty) = match name.as_str() {
                     "len" => (Expr::Len(a, t), INT),
                     "str" => (Expr::ToStr(a, t), Ty::Str),
-                    "int" if t == Ty::Str => (rt("lt_str_int", vec![a], true), INT),
+                    "int" if t == Ty::Str => (rt(Builtin::StrInt, vec![a], true), INT),
                     "float" if t == Ty::Str => {
-                        (rt("lt_str_float", vec![a], true), Ty::Float(lotml_check::ty::FloatKind::F64))
+                        (rt(Builtin::StrFloat, vec![a], true), Ty::Float(lotml_check::ty::FloatKind::F64))
                     }
                     "int" => (Expr::Convert(a, t, INT), INT),
                     "float" => (
@@ -2951,19 +2951,19 @@ impl<'c, 'a> Builder<'c, 'a> {
                         let elem = element(&t);
                         let list = self.as_list(a, &t);
                         let total = match &elem {
-                            Ty::Float(_) => rt("lt_sum_f64", vec![list], false),
-                            Ty::Int(IntKind::U64) => rt("lt_sum_u64", vec![list], true),
-                            _ => rt("lt_sum_i64", vec![list], true),
+                            Ty::Float(_) => rt(Builtin::SumF64, vec![list], false),
+                            Ty::Int(IntKind::U64) => rt(Builtin::SumU64, vec![list], true),
+                            _ => rt(Builtin::SumI64, vec![list], true),
                         };
                         (total, elem)
                     }
                     "sorted" => {
                         let elem = element(&t);
                         let list = self.as_list(a, &t);
-                        (rt("lt_list_sorted", vec![list, flag(false)], true), Ty::list(elem))
+                        (rt(Builtin::ListSorted, vec![list, flag(false)], true), Ty::list(elem))
                     }
-                    "ord" => (rt("lt_str_ord", vec![a], true), INT),
-                    "chr" => (rt("lt_str_chr", vec![a], true), Ty::Str),
+                    "ord" => (rt(Builtin::StrOrd, vec![a], true), INT),
+                    "chr" => (rt(Builtin::StrChr, vec![a], true), Ty::Str),
                     _ => return (self.unsupported(func.span, &format!("`{name}` as a value here")), Ty::Error),
                 };
                 (self.hold(ty.clone(), expr), ty)
@@ -2995,7 +2995,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             b.push_element(keys, k, &target);
         });
         self.push(StmtKind::Mutate {
-            name: "lt_list_sort_by_keys",
+            op: Builtin::ListSortByKeys,
             place,
             args: vec![Arg::Value(Operand::Local(keys)), Arg::Value(reverse)],
             at: true,
@@ -3157,7 +3157,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let found = self.temp(v.clone());
                 let ok = self.temp(Ty::Bool);
                 self.push(StmtKind::Mutate {
-                    name: "lt_dict_pop",
+                    op: Builtin::DictPop,
                     place,
                     args: vec![Arg::Address(key, k.clone()), Arg::Out(found, v.clone())],
                     at: false,
@@ -3180,7 +3180,13 @@ impl<'c, 'a> Builder<'c, 'a> {
             }
             ("clear", []) => {
                 let place = self.place_or_hold(object);
-                self.push(StmtKind::Mutate { name: "lt_dict_clear", place, args: Vec::new(), at: false, result: None });
+                self.push(StmtKind::Mutate {
+                    op: Builtin::DictClear,
+                    place,
+                    args: Vec::new(),
+                    at: false,
+                    result: None,
+                });
                 Value::Done(Operand::Const(Const::Unit))
             }
             _ => {
@@ -3194,7 +3200,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                         let key = self.coerce(key.clone(), k);
                         self.optional_from(
                             &ty,
-                            "lt_dict_get_optional",
+                            Builtin::DictGetOptional,
                             vec![Arg::Value(d), Arg::Address(key, k.clone())],
                             false,
                         )
@@ -3203,18 +3209,18 @@ impl<'c, 'a> Builder<'c, 'a> {
                         let key = self.coerce(key.clone(), k);
                         let default = self.coerce(default.clone(), v);
                         Value::Expr(Expr::RtValue {
-                            name: "lt_dict_get_or",
+                            op: Builtin::DictGetOr,
                             args: vec![Arg::Value(d), Arg::Address(key, k.clone()), Arg::Address(default, v.clone())],
                             at: false,
                             ty: v.clone(),
                         })
                     }
-                    ("keys", []) => Value::Expr(rt("lt_dict_keys", vec![d], false)),
-                    ("values", []) => Value::Expr(rt("lt_dict_values", vec![d], false)),
+                    ("keys", []) => Value::Expr(rt(Builtin::DictKeys, vec![d], false)),
+                    ("values", []) => Value::Expr(rt(Builtin::DictValues, vec![d], false)),
                     ("items", []) => {
                         let pair = Ty::Tuple(vec![k.clone(), v.clone()]);
                         Value::Expr(rt_args(
-                            "lt_dict_items",
+                            Builtin::DictItems,
                             vec![Arg::Value(d), Arg::Desc(pair.clone()), Arg::Offset(pair)],
                             false,
                         ))
@@ -3222,12 +3228,12 @@ impl<'c, 'a> Builder<'c, 'a> {
                     ("contains", [key]) => {
                         let key = self.coerce(key.clone(), k);
                         Value::Expr(rt_args(
-                            "lt_dict_contains",
+                            Builtin::DictContains,
                             vec![Arg::Value(d), Arg::Address(key, k.clone())],
                             false,
                         ))
                     }
-                    ("copy", []) => Value::Expr(rt("lt_dict_copy", vec![d], false)),
+                    ("copy", []) => Value::Expr(rt(Builtin::DictCopy, vec![d], false)),
                     _ => Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
                 }
             }
@@ -3250,22 +3256,22 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let v = self.value(e);
                 values.push(self.coerce(v, t));
             }
-            let mutate = |name: &'static str, args: Vec<Arg>, at: bool| StmtKind::Mutate {
-                name,
+            let mutate = |op: Builtin, args: Vec<Arg>, at: bool| StmtKind::Mutate {
+                op,
                 place: place.clone(),
                 args,
                 at,
                 result: None,
             };
             let stmt = match (name, values.as_slice()) {
-                ("add", [x]) => mutate("lt_set_add", vec![Arg::Address(x.clone(), t.clone())], false),
-                ("remove", [x]) => mutate("lt_set_remove", vec![Arg::Address(x.clone(), t.clone())], true),
-                ("discard", [x]) => mutate("lt_set_discard", vec![Arg::Address(x.clone(), t.clone())], false),
+                ("add", [x]) => mutate(Builtin::SetAdd, vec![Arg::Address(x.clone(), t.clone())], false),
+                ("remove", [x]) => mutate(Builtin::SetRemove, vec![Arg::Address(x.clone(), t.clone())], true),
+                ("discard", [x]) => mutate(Builtin::SetDiscard, vec![Arg::Address(x.clone(), t.clone())], false),
                 ("pop", []) => {
                     let found = self.temp(t.clone());
                     let ok = self.temp(Ty::Bool);
                     self.push(StmtKind::Mutate {
-                        name: "lt_set_pop",
+                        op: Builtin::SetPop,
                         place: place.clone(),
                         args: vec![Arg::Out(found, t.clone())],
                         at: false,
@@ -3286,14 +3292,14 @@ impl<'c, 'a> Builder<'c, 'a> {
         match (name, values.as_slice()) {
             ("contains", [x]) => {
                 let x = self.coerce(x.clone(), t);
-                Value::Expr(rt_args("lt_set_contains", vec![Arg::Value(s), Arg::Address(x, t.clone())], false))
+                Value::Expr(rt_args(Builtin::SetContains, vec![Arg::Value(s), Arg::Address(x, t.clone())], false))
             }
-            ("issubset", [other]) => Value::Expr(rt("lt_set_issubset", vec![s, other.clone()], false)),
-            ("issuperset", [other]) => Value::Expr(rt("lt_set_issubset", vec![other.clone(), s], false)),
-            ("union", [other]) => Value::Expr(rt("lt_set_union", vec![s, other.clone()], false)),
-            ("intersection", [other]) => Value::Expr(rt("lt_set_intersection", vec![s, other.clone()], false)),
-            ("difference", [other]) => Value::Expr(rt("lt_set_difference", vec![s, other.clone()], false)),
-            ("copy", []) => Value::Expr(rt("lt_set_copy", vec![s], false)),
+            ("issubset", [other]) => Value::Expr(rt(Builtin::SetIssubset, vec![s, other.clone()], false)),
+            ("issuperset", [other]) => Value::Expr(rt(Builtin::SetIssubset, vec![other.clone(), s], false)),
+            ("union", [other]) => Value::Expr(rt(Builtin::SetUnion, vec![s, other.clone()], false)),
+            ("intersection", [other]) => Value::Expr(rt(Builtin::SetIntersection, vec![s, other.clone()], false)),
+            ("difference", [other]) => Value::Expr(rt(Builtin::SetDifference, vec![s, other.clone()], false)),
+            ("copy", []) => Value::Expr(rt(Builtin::SetCopy, vec![s], false)),
             _ => Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
         }
     }
@@ -3327,7 +3333,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 Some(e) => self.value(e),
                 None => int(-1),
             };
-            return Value::Expr(rt("lt_str_split", vec![receiver, sep, maxsplit], true));
+            return Value::Expr(rt(Builtin::StrSplit, vec![receiver, sep, maxsplit], true));
         }
         if !keywords.is_empty() {
             return Value::Done(self.unsupported(whole.span, &format!("keyword arguments of `{name}`")));
@@ -3346,17 +3352,17 @@ impl<'c, 'a> Builder<'c, 'a> {
                 [],
             ) => {
                 let rt_name = match name {
-                    "lower" => "lt_str_lower",
-                    "upper" => "lt_str_upper",
-                    "swapcase" => "lt_str_swapcase",
-                    "title" => "lt_str_title",
-                    "capitalize" => "lt_str_capitalize",
-                    "isalpha" => "lt_str_isalpha",
-                    "isdigit" => "lt_str_isdigit",
-                    "isspace" => "lt_str_isspace",
-                    "isalnum" => "lt_str_isalnum",
-                    "isupper" => "lt_str_isupper",
-                    _ => "lt_str_islower",
+                    "lower" => Builtin::StrLower,
+                    "upper" => Builtin::StrUpper,
+                    "swapcase" => Builtin::StrSwapcase,
+                    "title" => Builtin::StrTitle,
+                    "capitalize" => Builtin::StrCapitalize,
+                    "isalpha" => Builtin::StrIsalpha,
+                    "isdigit" => Builtin::StrIsdigit,
+                    "isspace" => Builtin::StrIsspace,
+                    "isalnum" => Builtin::StrIsalnum,
+                    "isupper" => Builtin::StrIsupper,
+                    _ => Builtin::StrIslower,
                 };
                 rt(rt_name, all, false)
             }
@@ -3364,14 +3370,14 @@ impl<'c, 'a> Builder<'c, 'a> {
                 all.push(rest.first().cloned().unwrap_or(null));
                 all.push(flag(name != "rstrip"));
                 all.push(flag(name != "lstrip"));
-                rt("lt_str_strip", all, false)
+                rt(Builtin::StrStrip, all, false)
             }
             ("startswith" | "endswith" | "count", [x]) => {
                 all.push(x.clone());
                 let rt_name = match name {
-                    "startswith" => "lt_str_startswith",
-                    "endswith" => "lt_str_endswith",
-                    _ => "lt_str_count",
+                    "startswith" => Builtin::StrStartswith,
+                    "endswith" => Builtin::StrEndswith,
+                    _ => Builtin::StrCount,
                 };
                 rt(rt_name, all, false)
             }
@@ -3379,11 +3385,11 @@ impl<'c, 'a> Builder<'c, 'a> {
                 all.push(old.clone());
                 all.push(with.clone());
                 all.push(rest.first().cloned().unwrap_or(int(-1)));
-                rt("lt_str_replace", all, false)
+                rt(Builtin::StrReplace, all, false)
             }
             ("zfill", [width]) => {
                 all.push(width.clone());
-                rt("lt_str_zfill", all, false)
+                rt(Builtin::StrZfill, all, false)
             }
             ("center" | "ljust" | "rjust", [width, rest @ ..]) if rest.len() <= 1 => {
                 all.push(width.clone());
@@ -3394,27 +3400,27 @@ impl<'c, 'a> Builder<'c, 'a> {
                     _ => '>',
                 };
                 all.push(Operand::Const(Const::Char(align)));
-                rt("lt_str_pad", all, true)
+                rt(Builtin::StrPad, all, true)
             }
             ("split", rest) if rest.len() <= 2 => {
                 all.push(rest.first().cloned().unwrap_or(null));
                 all.push(rest.get(1).cloned().unwrap_or(int(-1)));
-                rt("lt_str_split", all, true)
+                rt(Builtin::StrSplit, all, true)
             }
-            ("splitlines", []) => rt("lt_str_splitlines", all, false),
+            ("splitlines", []) => rt(Builtin::StrSplitlines, all, false),
             ("join", [parts]) => {
                 all.push(parts.clone());
-                rt("lt_str_join", all, false)
+                rt(Builtin::StrJoin, all, false)
             }
             ("to_int", []) => {
-                return self.optional_from(&self.ty(whole), "lt_str_to_int", vec![Arg::Value(receiver)], true);
+                return self.optional_from(&self.ty(whole), Builtin::StrToInt, vec![Arg::Value(receiver)], true);
             }
             ("to_float", []) => {
-                return self.optional_from(&self.ty(whole), "lt_str_to_float", vec![Arg::Value(receiver)], false);
+                return self.optional_from(&self.ty(whole), Builtin::StrToFloat, vec![Arg::Value(receiver)], false);
             }
             ("find" | "rfind", [sub]) => {
                 let args = vec![Arg::Value(receiver), Arg::Value(sub.clone()), Arg::Value(flag(name == "rfind"))];
-                return self.optional_from(&self.ty(whole), "lt_str_find", args, false);
+                return self.optional_from(&self.ty(whole), Builtin::StrFind, args, false);
             }
             ("split_once", [sep]) => {
                 let (head, tail) = (self.temp(Ty::Str), self.temp(Ty::Str));
@@ -3424,7 +3430,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                     Arg::Out(head, Ty::Str),
                     Arg::Out(tail, Ty::Str),
                 ];
-                let ok = self.hold(Ty::Bool, Expr::Rt { name: "lt_str_split_once", args, at: true });
+                let ok = self.hold(Ty::Bool, Expr::Rt { op: Builtin::StrSplitOnce, args, at: true });
                 let pair_ty = Ty::Tuple(vec![Ty::Str, Ty::Str]);
                 let pair = self.hold(
                     pair_ty.clone(),
@@ -3437,7 +3443,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 for which in 0..3 {
                     let part = self.hold(
                         Ty::Str,
-                        rt("lt_str_partition_part", vec![receiver.clone(), sep.clone(), int(which)], true),
+                        rt(Builtin::StrPartitionPart, vec![receiver.clone(), sep.clone(), int(which)], true),
                     );
                     parts.push(part);
                 }
@@ -3468,16 +3474,16 @@ impl<'c, 'a> Builder<'c, 'a> {
             }
             return match (name, values.as_slice()) {
                 ("count" | "contains", [x]) => Value::Expr(rt_args(
-                    if name == "count" { "lt_list_count" } else { "lt_list_contains" },
+                    if name == "count" { Builtin::ListCount } else { Builtin::ListContains },
                     vec![Arg::Value(list), Arg::Address(x.clone(), elem.clone())],
                     false,
                 )),
-                ("copy", []) => Value::Expr(rt("lt_list_copy", vec![list], false)),
+                ("copy", []) => Value::Expr(rt(Builtin::ListCopy, vec![list], false)),
                 ("index", [x]) => {
                     let args = vec![Arg::Value(list), Arg::Address(x.clone(), elem.clone())];
-                    self.optional_from(&self.ty(whole), "lt_list_index", args, false)
+                    self.optional_from(&self.ty(whole), Builtin::ListIndex, args, false)
                 }
-                ("last", []) => self.optional_from(&self.ty(whole), "lt_list_last", vec![Arg::Value(list)], false),
+                ("last", []) => self.optional_from(&self.ty(whole), Builtin::ListLast, vec![Arg::Value(list)], false),
                 ("find", []) if positional.len() == 1 => {
                     let ty = self.ty(whole);
                     let result = self.temp(ty.clone());
@@ -3509,21 +3515,21 @@ impl<'c, 'a> Builder<'c, 'a> {
         for e in positional {
             values.push(self.value(e));
         }
-        let mutate = |name: &'static str, args: Vec<Arg>, at: bool| StmtKind::Mutate {
-            name,
+        let mutate = |op: Builtin, args: Vec<Arg>, at: bool| StmtKind::Mutate {
+            op,
             place: place.clone(),
             args,
             at,
             result: None,
         };
         let stmt = match (name, values.as_slice()) {
-            ("append", [x]) => mutate("lt_list_push", vec![Arg::Address(x.clone(), elem.clone())], false),
-            ("extend", [other]) => mutate("lt_list_extend", vec![Arg::Value(other.clone())], false),
+            ("append", [x]) => mutate(Builtin::ListPush, vec![Arg::Address(x.clone(), elem.clone())], false),
+            ("extend", [other]) => mutate(Builtin::ListExtend, vec![Arg::Value(other.clone())], false),
             ("insert", [i, x]) => {
-                mutate("lt_list_insert", vec![Arg::Value(i.clone()), Arg::Address(x.clone(), elem.clone())], false)
+                mutate(Builtin::ListInsert, vec![Arg::Value(i.clone()), Arg::Address(x.clone(), elem.clone())], false)
             }
-            ("remove", [x]) => mutate("lt_list_remove", vec![Arg::Address(x.clone(), elem.clone())], true),
-            ("clear", []) => mutate("lt_list_clear", Vec::new(), false),
+            ("remove", [x]) => mutate(Builtin::ListRemove, vec![Arg::Address(x.clone(), elem.clone())], true),
+            ("clear", []) => mutate(Builtin::ListClear, Vec::new(), false),
             ("pop", rest @ ([] | [_])) => {
                 let ty = self.ty(whole);
                 let found = self.temp(elem.clone());
@@ -3533,7 +3539,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                     None => (flag(false), int(0)),
                 };
                 self.push(StmtKind::Mutate {
-                    name: "lt_list_pop",
+                    op: Builtin::ListPop,
                     place: place.clone(),
                     args: vec![Arg::Value(has), Arg::Value(index), Arg::Out(found, elem.clone())],
                     at: true,
@@ -3541,7 +3547,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 });
                 return Value::Expr(Expr::OptIf { ty, cond: Operand::Local(ok), value: Operand::Local(found) });
             }
-            ("reverse", []) => mutate("lt_list_reverse", Vec::new(), false),
+            ("reverse", []) => mutate(Builtin::ListReverse, Vec::new(), false),
             ("sort", []) => {
                 let reverse = match keywords.iter().find(|(k, _)| *k == "reverse") {
                     Some((_, r)) => self.value(r),
@@ -3551,7 +3557,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                     self.sort_by_key(place.clone(), key, reverse);
                     return Value::Done(Operand::Const(Const::Unit));
                 }
-                mutate("lt_list_sort", vec![Arg::Value(reverse)], true)
+                mutate(Builtin::ListSort, vec![Arg::Value(reverse)], true)
             }
             _ => return Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
         };

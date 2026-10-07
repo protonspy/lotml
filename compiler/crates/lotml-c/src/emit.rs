@@ -548,7 +548,8 @@ impl Writer<'_> {
                         self.line(&text);
                     }
                 }
-                StmtKind::Mutate { name, place, args, at, result } => {
+                StmtKind::Mutate { op, place, args, at, result } => {
+                    let name = lotml_runtime::function(*op);
                     let slot = self.slot_of_container(place);
                     let mut all = vec![slot];
                     all.extend(args.iter().map(|a| self.arg(a)));
@@ -825,14 +826,16 @@ impl Writer<'_> {
                     .collect();
                 format!("{name}({})", args.join(", "))
             }
-            Expr::Rt { name, args, at } => {
+            Expr::Rt { op, args, at } => {
+                let name = lotml_runtime::function(*op);
                 let mut args: Vec<String> = args.iter().map(|a| self.arg(a)).collect();
                 if *at {
                     args.push("LT_HERE".to_string());
                 }
                 format!("{name}({})", args.join(", "))
             }
-            Expr::RtValue { name, args, at, ty } => {
+            Expr::RtValue { op, args, at, ty } => {
+                let name = lotml_runtime::function(*op);
                 let mut args: Vec<String> = args.iter().map(|a| self.arg(a)).collect();
                 if *at {
                     args.push("LT_HERE".to_string());
