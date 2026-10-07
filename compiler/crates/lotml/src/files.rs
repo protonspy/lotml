@@ -1,12 +1,33 @@
 //! Finding the files a command works on, and reading them as they were at a git revision.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::Failure;
 
-/// The `.lotml` files named, or found under the directories named, in a stable order.
+/// The source files named, or found under the directories named, in a stable order — refused
+/// when one name is there under both extensions, since `build` would write the two to one module.
 pub fn expand(paths: &[PathBuf]) -> Result<Vec<PathBuf>, Failure> {
+    let found = sources(paths)?;
+    let mut seen: HashMap<PathBuf, &PathBuf> = HashMap::new();
+    for path in found.iter().filter(|p| is_source(p)) {
+        if let Some(first) = seen.insert(path.with_extension(""), path)
+            && first != path
+        {
+            return Err(Failure(format!(
+                "{} and {} are one module under two extensions: keep one",
+                first.display(),
+                path.display()
+            )));
+        }
+    }
+    Ok(found)
+}
+
+/// [`expand`] without refusing a name found under both extensions: the servers, which serve each
+/// file on its own and must not lose the whole project to one such pair.
+pub fn sources(paths: &[PathBuf]) -> Result<Vec<PathBuf>, Failure> {
     let mut found = Vec::new();
     for path in paths {
         if path.is_dir() {
@@ -30,11 +51,17 @@ fn walk(dir: &Path, found: &mut Vec<PathBuf>) -> std::io::Result<()> {
         let linked = entry.file_type().is_ok_and(|t| t.is_symlink());
         if path.is_dir() && !hidden && !linked && entry.file_name() != "target" {
             walk(&path, found)?;
-        } else if path.extension().is_some_and(|e| e == "lotml") {
+        } else if is_source(&path) {
             found.push(path);
         }
     }
     Ok(())
+}
+
+/// Whether `path` names a LotML source file: `.lot`, preferred, or `.lotml`
+/// (adr:0018-lot-as-the-preferred-source-extension).
+pub fn is_source(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e == "lot" || e == "lotml")
 }
 
 /// The interface of a Python module a file may import (adr:0012).
@@ -162,5 +189,51 @@ mod tests {
         let found: Vec<String> = interfaces_for(&project.join("a.lotml")).into_iter().map(|b| b.module).collect();
         let _ = std::fs::remove_dir_all(&base);
         assert_eq!(found, vec!["inside"], "a bindings/ above the repository never applies");
+    }
+
+    #[test]
+    fn a_source_file_is_named_lot_or_lotml() {
+        for name in ["a.lot", "a.lotml", "dir/b.lot"] {
+            assert!(is_source(Path::new(name)), "{name} is LotML source");
+        }
+        for name in ["a.lotmli", "a.lo", "a.py", "lot", "a.lot.partial", "a.LOT"] {
+            assert!(!is_source(Path::new(name)), "{name} is not LotML source");
+        }
+    }
+
+    #[test]
+    fn a_directory_search_finds_both_extensions_and_nothing_else() {
+        let base = std::env::temp_dir().join(format!("lotml-files-search-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("sub")).unwrap();
+        for name in ["a.lot", "b.lotml", "sub/c.lot", "d.lotmli", "e.py"] {
+            std::fs::write(base.join(name), "").unwrap();
+        }
+        let found = expand(std::slice::from_ref(&base));
+        let _ = std::fs::remove_dir_all(&base);
+        let Ok(found) = found else { panic!("the search failed") };
+        let names: Vec<_> = found.iter().map(|p| p.strip_prefix(&base).unwrap().to_path_buf()).collect();
+        assert_eq!(names, ["a.lot", "b.lotml", "sub/c.lot"].map(PathBuf::from));
+    }
+
+    #[test]
+    fn one_name_under_both_extensions_is_refused_by_the_commands_and_kept_by_the_servers() {
+        let base = std::env::temp_dir().join(format!("lotml-files-twins-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("sub")).unwrap();
+        for name in ["a.lot", "a.lotml", "sub/a.lotml", "b.lot"] {
+            std::fs::write(base.join(name), "").unwrap();
+        }
+        let refused = expand(std::slice::from_ref(&base)).err().map(|f| f.0);
+        let served = sources(std::slice::from_ref(&base)).ok().map(|found| found.len());
+        let twice = expand(&[base.join("b.lot"), base.join("b.lot")]).ok().map(|found| found.len());
+        let apart = expand(&[base.join("a.lot"), base.join("sub")]).ok().map(|found| found.len());
+        let _ = std::fs::remove_dir_all(&base);
+        let refused = refused.expect("a.lot beside a.lotml is refused");
+        assert!(refused.contains(&base.join("a.lot").display().to_string()), "{refused}");
+        assert!(refused.contains(&base.join("a.lotml").display().to_string()), "{refused}");
+        assert_eq!(served, Some(4), "the servers keep every file");
+        assert_eq!(twice, Some(2), "a file named twice is not a pair");
+        assert_eq!(apart, Some(2), "the same name in two directories is not a pair");
     }
 }

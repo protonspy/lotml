@@ -391,6 +391,25 @@ fn the_mcp_server_edits_by_symbol_and_reports_what_an_edit_introduced() {
 }
 
 #[test]
+fn the_mcp_server_serves_and_edits_a_lot_file_as_a_lotml_one() {
+    let dir = scratch("mcp-lot", &[("shapes.lot", SHAPES)]);
+    let file = dir.join("shapes.lot");
+    let mut mcp = Client::start(&["mcp", "--root", dir.to_str().unwrap()], false);
+    mcp.request(1, "initialize", json!({"protocolVersion": "2025-11-25", "capabilities": {}}));
+
+    let (replaced, failed) =
+        call(&mut mcp, 2, "replace", json!({"symbol": "twice", "part": "body", "text": "return 2.0 * area(s)"}));
+    assert!(!failed, "{replaced}");
+    assert_eq!(replaced, "replaced the body of `twice` in shapes.lot, line 11\nno errors introduced");
+    assert!(std::fs::read_to_string(&file).unwrap().ends_with("    return 2.0 * area(s)\n"));
+    assert!(!dir.join("shapes.lot.partial").exists() && !dir.join("shapes.lotml.partial").exists());
+
+    let (missing, failed) = call(&mut mcp, 3, "check", json!({"paths": ["other.lot"]}));
+    assert!(failed, "{missing}");
+    assert_eq!(missing, "no .lot or .lotml file at `other.lot`");
+}
+
+#[test]
 fn the_language_server_renames_every_reference() {
     let dir = scratch("lsp-rename", &[("shapes.lotml", SHAPES)]);
     let file = uri(&dir.join("shapes.lotml"));

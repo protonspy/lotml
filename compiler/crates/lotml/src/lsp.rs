@@ -258,7 +258,7 @@ impl Server {
         let mut cache = files::InterfaceCache::default();
         for folder in folders.iter().filter(|f| f.is_dir()) {
             // A folder that cannot be read leaves the workspace with what could.
-            for path in files::expand(std::slice::from_ref(folder)).unwrap_or_default() {
+            for path in files::sources(std::slice::from_ref(folder)).unwrap_or_default() {
                 if let Ok(text) = files::read(&path) {
                     self.store(&normalize(path), text, &mut cache);
                 }
@@ -296,9 +296,9 @@ impl Server {
     }
 
     /// Read a closed or changed file from the disk again, or forget it when it is gone. Only a
-    /// `.lotml` file is read: a URI naming anything else is not the server's to open.
+    /// `.lot` or `.lotml` file is read: a URI naming anything else is not the server's to open.
     fn reload(&mut self, path: &Path) -> Vec<Value> {
-        let source = path.extension().is_some_and(|e| e == "lotml");
+        let source = files::is_source(path);
         match source.then(|| std::fs::read_to_string(path).ok()).flatten() {
             Some(text) => {
                 self.store(path, text, &mut files::InterfaceCache::default());

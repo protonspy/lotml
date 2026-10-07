@@ -48,6 +48,31 @@ fn a_clean_file_exits_zero_and_says_so() {
 }
 
 #[test]
+fn a_directory_s_lot_and_lotml_files_are_checked_alike() {
+    let dir = scratch("both-extensions", &[("a.lot", CLEAN), ("b.lotml", BROKEN)]);
+    let out = lotml(&["check", "--json", "."], &dir);
+    let json: serde_json::Value = serde_json::from_str(&stdout(&out)).expect("JSON");
+    assert_eq!(json["summary"]["files"], 2);
+    assert_eq!(json["diagnostics"][0]["file"], "b.lotml");
+}
+
+#[test]
+fn the_help_names_the_project_lotml_and_both_extensions() {
+    let dir = scratch("help", &[]);
+    assert!(stdout(&lotml(&["--help"], &dir)).starts_with("The LotML compiler"));
+    assert!(stdout(&lotml(&["check", "--help"], &dir)).contains("searched for `.lot` and `.lotml` files"));
+}
+
+#[test]
+fn one_name_under_both_extensions_is_refused_naming_both() {
+    let dir = scratch("twins", &[("a.lot", CLEAN), ("a.lotml", CLEAN)]);
+    let out = lotml(&["check", "."], &dir);
+    let said = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "the command could not run: {said}");
+    assert!(said.contains("a.lot and a.lotml are one module under two extensions"), "{said}");
+}
+
+#[test]
 fn errors_exit_one_with_json_root_cause_first() {
     let dir = scratch("json", &[("a.lotml", BROKEN), ("b.lotml", "fn g() -> int:\n    return y\n")]);
     let out = lotml(&["check", "--json", "."], &dir);
@@ -225,6 +250,15 @@ fn a_panic_names_the_lotml_line() {
         stderr.contains("panic: IndexError") && stderr.contains("line 3, in main") && stderr.contains("print(xs[5])"),
         "{stderr}"
     );
+}
+
+#[test]
+fn a_panic_in_a_lot_file_names_its_line_too() {
+    let dir = scratch("panic-lot", &[("p.lot", "fn main():\n    xs = [1]\n    print(xs[5])\n")]);
+    let out = lotml(&["run", "p.lot"], &dir);
+    assert_eq!(out.status.code(), Some(101));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("p.lot\", line 3, in main") && stderr.contains("print(xs[5])"), "{stderr}");
 }
 
 #[test]

@@ -1,9 +1,9 @@
 # lotml language reference
 
 lotml is a statically typed language with Python's syntax wherever its meaning is Python's. Files
-use the `.lotml` extension. Blocks are indented by 4 spaces after a line ending in `:`; comments
-start with `#`. Each section is an example to copy. Lines marked **Not Python** are where lotml
-means something different from what the same Python would mean.
+use the `.lot` extension, or `.lotml`. Blocks are indented by 4 spaces after a line ending in `:`;
+comments start with `#`. Each section is an example to copy. Lines marked **Not Python** are
+where lotml means something different from what the same Python would mean.
 
 ## Functions and locals
 
