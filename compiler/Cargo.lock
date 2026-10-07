@@ -337,6 +337,7 @@ dependencies = [
  "lotml-py",
  "lotml-runtime",
  "lotml-syntax",
+ "serde_json",
 ]
 
 [[package]]

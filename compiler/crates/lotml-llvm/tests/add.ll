@@ -2,6 +2,11 @@
 
 %lt_at = type { ptr, i32, ptr }
 %lt_buf = type { ptr, i64, i64 }
+%lt_cell = type { i32, i32 }
+%lt_type = type { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }
+%lt_list = type { %lt_cell, i64, i64, ptr, ptr }
+%lt_str = type { %lt_cell, i64, i64, i64 }
+%lt_closure = type { %lt_cell, ptr, ptr, ptr }
 
 @lt_text.1 = private unnamed_addr constant [1 x i8] c"\0A"
 @lt_text.0 = private unnamed_addr constant [8 x i8] c"add.lot\00"
@@ -12,6 +17,24 @@ declare void @lt_buf_free(ptr)
 declare void @lt_buf_put(ptr, ptr, i64)
 declare void @lt_init()
 declare void @lt_write(ptr, i64)
+
+@lt_type_i8 = external constant %lt_type
+@lt_type_i16 = external constant %lt_type
+@lt_type_i32 = external constant %lt_type
+@lt_type_i64 = external constant %lt_type
+@lt_type_u8 = external constant %lt_type
+@lt_type_u16 = external constant %lt_type
+@lt_type_u32 = external constant %lt_type
+@lt_type_u64 = external constant %lt_type
+@lt_type_f64 = external constant %lt_type
+@lt_type_bool = external constant %lt_type
+@lt_type_none = external constant %lt_type
+@lt_type_str = external constant %lt_type
+@lt_type_list = external constant %lt_type
+@lt_type_heap = external constant %lt_type
+@lt_type_dict = external constant %lt_type
+@lt_type_closure = external constant %lt_type
+@lt_type_set = external constant %lt_type
 
 define internal double @lf_add(double %p0, double %p1) {
 entry:
@@ -35,19 +58,19 @@ define internal void @lf_main() {
 entry:
   %l0 = alloca double
   store double 0.0, ptr %l0
-  %buf2 = alloca %lt_buf
+  %s2 = alloca %lt_buf
   %v1 = call double @lf_add(double 0x3FF8000000000000, double 0x4002000000000000)
   store double %v1, ptr %l0
-  store %lt_buf zeroinitializer, ptr %buf2
+  store %lt_buf zeroinitializer, ptr %s2
   %v3 = load double, ptr %l0
-  call void @lt_buf_f64(ptr %buf2, double %v3)
-  call void @lt_buf_put(ptr %buf2, ptr @lt_text.1, i64 1)
-  %v4 = getelementptr %lt_buf, ptr %buf2, i32 0, i32 0
+  call void @lt_buf_f64(ptr %s2, double %v3)
+  call void @lt_buf_put(ptr %s2, ptr @lt_text.1, i64 1)
+  %v4 = getelementptr %lt_buf, ptr %s2, i32 0, i32 0
   %v5 = load ptr, ptr %v4
-  %v6 = getelementptr %lt_buf, ptr %buf2, i32 0, i32 1
+  %v6 = getelementptr %lt_buf, ptr %s2, i32 0, i32 1
   %v7 = load i64, ptr %v6
   call void @lt_write(ptr %v5, i64 %v7)
-  call void @lt_buf_free(ptr %buf2)
+  call void @lt_buf_free(ptr %s2)
   ret void
 }
 

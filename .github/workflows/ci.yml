@@ -27,8 +27,12 @@ jobs:
       - name: Lint
         run: cargo clippy --manifest-path compiler/Cargo.toml --locked --all-targets -- -D warnings
       - name: Clang
-        # The LLVM target's tests build with it; under CI they fail rather than skip without it.
-        run: clang --version
+        # The LLVM target's tests build with it and read its line tables with llvm-dwarfdump; under
+        # CI they fail rather than skip without them.
+        run: |
+          clang --version
+          major=$(clang --version | sed -n 's/.*clang version \([0-9]*\).*/\1/p' | head -1)
+          command -v "llvm-dwarfdump-$major" || command -v llvm-dwarfdump || ls "/usr/lib/llvm-$major/bin/llvm-dwarfdump"
       - name: Test
         run: cargo test --manifest-path compiler/Cargo.toml --locked
 

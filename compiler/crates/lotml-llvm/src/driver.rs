@@ -117,6 +117,9 @@ impl Clang {
     ) -> Result<(), String> {
         let mut command = Command::new(&self.program);
         command.arg(if level == Level::Release { "-O2" } else { "-O0" });
+        if level == Level::Debug {
+            command.arg("-g");
+        }
         if counting {
             command.arg("-DLT_COUNT_CELLS");
         }

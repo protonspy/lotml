@@ -64,10 +64,16 @@ pub fn build_and_run(clang: &driver::Clang, name: &str, source: &str, level: Lev
     let dir = scratch("llvm-target", &format!("{name}-{level:?}"));
     let path = dir.join("prog.lot");
     std::fs::write(&path, source).unwrap();
-    let program = lotml_llvm::compile_program(source, &path, &lotml_check::Interfaces::new(), build == Build::Tests)
-        .unwrap_or_else(|d| {
-            panic!("{source}\ndoes not compile to LLVM: {:#?}", d.iter().map(|d| &d.message).collect::<Vec<_>>())
-        });
+    let program = lotml_llvm::compile_program(
+        source,
+        &path,
+        &lotml_check::Interfaces::new(),
+        build == Build::Tests,
+        level == Level::Debug,
+    )
+    .unwrap_or_else(|d| {
+        panic!("{source}\ndoes not compile to LLVM: {:#?}", d.iter().map(|d| &d.message).collect::<Vec<_>>())
+    });
     let ll = program.ll;
     let ll_path = dir.join("prog.ll");
     std::fs::write(&ll_path, &ll).unwrap();
@@ -99,12 +105,16 @@ pub fn frees_everything(name: &str, source: &str) {
 
 /// `source` compiled by the Python backend and run as `lotml run` runs it.
 pub fn run_python(name: &str, source: &str) -> Run {
+    run_python_with(name, source, &lotml_check::Interfaces::new())
+}
+
+/// [`run_python`] for a program importing through `interfaces`.
+pub fn run_python_with(name: &str, source: &str, interfaces: &lotml_check::Interfaces) -> Run {
     let dir = scratch("py-target", name);
     let path = dir.join("prog.lot");
     std::fs::write(&path, source).unwrap();
-    let module = lotml_py::compile_with(source, &path, &lotml_check::Interfaces::new())
-        .unwrap_or_else(|d| panic!("{source}\n{d:#?}"))
-        .module;
+    let module =
+        lotml_py::compile_with(source, &path, interfaces).unwrap_or_else(|d| panic!("{source}\n{d:#?}")).module;
     std::fs::write(dir.join("prog.py"), module).unwrap();
     std::fs::write(dir.join("lotml_rt.py"), lotml_py::RUNTIME).unwrap();
     let python = lotml_py::python().expect("a Python interpreter");

@@ -4,8 +4,6 @@ must report the same."""
 import json
 import subprocess
 
-import pytest
-
 from lotml_harness.experiments import parity
 
 RIGHT = 'fn double(n: int) -> int:\n    return n * 2\n\ntest "double":\n    assert double(2) == 4\n'
@@ -57,7 +55,6 @@ def test_a_native_program_that_did_not_report_is_a_failure_of_its_own():
     assert parity.compare("t/1", ran(report(PASS)), ran("", 2)).verdict == "no report"
 
 
-@pytest.mark.skip(reason="test blocks on the LLVM target come with specs/llvm-parity task 2.4")
 def test_a_real_program_reports_the_same_on_both_targets_even_when_it_fails():
     outcomes = parity.suite([{"task": "t/1", "lotml": RIGHT}, {"task": "t/2", "lotml": WRONG}])
     assert [(o.task, o.verdict) for o in outcomes] == [("t/1", "same"), ("t/2", "same")]

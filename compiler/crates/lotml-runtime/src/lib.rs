@@ -1,6 +1,8 @@
 //! The runtime native programs run on, apart from the compiler that writes them: C, compiled into
 //! every program as one translation unit (adr:0016, plans/ir-architecture.md).
 
+pub mod abi;
+
 use std::path::Path;
 
 use lotml_ir::ir::Builtin;

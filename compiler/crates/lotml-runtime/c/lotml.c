@@ -2,6 +2,54 @@
 
 #include "lotml.h"
 
+/* The one external definition of each of lotml.h's inline helpers. */
+extern int32_t lt_count_of(const lt_cell *c);
+extern void lt_inc(void *p);
+extern bool lt_dec(void *p);
+extern bool lt_unique(const void *p);
+extern int64_t lt_add_i64(int64_t a, int64_t b, const lt_at *at);
+extern int64_t lt_sub_i64(int64_t a, int64_t b, const lt_at *at);
+extern int64_t lt_mul_i64(int64_t a, int64_t b, const lt_at *at);
+extern int64_t lt_neg_i64(int64_t a, const lt_at *at);
+extern int64_t lt_abs_i64(int64_t a, const lt_at *at);
+extern int64_t lt_floordiv_i64(int64_t a, int64_t b, const lt_at *at);
+extern int64_t lt_mod_i64(int64_t a, int64_t b, const lt_at *at);
+extern double lt_truediv_i64(int64_t a, int64_t b, const lt_at *at);
+extern uint64_t lt_add_u64(uint64_t a, uint64_t b, const lt_at *at);
+extern uint64_t lt_sub_u64(uint64_t a, uint64_t b, const lt_at *at);
+extern uint64_t lt_mul_u64(uint64_t a, uint64_t b, const lt_at *at);
+extern uint64_t lt_floordiv_u64(uint64_t a, uint64_t b, const lt_at *at);
+extern uint64_t lt_mod_u64(uint64_t a, uint64_t b, const lt_at *at);
+extern double lt_truediv_u64(uint64_t a, uint64_t b, const lt_at *at);
+extern uint64_t lt_neg_u64(uint64_t a, const lt_at *at);
+extern int64_t lt_fit(int64_t value, int64_t low, int64_t high, const char *type, const lt_at *at);
+extern uint64_t lt_i64_to_u64(int64_t value, const lt_at *at);
+extern int64_t lt_u64_to_i64(uint64_t value, const lt_at *at);
+extern double lt_truediv_f64(double a, double b, const lt_at *at);
+extern int64_t lt_wrapping_add(int64_t a, int64_t b);
+extern int64_t lt_wrapping_sub(int64_t a, int64_t b);
+extern int64_t lt_wrapping_mul(int64_t a, int64_t b);
+extern double lt_math_sqrt(double x, const lt_at *at);
+extern double lt_math_exp(double x, const lt_at *at);
+extern double lt_math_sin(double x, const lt_at *at);
+extern double lt_math_cos(double x, const lt_at *at);
+extern double lt_math_tan(double x, const lt_at *at);
+extern double lt_math_atan(double x, const lt_at *at);
+extern double lt_math_fabs(double x, const lt_at *at);
+extern double lt_math_ln(double x, const lt_at *at);
+extern double lt_math_log2(double x, const lt_at *at);
+extern double lt_math_log10(double x, const lt_at *at);
+extern double lt_math_atan2(double y, double x, const lt_at *at);
+extern double lt_math_hypot(double x, double y, const lt_at *at);
+extern int64_t lt_math_floor(double x, const lt_at *at);
+extern int64_t lt_math_ceil(double x, const lt_at *at);
+extern int64_t lt_math_trunc(double x, const lt_at *at);
+extern double lt_min_f64(double a, double b);
+extern double lt_max_f64(double a, double b);
+extern bool lt_range_step(lt_range *r, int64_t *value);
+extern int64_t lt_index(int64_t len, int64_t index, const lt_at *at);
+extern void *lt_list_slot(lt_list **slot, int64_t index, const lt_at *at);
+
 #include <stdarg.h>
 
 #ifdef _WIN32
@@ -97,6 +145,15 @@ void lt_init(void) {
 int lt_no_main(void) {
     fputs("the program has no `fn main()`\n", stderr);
     return lt_exit(2);
+}
+
+void lt_main_error(const lt_type *type, const void *error) {
+    lt_buf b = LT_BUF;
+    lt_buf_puts(&b, "error: ");
+    type->repr(&b, error);
+    lt_flush();
+    fprintf(stderr, "%.*s\n", (int)b.len, b.data);
+    lt_buf_free(&b);
 }
 
 int lt_exit(int status) {

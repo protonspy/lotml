@@ -81,11 +81,21 @@ fn without_clang_the_llvm_target_says_where_it_looked_and_what_else_builds() {
 }
 
 #[test]
-fn a_construct_the_llvm_target_does_not_compile_is_a_diagnostic_not_a_crash() {
-    let dir = scratch("refused", &[("list.lot", "fn main():\n    xs = [1, 2]\n    print(xs[0])\n")]);
-    let out = lotml(&["build", "--target", "llvm", "list.lot", "-o", "out"], &dir);
-    assert_eq!(out.status.code(), Some(1));
-    let said = String::from_utf8_lossy(&out.stdout);
-    assert!(said.contains("error[E0402]"), "{said}");
-    assert!(said.contains("--target python"), "{said}");
+fn test_on_the_llvm_target_reports_what_the_python_target_reports() {
+    if !has_clang() {
+        return;
+    }
+    let module = "type P(x: int, name: str)\n\nfn grow(xs: [int]) -> [int]:\n    return xs + [len(xs)]\n\n\
+                  test \"passes\":\n    assert grow([1]) == [1, 1]\n\n\
+                  test \"fails\":\n    assert P(1, \"a\") == P(2, \"b\")\n\n\
+                  test \"panics\":\n    xs = [1]\n    print(xs[3])\n";
+    let dir = scratch("test", &[("t.lot", module)]);
+    let report = |target: &str| {
+        let out = lotml(&["test", "--target", target, "--json", "t.lot"], &dir);
+        assert_eq!(out.status.code(), Some(1), "{}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n")
+    };
+    let llvm = report("llvm");
+    assert!(llvm.contains("\"outcome\":\"fail\"") || llvm.contains("\"outcome\": \"fail\""), "{llvm}");
+    assert_eq!(llvm, report("python"));
 }

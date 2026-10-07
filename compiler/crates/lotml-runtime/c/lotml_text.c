@@ -22,6 +22,14 @@ static int32_t lt_decode(const char *text, int *length) {
     return ((p[0] & 0x07) << 18) | ((p[1] & 0x3F) << 12) | ((p[2] & 0x3F) << 6) | (p[3] & 0x3F);
 }
 
+lt_str *lt_str_char_at(const lt_str *s, int64_t *at) {
+    int width;
+    lt_decode(s->bytes + *at, &width);
+    lt_str *c = lt_str_new(s->bytes + *at, width);
+    *at += width;
+    return c;
+}
+
 static int lt_encode(int32_t code, char out[4]) {
     if (code < 0x80) {
         out[0] = (char)code;

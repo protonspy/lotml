@@ -3,6 +3,11 @@
 
 pub mod driver;
 mod emit;
+mod module;
+mod types;
+
+#[cfg(test)]
+mod layout;
 
 use std::path::Path;
 
@@ -19,16 +24,18 @@ pub struct Program {
 
 /// The LLVM IR of the program `source`, read from `path`; or the errors that stop it.
 pub fn compile(source: &str, path: &Path) -> Result<String, Vec<Diagnostic>> {
-    compile_program(source, path, &Interfaces::new(), false).map(|p| p.ll)
+    compile_program(source, path, &Interfaces::new(), false, false).map(|p| p.ll)
 }
 
 /// The program for `source`, importing the C libraries of `interfaces`; a Python module's import
-/// is refused, and so, in this increment, are `test` blocks.
+/// is refused. With `tests`, it runs the `test` blocks; with `lines`, it carries line tables that
+/// name `path`, as `-O0` builds it for `lotml run` (specs/llvm-parity R2.2).
 pub fn compile_program(
     source: &str,
     path: &Path,
     interfaces: &Interfaces,
     tests: bool,
+    lines: bool,
 ) -> Result<Program, Vec<Diagnostic>> {
     let parsed = parse(source);
     let mut errors: Vec<Diagnostic> = parsed.errors.iter().map(lotml_check::syntax).collect();
@@ -54,15 +61,7 @@ pub fn compile_program(
     if !refused.is_empty() {
         return Err(refused);
     }
-    if tests {
-        let span = lotml_syntax::span::Span::new(0, 0);
-        return Err(vec![Diagnostic::error(
-            "E0402",
-            span,
-            "`--target llvm` does not run `test` blocks yet: run them with `--target python`".to_string(),
-        )]);
-    }
     lotml_ir::native(&mut lowered);
-    let ll = emit::program(&lowered, &path.display().to_string())?;
+    let ll = emit::program(&lowered, &path.display().to_string(), tests, lines)?;
     Ok(Program { ll, libraries: lowered.libraries.iter().cloned().collect() })
 }

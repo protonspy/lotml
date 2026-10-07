@@ -13,6 +13,7 @@ lotml-runtime = { path = "../lotml-runtime" }
 
 [dev-dependencies]
 lotml-py = { path = "../lotml-py" }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

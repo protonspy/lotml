@@ -263,7 +263,7 @@ fn llvm_executable(path: &Path, dir: &Path, tests: bool, level: Level) -> Result
             (b.module, read)
         })
         .collect();
-    let program = match lotml_llvm::compile_program(&text, &absolute, &interfaces, tests) {
+    let program = match lotml_llvm::compile_program(&text, &absolute, &interfaces, tests, level == Level::Debug) {
         Ok(program) => program,
         Err(diagnostics) => {
             let shown = path.display().to_string();
