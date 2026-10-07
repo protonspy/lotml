@@ -10,12 +10,12 @@ evidence that the design helps the model.
 | language | what it decided for LLMs | status |
 | --- | --- | --- |
 | [BAML](https://github.com/BoundaryML/baml) | "the programming language for agents"; looks like TypeScript; types persist at runtime, no `any`; typed, statically analyzed errors; built-in tests and evals; colorless concurrency with green threads; callable from TS, Python, Go, C#, Java | pre-1.0, nightly builds |
-| MoonBit | "flattened design": mandatory signatures at module level and separate local definitions, for linear generation; a sampler that resamples on syntax and on types with backtracking (compile-rate gain announced without absolute numbers); expect tests | v0.10.x in 2026, 1.0 not yet released |
+| MoonBit | "flattened design": mandatory signatures at module level and separate local definitions, for linear generation; a sampler that resamples on syntax and on types with backtracking (its LLM4Code 2024 paper gives 43.75% against 56.25% compile rate for CodeLlama-34B on about 33 small tasks, with a ~3% throughput cost); expect tests; `moon prove` for formal verification since 0.9 | 1.0 was planned for the first half of 2026 and has not shipped |
 | [Pel](https://arxiv.org/abs/2505.13453) | minimal, homoiconic grammar meant for constrained generation; capability control in the syntax; natural-language conditions evaluated by an LLM | paper with no empirical evaluation |
 | [Quasar](https://arxiv.org/abs/2506.12202) | separates internal logic from tool calls with effect annotations, for access control and parallelization; the model writes a restricted Python subset that a transpiler compiles to Quasar, because models struggle to write Quasar directly | COLM 2026; measured: the subset kept accuracy close to unrestricted Python (71.4 against 71.8), and the annotations cut approvals by 26% and running time by 18–27% |
-| [Anka](https://arxiv.org/abs/2512.23214) | a data-pipeline DSL: one canonical form per operation and a mandatory, uniquely named result for every step | arXiv 2025; learned from the prompt alone (99.9% parse, 95.8% tasks with Claude 3.5 Haiku); +40 points over Python on pipelines of five or more steps, none on short tasks |
-| [NanoLang](https://github.com/jordanhubbard/nanolang) | "designed for machines to write and humans to read"; mandatory test blocks; a JSON spec for the model | no measured results |
-| Zero (Vercel Labs) | started with JSON diagnostics with stable codes and `zero fix --plan --json`; the current README turned "graph-native", with the program as a semantic database edited through `zero query` and `zero patch` | experimental, "expect breaking changes" |
+| [Anka](https://arxiv.org/abs/2512.23214) | a data-pipeline DSL: one canonical form per operation and a mandatory, uniquely named result for every step | arXiv 2025; learned from the prompt alone (99.9% parse, 95.8% tasks with Claude 3.5 Haiku); +40 points over Python on its multi-step category, which its Table 2 defines as 3–5 operations (only a figure says 5+), none on short tasks |
+| [NanoLang](https://github.com/jordanhubbard/nanolang) | "designed for machines to write and humans to read"; test blocks, no longer enforced everywhere ("missing-shadow enforcement is not universal"); a JSON spec for the model | v5.0.0; no measured results |
+| Zero, now zerolang (Vercel Labs) | started with JSON diagnostics with stable codes and `zero fix --plan --json`; the current README turned "graph-native", with the program as a semantic database edited through `zero query` and `zero patch`; its evals harness has published no results | experimental; last release v0.3.4 (June 2026), quiet since |
 
 ## Precedents by aspect
 
@@ -57,6 +57,31 @@ syntax guide the Python prompt did not, its principles were never ablated one by
 only data pipelines. The lesson that transfers to lotml is narrow and consistent with the rest of
 the evidence: one canonical form per operation, and no silent reuse of a name — which lotml's
 immutable-by-default locals already enforce.
+
+## Since the first survey
+
+By October 2026 nine more languages were built for models to write — Vera, Aver, AILANG,
+Almide, Mog, Jacquard, NERD, Codong and Sui — and four more have a compiler that calls a model
+(CodeSpeak, Djinnlang, Plang, Marsha). Three now publish measurements:
+
+- **Vera** (MIT): no variable names, mandatory contracts checked by Z3, effect rows, and
+  diagnostics written as instructions to the model. VeraBench, 60 problems across nine frontier
+  models, one run each: Vera 98.7%, Python 96.7%, TypeScript 99.7%. The benchmark is saturated
+  and has no significance tests.
+- **Aver** (MIT): its intent-trace study, about 19,000 judgments, compared Aver, Aver
+  transliterated into Python, and idiomatic Python. Aver and its Python transliteration tied;
+  idiomatic Python came out below. The structure carried the legibility, not the syntax: the
+  ablation the rest of the family skips.
+- **Almide** (MIT/Apache-2.0): the nearest cousin to lotml. It has a compiler written in Rust,
+  reference counting with reuse, native and Wasm targets, and a metric of its own, the
+  "modification survival rate". On its 38-task dojo, Llama 3.3 70B scored 65% and Llama 3.1 8B
+  44%, with no other language run on it.
+
+Quasar's v2 adds the strongest result of the family: its Python subset, repaired from static
+errors, reached 89.2% execution on AgentDojo against 76.3% for unrestricted Python. None of them
+has lotml's paired design with exact tests, or measures 7–8B models. The evidence by language
+property is in [[language-design-evidence]]; the sources are in
+`research/llm-landscape/languages.md`.
 
 That leaves the space this project's [[evaluation-harness]] can occupy: the differentiator is not
 having the same features, it is measuring which of them matter.

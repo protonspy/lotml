@@ -170,7 +170,9 @@ like code to complete.
 ## LSP and MCP
 
 - **It became standard:** gopls v0.20 with built-in MCP, `dart mcp-server`, IntelliJ 2025.2, Xcode
-  26.3 (`xcrun mcpbridge`), and Claude Code returns LSP diagnostics after every edit.
+  26.3 (`xcrun mcpbridge`), and Claude Code returns LSP diagnostics after every edit once a
+  code-intelligence plugin maps a language server to the file's extension; without one its LSP
+  tool is inactive ([[agent-harness-design]]).
 - **The gain depends on the model and the result format** ([arXiv 2608.13568](https://arxiv.org/abs/2608.13568),
   preliminary): LSP raised token spend by 6–118% for Opus and Sonnet but saved Haiku 26%;
   location-only references were the costly part — adding two lines of source around each raised

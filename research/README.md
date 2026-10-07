@@ -29,6 +29,10 @@ Measurements for the lotml study. The pilot and the corpus use the provisional n
   lotml's compiler: one study per project (`studies/`), the synthesis (`synthesis.md`) and the
   commits read (`README.md`). It runs nothing; the clones it cites are git-ignored, and are read,
   never built.
+- `llm-landscape/` — three sourced reports: languages built for models (`languages.md`), coding
+  agent harnesses (`harnesses.md`), and evaluation with new-language adaptation
+  (`evaluation-and-adaptation.md`). Their quotations came through an extraction step and are not yet
+  in `literature/claims.json`.
 
 **Running model output executes it.** `transpiler/`, `indentation/` and `editing/` run
 model-written programs and edits in-process. The transpiler refuses imports outside `math` and

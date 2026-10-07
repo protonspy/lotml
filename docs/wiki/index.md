@@ -28,6 +28,8 @@ fixed documents, not pages, and neither is ever an orphan.
 
 - [[training-prior]] — languages without a corpus, confusion with Python and how to get around it
 - [[languages-for-agents]] — languages already designed for LLMs and what none of them measured
+- [[language-design-evidence]] — what was measured about types, indentation, errors as values and intermediate languages for model-written code
+- [[agent-harness-design]] — how coding harnesses are built, how much a harness moves a fixed model, and what lotml measures
 
 ### Design
 

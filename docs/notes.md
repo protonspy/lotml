@@ -134,3 +134,5 @@ over this file answers with the example above as well as with the notes. -->
 - n-0094 2026-10-07 #ceiling @compiler/crates/lotml-llvm/src/emit.rs — the emitted IR calls the extern lt_inc rather than the inline one in lotml.h, and nothing optimizes the two units together
 - n-0095 2026-10-07 #gotcha @compiler/crates/lotml-llvm/src/driver.rs — the recursion limit differs by target: CPython's 1000 frames under run, the OS stack (1 MiB on Windows) under build
 - n-0096 2026-10-07 #ceiling @compiler/crates/lotml-db/src/lib.rs — checked is one query per file with absolute spans, and interfaces is untracked, so an edit re-checks every function and re-parses every interface
+- n-0097 2026-10-07 #gotcha @harness/lotml_harness/agent/report.py — wilson() pools every graded run, so several runs of one task count as independent trials and the interval comes out too narrow
+- n-0098 2026-10-07 #gotcha @harness/lotml_harness/corpus/pipeline.py — the corpus translates MultiPL-E's typed copies, whose licence forbids training; it is a measurement, never a training seed

@@ -102,6 +102,17 @@ of lotml drew the C family's `else if`. Every neighbour's prior leaks where lotm
    automatically applicable fix. CangjieBench's authors recommend the same: a small, compiler-checked
    index of the constructs that break most often, naming option types and mutability.
 
+**Examples carry more than rules, measured outside code too.** Translating Kalamang from a
+573-page grammar in context, Aycock et al. split the book and found "almost all improvements stem
+from the book's parallel examples rather than its grammatical explanations": 11.0 chrF++
+zero-shot, 30.8 with the example sentences alone, 22.6 with the explanations alone
+([arXiv 2409.19151](https://arxiv.org/abs/2409.19151)). Grammar prompting helped only DSLs absent
+from pretraining ([arXiv 2305.19234](https://arxiv.org/abs/2305.19234)), which is lotml's case.
+Paired data carries transfer: continued training on source paired with its LLVM IR lifted a 1.3B
+model on MultiPL-E, and unpaired IR did not ([arXiv 2403.03894](https://arxiv.org/abs/2403.03894)).
+lotml has the pairing for free, since its Python target writes the Python each program means.
+Sources: `research/llm-landscape/evaluation-and-adaptation.md`.
+
 ## Consequences for the project
 
 - The risk did not disappear when the syntax stopped leaking; it moved to implementation fidelity
