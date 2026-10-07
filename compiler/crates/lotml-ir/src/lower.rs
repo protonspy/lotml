@@ -15,6 +15,7 @@ use crate::ir::{
     Arg, BinOp, Block, Builtin, CmpOp, Const, Expr, FormatPart, Function, Local, LocalInfo, Operand, Panic, Place,
     Proj, Stmt, StmtKind, UnOp, counted,
 };
+use crate::symbol;
 
 /// The program as functions of the IR.
 pub struct Lowered {
@@ -24,7 +25,7 @@ pub struct Lowered {
     /// The records and sum types the module declares.
     pub declared: BTreeMap<String, TypeDef>,
     /// Each lambda: the types of what it captures, and its function type; its code is the
-    /// function `lambda_name(index)`.
+    /// function `symbol::lambda(index)`.
     pub lambdas: Vec<(Vec<Ty>, Ty)>,
     /// The module's functions used as values, by their C names.
     pub fn_refs: BTreeSet<String>,
@@ -288,27 +289,7 @@ fn exceeds(ty: &Ty, budget: &mut usize) -> bool {
     }
 }
 
-/// The C name of the instance `index` of the generic function or method `base`.
-fn instance_name(base: &str, index: usize) -> String {
-    format!("li{index}_{base}")
-}
-
-/// The C name of the method `method` of the type `owner`.
-pub fn method_name(owner: &str, method: &str) -> String {
-    format!("lm_{owner}_{method}")
-}
-
-/// The C name of the function of the lambda `index`.
-pub fn lambda_name(index: usize) -> String {
-    format!("lf_lambda{index}")
-}
-
-/// The C name of the lotml function `name`.
-pub fn function_name(name: &str) -> String {
-    format!("lf_{name}")
-}
-
-/// The module as functions of the intermediate form; with `tests`, its `test` blocks too.
+/// The module as functions of the IR; with `tests`, its `test` blocks too.
 pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Result<Lowered, Vec<Diagnostic>> {
     let mut cx = Context {
         text,
@@ -425,7 +406,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
                     if generic_owner || !sig.type_params.is_empty() {
                         continue;
                     }
-                    let name = method_name(&name.name, &m.name.name);
+                    let name = symbol::method(&name.name, &m.name.name);
                     if let Some(function) = cx.lower_function(m, &sig, name, Subst::default()) {
                         functions.push(function);
                     }
@@ -519,7 +500,7 @@ impl<'a> Context<'a> {
         if !sig.type_params.is_empty() {
             return None;
         }
-        self.lower_function(f, &sig, function_name(&f.name.name), Subst::default())
+        self.lower_function(f, &sig, symbol::function(&f.name.name), Subst::default())
     }
 
     /// The C name of `def`, of signature `sig`, for the type arguments of `subst`: `base` itself
@@ -552,7 +533,7 @@ impl<'a> Context<'a> {
             return key.0;
         }
         *count += 1;
-        let name = instance_name(&key.0, self.instances.len());
+        let name = symbol::instance(&key.0, self.instances.len());
         self.instances.insert(key, name.clone());
         self.pending.push(Pending { def, sig: subst.sig(sig), name: name.clone(), subst });
         name
@@ -571,7 +552,7 @@ impl<'a> Context<'a> {
             subst.types.push(Ty::Adt(owner.to_string(), owner_args.to_vec()));
         }
         let sig = subst.sig(&method.sig);
-        let c_name = self.instance(def, &method.sig, method_name(owner, name), subst);
+        let c_name = self.instance(def, &method.sig, symbol::method(owner, name), subst);
         Some((c_name, sig))
     }
 
@@ -630,7 +611,7 @@ impl<'a> Context<'a> {
         let mut b = Builder {
             cx: self,
             function: Function {
-                name: format!("lt_test{k}"),
+                name: symbol::test(k),
                 source_name: format!("__test_{k}"),
                 params: Vec::new(),
                 ret: Ty::Unit,
@@ -2868,7 +2849,7 @@ impl<'c, 'a> Builder<'c, 'a> {
         let mut b = Builder {
             cx: &mut *self.cx,
             function: Function {
-                name: lambda_name(index),
+                name: symbol::lambda(index),
                 source_name: "<lambda>".to_string(),
                 params: Vec::new(),
                 ret: ret.clone(),
@@ -2925,7 +2906,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                     let Some(subst) = self.subst_for(names, &map) else {
                         return (self.unsupported(func.span, "this generic function here"), Ty::Error);
                     };
-                    let c_name = self.cx.instance(f, &sig, function_name(name), subst.clone());
+                    let c_name = self.cx.instance(f, &sig, symbol::function(name), subst.clone());
                     let sig = subst.sig(&sig);
                     let operands = args.into_iter().zip(&sig.params).map(|((a, _), p)| self.coerce(a, &p.ty)).collect();
                     let ty = sig.ret.clone();
@@ -3578,7 +3559,7 @@ impl<'c, 'a> Builder<'c, 'a> {
         let Some(subst) = self.subst_for(names, &map) else {
             return Value::Done(self.unsupported(whole.span, "this call of a generic function"));
         };
-        let c_name = self.cx.instance(f, &sig, function_name(name), subst.clone());
+        let c_name = self.cx.instance(f, &sig, symbol::function(name), subst.clone());
         let sig = subst.sig(&sig);
         self.call_with(c_name, &f.params, &sig.params, None, args)
     }
@@ -3618,7 +3599,7 @@ impl<'c, 'a> Builder<'c, 'a> {
         let Some(subst) = self.subst_for(names, &map) else {
             return Value::Done(self.unsupported(e.span, "this generic function as a value"));
         };
-        let c_name = self.cx.instance(f, &sig, function_name(name), subst);
+        let c_name = self.cx.instance(f, &sig, symbol::function(name), subst);
         self.cx.fn_refs.insert(c_name.clone());
         Value::Expr(Expr::FnRef(c_name))
     }

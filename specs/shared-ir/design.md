@@ -39,9 +39,12 @@ Serves R1.2, R1.3, R1.4.
 - `Expr::Rt { name: &'static str, .. }` and `Mutate { name, .. }` name a C runtime function
   today. They take a `Builtin` enum instead (`ListAppend`, `StrRepr`, `DictGet`, …), one variant
   per operation the language defines.
-- `Function.name` is a C name today. It becomes the LotML path plus the instance's type
-  arguments; each native emitter makes its symbol from those with `lotml_ir::symbol`, so the C
-  and LLVM targets, and the C ABI export (`specs/c-abi-export/`), name a function the same way.
+- `Function.name` is the function's symbol, made by `lotml_ir::symbol` — `lf_` for a module
+  function, `lm<n>_` for a method of an owner `n` characters long, `li<k>_` for an instance,
+  `ll` for a lambda, `lt_test` for a `test` block — so the C and LLVM targets, and the wrappers
+  of the C ABI export (`specs/c-abi-export/`), name a function the same way; `source_name` is
+  its LotML name, the one a panic reports. The symbols before the IR let a function named
+  `lambda0` collide with the first lambda and `a_b.c` with `a.b_c`; the prefixes keep them apart.
 - A call into a Python module through its interface is an expression of the IR
   (`CallPython { module, function, args, ret }`), beside `CallC`. The Python backend compiles it;
   the native targets refuse it at the import until `specs/python-bridge/`.

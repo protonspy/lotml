@@ -8,12 +8,13 @@ use std::fmt::Write;
 use lotml_check::ty::{FloatKind, IntKind, Ty};
 use lotml_syntax::span::Span;
 
-use crate::lower::{Lowered, function_name, lambda_name};
+use crate::lower::Lowered;
 use crate::mir::{
     Arg, BinOp, Block, CmpOp, Const, Expr, FormatPart, Function, Local, Operand, Panic, Place, Proj, StmtKind, UnOp,
     block_exprs, block_operands, block_types,
 };
 use crate::types::Types;
+use lotml_ir::symbol;
 
 /// The C of the program; with `tests`, its `main` runs the `test` blocks and reports them.
 pub fn program(lowered: &Lowered, file: &str, tests: bool) -> String {
@@ -85,10 +86,10 @@ pub fn program(lowered: &Lowered, file: &str, tests: bool) -> String {
         out.push_str("    lt_test_report();\n    return lt_exit(0);\n}\n");
         return out;
     }
-    let main = lowered.functions.iter().find(|f| f.name == function_name("main"));
+    let main = lowered.functions.iter().find(|f| f.name == symbol::function("main"));
     if let Some(Ty::Result(_, error)) = main.map(|f| &f.ret) {
         let result = types.c_type(&main.expect("main").ret);
-        let _ = writeln!(out, "    {result} r = {}();", function_name("main"));
+        let _ = writeln!(out, "    {result} r = {}();", symbol::function("main"));
         let drop = types.count(&main.expect("main").ret, false, "r");
         let _ = writeln!(
             out,
@@ -100,7 +101,7 @@ pub fn program(lowered: &Lowered, file: &str, tests: bool) -> String {
         let _ = writeln!(out, "    {drop}");
         out.push_str("    return lt_exit(0);\n");
     } else if lowered.main {
-        let _ = writeln!(out, "    {}();", function_name("main"));
+        let _ = writeln!(out, "    {}();", symbol::function("main"));
         out.push_str("    return lt_exit(0);\n");
     } else {
         out.push_str("    fputs(\"the program has no `fn main()`\\n\", stderr);\n    return lt_exit(2);\n");
@@ -445,7 +446,7 @@ impl Writer<'_> {
                     let values: Vec<String> = captures.iter().map(|c| self.operand(c)).collect();
                     self.line("{");
                     self.line(&format!("    lt_c{lambda} *c = lt_alloc(sizeof(lt_c{lambda}));"));
-                    self.line(&format!("    c->fn = (void *){};", lambda_name(*lambda)));
+                    self.line(&format!("    c->fn = (void *){};", symbol::lambda(*lambda)));
                     self.line(&format!("    c->drop = lt_drop_c{lambda};"));
                     self.line(&format!("    c->share = lt_share_c{lambda};"));
                     for (i, v) in values.iter().enumerate() {

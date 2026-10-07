@@ -4,6 +4,7 @@
 
 pub mod ir;
 pub mod lower;
+pub mod symbol;
 
 mod hoist;
 mod own;
