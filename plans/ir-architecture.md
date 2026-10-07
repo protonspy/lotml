@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: b941a55d9c371a6dc4031ca6c8270b016ed8409350270b43e47236c89a1c5c8d
+checksum: d7ca5ee3d0a3b28e0ee726260795985fe620cd872374792fec82b01d79d8d30a
 ---
 
 # IR architecture
@@ -91,6 +91,11 @@ makes an executable.
 - [ ] 4.1 (Unit) Narrate the pipeline in `docs/codewiki/` and bring the README's architecture and
   status, `docs/stack.md` and the wiki's transpilation strategy up to date
   _Depends 1.3, 2.3, 3.1, 3.2_
+- [ ] 2.4 (Unit) Pass `--target python` where the harness experiments call `lotml build`
+      and import the module it wrote (`gate2.py`, `phase1.py`), so moving the default
+      does not change what they run
+  _Depends 2.2_
+  _Reason review of the plan: adr:0022's context missed these two callers of build_
 
 ## Done when
 

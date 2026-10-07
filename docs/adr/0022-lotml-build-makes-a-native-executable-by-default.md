@@ -12,9 +12,10 @@ only target (adr:0001-transpile-to-python-first). The project's direction now gi
 worlds different jobs: Python for development, debugging and the Python ecosystem; native code
 for performance and distribution, with a small runtime and no interpreter to ship. `run` and
 `test` are the development loop, where a model iterates and the Python ecosystem is reachable;
-`build` is what is distributed. The harness drives `check`, `run` and `test`, not `build`; the
-README, the wiki and adr:0012-python-interop-through-checked-boundaries-and-interface-files
-describe `build` as writing Python.
+`build` is what is distributed. Two harness experiments call `build` and then import the Python
+module it wrote (`harness/lotml_harness/experiments/gate2.py` and `phase1.py`); the README, the
+wiki and adr:0012-python-interop-through-checked-boundaries-and-interface-files describe `build`
+as writing Python.
 
 ## Decision
 
@@ -30,8 +31,9 @@ command meant for distribution.
 
 ## Consequences
 
-- Anything that relied on `lotml build` writing a Python module passes `--target python`; the
-  documents that describe `build` that way are corrected in the same change.
+- Anything that relied on `lotml build` writing a Python module passes `--target python`, the
+  harness experiments first; the documents that describe `build` that way are corrected in the
+  change that moves the default.
 - `build` with no flag fails on a machine without `clang` where it used to succeed.
 - A program importing a Python module cannot be built natively until native targets can call
   CPython; until then `build` refuses it at the import, as the C target does.
