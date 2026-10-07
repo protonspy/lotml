@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 039ed438608a83cf2ad0360ddfa542a3c5f2e881e86edbee6eae8c595b9d529f
+checksum: f0e273fd8bb68531c2bd79942b1c636670bc1025548eeed69cbc1be460573dbf
 ---
 
 # Build and check speed
@@ -47,10 +47,10 @@ function, and both are measured before and after. See `docs/wiki/pages/compiler-
 
 ## Tasks
 
-- [ ] 1.1 (Unit) Measure a small native build at `-O0` and `-O2`, split into runtime compile, program compile and link, and record it in `harness/results/`
-- [ ] 1.2 (Unit) Cache the runtime's object keyed by a hash of the runtime sources, `clang`'s path and version, the optimization, sanitizer and shared-library flags, and the target; rebuild on a miss only. The cache lives in a per-user directory with owner-only permissions, never a shared fixed path; an entry is written to a temporary file and renamed into place, and its hash is checked before it is linked. Record in `docs/wiki/pages/transpilation-strategy.md` that the runtime is compiled once per toolchain and flags, citing adr:0025
+- [x] 1.1 (Unit) Measure a small native build at `-O0` and `-O2`, split into runtime compile, program compile and link, and record it in `harness/results/`
+- [x] 1.2 (Unit) Cache the runtime's object keyed by a hash of the runtime sources, `clang`'s path and version, the optimization, sanitizer and shared-library flags, and the target; rebuild on a miss only. The cache lives in a per-user directory with owner-only permissions, never a shared fixed path; an entry is written to a temporary file and renamed into place, and its hash is checked before it is linked. Record in `docs/wiki/pages/transpilation-strategy.md` that the runtime is compiled once per toolchain and flags, citing adr:0025
   _Depends 1.1_
-- [ ] 1.3 (Unit) Probe `clang` once per process and turn a missing linker or Windows SDK into a diagnostic that names what is missing, rather than passing clang's raw output through
+- [x] 1.3 (Unit) Probe `clang` once per process and turn a missing linker or Windows SDK into a diagnostic that names what is missing, rather than passing clang's raw output through
 - [ ] 2.1 (Unit) Measure check latency after a one-line body edit in a large file through `lotml-db`, and record it as the baseline
 - [ ] 2.2 (Unit) Make each file's interfaces a tracked salsa input with high durability, so a check no longer re-parses them
   _Depends 2.1_

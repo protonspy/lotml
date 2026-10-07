@@ -29,6 +29,11 @@ loses no inlining. The cache key must cover:
 - the optimization, sanitizer and shared-library flags;
 - the target.
 
+That cache is built (plans/build-and-check-speed.md): the runtime's object is kept per user,
+keyed by all four, and a second build takes it from there. On the same machine a small build
+went from 0.37 s to 0.12 s at `-O0` and from 0.92 s to 0.08 s at `-O2`
+(`harness/results/build-speed.md`); [[transpilation-strategy]] says how an entry is kept sound.
+
 This also answers the Cranelift question. A faster code generator could replace only the `.ll`
 step, which is the smaller one. plix's native code still loses to CPython on calls because of
 its runtime design: boxed arguments, floats on the heap, and an error-flag check after every

@@ -128,7 +128,7 @@ over this file answers with the example above as well as with the notes. -->
 - n-0088 2026-10-07 #gotcha @compiler/crates/lotml-py/src/from_ir.rs — lotml-py: Python 3.12 refuses a Name, Attribute, Subscript, List, Tuple or Starred node without ctx where 3.13 defaults it, so a node missing one passes on a 3.13 machine and fails CI; the backend test every_node_with_a_context_carries_one guards it
 - n-0089 2026-10-07 #gotcha @compiler/crates/lotml-syntax/src/lexer.rs — an unclosed bracket keeps the lexer above depth 0, where newlines and indentation are dropped, so every later definition is lost to the parse (read, not reproduced)
 - n-0090 2026-10-07 #gotcha @compiler/crates/lotml-check/src/lib.rs — expression types are keyed by span, so a desugared node that reuses its source span overwrites the type recorded for it
-- n-0091 2026-10-07 #ceiling @compiler/crates/lotml-llvm/src/driver.rs — the runtime's lotml.c is compiled again on every native build and every LLVM test, about 60-80% of a small build; caching its object lifts it
+<!-- n-0091 removed -->
 - n-0092 2026-10-07 #ceiling @compiler/crates/lotml-runtime/c/lotml_text.c — lt_offset counts code points from the start, so s[i] is O(n) on non-ASCII text and an index loop over it quadratic
 - n-0093 2026-10-07 #ceiling @compiler/crates/lotml-runtime/c/lotml.c — lt_shortest tries up to 17 precisions through snprintf and strtod; Ryu finds the shortest form directly
 - n-0094 2026-10-07 #ceiling @compiler/crates/lotml-llvm/src/emit.rs — the emitted IR calls the extern lt_inc rather than the inline one in lotml.h, and nothing optimizes the two units together

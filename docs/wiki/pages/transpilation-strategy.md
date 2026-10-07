@@ -157,6 +157,15 @@ calls, exporting the functions whose signatures C can be given
 Python, so a Python module's import is refused there; a C library is called directly and linked
 (adr:0013-c-libraries-through-interfaces-named-c).
 
+The runtime stays a separate unit, as adr:0025-two-targets-python-for-run-llvm-for-build has it,
+and is compiled once per toolchain and flags rather than with every program. Its object is kept in
+a per-user cache readable by its owner alone (`LOTML_CACHE_DIR`, or the system's cache directory),
+keyed by the runtime's sources, `clang`'s path and `--version`, and the flags it was compiled with.
+An entry is written to a temporary file, renamed into place, and checked against the SHA-256 its
+name carries before it is linked. The runtime was 58% of a small `-O0` build and 92% of an `-O2`
+one; with its object cached, the build takes 35% and 9% of its time
+(`harness/results/build-speed.md`).
+
 The suite is still the corpus: all 509 programs report the same on the Python and LLVM targets
 (`harness/results/parity-llvm.md`). Against hand-written C built by the same `clang`
 (`harness/results/benchmarks-llvm.md`), mandelbrot takes 0.69x its time, fib 1.74x, sieve 2.26x,
