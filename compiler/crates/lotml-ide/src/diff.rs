@@ -114,7 +114,7 @@ fn line(n: usize) -> u32 {
 }
 
 /// A file's symbol-addressed declarations: their symbol, kind and lines.
-fn declared(text: &str) -> Vec<Declaration> {
+pub fn declared(text: &str) -> Vec<Declaration> {
     let mut workspace = Workspace::new();
     let path = std::path::Path::new("diff.lotml");
     workspace.set(path, text.to_string());

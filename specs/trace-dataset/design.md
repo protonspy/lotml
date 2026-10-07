@@ -65,12 +65,14 @@ The model's entry and its providers' start `unknown`: whether Z.ai's terms and t
 provider OpenRouter routes it to allow training on the outputs is unverified, and the export stays
 shut until someone records them (plans/agent-data.md, task 1.1). A grant given in conversation is
 not evidence; a link to it in writing is. A row whose `providers` is empty is denied (R1.3): it
-cannot show who served it.
+cannot show who served it. A response whose metadata names no provider is counted under `unnamed`,
+which the registry holds no entry for, so one such call denies the whole run.
 
 **Identity** (R1.6). The exporter reads model, arm, task and providers from the `row` in each
 trace, rejects a trace whose directory names differ from the row's, derives the source from the
-task id (`humaneval-<n>` is `humaneval-original`, `mbpp-<n>` is `mbpp-original`, a benchmark directory name is `bench`) and
-rejects a row whose `source` says otherwise or is missing. Symbolic links among the traces are
+task id (`humaneval-<n>` is `humaneval-original`, `mbpp-<n>` is `mbpp-original`, a benchmark directory name is `bench`, and
+any other spelling is `unknown` — MultiPL-E's `HumanEval_<n>_<name>` among them, though the split
+maps it to its problem) and rejects a row whose `source` says otherwise or is missing. Symbolic links among the traces are
 skipped. Output paths are built from constants and the date only.
 
 **What the trace must carry** (R2.1, R2.2, R2.4). The `Meter` snapshots the workspace's `.lotml`
@@ -82,7 +84,8 @@ both workspace-relative. The trace gains `checks: [{"paths": [...], "before": {.
 "after": {...}, "report": {...} | null, "status": "success" | "error"}]` in call order, and
 `tests` in the same shape for every `test` call (R2.5), whose report is `lotml test --json`'s. A
 `test` report can carry Python's load errors, which name host paths; the home directory and the
-user's name are replaced with `~` and `<user>` before the trace is written. A snapshot cut at its
+user's name, where it is a whole segment of a path, are replaced with `~` and `<user>` before the
+trace is written, and the exporter does the same to every record it writes. A snapshot cut at its
 cap marks the call `truncated`, which R3.4 treats as files changed, so a cut file never opens or
 closes a repair. Of the model's invocation parameters only the tool schemas are kept.
 `lotml --version` is read once per run into the trace and the row. The first call of the main
@@ -147,13 +150,16 @@ needs. Held-out records are never written, so no trainer can read one; the evalu
 traces itself.
 
 **Scrubbing** (R2.3, R3.7). Secrets: the values of every environment variable whose name ends in
-`_KEY`, `_TOKEN` or `_SECRET`, compared exactly and only when eight characters or longer — an
+`_KEY`, `_TOKEN`, `_SECRET`, `_PASSWORD` or `_PASS`, compared exactly and only when eight characters or longer — an
 empty or short value would match everything — and the shapes `sk-[A-Za-z0-9_-]{20,}`,
 `ghp_[A-Za-z0-9]{30,}`, `hf_[A-Za-z0-9]{30,}`, `AKIA[0-9A-Z]{16}`, `Bearer [A-Za-z0-9._~+/-]{20,}`
 and three-part JWTs. In a dataset record a secret drops the record; in a row or report bound for
 `harness/results/` it is replaced with `<redacted>` before writing, the `error` field included.
 Hidden tests: a record holding an `assert` line of the task's hidden blocks, compared after
-collapsing whitespace, is dropped — unless the same call and expected value appear in the task's
+collapsing whitespace and matched whole, a trailing comment allowed, is dropped — unless the
+task's prompt pairs the same call with the same expected value, as a docstring's example does
+(`>>> f(x)` and the value on the next line, or `f(x) == y`), or holds the whole assert. A call and
+a value found apart in the prompt do not count: a short value such as `2` is in almost any
 prompt. Many HumanEval cases are its docstring's examples, and an agent that copies one into its
 own `test` block writes an identical line; dropping it would remove exactly the runs that test
 themselves. Every drop is counted by reason in the manifest, so the bias it could introduce shows.

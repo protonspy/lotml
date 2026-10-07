@@ -14,17 +14,17 @@
 
 ## 2 · Running and reporting
 
-- [ ] 2.1 (TDD) Draw a seeded sample of the kept tasks, the same for every arm and model — R2.1
-- [ ] 2.2 (Unit) Run HumanEval tasks from the command line with `--source humaneval`, `--sample`, `--seed` and `--task humaneval-<n>` — R2.1, R2.2
+- [x] 2.1 (TDD) Draw a seeded sample of the kept tasks, the same for every arm and model — R2.1
+- [x] 2.2 (Unit) Run HumanEval tasks from the command line with `--source humaneval`, `--sample`, `--seed` and `--task humaneval-<n>` — R2.1, R2.2
   _Depends 1.6, 2.1_
-- [ ] 2.3 (Unit) Record every row's source, and report pass@1 per source, the arms' McNemar comparison on first attempts, and failures by signature apart from behaviour — R2.3, R2.4, R2.5
+- [x] 2.3 (Unit) Record every row's source, and report pass@1 per source, the arms' McNemar comparison on first attempts, and failures by signature apart from behaviour — R2.3, R2.4, R2.5
   _Depends 2.2_
 
 ## 3 · MBPP's tasks
 
-- [ ] 3.1 (Unit) Download MBPP's original `mbpp.jsonl` at a pinned commit through the same digested download — R3.1
+- [x] 3.1 (Unit) Download MBPP's original `mbpp.jsonl` at a pinned commit through the same digested download — R3.1
   _Depends 1.1_
-- [ ] 3.2 (TDD) Find the one function an MBPP problem's tests call, refusing a problem whose tests call none or several, and record its outermost calls by running the setup and the asserts against the canonical code — R3.3, R3.4
+- [x] 3.2 (TDD) Find the one function an MBPP problem's tests call, refusing a problem whose tests call none or several, and record its outermost calls by running the setup and the asserts against the canonical code — R3.3, R3.4
   _Depends 1.2, 3.1_
-- [ ] 3.3 (Unit) Build MBPP agent tasks as HumanEval's are built, the problem's text as the docstring, run them with `--source mbpp` and `--task mbpp-<n>`, and write their report with the CC BY 4.0 attribution — R3.2, R3.5, R3.6
+- [x] 3.3 (Unit) Build MBPP agent tasks as HumanEval's are built, the problem's text as the docstring, run them with `--source mbpp` and `--task mbpp-<n>`, and write their report with the CC BY 4.0 attribution — R3.2, R3.5, R3.6
   _Depends 1.6, 2.2, 3.2_

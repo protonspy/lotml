@@ -19,6 +19,7 @@ import secrets
 import subprocess
 import sys
 import tempfile
+import warnings
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -471,6 +472,8 @@ def typed(
         raise Refused("record", recorded.error)
     if not recorded.cases:
         raise Refused("record", "no case")
+    if any(arguments is NO_LITERAL for arguments, _ in recorded.cases):
+        raise Refused("literal", "an argument has no literal")
     if any(len(arguments) != len(names) for arguments, _ in recorded.cases):
         raise Refused("signature", "a call leaves out a parameter")
     try:
@@ -507,11 +510,18 @@ def pose(
     )
 
 
+def _parsed(source: str) -> ast.Module:
+    """`source` parsed, quietly: a dataset's regular expressions hold escapes Python warns of."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", SyntaxWarning)
+        return ast.parse(source)
+
+
 def _function(source: str, entry: str) -> tuple[list[str], str]:
     """The parameter names of `entry`'s `def` in `source` and its docstring: the first string
     statement of its body, which a stray `import` may precede."""
     try:
-        tree = ast.parse(source)
+        tree = _parsed(source)
     except SyntaxError as error:
         raise Refused("signature", "the source does not parse") from error
     found = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == entry]
@@ -590,6 +600,94 @@ def _ident(record: dict) -> str:
     if task_id.startswith("HumanEval/"):
         return "humaneval-" + task_id.removeprefix("HumanEval/")
     return f"mbpp-{task_id}"
+
+
+MBPP_NOTICE = """\
+MBPP (Mostly Basic Python Problems), from "Program Synthesis with Large Language Models",
+Austin et al., 2021, released by Google Research under the Creative Commons Attribution 4.0
+International licence (CC BY 4.0, https://creativecommons.org/licenses/by/4.0/). The problems are
+posed here as lotml agent tasks: their text as a docstring, their tests' recorded values as
+hidden test blocks.
+"""
+"""The attribution CC BY 4.0 asks for, carried by MBPP's report."""
+MBPP_REPORT = RESULTS / "agent-mbpp.md"
+
+
+def mbpp_url() -> str:
+    return (
+        "https://raw.githubusercontent.com/google-research/google-research/"
+        f"{sources.MBPP}/mbpp/mbpp.jsonl"
+    )
+
+
+def read_mbpp() -> tuple[list[dict], str]:
+    """MBPP's 974 records and the SHA-256 of the bytes they were parsed from (R3.1)."""
+    target = sources.CACHE / "mbpp" / sources.MBPP / "mbpp.jsonl"
+    data = sources.pinned(mbpp_url(), target, sources.MBPP_SHA256)
+    records = [json.loads(line) for line in data.decode("utf-8").splitlines() if line.strip()]
+    return records, sources.MBPP_SHA256
+
+
+def called_function(problem: dict) -> str:
+    """The one function of an MBPP problem's code its asserts call; `Refused` when they call none
+    of its functions, or more than one (R3.4)."""
+    try:
+        defined = {n.name for n in _parsed(problem["code"]).body if isinstance(n, ast.FunctionDef)}
+    except SyntaxError as error:
+        raise Refused("signature", "the code does not parse") from error
+    called: set[str] = set()
+    for line in problem["test_list"]:
+        try:
+            tree = _parsed(line)
+        except SyntaxError as error:
+            raise Refused("tests", "an assert does not parse") from error
+        called |= {
+            node.func.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in defined
+        }
+    if len(called) != 1:
+        raise Refused("tests", f"the tests call {len(called)} of its functions")
+    return called.pop()
+
+
+def record_mbpp(problem: dict) -> Recorded:
+    """The outermost calls of the tested function the asserts make, after the setup code (R3.3)."""
+    entry = called_function(problem)
+    tests = "\n".join(problem["test_list"])
+    return record(problem["code"], tests, entry, "asserts", setup=problem["test_setup_code"])
+
+
+def pose_mbpp(problem: dict, lotml: Lotml | None = None) -> AgentTask:
+    """MBPP's problem as `mbpp-<n>`, posed as HumanEval's are: the tested function's name and
+    parameter names from its `def`, the problem's text as the docstring (R3.2)."""
+    number = int(problem["task_id"])
+    entry = called_function(problem)
+    names, _ = _function(problem["code"], entry)
+    return pose(f"mbpp-{number}", entry, names, problem["text"], record_mbpp(problem), lotml)
+
+
+def mbpp_tasks(lotml: Lotml | None = None) -> tuple[list[AgentTask], Report]:
+    """MBPP's kept problems as agent tasks, and the report of what was read."""
+    records, digest = read_mbpp()
+    return build(records, digest, lambda problem: pose_mbpp(problem, lotml))
+
+
+def write_mbpp_report(report: Report, path: Path = MBPP_REPORT) -> None:
+    origin = f"google-research/google-research at `{sources.MBPP}`, `mbpp/mbpp.jsonl`"
+    path.write_text(
+        markdown(report, "Agent tasks from MBPP", origin, MBPP_NOTICE), encoding="utf-8"
+    )
+
+
+def sample(ids: list[str], count: int, seed: int = 0) -> list[str]:
+    """`count` of the kept tasks, drawn by a generator seeded with `seed` from the ids sorted, so
+    the draw depends on the seed and the set alone — the same for every arm and model (R2.1)."""
+    ordered = sorted(ids)
+    random.Random(seed).shuffle(ordered)  # noqa: S311 - a reproducible draw
+    return ordered[:count]
 
 
 def humaneval_tasks(lotml: Lotml | None = None) -> tuple[list[AgentTask], Report]:

@@ -1,9 +1,9 @@
 ---
 autonomy: auto
 ci: wait
-branch: feat/guide-training
-delivery: merged
-pr: 18
+branch: feat/guide-evaluation
+delivery: in-review
+pr: 23
 ---
 
 # Agent HumanEval — requirements

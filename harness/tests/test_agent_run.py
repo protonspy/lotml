@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
+from langchain_core.utils.function_calling import convert_to_openai_tool
 
 from lotml_harness.agent import run as runner
 from lotml_harness.agent.bench import tasks
@@ -39,10 +40,11 @@ return best
 
 
 class Scripted(GenericFakeChatModel):
-    """A chat model answering from a script; tools are bound by name only."""
+    """A chat model answering from a script; its tools are bound as a real model's are, so their
+    schemas reach its invocation parameters."""
 
     def bind_tools(self, tools, **_):
-        return self
+        return self.bind(tools=[convert_to_openai_tool(t) for t in tools])
 
 
 def said(n: int, *calls: tuple[str, dict], text: str = "") -> AIMessage:
@@ -75,6 +77,7 @@ def test_a_solved_task_passes_with_its_metrics(tmp_path: Path):
         "done",
     )
     assert row["model_calls"] == 4
+    assert row["source"] == "bench"
     assert row["tools"] == {"check": 1, "replace": 2, "test": 1}
     assert row["tool_errors"] == 0 and row["check_errors"] == 0
     assert row["tokens"] == {"input": 400, "output": 40, "reasoning": 0}
@@ -242,3 +245,71 @@ def test_lines_changed_counts_both_sides():
 def test_check_output_with_errors_is_recognised():
     assert runner.reports_errors('{"summary": {"errors": 2}}')
     assert not runner.reports_errors('{"summary": {"errors": 0, "clean": true}}')
+
+
+def test_the_trace_keeps_the_files_around_every_check_and_test_and_the_context(tmp_path: Path):
+    broken = "x = 1\nx = 2\nreturn None"
+    model = scripted(
+        said(1, ("replace", {"symbol": "median", "part": "body", "text": broken})),
+        said(2, ("check", {"paths": ["/stats.lotml"]})),
+        said(3, ("replace", {"symbol": "median", "part": "body", "text": MEDIAN})),
+        said(4, ("check", {"paths": ["/stats.lotml"]})),
+        said(5, ("test", {"paths": ["/stats.lotml"]})),
+        said(6, text="Done."),
+    )
+    row = runner.run(TASKS["median-mode"], "agents", 0, model, "scripted", traces=tmp_path)
+    trace = json.loads((tmp_path / "scripted" / "agents" / "median-mode-0.json").read_text("utf-8"))
+    first, second = trace["checks"]
+    assert first["paths"] == ["stats.lotml"], "the file tools' leading / is stripped"
+    assert first["status"] == "success" and not first["truncated"]
+    assert first["before"] == first["after"], "check changes no file"
+    assert "x = 2" in first["before"]["stats.lotml"]
+    assert first["report"]["summary"]["errors"] > 0
+    assert second["report"]["summary"]["errors"] == 0
+    assert "mid = len(s) // 2" in second["before"]["stats.lotml"]
+    [test] = trace["tests"]
+    assert test["paths"] == ["stats.lotml"]
+    assert test["status"] == "success" and test["report"]["tests"]
+    assert trace["compiler"].startswith("lotml ") and row["compiler"] == trace["compiler"]
+    assert runner.SYSTEM in trace["system"]
+    assert {t["function"]["name"] for t in trace["tools"]} >= {"check", "test", "replace"}
+
+
+def test_a_snapshot_skips_links_and_marks_a_cut(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    (tmp_path / "a.lotml").write_text("fn f() -> int:\n    return 1\n", encoding="utf-8")
+    (tmp_path / "big.lotml").write_text("x" * 100, encoding="utf-8")
+    monkeypatch.setattr(runner, "SNAPSHOT_FILE", 50)
+    files, cut = runner.bounded_snapshot(tmp_path)
+    assert list(files) == ["a.lotml"]
+    assert cut
+    try:
+        (tmp_path / "link.lotml").symlink_to(tmp_path / "a.lotml")
+    except OSError:
+        return
+    files, _ = runner.bounded_snapshot(tmp_path)
+    assert "link.lotml" not in files
+
+
+def test_a_test_report_names_no_home_directory_or_user():
+    home, user = str(Path.home()), Path.home().name
+    text = json.dumps({"message": f"cannot load {home}/x.py or D:/work/{user}/y.py"})
+    shown = runner.anonymised(text)
+    assert home not in shown and user not in shown
+    assert "~" in shown and "D:/work/<user>/y.py" in shown
+
+
+def test_a_word_holding_the_user_name_is_left_alone(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(Path, "home", lambda: Path("/home/test"))
+    shown = runner.anonymised("the contest in /srv/test/a.py and /srv/tester/b.py")
+    assert shown == "the contest in /srv/<user>/a.py and /srv/tester/b.py"
+
+
+def test_a_response_naming_no_provider_is_counted_under_one_the_registry_does_not_hold():
+    from langchain_core.outputs import ChatGeneration, LLMResult
+
+    meter = runner.Meter()
+    named, unnamed = said(0), said(1)
+    unnamed.response_metadata = {"cost": 0.001}
+    generations = [[ChatGeneration(message=named)], [ChatGeneration(message=unnamed)]]
+    meter.on_llm_end(LLMResult(generations=generations))
+    assert meter.providers == {"Scripted": 1, runner.UNNAMED: 1}

@@ -3,6 +3,7 @@
     python -m lotml_harness.agent --attempts 3
     python -m lotml_harness.agent --model z-ai/glm-5.3-flash --arm agents --task stock-take
     python -m lotml_harness.agent --report-only
+    python -m lotml_harness.agent --source humaneval --sample 50 --seed 0
 
 Rows go to `harness/results/agent/<model>__<arm>.jsonl`, the report to `harness/results/agent.md`.
 A task, arm and attempt already recorded is skipped, unless its run ended in a model error.
@@ -15,10 +16,11 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from lotml_harness.agent import report
+from lotml_harness.agent import humaneval, report, secrets
 from lotml_harness.agent.bench import AgentTask, tasks
 from lotml_harness.agent.run import ARMS, MODEL, error_row, openrouter, run
 from lotml_harness.experiments.phase1 import RESULTS
+from lotml_harness.tasks.sources import DigestMismatch
 
 RUNS = RESULTS / "agent"
 REPORT = RESULTS / "agent.md"
@@ -40,18 +42,54 @@ def pending(found: list[AgentTask], attempts: int, done: list[dict]) -> list[tup
     return [(t, a) for t in found for a in range(attempts) if (t.id, a) not in recorded]
 
 
+def chosen(args: argparse.Namespace) -> list[AgentTask] | None:
+    """The tasks to run: the benchmark's, or HumanEval's or MBPP's kept ones, sampled or named.
+    None when the source cannot be read: then nothing runs (specs/agent-humaneval/ R2.1, R2.2,
+    R3.5)."""
+    if args.source == "bench":
+        return [t for t in tasks() if not args.task or t.id in args.task]
+    reading, writing = {
+        "humaneval": (humaneval.humaneval_tasks, humaneval.write_humaneval_report),
+        "mbpp": (humaneval.mbpp_tasks, humaneval.write_mbpp_report),
+    }[args.source]
+    try:
+        kept, built = reading()
+    except (DigestMismatch, OSError, ValueError) as failure:
+        print(f"{args.source} could not be read, so nothing runs: {failure}", file=sys.stderr)
+        return None
+    writing(built)
+    drawn = (
+        set(humaneval.sample([t.id for t in kept], args.sample, args.seed)) if args.sample else None
+    )
+    return [
+        t for t in kept if (not args.task or t.id in args.task) and (drawn is None or t.id in drawn)
+    ]
+
+
 def main(argv: list[str] | None = None, runs: Path = RUNS, written: Path = REPORT) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--model", default=MODEL, help="an OpenRouter model id")
     parser.add_argument("--arm", action="append", choices=ARMS, help="both when absent")
     parser.add_argument("--attempts", type=int, default=1, help="runs per task and arm")
     parser.add_argument("--task", action="append", help="only these tasks")
+    parser.add_argument("--source", choices=("bench", "humaneval", "mbpp"), default="bench")
+    parser.add_argument(
+        "--sample", type=int, help="with --source humaneval or mbpp: N tasks by --seed"
+    )
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--report-only", action="store_true")
     parser.add_argument("--live", action="store_true", help="say each model and tool call")
     args = parser.parse_args(argv)
+    for prefix in ("humaneval", "mbpp"):
+        if any(t.startswith(f"{prefix}-") for t in args.task or []):
+            args.source = prefix
+    if args.sample is not None and args.source == "bench":
+        parser.error("--sample draws from --source humaneval or mbpp")
     if not args.report_only:
-        found = [t for t in tasks() if not args.task or t.id in args.task]
+        found = chosen(args)
+        if found is None:
+            return
         model = openrouter(args.model)
         lock = threading.Lock()
         runs.mkdir(parents=True, exist_ok=True)
@@ -73,6 +111,7 @@ def main(argv: list[str] | None = None, runs: Path = RUNS, written: Path = REPOR
                     row = error_row(
                         task, arm, attempt, args.model, f"{type(failure).__name__}: {failure}"
                     )
+                row = secrets.scrub_value(row)
                 with lock, path.open("a", encoding="utf-8") as out:
                     out.write(json.dumps(row) + "\n")
                 print(
@@ -85,7 +124,7 @@ def main(argv: list[str] | None = None, runs: Path = RUNS, written: Path = REPOR
             with ThreadPoolExecutor(max_workers=args.workers) as pool:
                 list(pool.map(one, todo))
     rows = [row for path in sorted(runs.glob("*.jsonl")) for row in read_rows(path)]
-    text = report.markdown(rows)
+    text = secrets.scrub(report.markdown(rows))
     written.write_text(text, encoding="utf-8")
     sys.stdout.buffer.write(text.encode("utf-8"))
 

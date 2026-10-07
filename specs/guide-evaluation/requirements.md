@@ -1,6 +1,9 @@
 ---
 autonomy: auto
 ci: wait
+branch: feat/guide-evaluation
+delivery: in-review
+pr: 23
 ---
 
 # Guide evaluation — requirements

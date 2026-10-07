@@ -27,6 +27,16 @@ class Grade:
     """The compiler's output when tests did not run: the agent's text, kept to the trace."""
 
     @property
+    def failure(self) -> str | None:
+        """Why a run that did not pass failed: `signature` when its files check alone but the
+        hidden blocks appended do not — the agent's types refused the tests' values — and
+        `behaviour` otherwise; None for a pass (specs/agent-humaneval/ R2.5)."""
+        if self.outcome == "pass":
+            return None
+        refused = any(f.endswith("the tests did not run") for f in self.failures)
+        return "signature" if self.checks and refused else "behaviour"
+
+    @property
     def outcome(self) -> str:
         if self.total > 0 and self.passed == self.total:
             return "pass"

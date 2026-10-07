@@ -72,7 +72,8 @@ reason; shown over shown would be 100% by construction.
 ```
 
 Rows hold symbols, booleans, numbers and the tool's fixed reason codes — no code and no free text
-from the model or the server — and pass the agent harness's scrub before writing, so committing
+from the model or the server; a `lotml guide ask` that overran the evaluation's deadline is silent
+for `deadline`, and one that crashed or printed no JSON for `unread`, the harness's own code — and pass the agent harness's scrub before writing, so committing
 them commits no prompt and no secret; the report is built from rows alone.
 
 ## Alternatives considered

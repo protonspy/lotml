@@ -71,3 +71,14 @@ pub fn diff(before: &Path, after: &Path, path: &str, as_json: bool) -> Result<bo
     }
     Ok(true)
 }
+
+/// Print a file's symbol-addressed declarations as JSON: symbol, kind and lines, in source order.
+pub fn outline(path: &Path) -> Result<bool, Failure> {
+    let text = files::read(path)?;
+    let listed: Vec<_> = lotml_ide::diff::declared(&text)
+        .iter()
+        .map(|d| json!({"symbol": d.symbol, "kind": d.kind, "lines": d.lines}))
+        .collect();
+    println!("{}", serde_json::Value::Array(listed));
+    Ok(true)
+}

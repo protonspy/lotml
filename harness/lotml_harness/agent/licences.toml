@@ -1,0 +1,44 @@
+# Whether training on what a task source, a model or a provider produced is permitted, with the
+# evidence and the date it was checked (specs/trace-dataset/). Default deny: a run is exported only
+# when its source, its model and every provider that served it say exactly "permitted", each with
+# evidence that resolves, the date checked and the notice to carry. A grant given in conversation
+# is not evidence; a link to it in writing is.
+
+[sources.bench]
+licence = "MIT"
+training = "permitted"
+evidence = "LICENSE"
+checked = 2026-10-06
+notice = "Copyright (c) 2026 Mateus Andrade, MIT License"
+
+[sources.humaneval-original]
+licence = "MIT"
+training = "permitted"
+evidence = "https://github.com/openai/human-eval/blob/d321ec0b6c23dec317337be99f6d0c45ca73f3d5/LICENSE"
+checked = 2026-10-06
+notice = "Copyright (c) OpenAI (https://openai.com), MIT License"
+
+# The task set's typed translations; never an agent harness source, named so they cannot be read
+# for the originals above.
+[sources.multipl-e-humaneval]
+licence = "BSD-3-Clause with a machine-learning restriction"
+training = "forbidden"
+evidence = "harness/results/NOTICE.md"
+checked = 2026-10-06
+notice = ""
+
+[sources.multipl-e-mbpp]
+licence = "BSD-3-Clause with a machine-learning restriction"
+training = "forbidden"
+evidence = "harness/results/NOTICE.md"
+checked = 2026-10-06
+notice = ""
+
+# Whether Z.ai's terms, and those of each provider OpenRouter routes the model to, allow training on
+# its outputs is unverified (plans/agent-data.md, task 1.1).
+[models."z-ai/glm-5.3-flash"]
+terms = ""
+training = "unknown"
+evidence = ""
+checked = ""
+notice = ""

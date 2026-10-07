@@ -44,6 +44,22 @@ group the default environment leaves out.
   `reference/grammar/tree-sitter/` and parses the corpus with it in the harness tests, which
   skip without `npx`; it compiles the parser with the platform's C compiler.
 
+## The harness guide (`harness/`, group `train`, adr:0017-a-half-billion-coder-model-tuned-locally-and-served-by-llama-server)
+
+Outside the default environment: `uv run --group train` trains the guide on the local GPU.
+
+- **torch** 2.11.0 built for CUDA 12.8, from PyTorch's own index — the training runtime on the
+  local RTX 3060.
+- **transformers** 5.19.0, **peft** 0.21.2, **trl** 1.0.0 — the base model, its LoRA adapter, and
+  supervised fine-tuning with the loss on the answer alone.
+- **datasets** 5.1.0 and **accelerate** 1.15.0 — what trl reads its examples through and trains
+  with.
+- **llama.cpp** (build b11450, a release binary and its source's `convert_hf_to_gguf.py`, used by
+  path) — converts the merged guide to a Q4_K_M GGUF, and `llama-server` serves it on the CPU with
+  JSON-schema answers and log-probabilities, the request the `guide` tool sends.
+- **Qwen/Qwen2.5-Coder-0.5B-Instruct** (revision `ea3f2471`, Apache-2.0) — the base model; its
+  tokenizer counts the guidance records.
+
 ## Compiler (`compiler/`)
 
 A Cargo workspace, Rust 1.97 and edition 2024 (adr:0006-compiler-written-in-rust), with a lock

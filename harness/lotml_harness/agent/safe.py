@@ -87,12 +87,14 @@ def lotml(
     binary: Path | str = COMPILER,
     memory: int = MEMORY,
     output: int = OUTPUT,
+    env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess | None:
     """`lotml <args> -- <files>` in `cwd`: the clean environment, a memory cap on the call and on
     each process it starts, its output written to files and only `output` bytes of it read, and
     at `deadline` the whole process tree ended — a job object on Windows, a session killed as a
-    group on POSIX. None when the deadline passed; a call that printed more than `output` bytes
-    comes back with no output and status -1."""
+    group on POSIX; `env` adds variables the call needs by name, to the clean environment. None
+    when the deadline passed; a call that printed more than `output` bytes comes back with no
+    output and status -1."""
     command = [
         sys.executable,
         "-m",
@@ -108,7 +110,7 @@ def lotml(
         with subprocess.Popen(  # noqa: S603
             command,
             cwd=cwd,
-            env=child_environment(),
+            env=child_environment() | (env or {}),
             stdout=out,
             stderr=err,
             start_new_session=posix,
