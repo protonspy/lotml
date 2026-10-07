@@ -38,10 +38,10 @@ harness already speaks OpenRouter: `price(gpu, cloud)` reads `GET /catalog/gpus/
 `harness/results/runpod.md`, built from it. Spent is the sum of the rows' costs; a row's cost is
 the price times the time from creation to the confirmed termination, rounded up to the minute. The
 estimate uses the deadline, not a guess at the duration, so a run that hangs still fits. The cap
-is `--cap`, default 25.00 USD, the amount the user approved on 2026-10-07. Before a pod is
-created a row is written with `ended: null`, and the watcher completes it; a row left open by a
-crash is counted at its full deadline until `pipeline reconcile` reads the pod's real end from the
-API.
+is `--cap`, default 25.00 USD, the amount the user approved on 2026-10-07. As soon as RunPod
+returns the pod's id a row is written with `ended: null`, and the watcher completes it; a row left
+open by a crash is counted at its full deadline until `pipeline reconcile` closes it — a pod still
+there terminated and closed now, a pod gone closed at its deadline or now, whichever is sooner.
 
 **The deadline** (R1.4, R1.5) is enforced twice. The watcher terminates the pod when the run's
 `status.json` says `done` or `failed`, or when the deadline passes. Inside the pod, the bootstrap
