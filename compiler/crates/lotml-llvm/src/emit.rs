@@ -24,7 +24,7 @@ pub fn program(lowered: &Lowered, file: &str) -> Result<String, Vec<Diagnostic>>
             Err((span, what)) => refused.push(Diagnostic::error(
                 "E0402",
                 span,
-                format!("`--target llvm` does not compile {what} yet: build with `--target python` or `--target c`"),
+                format!("`--target llvm` does not compile {what} yet: run it with `--target python`"),
             )),
         }
     }
@@ -35,8 +35,7 @@ pub fn program(lowered: &Lowered, file: &str) -> Result<String, Vec<Diagnostic>>
         refused.push(Diagnostic::error(
             "E0402",
             f.span,
-            "`--target llvm` does not compile a `main` that returns a value yet: build with `--target python` or \
-             `--target c`"
+            "`--target llvm` does not compile a `main` that returns a value yet: run it with `--target python`"
                 .to_string(),
         ));
     }
@@ -196,7 +195,7 @@ fn int_kind(kind: IntKind) -> (u32, bool) {
     }
 }
 
-/// The range of a kind narrower than 64 bits, and its name, as `lt_fit` checks it in the C target.
+/// The range of a kind narrower than 64 bits, and its name, as the runtime's `lt_fit` checks it.
 fn range(kind: IntKind) -> Option<(i64, i64, &'static str)> {
     Some(match kind {
         IntKind::I8 => (i64::from(i8::MIN), i64::from(i8::MAX), "i8"),
@@ -210,7 +209,7 @@ fn range(kind: IntKind) -> Option<(i64, i64, &'static str)> {
 }
 
 /// The LLVM type of a value of `ty` in a register, when this backend compiles values of `ty`:
-/// every float is a `double`, as the C target and the Python target keep it.
+/// every float is a `double`, as the Python target keeps it.
 fn value_ty(ty: &Ty) -> Option<String> {
     match ty {
         Ty::Int(kind) => Some(format!("i{}", int_kind(*kind).0)),
@@ -757,7 +756,7 @@ impl<'a> Writer<'a> {
         }
     }
 
-    /// `int(x)`, `float(n)`, `i32(n)` and the rest: checked as the C target checks them.
+    /// `int(x)`, `float(n)`, `i32(n)` and the rest: checked as the runtime's conversions check them.
     fn convert_expr(&mut self, value: &Operand, from: &Ty, to: &Ty) -> Result<Value, Refusal> {
         let v = self.operand(value)?;
         let f64_ty = Ty::Float(lotml_check::ty::FloatKind::F64);
@@ -801,7 +800,7 @@ impl<'a> Writer<'a> {
         let (x, y) = (self.operand(a)?, self.operand(b)?);
         let (x, y) = (self.convert(x, ty)?, self.convert(y, ty)?);
         let vty = value_ty(ty).map_or_else(|| self.refuse(format!("`min` or `max` of {ty}")), Ok)?;
-        // `b < a ? b : a` for `min` and `b > a ? b : a` for `max`, as the C target writes them.
+        // `b < a ? b : a` for `min` and `b > a ? b : a` for `max`, as the runtime's `lt_min_f64` and `lt_max_f64` do.
         let cond = match (ty, max) {
             (Ty::Float(_), false) => "fcmp olt",
             (Ty::Float(_), true) => "fcmp ogt",

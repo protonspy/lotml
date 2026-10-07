@@ -26,11 +26,11 @@ jobs:
         run: cargo fmt --manifest-path compiler/Cargo.toml --all --check
       - name: Lint
         run: cargo clippy --manifest-path compiler/Cargo.toml --locked --all-targets -- -D warnings
+      - name: Clang
+        # The LLVM target's tests build with it; under CI they fail rather than skip without it.
+        run: clang --version
       - name: Test
         run: cargo test --manifest-path compiler/Cargo.toml --locked
-        env:
-          # The C target's programs run under AddressSanitizer and UndefinedBehaviorSanitizer.
-          LOTML_SANITIZE: "1"
 
   harness:
     runs-on: ubuntu-latest

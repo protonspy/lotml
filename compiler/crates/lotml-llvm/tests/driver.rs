@@ -17,6 +17,7 @@ fn clang() -> Option<driver::Clang> {
     match driver::find() {
         Ok(clang) => Some(clang),
         Err(e) => {
+            assert!(std::env::var_os("CI").is_none(), "CI has no clang: {e}");
             eprintln!("skipped: {e}");
             None
         }

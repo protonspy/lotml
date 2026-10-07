@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-const LOWERING: [&str; 4] = ["lotml-ir", "lotml-c", "lotml-py", "lotml-runtime"];
+const LOWERING: [&str; 4] = ["lotml-ir", "lotml-llvm", "lotml-py", "lotml-runtime"];
 
 fn read(path: &str) -> String {
     let full = Path::new(env!("CARGO_MANIFEST_DIR")).join(path);

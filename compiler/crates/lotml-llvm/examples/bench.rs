@@ -1,22 +1,23 @@
-//! The benchmarks of plans/lotml-roadmap.md task 4.3: each `<name>.lotml` of a directory built
-//! by the C backend, and the `<name>.c` beside it written by hand, both by the C compiler the
-//! driver finds with the same options; each run `runs` times. A JSON line naming the compiler,
+//! The benchmarks (plans/lotml-roadmap.md task 4.3, specs/llvm-parity R5.2): each `<name>.lotml`
+//! of a directory built by the LLVM backend at `-O2`, and the `<name>.c` beside it written by hand,
+//! built by the same `clang` at `-O2`; each run `runs` times. A JSON line naming the compiler,
 //! then one per benchmark: its name, the seconds of each run of either program, and what each
-//! printed.
+//! printed — or, for a program the LLVM backend does not compile yet, why.
 //!
-//!     cargo run --release -p lotml-c --example bench -- <directory> [runs]
+//!     cargo run --release -p lotml-llvm --example bench -- <directory> [runs]
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 
+use lotml_llvm::driver::{self, Level};
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let dir = PathBuf::from(args.next().expect("the directory of the benchmarks"));
     let runs: usize = args.next().map_or(5, |r| r.parse().expect("a number of runs"));
-    let compiler = lotml_c::driver::find().unwrap_or_else(|e| panic!("{e}"));
-    let program = compiler.program.file_name().map_or(String::new(), |n| n.to_string_lossy().into_owned());
-    println!("{{\"compiler\": {program:?}}}");
+    let clang = driver::find().unwrap_or_else(|e| panic!("{e}"));
+    println!("{{\"compiler\": \"clang {}\"}}", clang.version);
     let scratch = scratch();
     let mut names: Vec<String> = std::fs::read_dir(&dir)
         .expect("the benchmarks")
@@ -29,16 +30,22 @@ fn main() {
         std::fs::create_dir_all(&out).expect("a scratch directory");
         let source = dir.join(format!("{name}.lotml"));
         let text = std::fs::read_to_string(&source).expect("the program");
-        let c = lotml_c::compile(&text, &source)
-            .unwrap_or_else(|d| panic!("{name}: {:?}", d.iter().map(|d| &d.message).collect::<Vec<_>>()));
-        std::fs::write(out.join("program.c"), c).expect("the C");
+        let ll = match lotml_llvm::compile(&text, &source) {
+            Ok(ll) => ll,
+            Err(d) => {
+                let why = d.first().map_or(String::new(), |d| d.message.clone());
+                println!("{{\"name\": {name:?}, \"refused\": {why:?}}}");
+                continue;
+            }
+        };
+        std::fs::write(out.join("program.ll"), ll).expect("the IR");
         lotml_runtime::write(&out).expect("the runtime");
         let lotml = exe(&out, "program");
-        compiler.build(&out.join("program.c"), &lotml, &[]).unwrap_or_else(|e| panic!("{e}"));
+        clang.build(&out.join("program.ll"), &out, &lotml, Level::Release, &[]).unwrap_or_else(|e| panic!("{e}"));
         let baseline = exe(&out, "baseline");
         let written = out.join("baseline.c");
         std::fs::copy(dir.join(format!("{name}.c")), &written).expect("the baseline");
-        compiler.build(&written, &baseline, &[]).unwrap_or_else(|e| panic!("{e}"));
+        clang.build_c(&written, &baseline).unwrap_or_else(|e| panic!("{e}"));
         let (c_times, c_out) = time(&baseline, runs);
         let (lotml_times, lotml_out) = time(&lotml, runs);
         println!(

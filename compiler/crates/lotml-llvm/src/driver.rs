@@ -118,6 +118,23 @@ impl Clang {
     }
 }
 
+impl Clang {
+    /// Compile the C file `source`, on its own, into the executable `exe` at `-O2`: the hand-written
+    /// programs the benchmarks time LotML against.
+    pub fn build_c(&self, source: &Path, exe: &Path) -> Result<(), String> {
+        let mut command = Command::new(&self.program);
+        command.args(["-std=c11", "-O2", "-w", "-o"]).arg(exe).arg(source);
+        if !cfg!(windows) {
+            command.arg("-lm");
+        }
+        let out = command.output().map_err(|e| format!("could not run {}: {e}", self.program.display()))?;
+        if out.status.success() {
+            return Ok(());
+        }
+        Err(format!("clang failed on {}:\n{}", source.display(), String::from_utf8_lossy(&out.stderr).trim_end()))
+    }
+}
+
 /// What a failed build says: an error `clang` found in the IR is a bug in the compiler that wrote
 /// it, and the `.ll` file is kept to report it with (R1.5); any other is `clang`'s own.
 fn rejected(output: &str, ll: &Path) -> String {

@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: 42778914b28bf538d225a86c471c459287ed38f4386995b483cc205352d9b772
+checksum: d4d61a34fe53965f98af835d775a4111c210e7bc41ab4477be9abd1ba5515abf
 ---
 
 # IR architecture
@@ -78,7 +78,7 @@ makes an executable.
   _Depends 1.2_
   _Status removed_
   _Reason reorder after analysing the research report: the LLVM target needs only the monomorphic IR, so the first executable lands before the Python backend's rewrite; re-added as 3.3_
-- [ ] 2.1 (Unit) Write and build the spec llvm-backend: `add`, `fib`, `collatz` and `mandelbrot`
+- [x] 2.1 (Unit) Write and build the spec llvm-backend: `add`, `fib`, `collatz` and `mandelbrot`
   print on `--target llvm` what they print on the Python target
   _Depends 1.2_
 - [ ] 2.2 (Unit) Write and build the spec llvm-parity: the parity suite identical on the
@@ -109,7 +109,7 @@ makes an executable.
       does not change what they run
   _Depends 2.6_
   _Reason review of the plan: adr:0022's context missed these two callers of build_
-- [ ] 2.5 (Unit) Retire the C target: remove `--target c`, the C emitter and its
+- [x] 2.5 (Unit) Retire the C target: remove `--target c`, the C emitter and its
       compiler
       discovery, keep the runtime crate `clang` compiles, run the parity suite on the Python and
       LLVM targets, and fold specs/c-backend into specs/llvm-parity

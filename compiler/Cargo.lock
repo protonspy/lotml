@@ -169,12 +169,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
-name = "find-msvc-tools"
-version = "0.1.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
-
-[[package]]
 name = "foldhash"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -263,7 +257,6 @@ name = "lotml"
 version = "0.1.0"
 dependencies = [
  "clap",
- "lotml-c",
  "lotml-check",
  "lotml-db",
  "lotml-diag",
@@ -274,20 +267,6 @@ dependencies = [
  "lotml-runtime",
  "lotml-syntax",
  "salsa",
- "serde_json",
-]
-
-[[package]]
-name = "lotml-c"
-version = "0.1.0"
-dependencies = [
- "find-msvc-tools",
- "lotml-check",
- "lotml-diag",
- "lotml-ir",
- "lotml-py",
- "lotml-runtime",
- "lotml-syntax",
  "serde_json",
 ]
 

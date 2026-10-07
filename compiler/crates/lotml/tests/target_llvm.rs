@@ -24,6 +24,7 @@ fn has_clang() -> bool {
     match lotml_llvm::driver::find() {
         Ok(_) => true,
         Err(e) => {
+            assert!(std::env::var_os("CI").is_none(), "CI has no clang: {e}");
             eprintln!("skipped: {e}");
             false
         }

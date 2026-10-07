@@ -288,15 +288,16 @@ pub const ALL: &[Code] = &[
     },
     Code {
         code: "E0401",
-        title: "a Python module on the C target",
-        explanation: "A program built with `--target c` runs without Python, so it cannot import a Python module \
-        through its interface. Build it for the Python target, or write the function in lotml; a C library is \
-        imported from its `c.<library>` interface instead.",
+        title: "a Python module in a native program",
+        explanation: "A program built natively (`--target llvm`) runs without Python, so it cannot import a \
+        Python module through its interface. Run it with `lotml run`, on CPython, where every Python library is \
+        reachable; or, to build it natively, write the function in LotML or import it from a C library's \
+        `c.<library>` interface.",
     },
     Code {
         code: "E0402",
-        title: "not compiled by the C backend",
-        explanation: "The C backend does not compile this construct yet. The program checks and runs on the Python \
-        target; build it without `--target c`.",
+        title: "not compiled by the LLVM backend yet",
+        explanation: "The LLVM backend does not compile this construct yet. The program checks and runs on the \
+        Python target: run it with `lotml run`, or build it with `--target python`.",
     },
 ];

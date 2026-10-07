@@ -10,6 +10,10 @@ pr: 16
 
 ## Purpose
 
+Retired (adr:0025-two-targets-python-for-run-llvm-for-build): the C target and its backend are
+gone, the runtime it built on stays as `lotml-runtime`, and the native contract below is restated
+for the LLVM target by `specs/llvm-parity/`. What follows records the C target as it was built.
+
 lotml's second target (plans/lotml-roadmap.md task 4.1, R18 and R19 of the roadmap): a checked
 program compiled to C and built by the platform's C compiler, giving the results the Python target
 gives, with memory managed by reference counting as adr:0008-value-semantics-with-reuse-before-borrowing
