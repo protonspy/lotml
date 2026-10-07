@@ -29,6 +29,7 @@ results the Python target gives. It lifts the native targets' refusal of Python 
 - **R2.3** If the CPython library cannot be loaded, or a module does not import, then the LLVM backend's program shall stop with status 101, naming the library or module and where it looked.
 - **R2.4** If no Python is found at build time, or the one found is older than 3.10 or free-threaded, then the LLVM backend shall stop with a diagnostic naming the reason and `LOTML_PYTHON`.
 - **R2.5** While a program imports no Python module, the LLVM backend's program shall neither load nor need CPython.
+- **R2.6** When such a program starts CPython, the LLVM backend's program shall give it the recorded home and module search path, whatever `PYTHONHOME`, `PYTHONPATH` or the working directory say.
 
 ## Out of scope
 

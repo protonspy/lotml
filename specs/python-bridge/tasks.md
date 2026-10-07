@@ -3,7 +3,7 @@
 ## 1 · Loading CPython
 
 - [ ] 1.1 (Unit) Ask the found Python for its library, search path, version and build at build time, refusing one older than 3.10 or free-threaded — R2.1, R2.4
-- [ ] 1.2 (Unit) Load the library and import the program's modules before `main` in the runtime's bridge, stopping with status 101 when either fails, and compile the bridge only into programs that import Python — R2.2, R2.3, R2.5
+- [ ] 1.2 (Unit) Load the library and import the program's modules before `main` in the runtime's bridge, stopping with status 101 when either fails, and compile the bridge only into programs that import Python — R2.2, R2.3, R2.5, R2.6
   _Depends 1.1_
 
 ## 2 · Calling

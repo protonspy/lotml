@@ -33,9 +33,12 @@ LLVM function with `dllexport` on Windows; the functions it wraps stay `internal
 exports exactly R1.2's symbols.
 
 A wrapper initialises the runtime once (an atomic flag, so a first call from two threads is
-safe), pushes the function's name on the runtime's per-thread stack of active functions so a
-panic names it, converts each `str` argument into a runtime string — validating UTF-8 first —
-calls the function, releases what it allocated, and returns. A panic calls the same runtime
+safe), converts each `str` argument into a runtime string — validating UTF-8 first — calls the
+function, releases what it allocated, and returns. A panic inside names its function through
+the constant place every site that can stop carries (`specs/llvm-backend/`); the runtime keeps
+no stack of active functions, so the wrapper pushes nothing. Its narrow integer and `bool`
+parameters and results carry the `signext` or `zeroext` `clang` gives the same C declaration,
+so a caller built by gcc, clang or MSVC reads the same bits. A panic calls the same runtime
 function a program's panic calls, which ends the process.
 
 ## Risks

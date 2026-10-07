@@ -48,6 +48,11 @@ Serves R1.2, R1.3, R1.4.
 - A call into a Python module through its interface is an expression of the IR
   (`CallPython { module, function, args, ret }`), beside `CallC`. The Python backend compiles it;
   the native targets refuse it at the import until `specs/python-bridge/`.
+- The IR prints as text, one statement per line with its span (R1.5): what `lower`, `mono` and
+  the native passes produce is compared in tests as text, so a change to a pass shows in review
+  without going through a backend. A verifier (R1.6) runs after each pass in test builds and
+  checks every local is set before it is read and every operand has the type its use needs; the
+  three emitters then rely on those facts instead of each re-checking them.
 - The argument forms `Arg::Address`, `Out`, `Desc`, `Offset` and `Slot` say how the native
   runtime takes a value. They stay: the LLVM backend calls the same runtime. The Python backend
   reads the operand out of each and ignores descriptors and offsets.
@@ -62,7 +67,10 @@ three backends call one runtime.
 ## Risks
 
 - `lower.rs` (3,852 lines) instantiates as it lowers; splitting instantiation out is the largest
-  change. R4.2 and R4.3 are the guard, run before every commit that moves code.
+  change. R4.2 and R4.3 are the guard, run before every commit that moves code. R4.3 compares
+  against a baseline measured on the same machine just before the move, never against the
+  recorded run of another session: the shortest benchmarks take 19 ms, where noise alone
+  exceeds 5%, so the gate is the geometric mean, with a looser bound per program.
 - A rule lowered in a form only C could read — a temporary the Python backend cannot name, a
   place projection with no Python meaning — shows up in `specs/python-on-ir/`, not here. That
   spec changes the IR as a delta to this one.

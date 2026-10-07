@@ -21,6 +21,8 @@ place.
 - **R1.2** The IR shall carry, on every statement, the source span it was lowered from.
 - **R1.3** The IR shall name the language's built-in operations and calls into Python and C libraries by what they do, never by a symbol of one backend's runtime.
 - **R1.4** When a program is lowered, the IR shall keep each generic function and type generic, every use carrying its type arguments.
+- **R1.5** The IR shall print as text, one statement per line with its span, in the form its tests compare.
+- **R1.6** If a pass leaves a local read before it is set, or an operand whose type is not the one its use requires, then the IR's verifier shall report the pass and the statement when a test build runs it after each pass.
 
 ## R2 · Lowering once
 
@@ -37,7 +39,7 @@ place.
 
 - **R4.1** The C backend shall compile from the IR after the native passes, without importing `lotml_syntax::ast`.
 - **R4.2** When the parity suite runs, the C target shall report the same row for every program as before the IR existed.
-- **R4.3** When the benchmarks run, the C target shall take no more than 5% longer on each than in the run recorded before the IR existed.
+- **R4.3** When the benchmarks run on the machine of a baseline run made just before from the commit preceding the IR, the C target shall take no more than 5% longer than the baseline as the geometric mean of the benchmarks, and no more than 10% longer on any one.
 
 ## Out of scope
 

@@ -27,14 +27,31 @@ the opaque `ptr` form, which sets the oldest supported `clang` at 17; the driver
 `clang --version` and refuses older ones (R1.3).
 
 **Checks and panics.** `+`, `-` and `*` on integers call `llvm.{s,u}{add,sub,mul}.with.overflow`
-and branch on the flag to a cold block that calls the runtime's panic function with the file,
-line and function, then `unreachable` (R2.3, R2.4). Division tests the divisor, and the
-`INT_MIN / -1` case, before dividing. `//` and `%` round toward negative infinity, as the C
-target writes them. The runtime keeps the stack of active function names it keeps for the C
-target, and the emitter calls the same push and pop.
+and branch on the flag to a cold block that calls the runtime's panic function, then
+`unreachable` (R2.3, R2.4). Division tests the divisor, and the `INT_MIN / -1` case, before
+dividing. `//` and `%` round toward negative infinity, as the C target writes them. All of this
+is written in IR, not called: the C target reaches it through `static inline` functions of
+`lotml.h` (`lt_add_i64`, `lt_floordiv_i64`, …), which no object file exports (n-0079).
+
+**Where a panic happened.** The C target names the place with `LT_HERE`, an `lt_at {file,
+line, function}` built from `#line`, `__LINE__` and the `lt_fn` every generated C function
+declares; the runtime keeps no stack of active functions. The emitter writes one constant
+`lt_at` global per site that can stop, from the statement's span and the function's LotML name,
+and passes its address (n-0080).
+
+**The boundary with the runtime.** The runtime's functions take `lt_at` by value — 112
+declarations in `lotml.h` — and LLVM does not lower an aggregate argument to the platform's C
+ABI: `clang` passes that 24-byte struct through a hidden pointer on Win64 and `byval` on SysV, so
+a call written with the struct as a value reads the wrong bytes (n-0078). The runtime gains,
+for each function the emitter calls, an entry point taking `const lt_at *`, the C target's
+callers unchanged, and the rule is general (R2.7): what crosses into the runtime is a scalar or
+a pointer. Integers narrower than 32 bits and `bool` cross with the `signext` or `zeroext`
+`clang` gives them.
 
 **Printing.** `print` calls the runtime functions the built-in table names for each type, so a
-float is written by the runtime's CPython `repr`, never by `printf` (R2.5).
+float is written by the runtime's CPython `repr`, never by `printf` (R2.5). A string literal goes
+to the runtime as a pointer to its bytes and a length, so this increment depends on no cell
+layout; static string cells arrive with `specs/llvm-parity/`'s layout test.
 
 **Entry.** The emitter writes `define i32 @main()`, which initialises the runtime and calls the
 program's `main`, returning the exit status `lotml run` expects.

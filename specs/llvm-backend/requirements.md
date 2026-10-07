@@ -29,6 +29,7 @@ proves the pipeline end to end before `specs/llvm-parity/` takes it to the whole
 - **R2.4** If an integer operation overflows, a divisor is zero, an `assert` fails or `todo()` runs, then the LLVM backend's program shall stop with status 101 and name the `.lot` file, line and function where it stopped.
 - **R2.5** When a float is printed, the LLVM backend's program shall print it as CPython's `repr` does.
 - **R2.6** If a program uses a construct R2.1 does not list, then the LLVM backend shall refuse it with a diagnostic at the construct that names `--target llvm` and the targets that compile it.
+- **R2.7** The LLVM backend shall pass to the runtime, and take from it, only scalars and pointers, every aggregate through a pointer, with integers narrower than 32 bits and `bool` extended as `clang` declares them.
 
 ## Out of scope
 

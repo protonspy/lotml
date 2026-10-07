@@ -12,15 +12,21 @@ adr:0023-native-programs-load-cpython-at-run-time-through-its-stable-abi:
   plus the library's own directory on Windows, `dlopen` with `RTLD_NOW | RTLD_GLOBAL` elsewhere),
   resolves the stable-ABI functions it uses into a table of function pointers, initialises the
   interpreter, sets `sys.path` to the recorded search path, imports the modules, and releases the
-  lock. Built with `Py_LIMITED_API` set to 3.10's value; it includes no Python header, declaring
+  lock. Before initialising, it sets `PYTHONHOME` in its own process's environment to the
+  recorded home and removes `PYTHONPATH` (R2.6): the stable ABI of 3.10 has no `PyConfig`, and
+  `Py_SetPythonHome` has been deprecated since 3.11, so the environment is the one lever left.
+  An executable outside the interpreter's own directory finds no standard library without the
+  home, and one that honoured the caller's `PYTHONPATH` would import whatever module the
+  environment plants (n-0076). Built with `Py_LIMITED_API` set to 3.10's value; it includes no Python header, declaring
   the few signatures it calls itself, so building a program needs no Python development files.
 - **The LLVM emitter** compiles `CallPython` (`specs/shared-ir/`), which it refuses today: the
   arguments go through the runtime's converters, then a call to the bridge, then the result's
   conversion back into `T ! PyError`.
 - **The driver** asks the found Python, once per build, for
   `sysconfig`'s shared library path (`LDLIBRARY` in `LIBDIR` on Unix, `python3XY.dll` beside
-  `sys.base_prefix` on Windows), `sys.path`, `sys.version_info` and `Py_GIL_DISABLED` (R2.1,
-  R2.4), and emits the first two as constant strings the bridge reads.
+  `sys.base_prefix` on Windows), `sys.base_prefix`, `sys.path`, `sys.version_info` and
+  `Py_GIL_DISABLED` (R2.1, R2.4), and emits the library, the home and the search path as constant
+  strings the bridge reads; the working directory and `''` are dropped from the recorded path.
 
 ## Converting values
 
