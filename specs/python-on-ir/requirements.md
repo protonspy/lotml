@@ -28,6 +28,12 @@ same tracebacks, same boundary with Python.
 - **R3.1** The Python backend shall keep the checked boundary of adr:0012-python-interop-through-checked-boundaries-and-interface-files in both directions: wrapped functions and a `.pyi` for Python callers, and calls through interfaces returning `T ! PyError`.
 - **R3.2** Where a program imports a C library through its `c.<library>` interface, the Python backend shall call it as adr:0013-c-libraries-through-interfaces-named-c defines.
 
+## R4 · The generic IR
+
+- **R4.1** When a program is lowered, the IR shall keep each generic function and type generic, every use carrying its type arguments.
+- **R4.2** When a native backend asks for a program, the IR shall make it monomorphic in a pass from IR to IR before the native passes, refusing as specs/shared-ir R3.3 defines a generic that needs instances without end.
+- **R4.3** When the parity suite and the benchmarks run, the native targets shall report what they reported, and take no longer than specs/shared-ir R4.3 allows, before the split.
+
 ## Out of scope
 
 Making the Python written from the IR read like the Python written from the syntax tree: the

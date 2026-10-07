@@ -1,5 +1,24 @@
 # Python on IR — design
 
+## The generic IR
+
+Serves R4.1, R4.2, R4.3.
+
+`specs/shared-ir/` moved lowering into `lotml-ir` still instantiating as it goes. This spec splits
+it: `lotml_ir::lower` keeps each generic function and type generic, a call carrying its type
+arguments (`Call { callee, type_args, args }`), and a pass, `lotml_ir::mono`, makes one instance
+per set of arguments before the native passes, refusing a generic that needs instances without
+end. A decision lowering takes today from a concrete type — which comparison, which runtime
+function, which trait method — becomes, on a type parameter, a node carrying the type, which
+`mono` resolves once the type is known; the native targets' parity and benchmarks hold through
+the split (R4.3).
+
+```
+lotml-ir::lower    generic IR       ──► Python backend
+  └─ lotml-ir::mono   monomorphic IR
+      └─ own, reuse, hoist   counted IR   ──► LLVM backend
+```
+
 ## What changes
 
 Serves R1.1, R1.2, R2.1, R3.1.
