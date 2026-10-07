@@ -103,3 +103,9 @@ its language and MCP servers — JSON-RPC written over `serde_json`, with no pro
 - **Windows PowerShell** 5.1 (part of Windows) — runs `editors/windows/register.ps1`, which gives
   `.lot` and `.lotml` their icon in Explorer; chosen over a `lotml` subcommand, which would link a
   registry crate into every build for something done once per machine.
+
+## Delivery (`.github/workflows/`)
+
+- **GitHub Actions** — CI on every push and pull request (`ci.yml`), and the release, started by
+  hand from `main` (`release.yml`): `lotml` built on GitHub's Linux, Windows and macOS runners and
+  published with the VS Code extension as a GitHub release. Every action is pinned to a commit.
