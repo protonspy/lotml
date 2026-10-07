@@ -107,11 +107,11 @@ def build(
     with scratch as directory:
         root = Path(directory)
         try:
-            safe.lay(root, {"before.lotml": repair["before"], "after.lotml": repair["after"]})
+            safe.lay(root, {"before.lot": repair["before"], "after.lot": repair["after"]})
         except ValueError:
             return [], ["unsafe files"]
         args = ["dev", "diff", "--path", repair["path"], "--json"]
-        diffed = safe.lotml(args, ["before.lotml", "after.lotml"], root, deadline)
+        diffed = safe.lotml(args, ["before.lot", "after.lot"], root, deadline)
         if diffed is None or diffed.returncode != 0:
             return [], ["diff failed"]
         diff = json.loads(diffed.stdout)

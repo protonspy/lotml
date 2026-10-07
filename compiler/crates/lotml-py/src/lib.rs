@@ -73,7 +73,7 @@ pub fn compile_with(source: &str, path: &Path, interfaces: &Interfaces) -> Resul
     // The path goes in as a JSON string, never into the comment: a file name may hold a newline,
     // which in a comment would start a line of Python.
     let module = format!(
-        "# Compiled by lotml: edit the .lotml source, not this file.\nimport lotml_rt\n\nlotml_rt.load_module(globals(), {file}, {payload})\n",
+        "# Compiled by lotml: edit the LotML source, not this file.\nimport lotml_rt\n\nlotml_rt.load_module(globals(), {file}, {payload})\n",
         file = serde_json::Value::String(file),
         payload = serde_json::Value::String(payload),
     );

@@ -124,10 +124,10 @@ def translated(record: dict, lotml: Lotml | None = None) -> tuple[str, str]:
     graded = AgentTask(
         id=task.id,
         kind="implement",
-        graded=("solution.lotml",),
+        graded=("solution.lot",),
         prompt="",
-        workspace_files={"solution.lotml": translation.code},
-        hidden_files={"solution.lotml": blocks},
+        workspace_files={"solution.lot": translation.code},
+        hidden_files={"solution.lot": blocks},
     )
     with tempfile.TemporaryDirectory(prefix="lotml-seeded-", ignore_cleanup_errors=True) as scratch:
         graded.lay(Path(scratch))
@@ -154,13 +154,13 @@ def humaneval_programs(lotml: Lotml | None = None, workers: int = 8) -> Taken:
         except humaneval.Refused as refusal:
             return refusal.reason
         prompt = humaneval.PROMPT.format(name=record["entry_point"])
-        files = {"solution.lotml": code.rstrip("\n") + "\n\n" + blocks}
+        files = {"solution.lot": code.rstrip("\n") + "\n\n" + blocks}
         return program(
             ident,
             "humaneval-original",
             prompt,
             files,
-            ("solution.lotml",),
+            ("solution.lot",),
             humaneval.HUMANEVAL_NOTICE,
         )
 

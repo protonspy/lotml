@@ -391,6 +391,46 @@ fn the_mcp_server_edits_by_symbol_and_reports_what_an_edit_introduced() {
 }
 
 #[test]
+fn the_mcp_server_serves_and_edits_a_lot_file_as_a_lotml_one() {
+    let dir = scratch("mcp-lot", &[("shapes.lot", SHAPES)]);
+    let file = dir.join("shapes.lot");
+    let mut mcp = Client::start(&["mcp", "--root", dir.to_str().unwrap()], false);
+    mcp.request(1, "initialize", json!({"protocolVersion": "2025-11-25", "capabilities": {}}));
+
+    let (replaced, failed) =
+        call(&mut mcp, 2, "replace", json!({"symbol": "twice", "part": "body", "text": "return 2.0 * area(s)"}));
+    assert!(!failed, "{replaced}");
+    assert_eq!(replaced, "replaced the body of `twice` in shapes.lot, line 11\nno errors introduced");
+    assert!(std::fs::read_to_string(&file).unwrap().ends_with("    return 2.0 * area(s)\n"));
+    assert!(!dir.join("shapes.lot.partial").exists() && !dir.join("shapes.lotml.partial").exists());
+
+    let (missing, failed) = call(&mut mcp, 3, "check", json!({"paths": ["other.lot"]}));
+    assert!(failed, "{missing}");
+    assert_eq!(missing, "no .lot or .lotml file at `other.lot`");
+}
+
+#[test]
+fn an_edit_never_writes_through_a_link_planted_at_its_partial_name() {
+    let dir = scratch("mcp-planted", &[("shapes.lot", SHAPES)]);
+    let victim = Path::new(env!("CARGO_TARGET_TMPDIR")).join("mcp-planted-victim.txt");
+    std::fs::write(&victim, "untouched").unwrap();
+    #[cfg(unix)]
+    let planted = std::os::unix::fs::symlink(&victim, dir.join("shapes.lot.partial"));
+    #[cfg(windows)]
+    let planted = std::os::windows::fs::symlink_file(&victim, dir.join("shapes.lot.partial"));
+    if planted.is_err() {
+        return; // this machine may not create links without privileges
+    }
+    let mut mcp = Client::start(&["mcp", "--root", dir.to_str().unwrap()], false);
+    mcp.request(1, "initialize", json!({"protocolVersion": "2025-11-25", "capabilities": {}}));
+    let (replaced, failed) =
+        call(&mut mcp, 2, "replace", json!({"symbol": "twice", "part": "body", "text": "return 2.0 * area(s)"}));
+    assert!(!failed, "{replaced}");
+    assert_eq!(std::fs::read_to_string(&victim).unwrap(), "untouched");
+    assert!(std::fs::read_to_string(dir.join("shapes.lot")).unwrap().ends_with("    return 2.0 * area(s)\n"));
+}
+
+#[test]
 fn the_language_server_renames_every_reference() {
     let dir = scratch("lsp-rename", &[("shapes.lotml", SHAPES)]);
     let file = uri(&dir.join("shapes.lotml"));

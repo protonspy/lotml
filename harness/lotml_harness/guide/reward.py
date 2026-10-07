@@ -18,7 +18,7 @@ from lotml_harness.agent import safe
 DEADLINE = 20.0
 """Seconds one judgment may take, the failing block's run included."""
 PASSES = "passes"
-FILE = "file.lotml"
+FILE = "file.lot"
 
 
 @dataclass(frozen=True)

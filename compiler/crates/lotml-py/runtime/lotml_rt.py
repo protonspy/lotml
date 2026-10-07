@@ -1,10 +1,10 @@
 """The runtime of Python modules compiled from lotml.
 
 A compiled module is a stub that hands `load` the program as a Python syntax tree whose nodes
-carry the lotml positions, so a traceback names the `.lotml` file, shows its line and underlines
-the expression. The rest is what that tree calls: results and failures, panics, the overflow
-trap, value semantics, records and variants, the prelude and the built-in methods whose lotml
-behaviour differs from Python's.
+carry the lotml positions, so a traceback names the `.lot` or `.lotml` file, shows its line and
+underlines the expression. The rest is what that tree calls: results and failures, panics, the
+overflow trap, value semantics, records and variants, the prelude and the built-in methods whose
+lotml behaviour differs from Python's.
 """
 
 import _string
@@ -1000,7 +1000,9 @@ def main(module_name: str) -> int:
         path = getattr(sys.modules.get(module_name), "__lotml__", None)
         lines = ["panic: " + type(error).__name__ + (f": {error}" if str(error) else "") + "\n"]
         for frame in traceback.extract_tb(error.__traceback__):
-            if frame.filename.endswith(".lotml") and (path is None or frame.filename == path):
+            if frame.filename.endswith((".lot", ".lotml")) and (
+                path is None or frame.filename == path
+            ):
                 lines.append(f'  File "{frame.filename}", line {frame.lineno}, in {frame.name}\n')
                 if frame.line:
                     lines.append(f"    {frame.line}\n")

@@ -17,6 +17,14 @@ def test_the_benchmark_has_eight_tasks_of_every_kind():
 
 
 @pytest.mark.parametrize("task", TASKS, ids=lambda t: t.id)
+def test_every_task_gives_the_model_lot_files_its_prompt_names(task: AgentTask):
+    """specs/lot-extension/ R2.3: what a model is given is written as `.lot`."""
+    files = [*task.graded, *task.workspace_files, *task.hidden_files, *task.solution_files]
+    assert files and all(name.endswith(".lot") for name in files), files
+    assert any(f"`{name}`" in task.prompt for name in task.graded), task.prompt
+
+
+@pytest.mark.parametrize("task", TASKS, ids=lambda t: t.id)
 def test_the_reference_solution_passes_every_hidden_test(task: AgentTask, tmp_path: Path):
     task.lay(tmp_path, solution=True)
     result = grade(task, tmp_path)
@@ -37,8 +45,8 @@ def test_an_agent_s_own_hidden_tests_do_not_count(tmp_path: Path):
     task = next(t for t in TASKS if t.id == "median-mode")
     task.lay(tmp_path)
     forged = "".join(f'\ntest "hidden: forged {i}":\n    assert True\n' for i in range(9))
-    (tmp_path / "stats.lotml").write_text(
-        (tmp_path / "stats.lotml").read_text(encoding="utf-8") + forged, encoding="utf-8"
+    (tmp_path / "stats.lot").write_text(
+        (tmp_path / "stats.lot").read_text(encoding="utf-8") + forged, encoding="utf-8"
     )
     result = grade(task, tmp_path)
     assert result.passed == 0

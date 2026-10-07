@@ -21,7 +21,7 @@ DIAGNOSTIC = {
 def repair(problem: str = "humaneval/0", bucket: str = "train") -> dict:
     return {
         "prompt": "Write `add`.",
-        "path": "solution.lotml",
+        "path": "solution.lot",
         "before": BEFORE,
         "after": AFTER,
         "diagnostics": [DIAGNOSTIC],
@@ -70,14 +70,14 @@ def test_a_repair_becomes_a_chat_example_with_and_without_its_task():
     roles = [m["role"] for m in with_task["messages"]]
     assert roles == ["system", "user", "assistant"]
     assert with_task["messages"][1]["content"].startswith(
-        "Task: Write `add`.\n\nFile solution.lotml:"
+        "Task: Write `add`.\n\nFile solution.lot:"
     )
     assert not without["messages"][1]["content"].startswith("Task:")
     assert "error E0201 at 2:16" in with_task["messages"][1]["content"]
     answer = json.loads(with_task["messages"][2]["content"])
-    assert answer["locations"] == [{"path": "solution.lotml", "symbol": "add", "lines": [1, 2]}]
+    assert answer["locations"] == [{"path": "solution.lot", "symbol": "add", "lines": [1, 2]}]
     assert answer["kind"] == "body"
-    assert answer["edit"]["arguments"]["path"] == "solution.lotml"
+    assert answer["edit"]["arguments"]["path"] == "solution.lot"
     assert with_task["meta"] == {
         "problem": "humaneval/0",
         "split": "train",
@@ -95,7 +95,7 @@ def test_a_record_keeps_the_state_it_was_rendered_from():
     with_task, without = build(repair(), ROOMY)[0]
     assert with_task["state"] == {
         "task": "Write `add`.",
-        "path": "solution.lotml",
+        "path": "solution.lot",
         "text": BEFORE,
         "diagnostics": [DIAGNOSTIC],
         "failing": None,

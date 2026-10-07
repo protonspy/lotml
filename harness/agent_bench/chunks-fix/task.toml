@@ -1,2 +1,2 @@
 kind = "fix"
-graded = ["batch.lotml"]
+graded = ["batch.lot"]

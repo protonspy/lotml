@@ -48,6 +48,31 @@ fn a_clean_file_exits_zero_and_says_so() {
 }
 
 #[test]
+fn a_directory_s_lot_and_lotml_files_are_checked_alike() {
+    let dir = scratch("both-extensions", &[("a.lot", CLEAN), ("b.lotml", BROKEN)]);
+    let out = lotml(&["check", "--json", "."], &dir);
+    let json: serde_json::Value = serde_json::from_str(&stdout(&out)).expect("JSON");
+    assert_eq!(json["summary"]["files"], 2);
+    assert_eq!(json["diagnostics"][0]["file"], "b.lotml");
+}
+
+#[test]
+fn the_help_names_the_project_lotml_and_both_extensions() {
+    let dir = scratch("help", &[]);
+    assert!(stdout(&lotml(&["--help"], &dir)).starts_with("The LotML compiler"));
+    assert!(stdout(&lotml(&["check", "--help"], &dir)).contains("searched for `.lot` and `.lotml` files"));
+}
+
+#[test]
+fn one_name_under_both_extensions_is_refused_naming_both() {
+    let dir = scratch("twins", &[("a.lot", CLEAN), ("a.lotml", CLEAN)]);
+    let out = lotml(&["check", "."], &dir);
+    let said = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "the command could not run: {said}");
+    assert!(said.contains("a.lot and a.lotml are one module under two extensions"), "{said}");
+}
+
+#[test]
 fn errors_exit_one_with_json_root_cause_first() {
     let dir = scratch("json", &[("a.lotml", BROKEN), ("b.lotml", "fn g() -> int:\n    return y\n")]);
     let out = lotml(&["check", "--json", "."], &dir);
@@ -228,6 +253,15 @@ fn a_panic_names_the_lotml_line() {
 }
 
 #[test]
+fn a_panic_in_a_lot_file_names_its_line_too() {
+    let dir = scratch("panic-lot", &[("p.lot", "fn main():\n    xs = [1]\n    print(xs[5])\n")]);
+    let out = lotml(&["run", "p.lot"], &dir);
+    assert_eq!(out.status.code(), Some(101));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("p.lot\", line 3, in main") && stderr.contains("print(xs[5])"), "{stderr}");
+}
+
+#[test]
 fn a_program_that_does_not_check_does_not_run() {
     let dir = scratch("no-run", &[("p.lotml", "fn main():\n    x = 1\n    x = 2\n")]);
     let out = lotml(&["run", "p.lotml"], &dir);
@@ -294,13 +328,13 @@ fn init_writes_the_guide_and_the_block_then_changes_nothing() {
     let out = lotml(&["init", "--harness", "none"], &dir);
     assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
     let said = stdout(&out);
-    assert!(said.contains("lotml.guide.lotml: created") && said.contains("AGENTS.md: updated"), "{said}");
+    assert!(said.contains("lotml.guide.lot: created") && said.contains("AGENTS.md: updated"), "{said}");
     let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
     assert!(agents.starts_with("# Our rules\n\nBe kind.\n\n<!-- lotml:begin -->\n## lotml\n"), "{agents}");
     assert!(agents.ends_with("<!-- lotml:end -->\n"));
     assert!(!dir.join(".mcp.json").exists());
     let again = stdout(&lotml(&["init", "--harness", "none"], &dir));
-    assert!(again.contains("lotml.guide.lotml: unchanged") && again.contains("AGENTS.md: unchanged"), "{again}");
+    assert!(again.contains("lotml.guide.lot: unchanged") && again.contains("AGENTS.md: unchanged"), "{again}");
     assert_eq!(std::fs::read_to_string(dir.join("AGENTS.md")).unwrap(), agents);
 }
 
@@ -308,13 +342,35 @@ fn init_writes_the_guide_and_the_block_then_changes_nothing() {
 fn the_guide_checks_and_its_tests_pass() {
     let dir = scratch("init-guide", &[]);
     lotml(&["init", "--harness", "none"], &dir);
-    let check = lotml(&["check", "lotml.guide.lotml"], &dir);
+    let check = lotml(&["check", "lotml.guide.lot"], &dir);
     assert_eq!(check.status.code(), Some(0), "{}", stdout(&check));
-    let test = lotml(&["test", "--json", "lotml.guide.lotml"], &dir);
+    let test = lotml(&["test", "--json", "lotml.guide.lot"], &dir);
     assert_eq!(test.status.code(), Some(0), "{}{}", stdout(&test), String::from_utf8_lossy(&test.stderr));
     let json: serde_json::Value = serde_json::from_str(stdout(&test).trim()).expect("JSON");
     assert!(json["summary"]["passed"].as_u64().unwrap() >= 14, "{json}");
-    assert_eq!(lotml(&["fmt", "--check", "lotml.guide.lotml"], &dir).status.code(), Some(0));
+    assert_eq!(lotml(&["fmt", "--check", "lotml.guide.lot"], &dir).status.code(), Some(0));
+}
+
+#[test]
+fn init_replaces_a_guide_an_earlier_init_wrote_as_lotml() {
+    let dir = scratch("init-old-guide", &[("lotml.guide.lotml", "# an old guide\n")]);
+    let out = lotml(&["init", "--harness", "none"], &dir);
+    assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
+    let said = stdout(&out);
+    assert!(said.contains("lotml.guide.lotml: renamed to lotml.guide.lot"), "{said}");
+    assert!(!dir.join("lotml.guide.lotml").exists() && dir.join("lotml.guide.lot").is_file());
+    let agents = std::fs::read_to_string(dir.join("AGENTS.md")).unwrap();
+    assert!(agents.contains("`lotml.guide.lot`") && agents.contains("(`.lot`, or `.lotml`)"), "{agents}");
+    assert_eq!(lotml(&["check", "."], &dir).status.code(), Some(0), "one guide, no pair to refuse");
+}
+
+#[test]
+fn init_leaves_an_old_guide_name_it_did_not_write_and_says_so() {
+    let dir = scratch("init-old-guide-dir", &[]);
+    std::fs::create_dir_all(dir.join("lotml.guide.lotml")).unwrap();
+    let said = stdout(&lotml(&["init", "--harness", "none"], &dir));
+    assert!(said.contains("lotml.guide.lotml: not a regular file, left as it was"), "{said}");
+    assert!(dir.join("lotml.guide.lotml").is_dir() && dir.join("lotml.guide.lot").is_file());
 }
 
 #[test]

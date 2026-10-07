@@ -20,7 +20,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
-#[command(name = "lotml", version, about = "The lotml compiler")]
+#[command(name = "lotml", version, about = "The LotML compiler")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -30,7 +30,7 @@ struct Cli {
 enum Command {
     /// Check files for syntax, type and mutability errors.
     Check {
-        /// Files, or directories searched for `.lotml` files.
+        /// Files, or directories searched for `.lot` and `.lotml` files.
         #[arg(required = true)]
         paths: Vec<PathBuf>,
         /// How to print the diagnostics.
@@ -59,7 +59,7 @@ enum Command {
     },
     /// Rewrite files in the canonical form.
     Fmt {
-        /// Files, or directories searched for `.lotml` files.
+        /// Files, or directories searched for `.lot` and `.lotml` files.
         #[arg(required = true)]
         paths: Vec<PathBuf>,
         /// Change nothing; exit 1 if a file is not in the canonical form.
@@ -68,7 +68,7 @@ enum Command {
     },
     /// Print the types and the documented signatures: the index of a project, without bodies.
     Digest {
-        /// Files, or directories searched for `.lotml` files.
+        /// Files, or directories searched for `.lot` and `.lotml` files.
         #[arg(required = true)]
         paths: Vec<PathBuf>,
     },
@@ -76,13 +76,13 @@ enum Command {
     Show {
         /// The symbol.
         symbol: String,
-        /// Files, or directories searched for `.lotml` files.
+        /// Files, or directories searched for `.lot` and `.lotml` files.
         #[arg(required = true)]
         paths: Vec<PathBuf>,
     },
     /// Compile files to Python modules, written with the runtime they import, or to executables.
     Build {
-        /// Files, or directories searched for `.lotml` files.
+        /// Files, or directories searched for `.lot` and `.lotml` files.
         #[arg(required = true)]
         paths: Vec<PathBuf>,
         /// Where to write the modules.
@@ -102,7 +102,7 @@ enum Command {
     },
     /// Run the `test` blocks, reporting the values a failed comparison saw.
     Test {
-        /// Files, or directories searched for `.lotml` files.
+        /// Files, or directories searched for `.lot` and `.lotml` files.
         #[arg(required = true)]
         paths: Vec<PathBuf>,
         /// Report as JSON.
@@ -112,7 +112,7 @@ enum Command {
         #[arg(long, value_enum, default_value = "python")]
         target: Target,
     },
-    /// Write the interface lotml imports a Python module through, from the module's stub.
+    /// Write the interface LotML imports a Python module through, from the module's stub.
     Bind {
         /// The Python module: `textwrap`, `os.path`.
         module: String,
@@ -139,7 +139,7 @@ enum Command {
     Lsp,
     /// Serve the compiler's tools to an agent over MCP, on standard input and output.
     Mcp {
-        /// The project: every `.lotml` file under it.
+        /// The project: every `.lot` and `.lotml` file under it.
         #[arg(long, default_value = ".")]
         root: PathBuf,
     },
@@ -155,7 +155,7 @@ enum Command {
 enum Guide {
     /// Ask the guide where to change the code, as the MCP tool asks it, and print its answer.
     Ask {
-        /// The project: every `.lotml` file under it.
+        /// The project: every `.lot` and `.lotml` file under it.
         #[arg(long, default_value = ".")]
         root: PathBuf,
         /// What you are doing, in a sentence or two.

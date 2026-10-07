@@ -146,7 +146,7 @@ def markdown(rows: list[dict]) -> str:
         "",
         "A deepagents agent on the agent benchmark (`harness/agent_bench/`), with the compiler's",
         "MCP tools, graded on hidden tests (specs/agent-harness/). Arm `agents`: `lotml init`",
-        "wrote `AGENTS.md`, loaded as the agent's memory, and `lotml.guide.lotml`; arm",
+        "wrote `AGENTS.md`, loaded as the agent's memory, and `lotml.guide.lot`; arm",
         "`reference`: the language reference in the system prompt. Written by",
         "`python -m lotml_harness.agent`.",
         "",
