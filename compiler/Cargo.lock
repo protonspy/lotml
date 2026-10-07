@@ -348,6 +348,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "lotml-llvm"
+version = "0.1.0"
+dependencies = [
+ "lotml-check",
+ "lotml-diag",
+ "lotml-ir",
+ "lotml-py",
+ "lotml-runtime",
+ "lotml-syntax",
+]
+
+[[package]]
 name = "lotml-py"
 version = "0.1.0"
 dependencies = [

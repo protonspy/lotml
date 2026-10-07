@@ -1,0 +1,18 @@
+[package]
+name = "lotml-llvm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lotml-syntax = { path = "../lotml-syntax" }
+lotml-diag = { path = "../lotml-diag" }
+lotml-check = { path = "../lotml-check" }
+lotml-ir = { path = "../lotml-ir" }
+lotml-runtime = { path = "../lotml-runtime" }
+
+[dev-dependencies]
+lotml-py = { path = "../lotml-py" }
+
+[lints]
+workspace = true
