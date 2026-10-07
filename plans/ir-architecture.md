@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: 73feff1668d3684eb8162e86dd43b1030de3ca883eebee02ea0716e8c3599d62
+checksum: 215f302bb625ddfa1bdee5e777f6603c6243e69ea4b3b01025e442030cf39689
 ---
 
 # IR architecture
@@ -76,6 +76,8 @@ makes an executable.
   _Depends 1.1_
 - [ ] 1.3 (Unit) Write and build the spec python-on-ir, the parity suite unchanged
   _Depends 1.2_
+  _Status removed_
+  _Reason reorder after analysing the research report: the LLVM target needs only the monomorphic IR, so the first executable lands before the Python backend's rewrite; re-added as 3.3_
 - [ ] 2.1 (Unit) Write and build the spec llvm-backend: `add`, `fib`, `collatz` and `mandelbrot`
   print on `--target llvm` what they print on the Python target
   _Depends 1.2_
@@ -93,7 +95,7 @@ makes an executable.
   _Depends 2.5_
 - [ ] 4.1 (Unit) Narrate the pipeline in `docs/codewiki/` and bring the README's architecture and
   status, `docs/stack.md` and the wiki's transpilation strategy up to date
-  _Depends 1.3, 2.3, 3.1, 3.2_
+  _Depends 2.3, 3.1, 3.2, 3.3_
 - [ ] 2.4 (Unit) Pass `--target python` where the harness experiments call `lotml build`
       and import the module it wrote (`gate2.py`, `phase1.py`), so moving the default
       does not change what they run
@@ -104,6 +106,11 @@ makes an executable.
       LLVM targets, and fold specs/c-backend into specs/llvm-parity
   _Depends 2.3, 2.4_
   _Reason the user chose LLVM as the only native target (adr:0021)_
+- [ ] 3.3 (Unit) Write and build the spec python-on-ir: one lowering from the syntax
+      tree to the IR, read with generics intact by the Python backend and after
+      monomorphization by the native ones, the parity suite unchanged
+  _Depends 1.2_
+  _Reason reorder after analysing the research report: the LLVM target needs only the monomorphic IR, so the first executable lands before the Python backend's rewrite; replaces 1.3_
 
 ## Done when
 

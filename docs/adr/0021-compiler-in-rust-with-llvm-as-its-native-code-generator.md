@@ -20,8 +20,9 @@ LLVM is reachable two ways from Rust. Linking its libraries (`llvm-sys`, `inkwel
 pinned LLVM version's development files on every machine that builds the compiler and links LLVM
 into the `lotml` binary. Writing LLVM's textual IR and handing it to `clang` needs only an
 installed toolchain, found the way CPython and the C compiler already are; `clang` also compiles
-the C runtime the native code calls into. The development machine had no LLVM toolchain; CI's
-Ubuntu runners ship `clang`.
+the C runtime the native code calls into. The development machine had no LLVM toolchain when this
+was decided — clang 23.1.3 was installed for this work afterwards, outside `PATH`; CI's Ubuntu
+runners ship `clang`.
 
 ## Decision
 
