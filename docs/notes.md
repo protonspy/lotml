@@ -126,7 +126,7 @@ over this file answers with the example above as well as with the notes. -->
 - n-0086 2026-10-07 #gotcha @compiler/crates/lotml-llvm/src/driver.rs — c-abi-export: a shared library is never built with LOTML_SANITIZE: ASan's runtime has to be the first library its host loads, and the C program the tests link it into is not built with one
 - n-0087 2026-10-07 #ceiling @compiler/crates/lotml-runtime/c/lotml.c — c-abi-export: lt_tasks_running is changed without atomics around a parallel call, which holds within one program; two host threads each calling an exported function that runs parallel at once race on it, and so on whether output is locked; an atomic count lifts it
 - n-0088 2026-10-07 #gotcha @compiler/crates/lotml-py/src/from_ir.rs — lotml-py: Python 3.12 refuses a Name, Attribute, Subscript, List, Tuple or Starred node without ctx where 3.13 defaults it, so a node missing one passes on a 3.13 machine and fails CI; the backend test every_node_with_a_context_carries_one guards it
-- n-0089 2026-10-07 #gotcha @compiler/crates/lotml-syntax/src/lexer.rs — an unclosed bracket keeps the lexer above depth 0, where newlines and indentation are dropped, so every later definition is lost to the parse (read, not reproduced)
+<!-- n-0089 removed -->
 - n-0090 2026-10-07 #gotcha @compiler/crates/lotml-check/src/lib.rs — expression types are keyed by span, so a desugared node that reuses its source span overwrites the type recorded for it
 <!-- n-0091 removed -->
 - n-0092 2026-10-07 #ceiling @compiler/crates/lotml-runtime/c/lotml_text.c — lt_offset counts code points from the start, so s[i] is O(n) on non-ASCII text and an index loop over it quadratic

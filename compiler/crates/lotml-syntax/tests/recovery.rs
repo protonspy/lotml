@@ -29,7 +29,7 @@ fn an_unclosed_parenthesis_does_not_hide_the_functions_after_it() {
 #[test]
 fn every_kind_of_definition_at_column_zero_ends_the_unclosed_bracket() {
     for (opener, definition, name) in [
-        ("(", "type Point:\n    x: int\n", "Point"),
+        ("(", "type Point(x: int, y: int)\n", "Point"),
         ("[", "fn later() -> int:\n    return 1\n", "later"),
         ("{", "test \"later\":\n    assert True\n", "later"),
     ] {

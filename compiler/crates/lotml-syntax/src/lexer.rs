@@ -359,11 +359,17 @@ const OPERATORS: &[(&str, TokenKind)] = &[
     ("=", TokenKind::Eq),
 ];
 
+/// The keywords a definition begins with, and the habits from Python the parser reports at the
+/// same place: at column 0 they end any bracket left open.
+const DEFINITIONS: &[&str] = &["fn", "type", "impl", "trait", "test", "from", "import", "async", "def", "class"];
+
 struct Lexer<'a> {
     text: &'a str,
     bytes: &'a [u8],
     pos: usize,
-    depth: usize,
+    /// The brackets open at this point, each with where it opened: inside one, newlines and
+    /// indentation are not tokens.
+    open: Vec<(u8, usize)>,
     levels: Vec<usize>,
     out: Lexed,
     at_line_start: bool,
@@ -374,7 +380,7 @@ pub fn lex(text: &str) -> Lexed {
         text,
         bytes: text.as_bytes(),
         pos: 0,
-        depth: 0,
+        open: Vec::new(),
         levels: vec![0],
         out: Lexed::default(),
         at_line_start: true,
@@ -402,7 +408,7 @@ impl Lexer<'_> {
 
     fn run(&mut self) {
         while self.pos < self.bytes.len() {
-            if self.at_line_start && self.depth == 0 {
+            if self.at_line_start && self.open.is_empty() {
                 self.indentation();
                 if self.pos >= self.bytes.len() {
                     break;
@@ -413,7 +419,10 @@ impl Lexer<'_> {
                 b' ' | b'\t' | b'\x0c' => self.pos += 1,
                 b'\r' if self.peek(1) == Some(b'\n') => self.pos += 1,
                 b'\n' | b'\r' => {
-                    if self.depth == 0 && !matches!(self.last_kind(), None | Some(TokenKind::Newline)) {
+                    if !self.open.is_empty() && self.definition_at(self.pos + 1) {
+                        self.close_unclosed();
+                    }
+                    if self.open.is_empty() && !matches!(self.last_kind(), None | Some(TokenKind::Newline)) {
                         self.push(TokenKind::Newline, self.pos, self.pos + 1);
                     }
                     self.pos += 1;
@@ -445,6 +454,29 @@ impl Lexer<'_> {
             self.push(TokenKind::Dedent, end, end);
         }
         self.push(TokenKind::Eof, end, end);
+    }
+
+    /// Whether a definition starts at `at`, at the start of a line: at column 0, a keyword an item
+    /// begins with, then a space and the name or string the item goes on with. A bracket still
+    /// open there was never closed, since no expression goes on that way.
+    fn definition_at(&self, at: usize) -> bool {
+        let rest = self.bytes.get(at..).unwrap_or_default();
+        DEFINITIONS.iter().any(|word| {
+            let Some(after) = rest.strip_prefix(word.as_bytes()) else { return false };
+            let gap = after.iter().take_while(|c| matches!(c, b' ' | b'\t')).count();
+            gap > 0
+                && after
+                    .get(gap)
+                    .is_some_and(|&c| c == b'_' || c == b'"' || c == b'\'' || c.is_ascii_alphabetic() || c >= 0x80)
+        })
+    }
+
+    /// Report each bracket still open as never closed, and close them, so the line ahead is read
+    /// as the start of a definition rather than as more of the expression.
+    fn close_unclosed(&mut self) {
+        for (bracket, start) in std::mem::take(&mut self.open) {
+            self.error(start, start + 1, format!("this `{}` is never closed", bracket as char), None);
+        }
     }
 
     /// At the start of a logical line: measure its indentation and compare with the open levels.
@@ -605,9 +637,11 @@ impl Lexer<'_> {
                 let start = self.pos;
                 self.pos += text.len();
                 match kind {
-                    TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => self.depth += 1,
+                    TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => {
+                        self.open.push((self.bytes[start], start));
+                    }
                     TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
-                        self.depth = self.depth.saturating_sub(1);
+                        self.open.pop();
                     }
                     _ => {}
                 }

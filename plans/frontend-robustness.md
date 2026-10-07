@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: f91b762bd98c764c0972d45776f677d02ccec63386aa5a453ca3e7f9440856dd
+checksum: b0609d50d13ee91be79641b3b378601d9f1c05c8dc4516b5f0726bd41a8fd2ff
 ---
 
 # Frontend robustness
@@ -46,7 +46,7 @@ without a panic. See `docs/wiki/pages/prior-art-compilers.md` and `research/prio
 
 ## Tasks
 
-- [ ] 1.1 (TDD) Reproduce, in a test, an unclosed `(` hiding every later `fn` from the outline, then recover at the next line that starts a definition at column 0 so the rest of the file parses
+- [x] 1.1 (TDD) Reproduce, in a test, an unclosed `(` hiding every later `fn` from the outline, then recover at the next line that starts a definition at column 0 so the rest of the file parses
 - [ ] 1.2 (Unit) Guard every parser loop so it always consumes a token or stops, and test that each node's span is ordered and nested inside its parent's over the corpus
 - [ ] 1.3 (Unit) Lower an `elif` chain iteratively in the `if_chain` of `lower.rs`, or bound its length with a diagnostic, so a long chain cannot recurse through the compiler's stack
 - [ ] 2.1 (Unit) Check whether any desugared node reuses a source span in the checker's type map; if one does, key expression types by node identity and add the case as a test
