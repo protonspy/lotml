@@ -95,3 +95,15 @@ def test_the_settings_are_adr_0020_s():
     assert (settings.loss, settings.scale, settings.beta) == ("dr_grpo", "none", 0.0)
     assert (settings.epsilon, settings.epsilon_high, settings.temperature) == (0.2, 0.28, 1.0)
     assert settings.learning_rate == 1e-5 and settings.completion == 1024
+
+
+def test_the_best_step_is_the_highest_validation_reward_the_later_on_a_tie():
+    history = [
+        {"step": 50, "eval_reward": 0.6},
+        {"step": 60, "reward": 0.9},
+        {"step": 100, "eval_reward": 0.7},
+        {"step": 150, "eval_reward": 0.7},
+        {"step": 200, "eval_reward": 0.65},
+    ]
+    assert grpo.best_step(history) == 150
+    assert grpo.best_step([{"step": 10, "reward": 0.5}]) is None

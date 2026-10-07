@@ -13,6 +13,7 @@ without them.
 
 import json
 import random
+import shutil
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -126,6 +127,21 @@ def summary(history: list[dict]) -> dict:
     }
 
 
+def best_step(history: list[dict]) -> int | None:
+    """The step whose evaluation on the validation sample scored the highest reward, the later one
+    on a tie; None when the run was never evaluated. TRL logs the evaluation's reward but does not
+    hand it to the trainer's own choice of a best model, so the run keeps every checkpoint and
+    this picks one."""
+    evaluated = [
+        (e["eval_reward"], e["step"]) for e in history if "eval_reward" in e and "step" in e
+    ]
+    return max(evaluated)[1] if evaluated else None
+
+
+ADAPTER = ("adapter_config.json", "adapter_model.safetensors")
+"""What a checkpoint holds of the adapter, copied out as the run's adapter."""
+
+
 def fit(
     settings: Settings,
     records: Path,
@@ -135,7 +151,8 @@ def fit(
     callbacks: list | None = None,
 ) -> dict:
     """Train a fresh adapter on top of `adapter`, merged, on the pool the `samples` calibrate; save
-    to `out/adapter` the checkpoint best on a validation sample, and return the run's report."""
+    to `out/adapter` the checkpoint best on a validation sample, every checkpoint kept to choose
+    from, and return the run's report."""
     import torch
     from datasets import Dataset
     from peft import LoraConfig, PeftModel
@@ -177,10 +194,6 @@ def fit(
         eval_steps=settings.checkpoint_steps,
         save_strategy="steps",
         save_steps=settings.checkpoint_steps,
-        save_total_limit=2,
-        load_best_model_at_end=True,
-        metric_for_best_model="eval_reward",
-        greater_is_better=True,
         report_to=[],
         seed=settings.seed,
     )
@@ -205,7 +218,15 @@ def fit(
     started = time.time()
     resumed = bool(sorted((out / "checkpoints").glob("checkpoint-*")))
     trainer.train(resume_from_checkpoint=resumed)
-    trainer.model.save_pretrained(out / "adapter")
+    best = best_step(trainer.state.log_history)
+    kept = out / "checkpoints" / f"checkpoint-{best}"
+    if best is not None and all((kept / name).exists() for name in ADAPTER):
+        (out / "adapter").mkdir(parents=True, exist_ok=True)
+        for name in ADAPTER:
+            shutil.copy2(kept / name, out / "adapter" / name)
+    else:
+        trainer.model.save_pretrained(out / "adapter")
+    rewards = {e["step"]: e["eval_reward"] for e in trainer.state.log_history if "eval_reward" in e}
     return {
         "settings": asdict(settings),
         "pool": len(chosen),
@@ -213,8 +234,8 @@ def fit(
         "sampled": len(samples),
         "always": sum(1 for r in samples if r["mean"] >= 1.0),
         "never": sum(1 for r in samples if r["mean"] <= 0.0),
-        "best": trainer.state.best_model_checkpoint,
-        "best_metric": trainer.state.best_metric,
+        "best": None if best is None else f"checkpoint-{best}",
+        "best_metric": rewards.get(best),
         "seconds": round(time.time() - started, 1),
         **summary(trainer.state.log_history),
         "unjudged": getattr(scorer, "unjudged", 0),
