@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: 86c346a589a5546b8e82399bfa6d605047736e64ec73fc6b972aeb87946aa044
+checksum: a8ca7f36ab7bb753abf04951ff1b12af3f2821d23c2b31b349d08cbe36be69c6
 ---
 
 # IR architecture
@@ -100,7 +100,7 @@ makes an executable.
 - [x] 3.2 (Unit) Write and build the spec c-abi-export: a C program calling a function from a
   library `lotml build` wrote
   _Depends 2.5_
-- [ ] 4.1 (Unit) Narrate the pipeline in `docs/codewiki/` and bring the README's
+- [x] 4.1 (Unit) Narrate the pipeline in `docs/codewiki/` and bring the README's
       architecture and
   status, `docs/stack.md` and the wiki's transpilation strategy up to date
   _Depends 2.3, 3.2, 3.3_
