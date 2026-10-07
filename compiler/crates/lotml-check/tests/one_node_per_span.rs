@@ -31,7 +31,7 @@ fn every_corpus_program_types_each_span_from_one_expression() {
     assert!(programs.len() > 500, "the corpus holds its programs");
     for (task, text) in &programs {
         let result = std::panic::catch_unwind(|| checked(text));
-        assert!(result.is_ok(), "{task}: two expressions share a span");
+        assert!(result.is_ok(), "{task}: the check panicked, two expressions sharing a span among the causes");
     }
 }
 

@@ -1069,8 +1069,6 @@ impl<'p> Body<'p> {
         ty
     }
 
-    /// `ty`, counted against [`BODY_TYPES`]: an error once the body's types pass it, the first
-    /// time reported.
     /// Report a field's format spec that the value it formats would refuse when the program runs
     /// (plans/frontend-robustness.md 2.2); a value whose type is not known yet is left to the run.
     fn format_spec(&mut self, value: &Expr, ty: &Ty, conversion: Option<char>, spec: &[StrPart]) {
@@ -1091,6 +1089,8 @@ impl<'p> Body<'p> {
         }
     }
 
+    /// `ty`, counted against [`BODY_TYPES`]: an error once the body's types pass it, the first
+    /// time reported.
     fn kept(&mut self, span: Span, ty: Ty) -> Ty {
         self.stored = self.stored.saturating_add(ty.size());
         if self.stored <= BODY_TYPES {
