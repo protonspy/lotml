@@ -81,3 +81,15 @@ def test_the_reward_scores_a_group_of_completions_and_counts_the_unjudged(
     assert found == [1.0, 0.0, 0.0]
     assert scorer.unjudged == 1
     assert scorer.__name__ == "compiler"
+
+
+def test_the_reward_reads_the_dataset_s_json_columns(monkeypatch: pytest.MonkeyPatch):
+    seen = []
+    monkeypatch.setattr(
+        reward,
+        "judge",
+        lambda text, state, deadline=0: seen.append(state) or Judged(True, [None], "none"),
+    )
+    found = Reward(workers=1)(["x"], state=[json.dumps(STATE)], truth=[json.dumps([None])])
+    assert found == [0.5]
+    assert seen == [STATE]

@@ -135,14 +135,17 @@ def train(settings: Settings, records: Path, out: Path, callbacks: list | None =
     return report
 
 
-def merge(model: str, revision: str, adapter: Path, out: Path) -> Path:
-    """The base model with the adapter merged into it, saved with its tokenizer."""
+def merge(model: str, revision: str, adapters: list[Path], out: Path) -> Path:
+    """The base model with `adapters` merged into it in order — the supervised one, then any
+    trained on top of it — saved with its tokenizer."""
     import torch
     from peft import PeftModel
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    base = AutoModelForCausalLM.from_pretrained(model, revision=revision, dtype=torch.bfloat16)
-    PeftModel.from_pretrained(base, str(adapter)).merge_and_unload().save_pretrained(out)
+    merged = AutoModelForCausalLM.from_pretrained(model, revision=revision, dtype=torch.bfloat16)
+    for adapter in adapters:
+        merged = PeftModel.from_pretrained(merged, str(adapter)).merge_and_unload()
+    merged.save_pretrained(out)
     AutoTokenizer.from_pretrained(model, revision=revision).save_pretrained(out)
     return out
 
@@ -181,7 +184,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--quantization", default="Q4_K_M")
     args = parser.parse_args(argv)
     if args.export:
-        merged = merge(args.model, args.revision, args.out / "adapter", args.out / "merged")
+        merged = merge(args.model, args.revision, [args.out / "adapter"], args.out / "merged")
         print(export(merged, args.llama_cpp, args.out, args.quantization))
         return
     settings = Settings(model=args.model, revision=args.revision)

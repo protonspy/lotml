@@ -20,9 +20,11 @@ fetch() {
   echo "$3  $1" | sha256sum -c --quiet -
   tar -xzf "$1" -C "$llama"
 }
-fetch "$llama/bin.tar.gz" \
-  "https://github.com/ggml-org/llama.cpp/releases/download/$LOTML_LLAMA/llama-$LOTML_LLAMA-bin-ubuntu-x64.tar.gz" \
+release="https://github.com/ggml-org/llama.cpp/releases/download/$LOTML_LLAMA"
+fetch "$llama/bin.tar.gz" "$release/llama-$LOTML_LLAMA-bin-ubuntu-cuda-12.8-x64.tar.gz" \
   "$LOTML_LLAMA_BINARY_SHA256"
+fetch "$llama/cudart.tar.gz" "$release/cudart-llama-$LOTML_LLAMA-bin-ubuntu-cuda-12.8-x64.tar.gz" \
+  "$LOTML_LLAMA_CUDART_SHA256"
 fetch "$llama/src.tar.gz" \
   "https://github.com/ggml-org/llama.cpp/archive/refs/tags/$LOTML_LLAMA.tar.gz" \
   "$LOTML_LLAMA_SOURCE_SHA256"

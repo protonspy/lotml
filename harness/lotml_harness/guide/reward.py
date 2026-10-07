@@ -72,8 +72,8 @@ def score(judged: Judged | None, truth: list[str | None]) -> float:
 
 class Reward:
     """A reward function as TRL's `GRPOTrainer` calls it: the group's completions, with the
-    records' `state` and `truth` columns, scored in parallel; `unjudged` counts the answers the
-    judge could not score."""
+    records' `state` and `truth` columns — values, or their JSON text as a dataset holds them —
+    scored in parallel; `unjudged` counts the answers the judge could not score."""
 
     __name__ = "compiler"
 
@@ -87,6 +87,8 @@ class Reward:
         self, completions: list, state: list[dict], truth: list[list], **_: object
     ) -> list[float]:
         texts = [c[-1]["content"] if isinstance(c, list) else str(c) for c in completions]
+        state = [json.loads(s) if isinstance(s, str) else s for s in state]
+        truth = [json.loads(t) if isinstance(t, str) else t for t in truth]
         with ThreadPoolExecutor(max_workers=self.workers) as pool:
             verdicts = list(
                 pool.map(

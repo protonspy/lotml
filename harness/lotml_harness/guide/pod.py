@@ -17,8 +17,11 @@ IMAGE = "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404"
 DISK = 40
 """GB of container disk: the toolchains, the environment, the base model and the run's outputs."""
 LLAMA = "b11450"
-LLAMA_BINARY_SHA256 = "a9a5c229a56ff61be66ad5ae0ddb2051201dbc091ccda1062553fbdf1152adc1"
-"""`llama-b11450-bin-ubuntu-x64.tar.gz`, as the release lists it."""
+LLAMA_BINARY_SHA256 = "c93e6b94ae881351d1325c6bf067e6838b4dadbc9fb3fd02cc4342404950e089"
+"""`llama-b11450-bin-ubuntu-cuda-12.8-x64.tar.gz`, as the release lists it: the validation asks
+the guide on the pod's GPU rather than its few cores."""
+LLAMA_CUDART_SHA256 = "30a4c1367f07d387390f6928096be37a9cb9818ad2a4426936f25f70629eafe2"
+"""`cudart-llama-b11450-bin-ubuntu-cuda-12.8-x64.tar.gz`: the CUDA libraries that build links."""
 LLAMA_SOURCE_SHA256 = "bc717d30da4d3c0546aded0f254349fd272a65fd1c87638ab06b98f781d7a54b"
 """The tag's source archive, for `convert_hf_to_gguf.py` and `gguf-py`."""
 
@@ -65,5 +68,6 @@ def environment(
         "LOTML_INPUTS": ",".join(f"{stage}={source}" for stage, source in inputs.items()),
         "LOTML_LLAMA": LLAMA,
         "LOTML_LLAMA_BINARY_SHA256": LLAMA_BINARY_SHA256,
+        "LOTML_LLAMA_CUDART_SHA256": LLAMA_CUDART_SHA256,
         "LOTML_LLAMA_SOURCE_SHA256": LLAMA_SOURCE_SHA256,
     }

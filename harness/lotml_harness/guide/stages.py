@@ -115,7 +115,22 @@ def sft(run: Run) -> None:
     run.hub.put(out / "train.json", f"runs/{run.run}/sft/train.json", f"run {run.run}: sft report")
 
 
-STAGES: dict[str, Callable[[Run], None]] = {"sft": sft}
+def rl(run: Run) -> None:
+    """Train the supervised guide further by group-relative policy optimization, the compiler's
+    judgment its reward (R3.3)."""
+    from lotml_harness.guide import grpo
+
+    adapter = run.hub.get(f"runs/{run.source('rl')}/sft/adapter", run.work)
+    out = run.out("rl")
+    resume(run, "rl")
+    report = grpo.fit(grpo.Settings(), run.records, adapter, out, callbacks=[uploader(run, "rl")])
+    report["sft"] = run.source("rl")
+    (out / "rl.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    run.hub.put(out / "adapter", f"runs/{run.run}/rl/adapter", f"run {run.run}: rl adapter")
+    run.hub.put(out / "rl.json", f"runs/{run.run}/rl/rl.json", f"run {run.run}: rl report")
+
+
+STAGES: dict[str, Callable[[Run], None]] = {"sft": sft, "rl": rl}
 
 
 def execute(run: Run, stages: list[str], known: dict[str, Callable[[Run], None]]) -> None:
