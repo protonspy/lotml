@@ -1,0 +1,56 @@
+{
+  "name": "lotml",
+  "displayName": "LotML",
+  "description": "LotML files with their lotus icon, and the compiler's language server.",
+  "version": "0.1.0",
+  "publisher": "protonspy",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/protonspy/lotml"
+  },
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "lotml",
+        "aliases": [
+          "LotML",
+          "lotml"
+        ],
+        "extensions": [
+          ".lot",
+          ".lotml"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/lotml-file.png",
+          "dark": "./icons/lotml-file.png"
+        }
+      }
+    ],
+    "configuration": {
+      "title": "LotML",
+      "properties": {
+        "lotml.path": {
+          "type": "string",
+          "default": "lotml",
+          "description": "The lotml compiler whose language server (`lotml lsp`) serves LotML files."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "package": "npx --yes @vscode/vsce@4.0.0 package --skip-license"
+  },
+  "dependencies": {
+    "vscode-languageclient": "10.1.2"
+  }
+}
