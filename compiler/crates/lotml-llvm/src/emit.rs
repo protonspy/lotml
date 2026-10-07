@@ -43,6 +43,9 @@ pub fn program(lowered: &Lowered, file: &str) -> Result<String, Vec<Diagnostic>>
     if !refused.is_empty() {
         return Err(refused);
     }
+    if main.is_none() {
+        module.declare("declare i32 @lt_no_main()");
+    }
     let mut out = module.header();
     out.push_str(&bodies);
     out.push_str("define i32 @main() {\nentry:\n  call void @lt_init()\n");
@@ -86,7 +89,7 @@ impl Module {
         let mut name = file.as_bytes().to_vec();
         name.push(0);
         module.file = module.text(&name);
-        for d in ["declare void @lt_init()", "declare i32 @lt_exit(i32)", "declare i32 @lt_no_main()"] {
+        for d in ["declare void @lt_init()", "declare i32 @lt_exit(i32)"] {
             module.declared.insert(d.to_string());
         }
         module
@@ -835,10 +838,11 @@ impl<'a> Writer<'a> {
             }
             let v = self.operand(a)?;
             let v = self.convert(v, p)?;
-            let ty = value_ty(p).map_or_else(|| self.refuse(format!("passing a {p}")), Ok)?;
+            let ty = value_ty(p).map_or_else(|| self.refuse(format!("passing {}", kind(p))), Ok)?;
             passed.push(format!("{ty} {}", v.text));
         }
-        let ret = ret_ty(&callee.ret).map_or_else(|| self.refuse(format!("a call returning {}", callee.ret)), Ok)?;
+        let ret =
+            ret_ty(&callee.ret).map_or_else(|| self.refuse(format!("a call returning {}", kind(&callee.ret))), Ok)?;
         let call = format!("call {ret} @{name}({})", passed.join(", "));
         if ret == "void" {
             self.emit(call);
@@ -1078,7 +1082,8 @@ impl<'a> Writer<'a> {
                         Some(v) => {
                             let v = self.operand(v)?;
                             let v = self.convert(v, &ret)?;
-                            let ty = value_ty(&ret).map_or_else(|| self.refuse(format!("returning a {ret}")), Ok)?;
+                            let ty =
+                                value_ty(&ret).map_or_else(|| self.refuse(format!("returning {}", kind(&ret))), Ok)?;
                             self.terminate(format!("ret {ty} {}", v.text));
                         }
                     }

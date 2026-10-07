@@ -18,5 +18,5 @@
 
 - [x] 2.1 (Unit) Give `lotml run` and `build` the `--target llvm` option, `-O0` for `run` and `-O2` for `build` — R1.1, R1.4
   _Depends 1.4_
-- [ ] 2.2 (Unit) Run `add`, `fib`, `collatz` and `mandelbrot` on `--target llvm` at both levels against the Python target's output, and check in `add`'s `.ll` — R2.2
+- [x] 2.2 (Unit) Run `add`, `fib`, `collatz` and `mandelbrot` on `--target llvm` at both levels against the Python target's output, and check in `add`'s `.ll` — R2.2
   _Depends 2.1, 1.5_
