@@ -16,7 +16,7 @@ use crate::ir::{
     StmtKind, UnOp, counted,
 };
 
-/// The program as functions of the intermediate form.
+/// The program as functions of the IR.
 pub struct Lowered {
     pub functions: Vec<Function>,
     /// Whether the module declares `fn main()`.
@@ -38,6 +38,15 @@ pub struct Lowered {
     pub c_functions: BTreeMap<String, (Vec<Ty>, Ty)>,
     /// The C libraries the program imports, by the name the linker knows: `m` for `c.m`.
     pub libraries: BTreeSet<String>,
+    /// Where each line of the source starts, as a byte offset: what turns a span into a line.
+    pub line_starts: Vec<u32>,
+}
+
+impl Lowered {
+    /// The line, from 1, where `span` starts.
+    pub fn line(&self, span: Span) -> u32 {
+        self.line_starts.partition_point(|&start| start <= span.start) as u32
+    }
 }
 
 /// The table of one type's methods for one trait, a slot per method of the trait in name order:
@@ -454,6 +463,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
         tests: test_names,
         c_functions: std::mem::take(&mut cx.c_functions),
         libraries: std::mem::take(&mut cx.libraries),
+        line_starts: std::mem::take(&mut cx.line_starts),
     })
 }
 
@@ -495,10 +505,6 @@ struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    fn line(&self, offset: u32) -> u32 {
-        self.line_starts.partition_point(|&start| start <= offset) as u32
-    }
-
     fn unsupported(&mut self, span: Span, what: &str) {
         self.diagnostics.push(Diagnostic::error("E0402", span, format!("the C backend does not compile {what} yet")));
     }
@@ -620,7 +626,7 @@ impl<'a> Context<'a> {
     /// The `test` block `t`, the `k`th, as a function of no parameters: named in a report's trace
     /// as the Python target names it.
     fn test(&mut self, t: &'a ast::TestDef, k: usize) -> Function {
-        let line = self.line(t.span.start);
+        let span = t.span;
         let mut b = Builder {
             cx: self,
             function: Function {
@@ -630,11 +636,11 @@ impl<'a> Context<'a> {
                 ret: Ty::Unit,
                 locals: Vec::new(),
                 body: Vec::new(),
-                line,
+                span,
             },
             vars: HashMap::new(),
             blocks: vec![Vec::new()],
-            line,
+            span,
             subst: Subst::default(),
         };
         b.statements(&t.body.stmts);
@@ -646,7 +652,7 @@ impl<'a> Context<'a> {
     /// The function `f`, of signature `sig`, as the C function `name`, its expressions' types
     /// read through `subst`: an `inout` parameter is a pointer to the caller's slot.
     fn lower_function(&mut self, f: &'a FnDef, sig: &FnSig, name: String, subst: Subst) -> Option<Function> {
-        let line = self.line(f.span.start);
+        let span = f.span;
         let ret = match &sig.error {
             Some(error) => Ty::Result(Box::new(sig.ret.clone()), Box::new(error.clone())),
             None => sig.ret.clone(),
@@ -660,11 +666,11 @@ impl<'a> Context<'a> {
                 ret,
                 locals: Vec::new(),
                 body: Vec::new(),
-                line,
+                span,
             },
             vars: HashMap::new(),
             blocks: vec![Vec::new()],
-            line,
+            span,
             subst,
         };
         for p in &sig.params {
@@ -677,7 +683,7 @@ impl<'a> Context<'a> {
             if let Ty::Result(ok, _) = &b.function.ret
                 && is_unit(ok)
             {
-                b.line = b.cx.line(body.end());
+                b.span = Span { start: body.end(), end: body.end() };
                 let done = b.ok_result(Operand::Const(Const::Unit));
                 b.push(StmtKind::Return(Some(done)));
             }
@@ -694,7 +700,8 @@ struct Builder<'c, 'a> {
     /// The local of each declaration, by the span of the declaring name.
     vars: HashMap<Span, Local>,
     blocks: Vec<Block>,
-    line: u32,
+    /// The span of the statement being lowered, which every statement it lowers to carries.
+    span: Span,
     /// The type arguments of the instance being lowered.
     subst: Subst,
 }
@@ -731,8 +738,8 @@ fn element(ty: &Ty) -> Ty {
 
 impl<'c, 'a> Builder<'c, 'a> {
     fn push(&mut self, kind: StmtKind) {
-        let line = self.line;
-        self.blocks.last_mut().expect("a block").push(Stmt { line, kind });
+        let span = self.span;
+        self.blocks.last_mut().expect("a block").push(Stmt { span, kind });
     }
 
     fn new_local(&mut self, ty: Ty, name: Option<&str>) -> Local {
@@ -837,7 +844,7 @@ impl<'c, 'a> Builder<'c, 'a> {
     }
 
     fn statement(&mut self, stmt: &ast::Stmt) {
-        self.line = self.cx.line(stmt.span.start);
+        self.span = stmt.span;
         match &stmt.kind {
             Ast::Expr(e) => self.effect(e),
             Ast::Var { name, value, .. } => {
@@ -891,23 +898,23 @@ impl<'c, 'a> Builder<'c, 'a> {
             Ast::Continue => self.push(StmtKind::Continue),
             Ast::If { branches, orelse } => self.if_chain(branches, orelse.as_ref()),
             Ast::While { test, body } => {
-                let line = self.line;
+                let saved = self.span;
                 let body = self.block(|b| {
                     let ok = b.condition(test);
                     let stop = b.block(|b| b.push(StmtKind::Break));
-                    b.line = line;
+                    b.span = saved;
                     b.push(StmtKind::If(ok, Vec::new(), stop));
                     b.statements(&body.stmts);
                 });
-                self.line = line;
+                self.span = saved;
                 self.push(StmtKind::Loop(body));
             }
             Ast::For { target, iter, body } => {
-                let line = self.line;
+                let saved = self.span;
                 self.each(iter, &mut |b, element, ty| {
                     b.bind(target, element, &ty);
                     b.statements(&body.stmts);
-                    b.line = line;
+                    b.span = saved;
                 });
             }
             Ast::Match { subject, arms } => self.match_stmt(subject, arms),
@@ -1269,15 +1276,15 @@ impl<'c, 'a> Builder<'c, 'a> {
         let value = self.value(subject);
         if let Some(variants) = self.simple_arms(&ty, arms) {
             let tag = self.hold(Ty::Int(IntKind::U32), Expr::Tag(value.clone()));
-            let line = self.line;
-            self.variant_chain(&variants, &value, &ty, &tag, line);
+            let saved = self.span;
+            self.variant_chain(&variants, &value, &ty, &tag, saved);
             return;
         }
         let narrow =
             arms.iter().any(|a| matches!(&a.pattern.kind, PatternKind::Literal(e) if matches!(e.kind, ExprKind::None)));
         let done = self.temp(Ty::Bool);
         self.push(StmtKind::Let(done, Expr::Use(flag(false))));
-        let line = self.line;
+        let saved = self.span;
         for arm in arms {
             let body = self.block(|b| {
                 b.pattern(&arm.pattern, value.clone(), &ty, narrow, &mut |b| {
@@ -1285,7 +1292,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                     b.statements(&arm.body.stmts);
                 });
             });
-            self.line = line;
+            self.span = saved;
             let open = self.hold(Ty::Bool, Expr::Unary(UnOp::Not, Operand::Local(done), Ty::Bool));
             self.push(StmtKind::If(open, body, Vec::new()));
         }
@@ -1325,7 +1332,7 @@ impl<'c, 'a> Builder<'c, 'a> {
         value: &Operand,
         ty: &Ty,
         tag: &Operand,
-        line: u32,
+        saved: Span,
     ) {
         let Some(((variant, arm), rest)) = arms.split_first() else { return };
         let body = |b: &mut Self| {
@@ -1358,8 +1365,8 @@ impl<'c, 'a> Builder<'c, 'a> {
                     ),
                 );
                 let then = self.block(body);
-                let otherwise = self.block(|b| b.variant_chain(rest, value, ty, tag, line));
-                self.line = line;
+                let otherwise = self.block(|b| b.variant_chain(rest, value, ty, tag, saved));
+                self.span = saved;
                 self.push(StmtKind::If(test, then, otherwise));
             }
         }
@@ -1500,11 +1507,11 @@ impl<'c, 'a> Builder<'c, 'a> {
             }
             return;
         };
-        let line = self.line;
+        let saved = self.span;
         let ok = self.condition(test);
         let then = self.block(|b| b.statements(&body.stmts));
         let otherwise = self.block(|b| b.if_chain(rest, orelse));
-        self.line = line;
+        self.span = saved;
         self.push(StmtKind::If(ok, then, otherwise));
     }
 
@@ -1575,9 +1582,9 @@ impl<'c, 'a> Builder<'c, 'a> {
                     }
                 };
                 let var = self.temp(INT);
-                let line = self.line;
+                let saved = self.span;
                 let inner = self.block(|b| body(b, Operand::Local(var), INT));
-                self.line = line;
+                self.span = saved;
                 self.push(StmtKind::ForRange { var, start, stop, step, body: inner, exit: Vec::new() });
                 return;
             }
@@ -1637,9 +1644,9 @@ impl<'c, 'a> Builder<'c, 'a> {
                 let over = self.value(iter);
                 let snapshot = self.hold(Ty::Str, Expr::Use(over));
                 let var = self.temp(Ty::Str);
-                let line = self.line;
+                let saved = self.span;
                 let inner = self.block(|b| body(b, Operand::Local(var), Ty::Str));
-                self.line = line;
+                self.span = saved;
                 self.push(StmtKind::ForStr { var, over: snapshot, body: inner, exit: Vec::new() });
             }
             _ => {
@@ -1658,7 +1665,7 @@ impl<'c, 'a> Builder<'c, 'a> {
         } else {
             self.push(StmtKind::Let(k, Expr::Use(int(0))));
         }
-        let line = self.line;
+        let saved = self.span;
         let inner = self.block(|b| {
             for (list, elem) in lists {
                 let more = if reverse {
@@ -1693,7 +1700,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 body(b, tuple, tuple_ty);
             }
         });
-        self.line = line;
+        self.span = saved;
         self.push(StmtKind::Loop(inner));
     }
 
@@ -2857,7 +2864,7 @@ impl<'c, 'a> Builder<'c, 'a> {
         let index = self.cx.lambdas.len();
         self.cx.lambdas.push(None);
         let capture_types: Vec<Ty> = captures.iter().map(|(_, _, l)| self.function.locals[*l].ty.clone()).collect();
-        let line = self.line;
+        let span = self.span;
         let mut b = Builder {
             cx: &mut *self.cx,
             function: Function {
@@ -2867,11 +2874,11 @@ impl<'c, 'a> Builder<'c, 'a> {
                 ret: ret.clone(),
                 locals: Vec::new(),
                 body: Vec::new(),
-                line,
+                span,
             },
             vars: HashMap::new(),
             blocks: vec![Vec::new()],
-            line,
+            span,
             subst: self.subst.clone(),
         };
         let closure = b.new_local(ty.clone(), Some("self"));
@@ -3047,7 +3054,7 @@ impl<'c, 'a> Builder<'c, 'a> {
         self.push(StmtKind::Let(best_key, Expr::Use(k0)));
         let i = self.temp(INT);
         self.push(StmtKind::Let(i, Expr::Use(int(1))));
-        let line = self.line;
+        let saved = self.span;
         let body = self.block(|b| {
             let more = b.hold(Ty::Bool, Expr::Compare(CmpOp::Lt, Operand::Local(i), n.clone(), INT));
             let done = b.block(|b| b.push(StmtKind::Break));
@@ -3066,7 +3073,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             });
             b.push(StmtKind::If(better, then, Vec::new()));
         });
-        self.line = line;
+        self.span = saved;
         self.push(StmtKind::Loop(body));
         Operand::Local(best)
     }

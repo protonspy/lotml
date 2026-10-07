@@ -4,6 +4,8 @@
 //! that only reads it lets it be decremented right after, when it was the last. A branch
 //! decrements on entry what it never uses; a spent loop, on exit, what is not used after it.
 
+use lotml_syntax::span::Span;
+
 use crate::ir::{Arg, Block, Expr, Function, Local, LocalInfo, Operand, Place, Proj, Stmt, StmtKind, counted, outs};
 
 /// A set of locals, as bits.
@@ -65,7 +67,7 @@ pub fn insert_counts(f: &mut Function) {
     let mut out = Vec::new();
     for &p in &f.params {
         if pass.counted(p) && !live_in.contains(p) {
-            out.push(Stmt { line: f.line, kind: StmtKind::Dec(p) });
+            out.push(Stmt { span: f.span, kind: StmtKind::Dec(p) });
         }
     }
     out.extend(pass.block(body, &empty, &empty, &empty));
@@ -295,8 +297,8 @@ impl Pass {
     }
 
     fn stmt(&mut self, stmt: Stmt, live_out: &Set, brk: &Set, cont: &Set, out: &mut Vec<Stmt>) {
-        let line = stmt.line;
-        let at = |kind| Stmt { line, kind };
+        let span = stmt.span;
+        let at = |kind| Stmt { span, kind };
         match stmt.kind {
             StmtKind::Let(x, e) => {
                 let set = e.outs();
@@ -314,20 +316,20 @@ impl Pass {
                         | Expr::ResultError(_)
                         | Expr::Capture { .. }
                 );
-                self.simple(line, uses, live_out, Some((x, borrowed)), StmtKind::Let(x, e), out);
-                self.drop_unused(line, &set, live_out, out);
+                self.simple(span, uses, live_out, Some((x, borrowed)), StmtKind::Let(x, e), out);
+                self.drop_unused(span, &set, live_out, out);
             }
             StmtKind::Do(e) => {
                 let set = e.outs();
                 let uses = self.uses_of(&e);
-                self.simple(line, uses, live_out, None, StmtKind::Do(e), out);
-                self.drop_unused(line, &set, live_out, out);
+                self.simple(span, uses, live_out, None, StmtKind::Do(e), out);
+                self.drop_unused(span, &set, live_out, out);
             }
             StmtKind::Store(place, v) => {
                 let mut uses = Uses::default();
                 self.local_uses(&[&v], true, &mut uses);
                 self.place_uses(&place, &mut uses);
-                self.simple(line, uses, live_out, None, StmtKind::Store(place, v), out);
+                self.simple(span, uses, live_out, None, StmtKind::Store(place, v), out);
             }
             StmtKind::Mutate { name, place, args, at: here, result } => {
                 let stores =
@@ -344,22 +346,22 @@ impl Pass {
                 self.place_uses(&place, &mut uses);
                 let set: Vec<Local> = outs(&args).collect();
                 let kind = StmtKind::Mutate { name, place, args, at: here, result };
-                self.simple(line, uses, live_out, None, kind, out);
-                self.drop_unused(line, &set, live_out, out);
+                self.simple(span, uses, live_out, None, kind, out);
+                self.drop_unused(span, &set, live_out, out);
             }
             StmtKind::Return(Some(v)) => {
                 let mut uses = Uses::default();
                 self.local_uses(&[&v], true, &mut uses);
-                self.simple(line, uses, live_out, None, StmtKind::Return(Some(v)), out);
+                self.simple(span, uses, live_out, None, StmtKind::Return(Some(v)), out);
             }
             StmtKind::If(test, then, otherwise) => {
                 let live_then = self.live_block(&then, live_out, brk, cont);
                 let live_else = self.live_block(&otherwise, live_out, brk, cont);
                 let mut live_in = live_then.clone();
                 live_in.union(&live_else);
-                let mut new_then = self.decs(line, live_in.minus(&live_then));
+                let mut new_then = self.decs(span, live_in.minus(&live_then));
                 new_then.extend(self.block(then, live_out, brk, cont));
-                let mut new_else = self.decs(line, live_in.minus(&live_else));
+                let mut new_else = self.decs(span, live_in.minus(&live_else));
                 new_else.extend(self.block(otherwise, live_out, brk, cont));
                 out.push(at(StmtKind::If(test, new_then, new_else)));
             }
@@ -370,7 +372,7 @@ impl Pass {
             }
             StmtKind::ForRange { var, start, stop, step, body, .. } => {
                 let head = self.loop_head(&body, live_out, Some(var), None);
-                let (body, exit) = self.loop_body(line, body, &head, live_out, var);
+                let (body, exit) = self.loop_body(span, body, &head, live_out, var);
                 out.push(at(StmtKind::ForRange { var, start, stop, step, body, exit }));
             }
             StmtKind::ForStr { var, over, body, .. } => {
@@ -380,7 +382,7 @@ impl Pass {
                 {
                     head.insert(o);
                 }
-                let (body, exit) = self.loop_body(line, body, &head, live_out, var);
+                let (body, exit) = self.loop_body(span, body, &head, live_out, var);
                 out.push(at(StmtKind::ForStr { var, over, body, exit }));
             }
             other => out.push(at(other)),
@@ -389,29 +391,29 @@ impl Pass {
 
     /// The body of a counted loop, with what it does not use dropped on entry, and the block run
     /// when the loop is spent, dropping what is not used after it.
-    fn loop_body(&mut self, line: u32, body: Block, head: &Set, live_out: &Set, var: Local) -> (Block, Block) {
+    fn loop_body(&mut self, span: Span, body: Block, head: &Set, live_out: &Set, var: Local) -> (Block, Block) {
         let live_body = self.live_block(&body, head, live_out, head);
         let mut entry = head.clone();
         if self.counted(var) {
             entry.insert(var);
         }
-        let mut new_body = self.decs(line, entry.minus(&live_body));
+        let mut new_body = self.decs(span, entry.minus(&live_body));
         new_body.extend(self.block(body, head, live_out, head));
-        let exit = self.decs(line, head.minus(live_out));
+        let exit = self.decs(span, head.minus(live_out));
         (new_body, exit)
     }
 
     /// Drop the counted locals a statement set through its outputs that nothing uses after it.
-    fn drop_unused(&self, line: u32, set: &[Local], live_out: &Set, out: &mut Vec<Stmt>) {
+    fn drop_unused(&self, span: Span, set: &[Local], live_out: &Set, out: &mut Vec<Stmt>) {
         for &l in set {
             if self.counted(l) && !live_out.contains(l) {
-                out.push(Stmt { line, kind: StmtKind::Dec(l) });
+                out.push(Stmt { span, kind: StmtKind::Dec(l) });
             }
         }
     }
 
-    fn decs(&self, line: u32, locals: Vec<Local>) -> Vec<Stmt> {
-        locals.into_iter().map(|l| Stmt { line, kind: StmtKind::Dec(l) }).collect()
+    fn decs(&self, span: Span, locals: Vec<Local>) -> Vec<Stmt> {
+        locals.into_iter().map(|l| Stmt { span, kind: StmtKind::Dec(l) }).collect()
     }
 
     /// A statement with no blocks: increments before it for what it stores and still needs,
@@ -419,14 +421,14 @@ impl Pass {
     /// value it sets is borrowed and needs its own count.
     fn simple(
         &mut self,
-        line: u32,
+        span: Span,
         uses: Uses,
         live_out: &Set,
         defined: Option<(Local, bool)>,
         kind: StmtKind,
         out: &mut Vec<Stmt>,
     ) {
-        let at = |kind| Stmt { line, kind };
+        let at = |kind| Stmt { span, kind };
         let target = defined.map(|(x, _)| x);
         for &l in &uses.by_ref_stored {
             out.push(at(StmtKind::Inc(l)));

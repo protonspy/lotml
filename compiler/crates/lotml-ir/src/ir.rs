@@ -2,6 +2,7 @@
 //! can follow each value's last use (specs/shared-ir/design.md, specs/c-backend/design.md).
 
 use lotml_check::ty::{IntKind, Ty};
+use lotml_syntax::span::Span;
 
 /// A local of a function: a parameter, a variable or an intermediate value.
 pub type Local = usize;
@@ -27,16 +28,16 @@ pub struct Function {
     pub ret: Ty,
     pub locals: Vec<LocalInfo>,
     pub body: Block,
-    /// The line of the declaration.
-    pub line: u32,
+    /// The span of the declaration.
+    pub span: Span,
 }
 
 pub type Block = Vec<Stmt>;
 
 #[derive(Clone, Debug)]
 pub struct Stmt {
-    /// The `.lotml` line the statement came from.
-    pub line: u32,
+    /// The span of the source statement this one was lowered from (R1.2).
+    pub span: Span,
     pub kind: StmtKind,
 }
 

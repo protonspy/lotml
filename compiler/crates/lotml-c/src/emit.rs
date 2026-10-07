@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 use lotml_check::ty::{FloatKind, IntKind, Ty};
+use lotml_syntax::span::Span;
 
 use crate::lower::{Lowered, function_name, lambda_name};
 use crate::mir::{
@@ -63,6 +64,7 @@ pub fn program(lowered: &Lowered, file: &str, tests: bool) -> String {
     let tasks = task_runners(&mut out, lowered, &types);
     for f in &lowered.functions {
         Writer {
+            lowered,
             out: &mut out,
             declared: &lowered.declared,
             function: f,
@@ -358,6 +360,8 @@ pub fn c_string_text(bytes: &[u8]) -> String {
 }
 
 struct Writer<'a> {
+    /// The program, for the line each span starts on.
+    lowered: &'a Lowered,
     out: &'a mut String,
     declared: &'a BTreeMap<String, lotml_check::TypeDef>,
     function: &'a Function,
@@ -380,7 +384,8 @@ impl Writer<'_> {
         self.out.push('\n');
     }
 
-    fn at(&mut self, line: u32) {
+    fn at(&mut self, span: Span) {
+        let line = self.lowered.line(span);
         let _ = writeln!(self.out, "#line {line} \"{}\"", self.file);
     }
 
@@ -402,7 +407,7 @@ impl Writer<'_> {
     fn function(&mut self) {
         let start = self.out.len();
         let f = self.function;
-        self.at(f.line);
+        self.at(f.span);
         let _ = writeln!(self.out, "{} {{", signature(f, self.types));
         let source = c_string_text(f.source_name.as_bytes());
         self.line(&format!("static const char lt_fn[] = \"{source}\";"));
@@ -423,7 +428,7 @@ impl Writer<'_> {
 
     fn block(&mut self, block: &Block) {
         for stmt in block {
-            self.at(stmt.line);
+            self.at(stmt.span);
             match &stmt.kind {
                 StmtKind::Let(local, Expr::Format(parts)) => {
                     let target = self.name(*local);

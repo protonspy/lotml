@@ -27,7 +27,7 @@ fn block(stmts: Block, f: &Function) -> Block {
                 for local in candidates(body, f) {
                     own(body, local);
                     out.push(Stmt {
-                        line: stmt.line,
+                        span: stmt.span,
                         kind: StmtKind::Mutate {
                             name: "lt_list_unique",
                             place: Place { local, proj: Vec::new() },
