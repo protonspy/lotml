@@ -1,9 +1,9 @@
 ---
 autonomy: auto
 ci: wait
-branch: feat/guide-tool
-delivery: merged
-pr: 20
+branch: fix/guide-request
+delivery: in-review
+pr: 24
 ---
 
 # Guide tool — requirements

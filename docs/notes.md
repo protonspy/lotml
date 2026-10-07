@@ -112,3 +112,4 @@ over this file answers with the example above as well as with the notes. -->
 <!-- n-0068 removed -->
 - n-0069 2026-10-06 #gotcha @compiler/crates/lotml-c/src/lower.rs — C target: for x in xs walks a held snapshot, so a body that changes xs in place still sees every element, while the Python target walks the live list and stops early; parity holds only for bodies that leave xs alone
 - n-0070 2026-10-06 #ceiling @harness/lotml_harness/experiments/gate2.py — lotml run/test --target c runs the program with no time or memory cap, and the harness's subprocess timeout kills lotml but not its C child; a job object or rlimit on the child, and a process-group kill in the harness, lift it
+- n-0075 2026-10-07 #gotcha @compiler/crates/lotml/src/guide/client.rs — serde_json sorts object keys and llama.cpp compiles a JSON schema to a grammar in the order its properties come; the guide's answer schema is sent as text to keep the trained order
