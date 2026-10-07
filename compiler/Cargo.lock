@@ -270,6 +270,7 @@ dependencies = [
  "lotml-fmt",
  "lotml-ide",
  "lotml-py",
+ "lotml-runtime",
  "lotml-syntax",
  "salsa",
  "serde_json",
@@ -283,6 +284,7 @@ dependencies = [
  "lotml-check",
  "lotml-diag",
  "lotml-py",
+ "lotml-runtime",
  "lotml-syntax",
  "serde_json",
 ]
@@ -344,6 +346,10 @@ dependencies = [
  "lotml-syntax",
  "serde_json",
 ]
+
+[[package]]
+name = "lotml-runtime"
+version = "0.1.0"
 
 [[package]]
 name = "lotml-syntax"

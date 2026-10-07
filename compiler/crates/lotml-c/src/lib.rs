@@ -1,5 +1,5 @@
-//! The C backend: a checked lotml program as one C file over a counting runtime (R18, R19;
-//! adr:0014, specs/c-backend).
+//! The C backend: a checked lotml program as one C file over the counting runtime of
+//! `lotml-runtime` (R18, R19; adr:0016, specs/c-backend).
 
 pub mod driver;
 mod emit;
@@ -15,24 +15,6 @@ use std::path::Path;
 use lotml_check::{Interfaces, check_resolved_with};
 use lotml_diag::{Diagnostic, Severity};
 use lotml_syntax::parse;
-
-/// The runtime's files, written next to every compiled program: `lotml.h` declares it, `lotml.c`
-/// includes the rest, and the program includes both, so it is one translation unit.
-pub const RUNTIME: &[(&str, &str)] = &[
-    ("lotml.h", include_str!("../runtime/lotml.h")),
-    ("lotml.c", include_str!("../runtime/lotml.c")),
-    ("lotml_text.c", include_str!("../runtime/lotml_text.c")),
-    ("lotml_list.c", include_str!("../runtime/lotml_list.c")),
-    ("lotml_dict.c", include_str!("../runtime/lotml_dict.c")),
-];
-
-/// Write the runtime into `dir`, where a compiled program includes it from.
-pub fn write_runtime(dir: &Path) -> std::io::Result<()> {
-    for (name, text) in RUNTIME {
-        std::fs::write(dir.join(name), text)?;
-    }
-    Ok(())
-}
 
 /// A compiled program: its C, and the C libraries to link it with.
 pub struct Program {

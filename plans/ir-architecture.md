@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: 215f302bb625ddfa1bdee5e777f6603c6243e69ea4b3b01025e442030cf39689
+checksum: 9817fa389c66c5c9c21e1000d98ec81e7d69cc071151253591a73a680f403013
 ---
 
 # IR architecture
@@ -69,7 +69,7 @@ makes an executable.
 
 ## Tasks
 
-- [ ] 1.1 (Unit) Move the C runtime out of `lotml-c` into a crate both native backends write it
+- [x] 1.1 (Unit) Move the C runtime out of `lotml-c` into a crate both native backends write it
   from, the parity run unchanged
 - [ ] 1.2 (Unit) Write and build the spec shared-ir, the C target's output, parity and benchmarks
   unchanged

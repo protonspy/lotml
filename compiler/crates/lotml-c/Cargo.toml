@@ -14,6 +14,7 @@ find-msvc-tools = "0.1.14"
 
 [dev-dependencies]
 lotml-py = { path = "../lotml-py" }
+lotml-runtime = { path = "../lotml-runtime" }
 serde_json = { workspace = true }
 
 [lints]

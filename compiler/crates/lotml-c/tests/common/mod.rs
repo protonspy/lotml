@@ -54,7 +54,7 @@ fn build_and_run(name: &str, source: &str, counting: bool, compile: Compile) -> 
     });
     let c = if counting { format!("#define LT_COUNT_CELLS 1\n{c}") } else { c };
     std::fs::write(dir.join("prog.c"), &c).unwrap();
-    lotml_c::write_runtime(&dir).unwrap();
+    lotml_runtime::write(&dir).unwrap();
     let compiler = lotml_c::driver::find().expect("a C compiler");
     let exe = dir.join(if cfg!(windows) { "prog.exe" } else { "prog" });
     let sanitize = std::env::var_os("LOTML_SANITIZE").is_some();
