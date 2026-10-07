@@ -63,7 +63,12 @@ checker forces you to handle. The full language fits in one example-driven page:
 
 ## Getting started
 
-Requires Rust 1.97+ and Python 3 (the first target compiles to Python modules).
+[Releases](https://github.com/protonspy/lotml/releases) hold `lotml` built for Linux (x86_64),
+Windows (x86_64) and macOS (Apple silicon): each archive holds the binary, this README and the
+licence, beside the VS Code extension's `.vsix` and a `SHA256SUMS`. The binary carries its
+runtimes; running programs needs Python 3.11 or later, and the C target a C compiler.
+
+To build it instead, with Rust 1.97+:
 
 ```bash
 cargo build --manifest-path compiler/Cargo.toml --locked --release -p lotml

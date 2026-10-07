@@ -1,0 +1,159 @@
+name: release
+
+# Started by hand from main: builds lotml for Linux, Windows and macOS and the VS Code extension,
+# and publishes them as a GitHub release tagged v<the workspace's version>
+# (plans/release-workflow.md). A version already released is refused: bump
+# [workspace.package] version in compiler/Cargo.toml first.
+
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: Mark the release as a pre-release
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  RUST_TOOLCHAIN: "1.97"
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - name: Only from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::a release is built from main, not $GITHUB_REF"
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read the version
+        id: read
+        run: |
+          version=$(sed -n '/^\[workspace.package\]/,/^\[/{s/^version = "\(.*\)"$/\1/p}' compiler/Cargo.toml)
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::no [workspace.package] version in compiler/Cargo.toml"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Refuse a version already released
+        env:
+          VERSION: ${{ steps.read.outputs.version }}
+        run: |
+          status=0
+          git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null || status=$?
+          case $status in
+            0) echo "::error::v$VERSION is released already: bump [workspace.package] version in compiler/Cargo.toml"; exit 1 ;;
+            2) echo "v$VERSION is new" ;;
+            *) echo "::error::cannot read the tags of origin"; exit 1 ;;
+          esac
+
+  build:
+    needs: version
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      TARGET: ${{ matrix.target }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Toolchain
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
+          rustup default "$RUST_TOOLCHAIN"
+      - name: Build
+        run: cargo build --manifest-path compiler/Cargo.toml --locked --release -p lotml --target "$TARGET"
+      - name: Archive
+        run: |
+          exe=lotml
+          if [ "$RUNNER_OS" = Windows ]; then exe=lotml.exe; fi
+          built="compiler/target/$TARGET/release/$exe"
+          said=$("$built" --version)
+          if [ "$said" != "lotml $VERSION" ]; then
+            echo "::error::the binary says '$said', not 'lotml $VERSION'"
+            exit 1
+          fi
+          name="lotml-$VERSION-$TARGET"
+          mkdir -p "dist/$name"
+          cp "$built" README.md LICENSE "dist/$name/"
+          if [ "$RUNNER_OS" = Windows ]; then
+            (cd dist && 7z a -tzip "$name.zip" "$name" > /dev/null)
+          else
+            tar -C dist -czf "dist/$name.tar.gz" "$name"
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lotml-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          if-no-files-found: error
+
+  vscode:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - name: Package
+        working-directory: editors/vscode
+        # No dependency's install script runs: the extension needs none, and vsce-sign's signs
+        # for publishing, which this does not do.
+        run: |
+          npm ci --ignore-scripts
+          npm test
+          npm run package
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lotml-vscode
+          path: editors/vscode/*.vsix
+          if-no-files-found: error
+
+  release:
+    needs: [version, build, vscode]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      PRERELEASE: ${{ inputs.prerelease }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+      - name: Publish
+        run: |
+          flags=()
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+          gh release create "v$VERSION" dist/* \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "LotML $VERSION" --generate-notes "${flags[@]}"
