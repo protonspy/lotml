@@ -27,8 +27,17 @@ DEADLINE = 120.0
 PORT = 8091
 
 
+CONTEXT = 8192
+"""Tokens of context each request gets: the guide tool's, which the records were counted against."""
 SYSTEM = ("SYSTEMROOT", "WINDIR", "TEMP", "TMP")
 """What a server needs from the environment on Windows to open a socket; none is a secret."""
+
+
+def arguments(server: Path, gguf: Path, port: int, slots: int) -> list[str]:
+    """llama-server's command line: `-c` is the context of every slot together, so each of
+    `slots` parallel requests gets the whole `CONTEXT`, as the guide tool's server gives one."""
+    return [str(server), "-m", str(gguf), "--host", "127.0.0.1", "--port", str(port),
+            "-c", str(CONTEXT * slots), "-ngl", "99", "-np", str(slots)]  # fmt: skip
 
 
 @contextlib.contextmanager
@@ -43,8 +52,7 @@ def served(gguf: Path, llama_cpp: Path, port: int = PORT, slots: int = 4) -> Ite
         "PATH": os.environ.get("PATH", ""),
         "LD_LIBRARY_PATH": ":".join([*libraries, os.environ.get("LD_LIBRARY_PATH", "")]),
     }
-    command = [str(server), "-m", str(gguf), "--host", "127.0.0.1", "--port", str(port),
-               "-c", "8192", "-ngl", "99", "-np", str(slots)]  # fmt: skip
+    command = arguments(server, gguf, port, slots)
     with (
         tempfile.TemporaryFile() as output,
         subprocess.Popen(command, env=env, stdout=output, stderr=output) as process,  # noqa: S603

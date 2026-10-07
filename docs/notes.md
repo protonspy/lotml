@@ -115,3 +115,4 @@ over this file answers with the example above as well as with the notes. -->
 - n-0075 2026-10-07 #gotcha @compiler/crates/lotml/src/guide/client.rs — serde_json sorts object keys and llama.cpp compiles a JSON schema to a grammar in the order its properties come; the guide's answer schema is sent as text to keep the trained order
 - n-0076 2026-10-07 #gotcha @harness/pod/run.sh — the runpod/pytorch image's system Python 3.13 fails torch's import with an IndentationError in _check_overload_body; the pod syncs on uv's managed CPython 3.13.14
 - n-0077 2026-10-07 #gotcha @harness/lotml_harness/guide/pod.py — a RunPod host whose driver predates the image's CUDA fails torch.cuda init with 'CUDA unknown error'; pods ask gpu.minCudaVersion 12.8
+- n-0078 2026-10-07 #gotcha @harness/lotml_harness/guide/validate.py — llama-server divides -c among its -np slots; validation gives -c 8192 times the slots so each request has the guide tool's 8192

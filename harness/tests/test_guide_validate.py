@@ -151,3 +151,9 @@ def test_export_merges_the_supervised_adapter_and_then_the_reinforcement_learned
         "sft": [work / "runs/r1/sft/adapter"],
         "rl": [work / "runs/r1/sft/adapter", work / "runs/r2/rl/adapter"],
     }
+
+
+def test_every_slot_gets_the_whole_context():
+    found = validate.arguments(Path("llama-server"), Path("g.gguf"), 8091, 4)
+    assert found[found.index("-c") + 1] == str(8192 * 4)
+    assert found[found.index("-np") + 1] == "4"
