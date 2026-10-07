@@ -175,22 +175,52 @@ UNAVAILABLE = "no longer any instances available"
 """RunPod's word for a GPU it has no card of right now, which the next one in the list may have."""
 
 
-def create(ready: Ready) -> str:
+LOOKS = 3
+"""How often a failed creation's pod is looked for by name before the next GPU is tried."""
+LOOK_DELAY = 10.0
+
+
+def looked_for(name: str, sleep: Callable[[float], None]) -> str | None:
+    """The id of the pod called `name`, looked for `LOOKS` times `LOOK_DELAY` seconds apart, since
+    RunPod may list a pod some seconds after it failed to answer the request creating it. A
+    lookup that keeps failing is raised: whether the pod exists is then unknown, and the next GPU
+    is not tried on a guess."""
+    failure: runpod.RunPodError | None = None
+    for look in range(LOOKS):
+        if look:
+            sleep(LOOK_DELAY)
+        try:
+            found = runpod.named(name)
+        except runpod.RunPodError as error:
+            failure = error
+            continue
+        if found is not None:
+            return found
+        failure = None
+    if failure is not None:
+        raise failure
+    return None
+
+
+def create(ready: Ready, sleep: Callable[[float], None] | None = None) -> str:
     """Create the pod on the first GPU RunPod has a card for, in the order given; its id, with
     `ready.gpu` and `ready.hourly` set. A creation RunPod may have made though its answer never
     came back is looked for by the pod's name, unique to the run, so it is terminated like any
-    other; a GPU with no card free, or one RunPod failed to create on its side, gives way to the
-    next."""
+    other; a GPU with no card free, or one RunPod failed to create on its side and does not list,
+    gives way to the next."""
     failure: runpod.RunPodError | None = None
     for gpu, hourly, request in ready.options:
         ready.gpu, ready.hourly = gpu, hourly
         try:
             return runpod.create(request)["id"]
         except runpod.RunPodError as error:
-            found = None if UNAVAILABLE in str(error) else runpod.named(request["name"])
+            if UNAVAILABLE in str(error):
+                failure = error
+                continue
+            found = looked_for(request["name"], sleep or time.sleep)
             if found is not None:
                 return found
-            if UNAVAILABLE in str(error) or str(error).startswith("RunPod answered 5"):
+            if str(error).startswith("RunPod answered 5"):
                 failure = error
                 continue
             raise
@@ -292,7 +322,7 @@ def fetched(store: Hub, run: str) -> dict:
         ("sample", f"runs/{run}/sample/sample.json"),
         ("rft", f"runs/{run}/rft/rft.json"),
         ("rl", f"runs/{run}/rl/rl.json"),
-        ("rl-random", f"runs/{run}/rl-random/rl.json"),
+        ("rl-random", f"runs/{run}/rl-random/rl-random.json"),
         ("export", f"runs/{run}/report.json"),
     ):
         if store.files(remote):
@@ -300,12 +330,39 @@ def fetched(store: Hub, run: str) -> dict:
     return found
 
 
-def _share(value: float) -> str:
-    return f"{value:.1%}"
+def _share(value: object) -> str:
+    return _number(value, ".1%")
+
+
+def _number(value: object, spec: str) -> str:
+    """`value` formatted as a number, or a dash when the report holds something else there."""
+    if isinstance(value, bool) or not isinstance(value, int | float | Decimal | str):
+        return "—"
+    try:
+        return format(float(value), spec)
+    except ValueError:
+        return "—"
+
+
+def _plain(value: object) -> object:
+    """`value`, read from the repository, with every string fit for one Markdown table cell or
+    bullet: a pipe escaped, a line break a space."""
+    if isinstance(value, str):
+        return " ".join(value.replace("|", "\\|").splitlines())
+    if isinstance(value, dict):
+        return {_plain(k): _plain(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_plain(v) for v in value]
+    return value
+
+
+PASSES = ("location@1", "location@4", "location@8", "answer@1", "answer@4", "answer@8")
+"""The pass@k columns: the first location, and the whole answer, right in k samples."""
 
 
 def markdown(run: str, plan: Plan, row: dict, seen: dict | None, found: dict) -> str:
     """The committed report of one run (R5.1)."""
+    found, seen = _plain(found), _plain(seen)
     lineage = found.get("run", {})
     lines = [
         f"# Training run {run}",
@@ -330,7 +387,7 @@ def markdown(run: str, plan: Plan, row: dict, seen: dict | None, found: dict) ->
         sampled = found["sample"]
         lines.append(
             f"- Sampled: {sampled.get('records')} train records, mean reward "
-            f"{sampled.get('mean', 0):.3f}, {sampled.get('always')} always solved, "
+            f"{_number(sampled.get('mean', 0), '.3f')}, {sampled.get('always')} always solved, "
             f"{sampled.get('never')} never, {sampled.get('unjudged', 0)} answers unjudged."
         )
     if "rft" in found:
@@ -361,7 +418,8 @@ def markdown(run: str, plan: Plan, row: dict, seen: dict | None, found: dict) ->
             "|---|---:|---:|---:|---:|---:|---|",
         ]
         for name, m in export["models"].items():
-            silent = ", ".join(f"{k} {v}" for k, v in sorted(m["silent"].items())) or "none"
+            silent = ", ".join(f"{k} {v}" for k, v in sorted(m["silent"].items(), key=str))
+            silent = silent or "none"
             lines.append(
                 f"| {name} | {m['records']} | {_share(m['within_schema'])} | {_share(m['top1'])} "
                 f"| {_share(m['top3'])} | {_share(m['edits_pass'])} | {silent} |"
@@ -372,18 +430,15 @@ def markdown(run: str, plan: Plan, row: dict, seen: dict | None, found: dict) ->
                 "",
                 "Sampled eight times at temperature 1.0, judged by the compiler:",
                 "",
-                "| model | records | location@1 | answer@1 | answer@4 | answer@8 |",
-                "|---|---:|---:|---:|---:|---:|",
+                "| model | records | " + " | ".join(PASSES) + " |",
+                "|---|---:|" + "---:|" * len(PASSES),
             ]
             for name, p in passed.items():
-                cells = " | ".join(
-                    _share(p[k]) if k in p else "—"
-                    for k in ("location@1", "answer@1", "answer@4", "answer@8")
-                )
+                cells = " | ".join(_share(p.get(k)) for k in PASSES)
                 lines.append(f"| {name} | {p.get('records')} | {cells} |")
         lines += [
             "",
-            f"Threshold for {export['final']}: {export['threshold']:.4f}, at which "
+            f"Threshold for {export['final']}: {_number(export['threshold'], '.4f')}, at which "
             f"{_share(export['shown'])} of the records are answered with first-location precision "
             f"{_share(export['precision'])} (target {_share(export['target'])}).",
         ]
@@ -411,9 +466,32 @@ def run(plan: Plan, store: Hub, ledger: ledgers.Ledger, dry: bool = False) -> Pa
         )
         seen = watch(store, ready.run, pod_id, created + datetime.timedelta(hours=plan.hours))
     finally:
-        if pod_id is not None:
-            path = finish(store, ledger, ready, pod_id, created, plan, seen)
+        try:
+            if pod_id is not None:
+                path = finish(store, ledger, ready, pod_id, created, plan, seen)
+        finally:
+            strays(ledger, lambda name: name == f"{PREFIX}{ready.run}", plan.cap)
     return path
+
+
+def strays(ledger: ledgers.Ledger, ours: Callable[[str], bool], cap: Decimal) -> None:
+    """Terminate and record every pod whose name `ours` claims and the ledger never saw: a creation
+    RunPod made though it answered with a failure, found only once the next GPU was tried."""
+    recorded = {row["pod"] for row in ledger.every()}
+    found = [p for p in runpod.pods() if ours(str(p.get("name", ""))) and p["id"] not in recorded]
+    for stray in found:
+        runpod.terminate(stray["id"])
+        started = datetime.datetime.fromisoformat(
+            str(stray.get("createdAt") or now().isoformat()).replace("Z", "+00:00")
+        )
+        gpu = (stray.get("gpu") or {}).get("id", "unknown")
+        hourly = Decimal(str(stray.get("cost") or 0))
+        run_id = str(stray["name"]).removeprefix(PREFIX)
+        ledger.open(run_id, stray["id"], [], gpu, str(stray.get("cloud", "")), hourly, 0, started)
+        ledger.close(stray["id"], now())
+    if found:
+        ledger.commit()
+        ledgers.REPORT.write_text(ledger.markdown(cap), encoding="utf-8")
 
 
 def reconcile(ledger: ledgers.Ledger) -> None:
@@ -432,19 +510,7 @@ def reconcile(ledger: ledgers.Ledger) -> None:
             )
             ended = min(deadline, now())
         ledger.close(row["pod"], ended)
-    recorded = {row["pod"] for row in ledger.every()}
-    for found in runpod.pods():
-        if not str(found.get("name", "")).startswith(PREFIX) or found["id"] in recorded:
-            continue
-        runpod.terminate(found["id"])
-        started = datetime.datetime.fromisoformat(
-            str(found.get("createdAt") or now().isoformat()).replace("Z", "+00:00")
-        )
-        gpu = (found.get("gpu") or {}).get("id", "unknown")
-        hourly = Decimal(str(found.get("cost") or 0))
-        run_id = str(found["name"]).removeprefix(PREFIX)
-        ledger.open(run_id, found["id"], [], gpu, str(found.get("cloud", "")), hourly, 0, started)
-        ledger.close(found["id"], now())
+    strays(ledger, lambda name: name.startswith(PREFIX), ledgers.CAP)
     ledger.commit()
     ledgers.REPORT.write_text(ledger.markdown(ledgers.CAP), encoding="utf-8")
 

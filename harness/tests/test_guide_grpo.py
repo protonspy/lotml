@@ -1,6 +1,9 @@
 """The reinforcement learning's dataset and settings (specs/training-pipeline/ R3.3)."""
 
 import json
+from pathlib import Path
+
+import pytest
 
 from lotml_harness.guide import grpo
 
@@ -107,3 +110,25 @@ def test_the_best_step_is_the_highest_validation_reward_the_later_on_a_tie():
     ]
     assert grpo.best_step(history) == 150
     assert grpo.best_step([{"step": 10, "reward": 0.5}]) is None
+
+
+def test_a_step_that_is_not_a_whole_number_is_never_the_best():
+    history = [{"step": "../x", "eval_reward": 1.0}, {"step": 1.5, "eval_reward": 1.0}]
+    assert grpo.best_step([*history, {"step": 50, "eval_reward": 0.2}]) == 50
+    assert grpo.best_step(history) is None
+
+
+def test_the_best_checkpoint_must_hold_the_adapter(tmp_path: Path):
+    assert grpo.kept(tmp_path, None) is None
+    with pytest.raises(RuntimeError, match="checkpoint-50"):
+        grpo.kept(tmp_path, 50)
+    found = tmp_path / "checkpoints" / "checkpoint-50"
+    found.mkdir(parents=True)
+    for name in grpo.ADAPTER:
+        (found / name).write_text("x", encoding="utf-8")
+    assert grpo.kept(tmp_path, 50) == found.resolve()
+
+
+def test_rows_refuse_an_index_outside_the_records():
+    with pytest.raises(ValueError, match="not an index"):
+        grpo.rows([record(0)], [1], 4, 0)

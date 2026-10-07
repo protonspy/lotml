@@ -13,6 +13,7 @@ import argparse
 import contextlib
 import dataclasses
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -119,20 +120,66 @@ def sft(run: Run) -> None:
     run.hub.put(out / "train.json", f"runs/{run.run}/sft/train.json", f"run {run.run}: sft report")
 
 
+RUN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+"""A run id as it may name a path in the repository: no glob, no separator, no `..`."""
+REPORTED = ("sample", "rft", "rl", "rl-random")
+STARTS = ("sft", "rft")
+"""The stages whose adapter a later one may start from."""
+
+
+def checked(value: object, allowed: tuple[str, ...] | None = None) -> str:
+    """`value`, a run id read from a report in the repository — or, with `allowed`, one of those
+    stage names — checked before it builds a path; ValueError otherwise."""
+    if not isinstance(value, str) or not (
+        value in allowed if allowed is not None else RUN.fullmatch(value)
+    ):
+        raise ValueError(f"{value!r} is not a run id or stage this pipeline writes")
+    return value
+
+
 def report(run: Run, source: str, stage: str) -> dict:
-    """The JSON report `source`'s `stage` left, as `rl/rl.json` or `sample/sample.json`."""
-    path = run.hub.get(f"runs/{source}/{stage}/{stage}.json", run.work)
-    return json.loads(path.read_text(encoding="utf-8"))
+    """The JSON report `source`'s `stage` left at `runs/<source>/<stage>/<stage>.json`."""
+    remote = f"runs/{checked(source)}/{checked(stage, REPORTED)}/{stage}.json"
+    found = json.loads(run.hub.get(remote, run.work).read_text(encoding="utf-8"))
+    if not isinstance(found, dict):
+        raise ValueError(f"{remote} holds no report")
+    return found
+
+
+def begun(found: dict) -> tuple[str, str]:
+    """The run and stage a reinforcement-learning report says it started from, checked."""
+    start = found.get("start") or {"run": found.get("sft"), "stage": "sft"}
+    return checked(start.get("run")), checked(start.get("stage"), STARTS)
 
 
 def starting(run: Run, source: str) -> tuple[str, str]:
     """The run and stage whose adapter `source`'s later stages start from: its rejection-sampled
     one when it has one, else the supervised one of the run it sampled from, else its own."""
-    if run.hub.files(f"runs/{source}/rft/adapter"):
+    if run.hub.files(f"runs/{checked(source)}/rft/adapter"):
         return source, "rft"
     if run.hub.files(f"runs/{source}/sample/sample.json"):
-        return report(run, source, "sample")["sft"], "sft"
+        return checked(report(run, source, "sample")["sft"]), "sft"
     return source, "sft"
+
+
+def samples_of(run: Run, source: str) -> list[dict]:
+    """The rows `source`'s sample stage wrote, checked before any is used: the file is the one its
+    report hashed, it was drawn from the records this run has, and every row's index points into
+    them. Records built again since would otherwise pair answers with the wrong records."""
+    from lotml_harness.guide import sample, train
+
+    summary = report(run, source, "sample")
+    path = run.hub.get(f"runs/{source}/sample/samples.jsonl", run.work)
+    data = path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != summary.get("samples_digest"):
+        raise ValueError(f"run {source}'s samples are not the ones its report hashed")
+    if summary.get("records_digest") != hubs.digest(run.records):
+        raise ValueError(f"run {source} sampled other records than this run's")
+    count = len(train.load(run.records, "train"))
+    rows = [json.loads(line) for line in data.decode("utf-8").splitlines() if line]
+    for row in rows:
+        sample.index(row.get("index") if isinstance(row, dict) else None, count)
+    return rows
 
 
 def rft(run: Run) -> None:
@@ -141,9 +188,8 @@ def rft(run: Run) -> None:
     from lotml_harness.guide import rft as rejection
 
     source = run.source("rft")
-    supervised = report(run, source, "sample")["sft"]
-    samples = run.hub.get(f"runs/{source}/sample/samples.jsonl", run.work)
-    rows = [json.loads(line) for line in samples.read_text(encoding="utf-8").splitlines() if line]
+    supervised = checked(report(run, source, "sample")["sft"])
+    rows = samples_of(run, source)
     adapter = run.hub.get(f"runs/{supervised}/sft/adapter", run.work)
     out = run.out("rft")
     resume(run, "rft")
@@ -163,23 +209,24 @@ def reinforce(run: Run, stage: str, random_reward: bool) -> None:
     from lotml_harness.guide import grpo
 
     source = run.source(stage)
-    if not run.hub.files(f"runs/{source}/sample/samples.jsonl"):
+    if not run.hub.files(f"runs/{checked(source)}/sample/samples.jsonl"):
         raise ValueError(f"{stage} calibrates its pool on a sample stage, which run {source} lacks")
-    path = run.hub.get(f"runs/{source}/sample/samples.jsonl", run.work)
-    samples = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
-    begun, start = starting(run, source)
-    adapter = run.hub.get(f"runs/{begun}/{start}/adapter", run.work)
+    samples = samples_of(run, source)
+    first, start = starting(run, source)
+    adapter = run.hub.get(f"runs/{first}/{start}/adapter", run.work)
     out = run.out(stage)
     resume(run, stage)
     settings = grpo.Settings(random_reward=random_reward)
     found = grpo.fit(settings, run.records, samples, adapter, out, callbacks=[uploader(run, stage)])
-    found |= {"start": {"run": begun, "stage": start}, "samples": source}
-    (out / "rl.json").write_text(json.dumps(found, indent=2), encoding="utf-8")
+    found |= {"start": {"run": first, "stage": start}, "samples": source}
+    (out / f"{stage}.json").write_text(json.dumps(found, indent=2), encoding="utf-8")
     run.hub.put(
         out / "adapter", f"runs/{run.run}/{stage}/adapter", f"run {run.run}: {stage} adapter"
     )
     run.hub.put(
-        out / "rl.json", f"runs/{run.run}/{stage}/rl.json", f"run {run.run}: {stage} report"
+        out / f"{stage}.json",
+        f"runs/{run.run}/{stage}/{stage}.json",
+        f"run {run.run}: {stage} report",
     )
 
 
@@ -206,6 +253,8 @@ def sampling(run: Run) -> None:
     out = run.out("sample") / "samples.jsonl"
     rows = sample.sample(model, tokenizer, train.load(run.records, "train"), settings, out)
     summary = {
+        "records_digest": hubs.digest(run.records),
+        "samples_digest": hashlib.sha256(out.read_bytes()).hexdigest(),
         "settings": dataclasses.asdict(settings),
         "records": len(rows),
         "sft": run.source("sample"),
@@ -227,17 +276,17 @@ def adapters(run: Run, source: str) -> dict[str, list[Path]]:
         return run.hub.get(f"runs/{at}/{stage}/adapter", run.work)
 
     found: dict[str, list[Path]] = {}
-    if run.hub.files(f"runs/{source}/rl/adapter"):
-        rl = report(run, source, "rl")
-        begun = rl.get("start") or {"run": rl["sft"], "stage": "sft"}
-        if begun["stage"] == "rft":
-            found["sft"] = [adapter(report(run, begun["run"], "rft")["sft"], "sft")]
-        found[begun["stage"]] = [adapter(begun["run"], begun["stage"])]
-        found["rl"] = [*found[begun["stage"]], adapter(source, "rl")]
+    if run.hub.files(f"runs/{checked(source)}/rl/adapter"):
+        first, start = begun(report(run, source, "rl"))
+        if start == "rft":
+            found["sft"] = [adapter(checked(report(run, first, "rft")["sft"]), "sft")]
+        found[start] = [adapter(first, start)]
+        found["rl"] = [*found[start], adapter(source, "rl")]
         if run.hub.files(f"runs/{source}/rl-random/adapter"):
-            found["rl-random"] = [*found[begun["stage"]], adapter(source, "rl-random")]
+            twin, twin_start = begun(report(run, source, "rl-random"))
+            found["rl-random"] = [adapter(twin, twin_start), adapter(source, "rl-random")]
     elif run.hub.files(f"runs/{source}/rft/adapter"):
-        found["sft"] = [adapter(report(run, source, "rft")["sft"], "sft")]
+        found["sft"] = [adapter(checked(report(run, source, "rft")["sft"]), "sft")]
         found["rft"] = [adapter(source, "rft")]
     else:
         found["sft"] = [adapter(source, "sft")]

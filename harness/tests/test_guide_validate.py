@@ -175,13 +175,19 @@ def test_export_follows_the_rejection_sampled_adapter_into_reinforcement_learnin
     }
 
 
-def test_export_also_gives_the_random_reward_twin_its_model(tmp_path: Path):
+def test_export_gives_the_random_reward_twin_the_model_its_own_report_started_from(
+    tmp_path: Path,
+):
     work = tmp_path / "work"
-    reports = {"runs/r4/rl/rl.json": {"start": {"run": "r4", "stage": "rft"}},
-               "runs/r4/rft/rft.json": {"sft": "r2"}}  # fmt: skip
+    reports = {
+        "runs/r4/rl/rl.json": {"start": {"run": "r4", "stage": "rft"}},
+        "runs/r4/rft/rft.json": {"sft": "r2"},
+        "runs/r4/rl-random/rl-random.json": {"start": {"run": "r2", "stage": "sft"}},
+    }
     files = ["runs/r4/rft/adapter/a", "runs/r4/rl/adapter/a", "runs/r4/rl-random/adapter/a"]
     found = stages.adapters(stages.Run("r5", tmp_path, {}, Store(files, reports), work), "r4")
-    assert found["rl-random"] == [work / "runs/r4/rft/adapter", work / "runs/r4/rl-random/adapter"]
+    assert found["rl"] == [work / "runs/r4/rft/adapter", work / "runs/r4/rl/adapter"]
+    assert found["rl-random"] == [work / "runs/r2/sft/adapter", work / "runs/r4/rl-random/adapter"]
 
 
 def test_a_later_stage_starts_from_the_rejection_sampled_adapter_when_there_is_one(tmp_path: Path):

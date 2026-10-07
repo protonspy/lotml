@@ -48,6 +48,10 @@ a deadline is more than zero and at most twelve hours. As soon as RunPod
 returns the pod's id a row is written with `ended: null`, and the watcher completes it; a row left
 open by a crash is counted at its full deadline until `pipeline reconcile` closes it — a pod still
 there terminated and closed now, a pod gone closed at its deadline or now, whichever is sooner.
+A creation RunPod answers with a failure may still have made a pod, so before the next GPU is tried
+the pod is looked for by its name, three times ten seconds apart; a lookup that keeps failing stops
+the run rather than risk a second pod. However the run ends, every pod named after it that the
+ledger never saw is terminated and recorded, as `reconcile` does for every name the pipeline gives.
 
 **The deadline** (R1.4, R1.5) is enforced twice. The watcher terminates the pod when the run's
 `status.json` says `done` or `failed`, or when the deadline passes. Inside the pod, the bootstrap
@@ -87,7 +91,10 @@ stage trains, `train.load` checks every record against the split, as it does tod
   supervised guide at temperature 1.0 with transformers on the GPU, and judges each with
   `lotml dev judge` across the pod's cores. `runs/<run>/sample/samples.jsonl` holds every answer's
   verdict and reward and each record's mean; `sample.json`, the mean reward, the records always
-  and never solved, and pass@1 and pass@4 (R3.6).
+  and never solved, pass@1 and pass@4 (R3.6), and the SHA-256 of `samples.jsonl` and the digest of
+  the records sampled. The stages that read the samples check both, and every row's index into the
+  records, before using any: records built again since would pair answers with other records.
+  A run id or stage read from a report names a path only once checked.
 - **rft**: `guide.rft` trains the supervised adapter further, at half its learning rate, on up to
   two distinct sampled answers per record that passed — first location right, edit passing — and
   on the record's own target where none did (R3.7). Later stages start from this adapter when a

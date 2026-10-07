@@ -80,6 +80,7 @@ def fake(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setattr(pipeline.runpod, "status", lambda pod: {"status": "RUNNING"})
     monkeypatch.setattr(pipeline.runpod, "terminate", lambda pod: calls["terminate"].append(pod))
     monkeypatch.setattr(pipeline.runpod, "pods", list)
+    monkeypatch.setattr(pipeline, "LOOK_DELAY", 0.0)
     monkeypatch.setattr(pipeline, "REPORTS", tmp_path / "training")
     monkeypatch.setattr(pipeline, "RUNS", tmp_path / "runs")
     monkeypatch.setattr(ledgers, "REPORT", tmp_path / "runpod.md")
@@ -359,8 +360,9 @@ def test_a_creation_runpod_fails_on_its_side_gives_way_to_the_next_gpu(
 
 def test_the_report_gives_pass_at_k_and_each_stage_s_numbers(tmp_path: Path):
     metrics = {"records": 2, "within_schema": 1.0, "top1": 1.0, "top3": 1.0, "edits_pass": 0.5,
-               "silent": {}, "pass": {"records": 200, "location@1": 0.9, "answer@1": 0.5,
-                                      "answer@4": 0.75, "answer@8": 0.8}}  # fmt: skip
+               "silent": {}, "pass": {"records": 200, "location@1": 0.9, "location@4": 0.92,
+                                      "location@8": 0.95, "answer@1": 0.5, "answer@4": 0.75,
+                                      "answer@8": 0.8}}  # fmt: skip
     found = {
         "export": {"models": {"rft": metrics}, "final": "rft", "threshold": 0.8, "precision": 1.0,
                    "shown": 1.0, "target": 0.9},
@@ -371,7 +373,97 @@ def test_the_report_gives_pass_at_k_and_each_stage_s_numbers(tmp_path: Path):
     }  # fmt: skip
     row = {"gpu": "g", "cloud": "COMMUNITY", "hourly": "0.22", "minutes": 90, "cost": "0.33"}
     text = pipeline.markdown("r1", plan(tmp_path), row, {"state": "done", "stage": "export"}, found)
-    assert "| rft | 200 | 90.0% | 50.0% | 75.0% | 80.0% |" in text
+    assert "| model | records | location@1 | location@4 | location@8 | answer@1 |" in text
+    assert "| rft | 200 | 90.0% | 92.0% | 95.0% | 50.0% | 75.0% | 80.0% |" in text
     assert "Sampled: 4272 train records, mean reward 0.810, 2000 always solved, 30 never" in text
     assert "Rejection sampling: 5000 passing answers and 300 targets over 4272 records." in text
     assert "- rl: a pool of 900 of 4272 sampled records;" in text and "25.0% of groups" in text
+
+
+def test_strings_and_numbers_from_the_repository_cannot_break_the_report(tmp_path: Path):
+    metrics = {"records": 2, "within_schema": "x", "top1": None, "top3": 1.0, "edits_pass": 0.5,
+               "silent": {"a|b": 1}, "pass": {"records": 1, "location@1": "high"}}  # fmt: skip
+    found = {
+        "export": {"models": {"rft|\n# injected": metrics}, "final": "rft", "threshold": "x",
+                   "precision": 1.0, "shown": 1.0, "target": 0.9},
+    }  # fmt: skip
+    row = {"gpu": "g", "cloud": "COMMUNITY", "hourly": "0.22", "minutes": 90, "cost": "0.33"}
+    text = pipeline.markdown("r1", plan(tmp_path), row, {"state": "done\n## x"}, found)
+    assert "\n# injected" not in text and "\n## x" not in text
+    assert "| rft\\| # injected | 2 | — | — | 100.0% | 50.0% | a\\|b 1 |" in text
+    assert "| rft\\| # injected | 1 | — | — |" in text
+    assert "Threshold for rft: —," in text
+
+
+def test_a_failed_creation_s_pod_is_looked_for_again_before_the_next_gpu(
+    fake, tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr(pipeline, "head", lambda: COMMIT)
+    monkeypatch.setattr(pipeline, "pushed", lambda _: True)
+    monkeypatch.setattr(pipeline, "watch", lambda *_, **__: None)
+    monkeypatch.setattr(pipeline.runpod, "price", lambda gpu, cloud: 0.3)
+    looks = iter([None, "pod_a"])
+    monkeypatch.setattr(pipeline.runpod, "named", lambda name: next(looks))
+    asked = []
+
+    def flaky(request):
+        asked.append(request["gpu"]["id"])
+        raise pipeline.runpod.RunPodError("RunPod answered 502: Bad Gateway")
+
+    monkeypatch.setattr(pipeline.runpod, "create", flaky)
+    ledger = Ledger(tmp_path / "runpod.jsonl", None)
+    pipeline.run(plan(tmp_path, gpu="A,B"), Store(), ledger)
+    assert asked == ["A"]
+    assert [r["pod"] for r in ledger.rows()] == ["pod_a"]
+
+
+def test_a_lookup_that_keeps_failing_stops_and_the_run_s_pods_are_swept(
+    fake, tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr(pipeline, "head", lambda: COMMIT)
+    monkeypatch.setattr(pipeline, "pushed", lambda _: True)
+    monkeypatch.setattr(pipeline.runpod, "price", lambda gpu, cloud: 0.3)
+    made: list[dict] = []
+
+    def made_but_failed(request):
+        made.append({"id": "pod_a", "name": request["name"], "cost": 0.3})
+        raise pipeline.runpod.RunPodError("RunPod answered 500: failed to create pod")
+
+    def unreachable(name):
+        raise pipeline.runpod.RunPodError("RunPod answered 503: Service Unavailable")
+
+    monkeypatch.setattr(pipeline.runpod, "create", made_but_failed)
+    monkeypatch.setattr(pipeline.runpod, "named", unreachable)
+    monkeypatch.setattr(pipeline.runpod, "pods", lambda: [*made, {"id": "x", "name": "other"}])
+    ledger = Ledger(tmp_path / "runpod.jsonl", None)
+    with pytest.raises(pipeline.runpod.RunPodError, match="503"):
+        pipeline.run(plan(tmp_path, gpu="A,B"), Store(), ledger)
+    assert len(made) == 1 and fake["terminate"] == ["pod_a"]
+    [row] = ledger.rows()
+    assert row["pod"] == "pod_a" and row["ended"] is not None
+
+
+def test_a_pod_a_failed_creation_made_unseen_is_swept_when_the_run_ends(
+    fake, tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr(pipeline, "head", lambda: COMMIT)
+    monkeypatch.setattr(pipeline, "pushed", lambda _: True)
+    monkeypatch.setattr(pipeline, "watch", lambda *_, **__: None)
+    monkeypatch.setattr(pipeline.runpod, "price", lambda gpu, cloud: 0.3)
+    monkeypatch.setattr(pipeline.runpod, "named", lambda name: None)
+    listed: list[dict] = []
+
+    def late(request):
+        if request["gpu"]["id"] == "A":
+            listed.append({"id": "pod_a", "name": request["name"], "cost": 0.3})
+            raise pipeline.runpod.RunPodError("RunPod answered 500: failed to create pod")
+        listed.append({"id": "pod_b", "name": request["name"], "cost": 0.3})
+        return {"id": "pod_b"}
+
+    monkeypatch.setattr(pipeline.runpod, "create", late)
+    monkeypatch.setattr(pipeline.runpod, "pods", lambda: list(listed))
+    ledger = Ledger(tmp_path / "runpod.jsonl", None)
+    pipeline.run(plan(tmp_path, gpu="A,B"), Store(), ledger)
+    assert fake["terminate"] == ["pod_b", "pod_a"]
+    assert sorted(r["pod"] for r in ledger.rows()) == ["pod_a", "pod_b"]
+    assert all(r["ended"] is not None for r in ledger.rows())

@@ -88,6 +88,14 @@ def pass_at(n: int, c: int, k: int) -> float:
     return 1.0 - math.comb(n - c, k) / math.comb(n, k)
 
 
+def index(value: object, count: int) -> int:
+    """`value`, a sampled row's index into its `count` records; ValueError when it is not one —
+    a row read back from the repository is not trusted to point where it should."""
+    if type(value) is not int or not 0 <= value < count:
+        raise ValueError(f"{value!r} is not an index into {count} records")
+    return value
+
+
 def pass_rates(rows: list[dict], ks: tuple[int, ...] = (1, 4, 8)) -> dict:
     """pass@k of the first location and of the whole answer — location and edit — over the rows,
     for every k no larger than the answers each row holds."""

@@ -18,7 +18,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from lotml_harness.guide import train
+from lotml_harness.guide import sample, train
 from lotml_harness.guide.reward import Reward
 
 
@@ -76,7 +76,7 @@ def rows(records: list[dict], indices: list[int], count: int, seed: int) -> list
     """At most `count` of the records at `indices`, drawn by `seed`, as GRPO's dataset: the prompt
     is the system and user messages; `state` and `truth`, as JSON text, are the columns the reward
     reads — the state the record was rendered from, and the symbols the real fix changed."""
-    chosen = sorted(indices)
+    chosen = sorted(sample.index(i, len(records)) for i in indices)
     if len(chosen) > count:
         chosen = sorted(random.Random(seed).sample(chosen, count))  # noqa: S311 - a reproducible draw
     return [
@@ -133,9 +133,24 @@ def best_step(history: list[dict]) -> int | None:
     hand it to the trainer's own choice of a best model, so the run keeps every checkpoint and
     this picks one."""
     evaluated = [
-        (e["eval_reward"], e["step"]) for e in history if "eval_reward" in e and "step" in e
+        (float(e["eval_reward"]), e["step"])
+        for e in history
+        if "eval_reward" in e and type(e.get("step")) is int
     ]
     return max(evaluated)[1] if evaluated else None
+
+
+def kept(out: Path, best: int | None) -> Path | None:
+    """The checkpoint directory holding step `best`'s adapter, inside `out/checkpoints`; None when
+    the run was never evaluated. RuntimeError when that checkpoint lacks the adapter, rather than
+    keeping another step's adapter under the best one's name."""
+    if best is None:
+        return None
+    root = (out / "checkpoints").resolve()
+    found = (root / f"checkpoint-{int(best)}").resolve()
+    if not found.is_relative_to(root) or not all((found / name).exists() for name in ADAPTER):
+        raise RuntimeError(f"checkpoint-{best}, the best on validation, holds no adapter")
+    return found
 
 
 ADAPTER = ("adapter_config.json", "adapter_model.safetensors")
@@ -219,11 +234,11 @@ def fit(
     resumed = bool(sorted((out / "checkpoints").glob("checkpoint-*")))
     trainer.train(resume_from_checkpoint=resumed)
     best = best_step(trainer.state.log_history)
-    kept = out / "checkpoints" / f"checkpoint-{best}"
-    if best is not None and all((kept / name).exists() for name in ADAPTER):
+    chosen_checkpoint = kept(out, best)
+    if chosen_checkpoint is not None:
         (out / "adapter").mkdir(parents=True, exist_ok=True)
         for name in ADAPTER:
-            shutil.copy2(kept / name, out / "adapter" / name)
+            shutil.copy2(chosen_checkpoint / name, out / "adapter" / name)
     else:
         trainer.model.save_pretrained(out / "adapter")
     rewards = {e["step"]: e["eval_reward"] for e in trainer.state.log_history if "eval_reward" in e}

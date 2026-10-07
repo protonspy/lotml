@@ -73,3 +73,10 @@ def test_pass_rates_count_locations_and_whole_answers():
     assert rates["answer@1"] == pytest.approx((1 / 4 + 0) / 2)
     assert rates["location@4"] == 1.0 and rates["answer@4"] == pytest.approx(0.5)
     assert "location@8" not in rates
+
+
+@pytest.mark.parametrize("value", [-1, 3, "1", True, None, 1.0])
+def test_an_index_must_be_a_whole_number_inside_the_records(value):
+    with pytest.raises(ValueError, match="not an index into 3 records"):
+        sample.index(value, 3)
+    assert sample.index(2, 3) == 2

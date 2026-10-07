@@ -1,6 +1,7 @@
 """A training run inside its pod: stages in order, status after each, checkpoints uploaded and
 resumed (specs/training-pipeline/ R2.3, R2.4, R3.5)."""
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -136,3 +137,76 @@ def test_a_failed_stage_leaves_its_diagnostics(tmp_path: Path, monkeypatch: pyte
         execute(run(tmp_path, store), ["sft"], {"sft": crashed})
     assert "runs/r2/diagnostics.json" in store.puts
     assert store.statuses[-1]["state"] == "failed"
+
+
+class Files:
+    """A Hub serving files from memory: `get` writes a file's body, or makes a directory's path."""
+
+    def __init__(self, bodies: dict[str, object]):
+        self.bodies = {
+            k: v if isinstance(v, bytes) else json.dumps(v).encode() for k, v in bodies.items()
+        }
+
+    def files(self, remote: str) -> list[str]:
+        return [f for f in self.bodies if f.startswith(remote + "/") or f == remote]
+
+    def get(self, remote: str, local: Path) -> Path:
+        target = local / remote
+        if remote in self.bodies:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(self.bodies[remote])
+        else:
+            target.mkdir(parents=True, exist_ok=True)
+        return target
+
+
+@pytest.mark.parametrize("value", ["..", "../r1", "r1/sft", "r*", "", None, 7, "-r1"])
+def test_a_run_id_from_the_repository_is_checked_before_it_names_a_path(value):
+    with pytest.raises(ValueError, match="not a run id"):
+        stages.checked(value)
+    assert stages.checked("20261007-081103") == "20261007-081103"
+    with pytest.raises(ValueError):
+        stages.checked("export", stages.STARTS)
+
+
+def test_a_report_naming_a_run_outside_the_repository_s_runs_is_refused(tmp_path: Path):
+    store = Files({"runs/r2/sample/sample.json": {"sft": "../../elsewhere"}})
+    with pytest.raises(ValueError, match="not a run id"):
+        stages.starting(run(tmp_path, store), "r2")
+    store = Files({"runs/r2/rl/adapter/a": b"x", "runs/r2/rl/rl.json": {"start": {
+        "run": "r1", "stage": "../sft"}}})  # fmt: skip
+    with pytest.raises(ValueError, match="not a run id or stage"):
+        stages.adapters(run(tmp_path, store), "r2")
+
+
+def samples_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rows: list, **summary) -> Run:
+    monkeypatch.setattr(stages.hubs, "digest", lambda _: "records-1")
+    monkeypatch.setattr(stages_train(), "load", lambda records, bucket: [{}, {}, {}])
+    body = "".join(json.dumps(r) + "\n" for r in rows).encode()
+    report = {"sft": "r1", "records_digest": "records-1",
+              "samples_digest": hashlib.sha256(body).hexdigest()} | summary  # fmt: skip
+    store = Files({"runs/r2/sample/sample.json": report, "runs/r2/sample/samples.jsonl": body})
+    return run(tmp_path, store)
+
+
+def stages_train():
+    from lotml_harness.guide import train
+
+    return train
+
+
+def test_samples_are_used_only_as_hashed_from_these_records_and_pointing_into_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    good = [{"index": 0, "mean": 0.5}, {"index": 2, "mean": 1.0}]
+    assert stages.samples_of(samples_run(tmp_path, monkeypatch, good), "r2") == good
+    tampered = samples_run(tmp_path / "a", monkeypatch, good, samples_digest="0" * 64)
+    with pytest.raises(ValueError, match="not the ones its report hashed"):
+        stages.samples_of(tampered, "r2")
+    rebuilt = samples_run(tmp_path / "b", monkeypatch, good, records_digest="records-0")
+    with pytest.raises(ValueError, match="other records"):
+        stages.samples_of(rebuilt, "r2")
+    for index in (3, -1, "0", True):
+        outside = samples_run(tmp_path / f"c{index}", monkeypatch, [{"index": index, "mean": 0.5}])
+        with pytest.raises(ValueError, match="not an index"):
+            stages.samples_of(outside, "r2")

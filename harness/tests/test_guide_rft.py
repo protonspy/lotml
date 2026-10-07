@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from lotml_harness.guide import rft
 
 
@@ -34,3 +36,8 @@ def test_passing_answers_are_kept_distinct_and_capped_and_a_target_stands_in_for
     assert counts == {"answers": 3, "targets": 1, "records": 3}
     assert [m["role"] for m in found[0]["prompt"]] == ["system", "user"]
     assert json.dumps(found)
+
+
+def test_a_row_pointing_outside_the_records_is_refused():
+    with pytest.raises(ValueError, match="not an index"):
+        rft.examples([], [{"index": 0, "answers": []}], 2)

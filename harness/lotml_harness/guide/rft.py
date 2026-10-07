@@ -34,7 +34,7 @@ def examples(records: list[dict], rows: list[dict], keep: int) -> tuple[list[dic
     and the counts of each."""
     found, counts = [], {"answers": 0, "targets": 0, "records": len(rows)}
     for row in rows:
-        record = records[row["index"]]
+        record = records[sample.index(row["index"], len(records))]
         texts: list[str] = []
         for answer in row["answers"]:
             if sample.passed(answer) and answer["text"] not in texts:
