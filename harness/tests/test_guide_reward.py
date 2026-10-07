@@ -40,15 +40,30 @@ def answer(symbols: list[str | None], body: str | None, symbol: str = "count") -
         (Judged(False, [], "none"), ["count"], 0.0),
         (Judged(True, ["count"], "passes"), ["count"], 1.0),
         (Judged(True, ["count"], "edit-fails-check"), ["count"], 0.5),
-        (Judged(True, ["other", "count"], "passes"), ["count"], 0.75),
-        (Judged(True, ["other", "count"], "none"), ["count"], 0.25),
+        (Judged(True, ["other", "count"], "passes"), ["count"], (10 / 11 + 1) / 2),
+        (Judged(True, ["other", "count"], "none"), ["count"], 10 / 11 / 2),
         (Judged(True, ["other"], "passes"), ["count"], 0.5),
         (Judged(True, ["other"], "none"), ["count"], 0.0),
         (Judged(True, [None], "none"), [None], 0.5),
+        (Judged(True, ["count"], "none"), ["count", "helper"], 10 / 19 / 2),
+        (Judged(True, ["count", "count"], "none"), ["count"], 0.5),
+        (Judged(True, ["count", "ghost"], "passes", ("ghost",)), ["count"], 0.5),
     ],
 )
-def test_the_score_is_the_mean_of_the_location_and_the_edit(judged, truth, expected):
-    assert score(judged, truth) == expected
+def test_the_locations_score_an_f_score_with_beta_3_averaged_with_the_edit(judged, truth, expected):
+    assert score(judged, truth) == pytest.approx(expected)
+
+
+def test_naming_more_declarations_never_scores_more_than_naming_the_right_one():
+    alone = score(Judged(True, ["count"], "none"), ["count"])
+    padded = score(Judged(True, ["a", "b", "count"], "none"), ["count"])
+    assert padded < alone
+
+
+def test_the_judge_names_the_declarations_the_file_does_not_have():
+    found = judge(answer(["count", "ghost"], None), STATE)
+    assert (found.valid, found.unknown) == (True, ("ghost",))
+    assert judge(answer(["count"], None), STATE).unknown == ()
 
 
 def test_the_compiler_judges_an_edit_that_fixes_the_file_and_one_that_copies_it():
