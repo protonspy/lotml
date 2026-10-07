@@ -21,7 +21,7 @@
 - [ ] 4.2 (Unit) Run the pipeline on RunPod — SFT, reinforcement learning and export of the 0.5B model — within the cap, and commit its report and ledger — R1.3, R5.1
   _Depends 3.5, 4.1_
 - [x] 5.1 (TDD) Score an answer's locations by the F-score with beta 3 of the declarations it names, zero when one is not declared in the file, the judge saying which are not — R4.2
-- [ ] 5.2 (Unit) Sample several answers to each train record from the fine-tuned guide and judge each — R3.6
+- [x] 5.2 (Unit) Sample several answers to each train record from the fine-tuned guide and judge each — R3.6
 - [ ] 5.3 (Unit) Fine-tune the guide further on the sampled answers that pass, with the record's target where none did — R3.7
   _Depends 5.2_
 - [ ] 5.4 (Unit) Build the reinforcement-learning pool from the records sometimes solved, with a share of those always solved — R3.8

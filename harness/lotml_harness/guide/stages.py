@@ -11,6 +11,7 @@ downloaded to resume lands where the trainer looks for it.
 
 import argparse
 import contextlib
+import dataclasses
 import datetime
 import json
 import os
@@ -133,6 +134,31 @@ def rl(run: Run) -> None:
     run.hub.put(out / "rl.json", f"runs/{run.run}/rl/rl.json", f"run {run.run}: rl report")
 
 
+def sampling(run: Run) -> None:
+    """Sample several answers to every train record from the fine-tuned guide and judge each
+    (R3.6): `runs/<run>/sample/samples.jsonl`, which rejection-sampled fine-tuning and the
+    reinforcement-learning pool read."""
+    from lotml_harness.guide import sample, train
+
+    base = train.Settings()
+    adapter = run.hub.get(f"runs/{run.source('sample')}/sft/adapter", run.work)
+    model, tokenizer = sample.load(base.model, base.revision, [adapter])
+    settings = sample.Settings(workers=max(2, (os.cpu_count() or 4) - 2))
+    out = run.out("sample") / "samples.jsonl"
+    rows = sample.sample(model, tokenizer, train.load(run.records, "train"), settings, out)
+    summary = {
+        "settings": dataclasses.asdict(settings),
+        "records": len(rows),
+        "sft": run.source("sample"),
+        "mean": sum(r["mean"] for r in rows) / len(rows) if rows else 0.0,
+        "always": sum(1 for r in rows if r["mean"] == 1.0),
+        "never": sum(1 for r in rows if r["mean"] == 0.0),
+        "unjudged": sum(1 for r in rows for a in r["answers"] if not a["judged"]),
+    } | sample.pass_rates(rows, ks=(1, settings.answers))
+    (out.parent / "sample.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    run.hub.put(out.parent, f"runs/{run.run}/sample", f"run {run.run}: sampled answers")
+
+
 def adapters(run: Run, source: str) -> dict[str, list[Path]]:
     """The models `source`'s adapters make, each as the adapters merged in order: the supervised
     one, and when `source` ran reinforcement learning, that one on top of the supervised one it
@@ -228,6 +254,7 @@ def diagnose(run: Run) -> None:
 STAGES: dict[str, Callable[[Run], None]] = {
     "diagnose": diagnose,
     "sft": sft,
+    "sample": sampling,
     "rl": rl,
     "export": export,
 }
