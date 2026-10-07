@@ -88,6 +88,10 @@ and MCP servers — JSON-RPC written over `serde_json`, with no protocol library
   mypy or jedi when no `--stub` is given, never installed by lotml.
 - **CPython** 3.11 or later — runs what the Python backend writes (`lotml run`, `lotml test`);
   found as `LOTML_PYTHON`, `python3`, `python` or `py -3`. Not a library the compiler links.
+- **uv** (shipped beside the binary, pinned) — provisions CPython 3.14, the default, and runs
+  the tools `lotml bind` needs, so a user installs no Python of their own
+  (adr:0026-lotml-ships-uv-and-runs-python-3-14-by-default). Decided, and built by
+  `plans/python-via-uv.md`; until then the two entries above describe the code.
 - **clang** 17 or later — compiles the LLVM IR the LLVM backend writes, with the C runtime, into
   an executable, or with `--shared` a shared library
   (`--target llvm`, adr:0021-compiler-in-rust-with-llvm-as-its-native-code-generator):
