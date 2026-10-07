@@ -404,20 +404,20 @@ def satisfiable(source: str, lotml: Lotml | None = None) -> str | None:
     """None when `source` checks; otherwise the compiler's first error, without its location."""
     lotml = lotml or Lotml()
     with tempfile.TemporaryDirectory(prefix="lotml-witness-") as directory:
-        (Path(directory) / "solution.lotml").write_text(source, encoding="utf-8")
-        checked = lotml.compiler(["check", "solution.lotml"], directory)
+        (Path(directory) / "solution.lot").write_text(source, encoding="utf-8")
+        checked = lotml.compiler(["check", "solution.lot"], directory)
     if checked is None:
         return "timeout"
     if checked.returncode == 0:
         return None
     for line in checked.stdout.splitlines() + checked.stderr.splitlines():
         if "error" in line:
-            return line.split(": ", 1)[1] if line.startswith("solution.lotml:") else line
+            return line.split(": ", 1)[1] if line.startswith("solution.lot:") else line
     return f"lotml check exited {checked.returncode}"
 
 
 PROMPT = (
-    "Write `{name}` in `solution.lotml`: give its parameters and its return their lotml types,"
+    "Write `{name}` in `solution.lot`: give its parameters and its return their lotml types,"
     " and implement it as its docstring says.\n"
 )
 """What the agent is asked, in the same words for every task, so arms differ only in context."""
@@ -496,17 +496,17 @@ def pose(
     recorded: Recorded,
     lotml: Lotml | None = None,
 ) -> AgentTask:
-    """An `implement` task graded on `solution.lotml`, its hidden blocks the recorded cases, once
+    """An `implement` task graded on `solution.lot`, its hidden blocks the recorded cases, once
     a witness signature shows they can be met. No reference solution: the cases are the canonical
     solution's own results."""
     _, _, blocks = typed(entry, names, recorded, lotml)
     return AgentTask(
         id=ident,
         kind="implement",
-        graded=("solution.lotml",),
+        graded=("solution.lot",),
         prompt=PROMPT.format(name=entry),
-        workspace_files={"solution.lotml": solution_file(entry, names, doc)},
-        hidden_files={"solution.lotml": blocks},
+        workspace_files={"solution.lot": solution_file(entry, names, doc)},
+        hidden_files={"solution.lot": blocks},
     )
 
 
@@ -591,7 +591,7 @@ def build(records: list[dict], digest: str, posing, workers: int = 8) -> tuple[l
             report.refused[_ident(record)] = refusal or "unknown"
             continue
         kept.append(task)
-        report.cases[task.id] = task.hidden("solution.lotml").count('test "hidden:')
+        report.cases[task.id] = task.hidden("solution.lot").count('test "hidden:')
     return kept, report
 
 

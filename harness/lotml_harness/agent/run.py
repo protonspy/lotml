@@ -24,6 +24,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, messages_to_dict
 from langchain_core.outputs import LLMResult
 
 from lotml_harness import ROOT
+from lotml_harness.agent import safe
 from lotml_harness.agent.bench import AgentTask
 from lotml_harness.agent.dataset import source_of
 from lotml_harness.agent.grade import grade
@@ -113,7 +114,7 @@ class Meter(BaseCallbackHandler):
     running: dict = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
     workspace: Path | None = None
-    """Where the `.lotml` files are snapshotted around every `check` and `test`."""
+    """Where the source files are snapshotted around every `check` and `test`."""
     checks: list = field(default_factory=list)
     tests: list = field(default_factory=list)
     system: str | None = None
@@ -240,10 +241,10 @@ def reports_errors(check_output: str) -> bool:
 
 
 def bounded_snapshot(workspace: Path) -> tuple[dict[str, str], bool]:
-    """The workspace's `.lotml` files, symbolic links skipped, each and all held to their caps;
-    and whether a cap cut it."""
+    """The workspace's `.lot` and `.lotml` files, symbolic links skipped, each and all held to their
+    caps; and whether a cap cut it."""
     files, total, cut = {}, 0, False
-    for path in sorted(workspace.rglob("*.lotml")):
+    for path in sorted(p for p in workspace.rglob("*") if safe.is_source(p)):
         if path.is_symlink() or not path.is_file():
             continue
         size = path.stat().st_size
@@ -264,7 +265,8 @@ def compiler_version(lotml: Lotml) -> str:
 def snapshot(workspace: Path) -> dict[str, str]:
     return {
         p.relative_to(workspace).as_posix(): p.read_text(encoding="utf-8", errors="replace")
-        for p in sorted(workspace.rglob("*.lotml"))
+        for p in sorted(workspace.rglob("*"))
+        if safe.is_source(p) and p.is_file()
     }
 
 

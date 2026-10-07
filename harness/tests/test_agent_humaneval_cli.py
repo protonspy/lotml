@@ -17,10 +17,10 @@ def kept(n: int) -> AgentTask:
     return AgentTask(
         id=f"humaneval-{n}",
         kind="implement",
-        graded=("solution.lotml",),
+        graded=("solution.lot",),
         prompt="Write it.",
-        workspace_files={"solution.lotml": ""},
-        hidden_files={"solution.lotml": ""},
+        workspace_files={"solution.lot": ""},
+        hidden_files={"solution.lot": ""},
     )
 
 
@@ -112,10 +112,10 @@ def test_the_arms_are_compared_on_first_attempts_by_mcnemar():
 
 
 def test_a_failure_whose_files_check_alone_but_not_with_the_hidden_blocks_is_a_signature():
-    refused = Grade(True, 0, 2, ["solution.lotml: the tests did not run"])
+    refused = Grade(True, 0, 2, ["solution.lot: the tests did not run"])
     assert refused.failure == "signature"
-    assert Grade(True, 1, 2, ["solution.lotml: hidden: 1: fail"]).failure == "behaviour"
-    assert Grade(False, 0, 2, ["solution.lotml: the tests did not run"]).failure == "behaviour"
+    assert Grade(True, 1, 2, ["solution.lot: hidden: 1: fail"]).failure == "behaviour"
+    assert Grade(False, 0, 2, ["solution.lot: the tests did not run"]).failure == "behaviour"
     assert Grade(True, 2, 2).failure is None
 
 

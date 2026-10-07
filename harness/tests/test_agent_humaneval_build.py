@@ -23,9 +23,9 @@ def test_a_problem_becomes_one_untyped_file_with_its_docstring_and_todo():
     task = pose_humaneval(ADD)
     assert task.id == "humaneval-7"
     assert task.kind == "implement"
-    assert task.graded == ("solution.lotml",)
+    assert task.graded == ("solution.lot",)
     assert task.workspace_files == {
-        "solution.lotml": (
+        "solution.lot": (
             'fn add(a, b):\n    """ Add two numbers.\n    >>> add(1, 2)\n    3\n    """\n'
             "    return todo()\n"
         )
@@ -35,7 +35,7 @@ def test_a_problem_becomes_one_untyped_file_with_its_docstring_and_todo():
 
 def test_the_prompt_is_the_same_sentence_for_every_task():
     assert pose_humaneval(ADD).prompt == (
-        "Write `add` in `solution.lotml`: give its parameters and its return their lotml types,"
+        "Write `add` in `solution.lot`: give its parameters and its return their lotml types,"
         " and implement it as its docstring says.\n"
     )
 
@@ -44,10 +44,10 @@ def test_the_hidden_blocks_are_the_recorded_cases_and_a_typed_solution_passes_th
     tmp_path: Path,
 ):
     task = pose_humaneval(ADD)
-    assert task.hidden("solution.lotml").count('test "hidden:') == 2
+    assert task.hidden("solution.lot").count('test "hidden:') == 2
     task.lay(tmp_path)
     assert grade(task, tmp_path).outcome == "no check", "the untyped file does not check"
-    (tmp_path / "solution.lotml").write_text(
+    (tmp_path / "solution.lot").write_text(
         'fn add(a: int, b: int) -> int:\n    """Add."""\n    return a + b\n', encoding="utf-8"
     )
     result = grade(task, tmp_path)
@@ -56,7 +56,7 @@ def test_the_hidden_blocks_are_the_recorded_cases_and_a_typed_solution_passes_th
 
 def test_a_docstring_found_after_an_import_is_kept():
     record = ADD | {"prompt": 'def add(a, b):\n    import math\n    """Add."""\n'}
-    assert '"""Add."""' in pose_humaneval(record).workspace_files["solution.lotml"]
+    assert '"""Add."""' in pose_humaneval(record).workspace_files["solution.lot"]
 
 
 @pytest.mark.parametrize(

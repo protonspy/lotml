@@ -5,7 +5,7 @@
       "camelcase": "Lotml",
       "scope": "source.lotml",
       "path": ".",
-      "file-types": ["lotml"],
+      "file-types": ["lot", "lotml"],
       "highlights": "queries/highlights.scm"
     }
   ],
