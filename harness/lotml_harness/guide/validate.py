@@ -32,7 +32,7 @@ def served(gguf: Path, llama_cpp: Path, port: int = PORT, slots: int = 4) -> Ite
     """`llama-server` from `llama_cpp` serving `gguf` on the GPU, every layer offloaded, until the
     block ends; its URL once it answers its health check. It gets only the path and its libraries
     from the environment, never the token."""
-    server = train._tool(llama_cpp, ("llama-server",))
+    server = train._tool(llama_cpp, ("llama-server", "llama-server.exe"))
     libraries = sorted({str(p.parent) for p in llama_cpp.rglob("*.so*")})
     env = {
         "PATH": os.environ.get("PATH", ""),

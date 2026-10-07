@@ -55,6 +55,8 @@ RunPod pod the pipeline creates (`python -m lotml_harness.guide.pipeline`).
   supervised fine-tuning with the loss on the answer alone.
 - **datasets** 5.1.0 and **accelerate** 1.15.0 — what trl reads its examples through and trains
   with.
+- **sentencepiece** 0.2.2 — llama.cpp's converter imports it before it falls back to the BPE
+  vocabulary Qwen uses, so the export fails without it.
 - **llama.cpp** (build b11450, a release binary and its source's `convert_hf_to_gguf.py`, used by
   path) — converts the merged guide to a Q4_K_M GGUF, and `llama-server` serves it on the CPU with
   JSON-schema answers and log-probabilities, the request the `guide` tool sends; in a training pod,
