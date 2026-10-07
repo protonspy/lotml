@@ -48,19 +48,53 @@ pub fn clang() -> Option<driver::Clang> {
 
 /// `source`, written to `prog.lot`, compiled by the LLVM backend at `level`, built and run.
 pub fn run_llvm(clang: &driver::Clang, name: &str, source: &str, level: Level) -> Run {
+    build_and_run(clang, name, source, level, Build::Plain)
+}
+
+/// How a test builds its program: plainly, reporting the cells left at exit, or running its
+/// `test` blocks.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Build {
+    Plain,
+    Counting,
+    Tests,
+}
+
+pub fn build_and_run(clang: &driver::Clang, name: &str, source: &str, level: Level, build: Build) -> Run {
     let dir = scratch("llvm-target", &format!("{name}-{level:?}"));
     let path = dir.join("prog.lot");
     std::fs::write(&path, source).unwrap();
-    let ll = lotml_llvm::compile(source, &path).unwrap_or_else(|d| {
-        panic!("{source}\ndoes not compile to LLVM: {:#?}", d.iter().map(|d| &d.message).collect::<Vec<_>>())
-    });
+    let program = lotml_llvm::compile_program(source, &path, &lotml_check::Interfaces::new(), build == Build::Tests)
+        .unwrap_or_else(|d| {
+            panic!("{source}\ndoes not compile to LLVM: {:#?}", d.iter().map(|d| &d.message).collect::<Vec<_>>())
+        });
+    let ll = program.ll;
     let ll_path = dir.join("prog.ll");
     std::fs::write(&ll_path, &ll).unwrap();
     lotml_runtime::write(&dir).unwrap();
     let exe = dir.join(if cfg!(windows) { "prog.exe" } else { "prog" });
-    clang.build(&ll_path, &dir, &exe, level, &[]).unwrap_or_else(|e| panic!("{e}\n--- the IR ---\n{ll}"));
+    clang
+        .build_with(&ll_path, &dir, &exe, level, &program.libraries, build == Build::Counting)
+        .unwrap_or_else(|e| panic!("{e}\n--- the IR ---\n{ll}"));
     let out = Command::new(&exe).current_dir(&dir).output().expect("the program runs");
     finish(out, ll)
+}
+
+/// `source` on the LLVM target at both levels, counting cells: it prints what the Python target
+/// prints, and every cell it allocated is freed by its end (specs/llvm-parity R3.1).
+pub fn frees_everything(name: &str, source: &str) {
+    let Some(clang) = clang() else { return };
+    let python = run_python(name, source);
+    for level in [Level::Debug, Level::Release] {
+        let run = build_and_run(&clang, name, source, level, Build::Counting);
+        assert_eq!(run.stdout, python.stdout, "{name} at {level:?}: {}", run.stderr);
+        assert!(
+            run.stderr.contains("lotml: 0 cells live at exit"),
+            "{name} at {level:?}: {}\n--- the IR ---\n{}",
+            run.stderr,
+            run.ll
+        );
+    }
 }
 
 /// `source` compiled by the Python backend and run as `lotml run` runs it.

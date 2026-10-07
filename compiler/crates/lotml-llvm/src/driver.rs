@@ -101,8 +101,25 @@ impl Clang {
         level: Level,
         libraries: &[String],
     ) -> Result<(), String> {
+        self.build_with(ll, runtime_dir, exe, level, libraries, false)
+    }
+
+    /// `build`, the runtime reporting at exit, when `counting`, the cells still live and the cells
+    /// allocated: what the leak tests read (specs/llvm-parity R3.1).
+    pub fn build_with(
+        &self,
+        ll: &Path,
+        runtime_dir: &Path,
+        exe: &Path,
+        level: Level,
+        libraries: &[String],
+        counting: bool,
+    ) -> Result<(), String> {
         let mut command = Command::new(&self.program);
         command.arg(if level == Level::Release { "-O2" } else { "-O0" });
+        if counting {
+            command.arg("-DLT_COUNT_CELLS");
+        }
         command.arg("-w").arg("-o").arg(exe).arg(ll).arg(runtime_dir.join("lotml.c"));
         command.arg("-I").arg(runtime_dir);
         if !cfg!(windows) {
