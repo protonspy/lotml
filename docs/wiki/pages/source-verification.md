@@ -7,10 +7,11 @@ is in `research/literature/`; the claims it checks are used throughout the wiki,
 
 ## How it works
 
-- **Sources** (`sources.json`): 83 papers — the 43 the first survey cited plus 15 published since or
+- **Sources** (`sources.json`): 138 papers — the 43 the first survey cited plus 15 published since or
   missed by it, found by a search on edit formats, languages designed for LLMs, prefix checking,
-  diagnostics and low-resource languages, and 25 on a small model inside the compiler
-  ([[compiler-embedded-model]]). Each has a versioned URL and the SHA-256 of the PDF.
+  diagnostics and low-resource languages; 25 on a small model inside the compiler
+  ([[compiler-embedded-model]]); and 55 on training a small coder model ([[small-coder-training]]).
+  Each has a versioned URL and the SHA-256 of the PDF.
 - **Fetch** (`fetch.py`): downloads each PDF into the git-ignored `cache/` — papers are identified,
   not redistributed — and converts it to Markdown page by page with docling, tables included.
 - **Claims** (`claims.json`): every number or statement the study uses, with a verbatim quote from
@@ -22,14 +23,15 @@ is in `research/literature/`; the claims it checks are used throughout the wiki,
   each quote to occur in its paper, reporting the page. A quote shorter than 12 canonical characters is
   refused; within one paper, longer strings do not match by accident.
 
-The quotes were extracted by seventeen reading passes, each covering four to six papers in full —
+The quotes were extracted by twenty-nine reading passes, each covering four to twelve papers in full —
 abstract, method, every results section and table, limitations — with instructions to check the
-denominator, model, benchmark and condition behind every number. The verifier then checked every
-quote mechanically.
+denominator, model, benchmark and condition behind every number: seventeen for the study, and twelve
+for the training pages, one of which re-read twelve papers already in the set. The verifier then
+checked every quote mechanically.
 
 ## What it found
 
-1,047 quotes, all found verbatim: 546 claims, 112 discrepancies and 389 findings over 83 papers.
+1,617 quotes, all found verbatim: 716 claims, 164 discrepancies and 737 findings over 138 papers.
 
 The discrepancies are the first survey's errors, and most are not wrong numbers but numbers
 detached from their conditions — one model, one benchmark, a relative gain read as points, a best
@@ -58,6 +60,28 @@ compiler while the model writes, admissible alternatives as the content of a dia
 addressed to syntax entities, and the cost of familiar syntax with a new meaning — see
 [[semantic-compiler]], [[editing-robustness]] and [[lotml-syntax]].
 
+The 55 papers added for [[small-coder-training]] corrected the deep-research survey that found them,
+whose researchers had read some papers in full and others through abstracts and search results. The
+corrections that changed what the pages say:
+
+| what the survey said | what the paper says | where it matters |
+| --- | --- | --- |
+| realistic bugs train better than synthetic ones | AST mutations and model rewrites trained within the error bars of reverted real fixes; only an open-ended "add a bug" prompt fell off | [[repair-training]] |
+| more distinct problems beat more solutions per problem | 1 to 16 solutions per problem gave 13.9 points; the more diverse set 2.6 more | [[small-coder-training]] |
+| a model's own verified data can replace the teacher | a 3B student learned more from a 33B model's data than from its own | [[small-coder-training]] |
+| difficulty-weighted test credit beat binary GRPO by 2.57 and 8.83 | with execution-feedback retries; single-turn the gain was 1.26, and raw pass rate beside the outcome term also beat binary | [[verifiable-rewards]] |
+| pass-rate reward ends 0.6–2.0 points below binary | one model at pass@4 to pass@16; it finished 0.3 above at pass@1, and another model lost 2.2 | [[verifiable-rewards]] |
+| the 0.5B fixer went from 59.40% to 97.82%, 25.2 points over fine-tuning | in the cached version 59.40% is a 6.7B generator's own rate; behind Qwen2.5-Coder 7B the fixer reached 96.92% against 73.83% fine-tuned | [[repair-training]] |
+| RL from starts of 1.5B and below gives no signal | Qwen3-1.7B and Llama-3.2-3B did not improve on competition problems; SmolLM3-3B, from 1–2%, did | [[small-coder-training]], [[training-prior]] |
+| a random-reward control detects format drift | it detects clipping amplifying what the model already does, and must use the main run's updates per batch | [[rl-environment]] |
+| top-K teacher probabilities are merely biased | below 25 tokens they trained a worse student than no distillation | [[small-coder-training]] |
+
+Smaller ones: LocAgent's 12% is relative, 4.0 points; PRIME's 15.1% is points; RLEF's doubling holds
+on the validation set and is 1.5 times on test; HardTests' drop with weak tests is under two problems
+of 105. Three passages the survey put in quotation marks — from Agnostics, SLMFix and SWE-smith — are
+not in the papers, and the row on small starts also corrects [[training-prior]], which had Agnostics
+failing on every model of 3B and below.
+
 The 25 papers added for [[compiler-embedded-model]] corrected the web survey that found them, which
 had read abstracts, in the same way: CORE's 59.2% holds on a 520-file user-study subset, and its
 25.8% fewer false positives is one of two figures the paper gives for the same filter; RTLFixer's
@@ -72,8 +96,13 @@ practices, not by confidence thresholds.
 - **Conversion can garble** formulas and wide tables; numbers quoted from a table row are checked as
   the row's text.
 - **Not every source is a paper.** Blogs, documentation, release notes and benchmark sites — Alderson,
-  Dan Luu, aider's documentation, the Benchmarks Game, rustc's and OpenAI's documentation, MojoBench —
-  are cited by link and not machine-checked; aider's 9× was re-read at its source in this pass.
+  Dan Luu, aider's documentation, the Benchmarks Game, rustc's and OpenAI's documentation; for the
+  training pages DeepCoder's, Oxen.ai's, Thinking Machines', Anthropic's and METR's posts and TRL's and
+  Unsloth's documentation — are cited by link and not machine-checked; aider's 9× was re-read at its
+  source in this pass. MojoBench, once among them, is now a checked paper.
+- **Equations do not convert.** Reward constants written as formulas — CodeRL's, RLEF's,
+  Arctic-Text2SQL-R1's, SLMFix's — did not survive the conversion to text, so the pages give those
+  rewards' shape and not their constants.
 - **Versions move.** A later arXiv version can change a number, as RustRepoTrans's did; the checksum
   in `sources.json` fails the fetch when the bytes change, so the claim is re-read instead of
   silently drifting.

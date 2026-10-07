@@ -63,7 +63,12 @@ checker forces you to handle. The full language fits in one example-driven page:
 
 ## Getting started
 
-Requires Rust 1.97+ and Python 3 (the first target compiles to Python modules).
+[Releases](https://github.com/protonspy/lotml/releases) hold `lotml` built for Linux (x86_64),
+Windows (x86_64) and macOS (Apple silicon): each archive holds the binary, this README and the
+licence, beside the VS Code extension's `.vsix` and a `SHA256SUMS`. The binary carries its
+runtimes; running programs needs Python 3.11 or later, and the C target a C compiler.
+
+To build it instead, with Rust 1.97+:
 
 ```bash
 cargo build --manifest-path compiler/Cargo.toml --locked --release -p lotml
@@ -78,12 +83,25 @@ lotml init                  # set a project up for coding agents: AGENTS.md, gui
 lotml explain E0204         # explain an error code
 ```
 
+### File icons and VS Code
+
+The lotus on a page marks LotML files in Windows Explorer, for the current user, with no
+administrator needed:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File editors\windows\register.ps1   # -Remove takes it back
+```
+
+The VS Code extension in [`editors/vscode/`](editors/vscode/) gives LotML files the same icon and
+starts the language server for them; its README says how to build and install it.
+
 ## Repository
 
 | Path | What lives there |
 |---|---|
 | [`compiler/`](compiler/) | The Rust compiler: syntax, checker, formatter, Python backend, LSP and MCP servers |
 | [`reference/`](reference/) | The language reference and the tree-sitter grammar |
+| [`editors/`](editors/) | The file icon, its Windows Explorer association and the VS Code extension |
 | [`harness/`](harness/) | The evaluation harness that measures models writing LotML |
 | [`research/`](research/) | Reproducible experiments: token cost, Python leakage, editing robustness |
 | [`docs/`](docs/) | Knowledge base: wiki, ADRs, glossary, stack |
