@@ -365,6 +365,15 @@ fn init_replaces_a_guide_an_earlier_init_wrote_as_lotml() {
 }
 
 #[test]
+fn init_leaves_an_old_guide_name_it_did_not_write_and_says_so() {
+    let dir = scratch("init-old-guide-dir", &[]);
+    std::fs::create_dir_all(dir.join("lotml.guide.lotml")).unwrap();
+    let said = stdout(&lotml(&["init", "--harness", "none"], &dir));
+    assert!(said.contains("lotml.guide.lotml: not a regular file, left as it was"), "{said}");
+    assert!(dir.join("lotml.guide.lotml").is_dir() && dir.join("lotml.guide.lot").is_file());
+}
+
+#[test]
 fn init_sets_up_the_harnesses_it_finds() {
     let dir = scratch(
         "init-found",

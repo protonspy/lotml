@@ -1,6 +1,8 @@
 ---
 autonomy: auto
 ci: wait
+branch: feat/lot-extension
+delivery: in-progress
 ---
 
 # Lot extension — requirements

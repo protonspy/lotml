@@ -10,10 +10,12 @@ use crate::Failure;
 /// when one name is there under both extensions, since `build` would write the two to one module.
 pub fn expand(paths: &[PathBuf]) -> Result<Vec<PathBuf>, Failure> {
     let found = sources(paths)?;
-    let mut seen: HashMap<PathBuf, &PathBuf> = HashMap::new();
+    // Compared whole, so `./a.lot` and `a.lotml` are a pair and `./a.lot` and `a.lot` one file.
+    let mut seen: HashMap<PathBuf, (PathBuf, &PathBuf)> = HashMap::new();
     for path in found.iter().filter(|p| is_source(p)) {
-        if let Some(first) = seen.insert(path.with_extension(""), path)
-            && first != path
+        let whole = std::path::absolute(path).unwrap_or_else(|_| path.clone());
+        if let Some((first_whole, first)) = seen.insert(whole.with_extension(""), (whole.clone(), path))
+            && first_whole != whole
         {
             return Err(Failure(format!(
                 "{} and {} are one module under two extensions: keep one",
@@ -226,14 +228,16 @@ mod tests {
         }
         let refused = expand(std::slice::from_ref(&base)).err().map(|f| f.0);
         let served = sources(std::slice::from_ref(&base)).ok().map(|found| found.len());
-        let twice = expand(&[base.join("b.lot"), base.join("b.lot")]).ok().map(|found| found.len());
+        let twice = expand(&[base.join("b.lot"), base.join(".").join("b.lot")]).ok().map(|found| found.len());
         let apart = expand(&[base.join("a.lot"), base.join("sub")]).ok().map(|found| found.len());
+        let spelled = expand(&[base.join(".").join("a.lot"), base.join("a.lotml")]).is_err();
         let _ = std::fs::remove_dir_all(&base);
         let refused = refused.expect("a.lot beside a.lotml is refused");
         assert!(refused.contains(&base.join("a.lot").display().to_string()), "{refused}");
         assert!(refused.contains(&base.join("a.lotml").display().to_string()), "{refused}");
         assert_eq!(served, Some(4), "the servers keep every file");
-        assert_eq!(twice, Some(2), "a file named twice is not a pair");
+        assert_eq!(twice, Some(2), "a file named twice, spelled two ways, is not a pair");
         assert_eq!(apart, Some(2), "the same name in two directories is not a pair");
+        assert!(spelled, "a pair spelled two ways is still a pair");
     }
 }

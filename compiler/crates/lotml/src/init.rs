@@ -78,8 +78,10 @@ pub fn run(dir: &Path, named: Option<&[Named]>, yes: bool) -> Result<u8, Failure
     };
     let mut status = 0;
     report(GUIDE_FILE, put(&dir.join(GUIDE_FILE), GUIDE)?);
-    if retire(&dir.join(OLD_GUIDE_FILE))? {
-        println!("{OLD_GUIDE_FILE}: renamed to {GUIDE_FILE}");
+    match retire(&dir.join(OLD_GUIDE_FILE))? {
+        Some(true) => println!("{OLD_GUIDE_FILE}: renamed to {GUIDE_FILE}"),
+        Some(false) => println!("{OLD_GUIDE_FILE}: not a regular file, left as it was; remove it"),
+        None => {}
     }
     put_block(dir, "AGENTS.md", AGENTS, &mut status)?;
     for (harness, _) in HARNESSES.iter().zip(chosen).filter(|(_, on)| *on) {
@@ -151,17 +153,19 @@ fn read(path: &Path) -> Result<Option<String>, Failure> {
     }
 }
 
-/// Write `text` to `path` unless it already holds exactly that.
-/// Remove the guide an earlier `init` wrote under its `.lotml` name, once the `.lot` one is written;
-/// whether there was one. Only a regular file: a link or a directory of that name is not `init`'s.
-fn retire(path: &Path) -> Result<bool, Failure> {
-    if !path.symlink_metadata().is_ok_and(|m| m.is_file()) {
-        return Ok(false);
+/// Remove the guide an earlier `init` wrote under its `.lotml` name, once the `.lot` one is written:
+/// `Some(true)` when it was removed, `Some(false)` when something else holds the name — a link or a
+/// directory is not `init`'s to remove — and `None` when nothing does.
+fn retire(path: &Path) -> Result<Option<bool>, Failure> {
+    let Ok(meta) = path.symlink_metadata() else { return Ok(None) };
+    if !meta.is_file() {
+        return Ok(Some(false));
     }
     std::fs::remove_file(path).map_err(|e| Failure(format!("cannot remove {}: {e}", path.display())))?;
-    Ok(true)
+    Ok(Some(true))
 }
 
+/// Write `text` to `path` unless it already holds exactly that.
 fn put(path: &Path, text: &str) -> Result<Outcome, Failure> {
     // A link would carry the write out of the project, into whatever it points at.
     if path.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink()) {

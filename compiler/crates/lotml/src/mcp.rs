@@ -714,15 +714,24 @@ fn stamp(path: &Path) -> Option<SystemTime> {
     std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
-/// Write a file whole or not at all: to a file beside it, then moved over it.
+/// Write a file whole or not at all: to a file beside it, then moved over it. Whatever holds that
+/// name already is removed and the file beside it is created new, so a link a repository planted
+/// there is never written through.
 fn save(path: &Path, text: &str) -> Result<(), ToolError> {
     let mut partial = path.as_os_str().to_owned();
     partial.push(".partial");
     let partial = PathBuf::from(partial);
-    std::fs::write(&partial, text).and_then(|()| std::fs::rename(&partial, path)).map_err(|e| {
-        let _ = std::fs::remove_file(&partial);
-        ToolError(format!("cannot write {}: {e}", path.display()))
-    })
+    let _ = std::fs::remove_file(&partial);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&partial)
+        .and_then(|mut file| io::Write::write_all(&mut file, text.as_bytes()))
+        .and_then(|()| std::fs::rename(&partial, path))
+        .map_err(|e| {
+            let _ = std::fs::remove_file(&partial);
+            ToolError(format!("cannot write {}: {e}", path.display()))
+        })
 }
 
 fn supported() -> Vec<&'static str> {
