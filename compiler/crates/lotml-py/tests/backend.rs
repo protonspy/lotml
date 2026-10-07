@@ -348,3 +348,35 @@ fn methods_of_two_types_whose_names_join_alike_stay_apart() {
                   impl A:\n    fn b_c(self) -> int:\n        return 2\n\nfn f() -> (int, int):\n    return (A_b(0).c(), A(0).b_c())\n";
     assert_eq!(prints("method-names", source, "print(m.f())"), "(1, 2)");
 }
+
+/// Every node of `tree` that names a context, and so must carry one for Python 3.12's `compile`,
+/// whose nodes have no default for it: the kinds of those that lack it.
+fn missing_contexts(tree: &serde_json::Value, out: &mut Vec<String>) {
+    match tree {
+        serde_json::Value::Object(map) => {
+            if let Some(serde_json::Value::String(kind)) = map.get("_")
+                && ["Name", "Attribute", "Subscript", "List", "Tuple", "Starred"].contains(&kind.as_str())
+                && !map.contains_key("ctx")
+            {
+                out.push(kind.clone());
+            }
+            map.values().for_each(|v| missing_contexts(v, out));
+        }
+        serde_json::Value::Array(items) => items.iter().for_each(|v| missing_contexts(v, out)),
+        _ => {}
+    }
+}
+
+#[test]
+fn every_node_with_a_context_carries_one_for_every_python_the_runtime_supports() {
+    for (name, source) in [("rest", REST), ("parse", PARSE)] {
+        let module = compile(source, Path::new("prog.lotml")).expect("compiles");
+        let payload = module.split("lotml_rt.load_module(globals(), ").nth(1).expect("the payload");
+        let payload = payload.split_once(", ").map(|(_, p)| p.trim_end().trim_end_matches(')')).expect("two arguments");
+        let payload: String = serde_json::from_str(payload).expect("a JSON string");
+        let tree: serde_json::Value = serde_json::from_str(&payload).expect("the program as JSON");
+        let mut missing = Vec::new();
+        missing_contexts(&tree["module"], &mut missing);
+        assert!(missing.is_empty(), "{name}: {missing:?}");
+    }
+}

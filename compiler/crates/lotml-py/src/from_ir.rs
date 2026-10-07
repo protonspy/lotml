@@ -1205,7 +1205,7 @@ impl<'m, 'l> Writer<'m, 'l> {
                 if *folded {
                     return node("Set", vec![("elts", Value::Array(items))]);
                 }
-                let list = node("List", vec![("elts", Value::Array(items))]);
+                let list = node("List", vec![("elts", Value::Array(items)), ("ctx", load())]);
                 call(builtin("set"), vec![list])
             }
             Expr::Closure { lambda, captures, .. } => {
