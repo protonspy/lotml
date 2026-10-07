@@ -111,7 +111,7 @@ def phase1_failures(rows: list[dict], tasks: dict[str, Task]) -> tuple[list[Fail
                 continue
             blocks = hidden(task) if kind == "test" else ""
             failure = Failure(
-                problem, "phase1", row["model"], kind, None, "solution.lotml",
+                problem, "phase1", row["model"], kind, None, "solution.lot",
                 failed["code"], passed["code"], blocks,
             )  # fmt: skip
             if _key(failure) not in seen:
@@ -262,7 +262,7 @@ def judged(failure: Failure, config: Path) -> dict:
     scratch = tempfile.TemporaryDirectory(prefix="lotml-guide-eval-", ignore_cleanup_errors=True)
     with scratch as directory:
         root = Path(directory)
-        safe.lay(root, {"before.lotml": failure.failing, "after.lotml": failure.fixed})
+        safe.lay(root, {"before.lot": failure.failing, "after.lot": failure.fixed})
         (root / "project").mkdir()
         safe.lay(root / "project", {failure.path: failure.failing})
         args = ["guide", "ask", "--root", "."] + (["--task", failure.task] if failure.task else [])
@@ -274,20 +274,20 @@ def judged(failure: Failure, config: Path) -> dict:
         diff = _shaped(
             _call(
                 ["dev", "diff", "--path", failure.path, "--json"],
-                ["before.lotml", "after.lotml"],
+                ["before.lot", "after.lot"],
                 root,
             ),
             dict,
         )
-        declared = _shaped(_call(["dev", "outline"], ["before.lotml"], root), list)
+        declared = _shaped(_call(["dev", "outline"], ["before.lot"], root), list)
         if failure.kind == "check":
-            checked = _shaped(_call(["check", "--json"], ["before.lotml"], root), dict)
+            checked = _shaped(_call(["check", "--json"], ["before.lot"], root), dict)
             lines = [
                 d["location"]["line"] for d in checked.get("diagnostics", []) if "location" in d
             ]
             baseline = baseline_of_check(declared, lines)
         else:
-            tested = _shaped(_call(["test", "--json"], ["before.lotml"], root), dict)
+            tested = _shaped(_call(["test", "--json"], ["before.lot"], root), dict)
             rows = [t for t in tested.get("tests", []) if t.get("outcome") != "pass"]
             baseline = baseline_of_test(declared, rows[0].get("expression", "") if rows else "")
     truth = [d["symbol"] for d in diff.get("declarations", []) if d.get("symbol")]

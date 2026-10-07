@@ -53,6 +53,9 @@ def test_the_phase_1_gate_gives_a_failure_followed_by_a_passing_answer_on_a_held
         ("humaneval/4", "test", "n", "phase1"),
     ]
     assert refused == {"not held out": 1}
+    assert {f.path for f in found} == {"solution.lot"}, (
+        "asked as the guide is trained (lot-extension R2.5)"
+    )
     check, test = found
     assert (check.before, check.after, check.blocks) == (BROKEN, FIXED, "")
     assert 'test "hidden: 1":' in test.blocks and "assert add(1, 2) == 3" in test.blocks

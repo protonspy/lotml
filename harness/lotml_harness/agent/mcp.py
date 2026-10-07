@@ -134,7 +134,7 @@ def scrub_interfaces(root: Path) -> list[str]:
 
 def relative(arguments: dict) -> dict:
     """Paths as the server takes them. The agent's file tools show the workspace as `/`, so it
-    names `/stats.lotml`; the server reads an absolute path as one outside the project."""
+    names `/stats.lot`; the server reads an absolute path as one outside the project."""
     out = dict(arguments)
     if isinstance(out.get("path"), str):
         out["path"] = out["path"].lstrip("/") or "."

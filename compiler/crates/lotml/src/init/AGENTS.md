@@ -1,9 +1,10 @@
 ## lotml
 
-This project is written in lotml (`.lotml`): Python's syntax, static types, errors as values,
-value semantics. It is not Python — code that looks right in Python is often a compile error here.
+This project is written in lotml (`.lot`, or `.lotml`): Python's syntax, static types, errors as
+values, value semantics. It is not Python — code that looks right in Python is often a compile
+error here.
 
-**Learn the language from `lotml.guide.lotml`**, before writing any: every rule as code that
+**Learn the language from `lotml.guide.lot`**, before writing any: every rule as code that
 checks, with tests. Lines marked `NOT PYTHON` are the traps. Copy its patterns.
 
 ### The traps, in short
@@ -45,4 +46,4 @@ The compiler serves these over MCP (`lotml mcp`, registered by `lotml init`):
 
 Without MCP, the same from a shell: `lotml check --json <files>`, `lotml check --fix`,
 `lotml explain <code>`, `lotml digest .`, `lotml show <symbol> .`, `lotml test --json .`,
-`lotml fmt .`, `lotml run main.lotml`. `lotml lsp` serves editors.
+`lotml fmt .`, `lotml run main.lot`. `lotml lsp` serves editors.

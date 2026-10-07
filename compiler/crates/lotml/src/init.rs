@@ -1,5 +1,5 @@
 //! `lotml init`: set a project up for coding agents. A lotml block in `AGENTS.md` teaching the
-//! compiler-driven edit loop, `lotml.guide.lotml` teaching the language as code that checks, and
+//! compiler-driven edit loop, `lotml.guide.lot` teaching the language as code that checks, and
 //! the compiler's MCP server registered in each assistant harness the project uses.
 //!
 //! Both texts are compiled in, so they always describe the compiler that wrote them; running
@@ -13,9 +13,11 @@ use serde_json::Value;
 
 use crate::Failure;
 
-pub const GUIDE: &str = include_str!("init/lotml.guide.lotml");
+pub const GUIDE: &str = include_str!("init/lotml.guide.lot");
 pub const AGENTS: &str = include_str!("init/AGENTS.md");
-const GUIDE_FILE: &str = "lotml.guide.lotml";
+const GUIDE_FILE: &str = "lotml.guide.lot";
+/// The guide's name before `.lot` was preferred (adr:0018-lot-as-the-preferred-source-extension).
+const OLD_GUIDE_FILE: &str = "lotml.guide.lotml";
 const BEGIN: &str = "<!-- lotml:begin -->";
 const END: &str = "<!-- lotml:end -->";
 
@@ -76,6 +78,9 @@ pub fn run(dir: &Path, named: Option<&[Named]>, yes: bool) -> Result<u8, Failure
     };
     let mut status = 0;
     report(GUIDE_FILE, put(&dir.join(GUIDE_FILE), GUIDE)?);
+    if retire(&dir.join(OLD_GUIDE_FILE))? {
+        println!("{OLD_GUIDE_FILE}: renamed to {GUIDE_FILE}");
+    }
     put_block(dir, "AGENTS.md", AGENTS, &mut status)?;
     for (harness, _) in HARNESSES.iter().zip(chosen).filter(|(_, on)| *on) {
         let path = dir.join(harness.config);
@@ -147,6 +152,16 @@ fn read(path: &Path) -> Result<Option<String>, Failure> {
 }
 
 /// Write `text` to `path` unless it already holds exactly that.
+/// Remove the guide an earlier `init` wrote under its `.lotml` name, once the `.lot` one is written;
+/// whether there was one. Only a regular file: a link or a directory of that name is not `init`'s.
+fn retire(path: &Path) -> Result<bool, Failure> {
+    if !path.symlink_metadata().is_ok_and(|m| m.is_file()) {
+        return Ok(false);
+    }
+    std::fs::remove_file(path).map_err(|e| Failure(format!("cannot remove {}: {e}", path.display())))?;
+    Ok(true)
+}
+
 fn put(path: &Path, text: &str) -> Result<Outcome, Failure> {
     // A link would carry the write out of the project, into whatever it points at.
     if path.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink()) {

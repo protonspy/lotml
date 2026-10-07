@@ -94,7 +94,7 @@ def test_humaneval_takes_train_and_validation_problems_and_counts_the_rest(monke
     taken = seeded.humaneval_programs(workers=2)
     assert [p.problem for p in taken.programs] == ["humaneval/0"]
     assert taken.programs[0].source == "humaneval-original"
-    assert taken.programs[0].files["solution.lotml"].count('test "hidden:') == 2
+    assert taken.programs[0].files["solution.lot"].count('test "hidden:') == 2
     assert taken.programs[0].prompt == humaneval.PROMPT.format(name="add")
     assert taken.left_out == {"rules": 1}
     assert "HumanEval/4" not in tried, "a held-out problem is never translated"
@@ -109,17 +109,17 @@ def export(tmp_path: Path, bucket: str, records: list[dict]) -> Path:
 
 def test_trajectories_give_their_final_files_with_their_task_s_hidden_blocks(tmp_path):
     task = next(t for t in tasks() if t.id == "median-mode")
-    final = {"stats.lotml": task.solution_files["stats.lotml"]}
+    final = {"stats.lot": task.solution_files["stats.lot"]}
     record = {"messages": [], "files": final, "meta": {"task": "median-mode", "source": "bench"}}
     taken = seeded.trajectory_programs(export(tmp_path, "train", [record]), lambda _: task)
     [program] = taken.programs
-    assert program.files["stats.lotml"].endswith(task.hidden("stats.lotml"))
+    assert program.files["stats.lot"].endswith(task.hidden("stats.lot"))
     assert (program.problem, program.split) == ("bench/median-mode", "train")
     assert seeded.trajectory_programs(None, lambda _: task).programs == []
 
 
 def test_a_trajectory_of_a_held_out_problem_stops_the_run(tmp_path):
-    files = {"solution.lotml": ""}
+    files = {"solution.lot": ""}
     record = {"files": files, "meta": {"task": "humaneval-4", "source": "humaneval-original"}}
     path = export(tmp_path, "validation", [record])
     with pytest.raises(HeldOut):

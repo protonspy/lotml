@@ -1,6 +1,6 @@
 """The safe layer for files nobody vouches for — agent files from traces, mutants — and the
-compiler run on them: a scratch copy that holds only `.lotml` files inside it, and one helper for
-every `lotml` call, confined in memory, environment, time and output.
+compiler run on them: a scratch copy that holds only `.lot` and `.lotml` files inside it, and one
+helper for every `lotml` call, confined in memory, environment, time and output.
 """
 
 import os
@@ -25,11 +25,19 @@ TOTAL_BYTES = 4 * 2**20
 """Bytes one file, and all of a copy's files, may hold: agent files are kilobytes."""
 OUTPUT = 32 * 2**20
 """Bytes of a call's output read back; a call that prints more gave no report."""
+SOURCES = (".lot", ".lotml")
+"""A LotML source file's extensions, `.lot` preferred
+(adr:0018-lot-as-the-preferred-source-extension)."""
+
+
+def is_source(path: Path) -> bool:
+    """Whether `path` names a LotML source file, its extension in any case as Windows reads it."""
+    return path.suffix.lower() in SOURCES
 
 
 def checked_name(name: str) -> str:
-    """`name` when it is a relative `.lotml` path with no `..`, no `:` and no reserved device name
-    in it; ValueError otherwise."""
+    """`name` when it is a relative `.lot` or `.lotml` path with no `..`, no `:` and no reserved
+    device name in it; ValueError otherwise."""
     if not isinstance(name, str) or not name:
         raise ValueError(f"{name!r} is not a file name")
     posix, windows = PurePosixPath(name), PureWindowsPath(name)
@@ -39,8 +47,8 @@ def checked_name(name: str) -> str:
         raise ValueError(f"{name!r} names a stream or a drive")
     if ".." in windows.parts:
         raise ValueError(f"{name!r} holds `..`")
-    if windows.suffix.lower() != ".lotml" or name.rstrip() != name or name.endswith("."):
-        raise ValueError(f"{name!r} is not a `.lotml` file")
+    if windows.suffix.lower() not in SOURCES or name.rstrip() != name or name.endswith("."):
+        raise ValueError(f"{name!r} is not a `.lot` or `.lotml` file")
     for part in windows.parts:
         if DEVICES.match(part.split(".")[0].rstrip(" ")):
             raise ValueError(f"{name!r} names a reserved device")

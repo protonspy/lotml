@@ -16,7 +16,7 @@ BROKEN = "fn add(a: int, b: int) -> int:\n    return a + bs\n"
 WRONG = "fn add(a: int, b: int) -> int:\n    return a - b\n"
 FIXED = "fn add(a: int, b: int) -> int:\n    return a + b\n"
 ANSWER = {
-    "locations": [{"path": "solution.lotml", "symbol": "add", "lines": [1, 2]}],
+    "locations": [{"path": "solution.lot", "symbol": "add", "lines": [1, 2]}],
     "kind": "body",
     "edit": None,
 }
@@ -62,7 +62,7 @@ def config(tmp_path: Path):
 
 def test_a_failure_is_asked_through_the_guide_tool_and_scored_against_the_fix(config):
     failure = evaluate.Failure(
-        "mbpp/2", "phase1", "m", "check", None, "solution.lotml", BROKEN, FIXED, ""
+        "mbpp/2", "phase1", "m", "check", None, "solution.lot", BROKEN, FIXED, ""
     )
     row = evaluate.judged(failure, config)
     assert row["truth"] == ["add"]
@@ -85,7 +85,7 @@ def test_a_failing_hidden_test_is_asked_with_its_block_and_the_baseline_is_the_c
     task = Task("mbpp/2", "mbpp", "add", [("a", Prim("int")), ("b", Prim("int"))], Prim("int"),
                 "Add.", [Case([1, 2], 3)])  # fmt: skip
     failure = evaluate.Failure(
-        "mbpp/2", "phase1", "m", "test", None, "solution.lotml", WRONG, FIXED,
+        "mbpp/2", "phase1", "m", "test", None, "solution.lot", WRONG, FIXED,
         evaluate.hidden(task),
     )  # fmt: skip
     row = evaluate.judged(failure, config)

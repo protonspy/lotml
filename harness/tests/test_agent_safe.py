@@ -24,12 +24,20 @@ from lotml_harness.agent import safe
         "sub/COM1.lotml",
         "a.lotml.",
         "b:c.lotml",
+        "a.lo",
+        "a.lot.",
+        "nul.lot",
         "",
     ],
 )
 def test_a_name_that_is_absolute_climbs_names_a_device_or_is_not_lotml_is_refused(name):
     with pytest.raises(ValueError):
         safe.checked_name(name)
+
+
+@pytest.mark.parametrize("name", ["a.lot", "src/b.lot", "a.lotml", "A.LOT"])
+def test_a_lot_or_lotml_name_is_taken(name):
+    assert safe.checked_name(name) == name
 
 
 def test_lay_writes_lotml_files_and_nothing_when_one_name_is_refused(tmp_path: Path):

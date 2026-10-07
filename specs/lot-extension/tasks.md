@@ -11,12 +11,12 @@
 
 ## 2 · What is written
 
-- [ ] 2.1 (Unit) Write the guide as `lotml.guide.lot` in `lotml init`, replacing a `lotml.guide.lotml` and reporting the rename, and name that file and both extensions in the `AGENTS.md` block — R2.1, R2.2
+- [x] 2.1 (Unit) Write the guide as `lotml.guide.lot` in `lotml init`, replacing a `lotml.guide.lotml` and reporting the rename, and name that file and both extensions in the `AGENTS.md` block — R2.1, R2.2
   _Depends 1.1_
-- [ ] 2.2 (Unit) Take `.lot` beside `.lotml` in the harness's safe layer and in the run's workspace snapshots — R2.4
+- [x] 2.2 (Unit) Take `.lot` beside `.lotml` in the harness's safe layer and in the run's workspace snapshots — R2.4
   _Depends 1.1_
-- [ ] 2.3 (Unit) Pose HumanEval's and MBPP's tasks in `solution.lot`, and rename the agent bench's files and the names in its `task.toml` and `prompt.md` to `.lot` — R2.3
+- [x] 2.3 (Unit) Pose HumanEval's and MBPP's tasks in `solution.lot`, and rename the agent bench's files and the names in its `task.toml` and `prompt.md` to `.lot` — R2.3
   _Depends 2.2_
-- [ ] 2.4 (Unit) Lay the guide's seeded programs, its records' and evaluation's scratch copies and the phase 1 failures it asks about as `.lot` files — R2.5
+- [x] 2.4 (Unit) Lay the guide's seeded programs, its records' and evaluation's scratch copies and the phase 1 failures it asks about as `.lot` files — R2.5
   _Depends 2.2_
-- [ ] 2.5 (Unit) Call the project LotML in the README, give the name's origin once, and show `.lot` in its badge and examples — R3.2
+- [x] 2.5 (Unit) Call the project LotML in the README, give the name's origin once, and show `.lot` in its badge and examples — R3.2

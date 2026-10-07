@@ -2,7 +2,7 @@
 #
 # lotml is Python's syntax wherever the meaning is Python's, statically typed, with errors as
 # values and value semantics. Every section below checks and its tests pass:
-# `lotml test lotml.guide.lotml` proves the guide against the compiler you have.
+# `lotml test lotml.guide.lot` proves the guide against the compiler you have.
 # A comment marked NOT PYTHON is where the same Python would mean something else.
 
 from math import sqrt, pi
