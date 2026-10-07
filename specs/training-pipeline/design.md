@@ -83,12 +83,26 @@ stage trains, `train.load` checks every record against the split, as it does tod
   block — because the reward judges the raw file, not its rendering (a delta to
   specs/guide-records/).
 - **sft**: `guide.train.train`, unchanged in its settings, with the checkpoint callback.
-- **rl**: `guide.grpo`, TRL's `GRPOTrainer` on the SFT adapter merged into the base model, a fresh
-  LoRA adapter of the same shape, `num_generations` 8, `max_completion_length` 1024 (the tool's
-  answer budget), `beta` 0.04, learning rate 1e-6, one epoch over the train split. Its dataset is
-  the records' prompt — the system and user messages — with the `state` and the target's symbols as
-  columns the reward reads. Generation uses transformers, not vLLM: one 24 GB card holds the 0.5B
-  model eight answers wide, and vLLM would be a second runtime to pin.
+- **sample**: `guide.sample` draws `answers` (4) answers to every train record from the
+  supervised guide at temperature 1.0 with transformers on the GPU, and judges each with
+  `lotml dev judge` across the pod's cores. `runs/<run>/sample/samples.jsonl` holds every answer's
+  verdict and reward and each record's mean; `sample.json`, the mean reward, the records always
+  and never solved, and pass@1 and pass@4 (R3.6).
+- **rft**: `guide.rft` trains the supervised adapter further, at half its learning rate, on up to
+  two distinct sampled answers per record that passed — first location right, edit passing — and
+  on the record's own target where none did (R3.7). Later stages start from this adapter when a
+  run has one; the pool below is still the supervised guide's, an approximation the report names.
+- **rl**: `guide.grpo`, TRL's `GRPOTrainer` on the starting adapter merged into the base model,
+  a fresh LoRA adapter of the same shape. Its dataset is the pool (R3.8): the records whose sampled
+  answers' mean reward lies strictly between zero and one, and a tenth as many always-solved ones,
+  at most 1024; the never-solved are left out, for they give nothing to learn. The settings are
+  adr:0020-the-guide-trains-by-fine-tuning-then-rejection-sampling-and-rl-on-what-it-sometimes-solves's:
+  `loss_type` `dr_grpo`, `scale_rewards` `none`, `beta` 0, clip 0.2 and 0.28, temperature 1.0, one
+  update per batch, FP16, learning rate 1e-5, eight answers per record. Every 50 steps the
+  checkpoint is evaluated on 64 validation records and the best by reward is kept. `rl-random` is
+  the same run with a reward of one or zero at even odds, the control (R3.9); the export gives it a
+  model of its own. `rl.json` holds the pool's size, the share of groups that scored alike, entropy,
+  the share cut off and the validation rewards (R5.1).
 - **export**: `train.merge` and `train.export`, then `llama-server` on the pod's CPU serves the GGUF
   file and the validation split is asked as the `guide` tool asks — the schema in its trained key
   order and `top_logprobs: 1` (plans/guide-request.md). The first location's confidence and

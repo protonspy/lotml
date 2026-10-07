@@ -175,6 +175,15 @@ def test_export_follows_the_rejection_sampled_adapter_into_reinforcement_learnin
     }
 
 
+def test_export_also_gives_the_random_reward_twin_its_model(tmp_path: Path):
+    work = tmp_path / "work"
+    reports = {"runs/r4/rl/rl.json": {"start": {"run": "r4", "stage": "rft"}},
+               "runs/r4/rft/rft.json": {"sft": "r2"}}  # fmt: skip
+    files = ["runs/r4/rft/adapter/a", "runs/r4/rl/adapter/a", "runs/r4/rl-random/adapter/a"]
+    found = stages.adapters(stages.Run("r5", tmp_path, {}, Store(files, reports), work), "r4")
+    assert found["rl-random"] == [work / "runs/r4/rft/adapter", work / "runs/r4/rl-random/adapter"]
+
+
 def test_a_later_stage_starts_from_the_rejection_sampled_adapter_when_there_is_one(tmp_path: Path):
     work = tmp_path / "work"
     with_rft = Store(["runs/r4/rft/adapter/a"])

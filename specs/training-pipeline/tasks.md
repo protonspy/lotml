@@ -24,9 +24,9 @@
 - [x] 5.2 (Unit) Sample several answers to each train record from the fine-tuned guide and judge each — R3.6
 - [x] 5.3 (Unit) Fine-tune the guide further on the sampled answers that pass, with the record's target where none did — R3.7
   _Depends 5.2_
-- [ ] 5.4 (Unit) Build the reinforcement-learning pool from the records sometimes solved, with a share of those always solved — R3.8
+- [x] 5.4 (Unit) Build the reinforcement-learning pool from the records sometimes solved, with a share of those always solved — R3.8
   _Depends 5.2_
-- [ ] 5.5 (Unit) Train by group-relative policy optimization on the pool with adr:0020's settings, keep the best checkpoint on a validation sample, and offer a random-reward twin — R3.3, R3.9
+- [x] 5.5 (Unit) Train by group-relative policy optimization on the pool with adr:0020's settings, keep the best checkpoint on a validation sample, and offer a random-reward twin — R3.3, R3.9
   _Depends 5.1, 5.4_
 - [ ] 5.6 (Unit) Report pass@1, pass@4 and pass@8 sampled on the validation split, the pool's size and the share of groups that scored alike — R5.1
   _Depends 5.2_

@@ -156,20 +156,41 @@ def rft(run: Run) -> None:
     run.hub.put(out / "rft.json", f"runs/{run.run}/rft/rft.json", f"run {run.run}: rft report")
 
 
-def rl(run: Run) -> None:
-    """Train the guide further by group-relative policy optimization, the compiler's judgment its
-    reward, from the adapter its source's earlier stages left (R3.3)."""
+def reinforce(run: Run, stage: str, random_reward: bool) -> None:
+    """Train the guide further by group-relative policy optimization on the pool its source's
+    samples calibrate, from the adapter its source's earlier stages left: with the compiler's
+    reward (R3.3), or as the control twin with a random one (R3.9)."""
     from lotml_harness.guide import grpo
 
-    begun, stage = starting(run, run.source("rl"))
-    adapter = run.hub.get(f"runs/{begun}/{stage}/adapter", run.work)
-    out = run.out("rl")
-    resume(run, "rl")
-    found = grpo.fit(grpo.Settings(), run.records, adapter, out, callbacks=[uploader(run, "rl")])
-    found["start"] = {"run": begun, "stage": stage}
+    source = run.source(stage)
+    if not run.hub.files(f"runs/{source}/sample/samples.jsonl"):
+        raise ValueError(f"{stage} calibrates its pool on a sample stage, which run {source} lacks")
+    path = run.hub.get(f"runs/{source}/sample/samples.jsonl", run.work)
+    samples = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    begun, start = starting(run, source)
+    adapter = run.hub.get(f"runs/{begun}/{start}/adapter", run.work)
+    out = run.out(stage)
+    resume(run, stage)
+    settings = grpo.Settings(random_reward=random_reward)
+    found = grpo.fit(settings, run.records, samples, adapter, out, callbacks=[uploader(run, stage)])
+    found |= {"start": {"run": begun, "stage": start}, "samples": source}
     (out / "rl.json").write_text(json.dumps(found, indent=2), encoding="utf-8")
-    run.hub.put(out / "adapter", f"runs/{run.run}/rl/adapter", f"run {run.run}: rl adapter")
-    run.hub.put(out / "rl.json", f"runs/{run.run}/rl/rl.json", f"run {run.run}: rl report")
+    run.hub.put(
+        out / "adapter", f"runs/{run.run}/{stage}/adapter", f"run {run.run}: {stage} adapter"
+    )
+    run.hub.put(
+        out / "rl.json", f"runs/{run.run}/{stage}/rl.json", f"run {run.run}: {stage} report"
+    )
+
+
+def rl(run: Run) -> None:
+    """Group-relative policy optimization with the compiler's reward."""
+    reinforce(run, "rl", random_reward=False)
+
+
+def rl_random(run: Run) -> None:
+    """The control twin: the same run with a reward drawn at random."""
+    reinforce(run, "rl-random", random_reward=True)
 
 
 def sampling(run: Run) -> None:
@@ -199,8 +220,8 @@ def sampling(run: Run) -> None:
 
 def adapters(run: Run, source: str) -> dict[str, list[Path]]:
     """The models `source`'s adapters make, each as the adapters merged in order: the supervised
-    one; the rejection-sampled one, which continues it; and the reinforcement-learned one on top of
-    whichever it started from."""
+    one; the rejection-sampled one, which continues it; and the reinforcement-learned one, with its
+    random-reward twin when there is one, on top of whichever it started from."""
 
     def adapter(at: str, stage: str) -> Path:
         return run.hub.get(f"runs/{at}/{stage}/adapter", run.work)
@@ -213,6 +234,8 @@ def adapters(run: Run, source: str) -> dict[str, list[Path]]:
             found["sft"] = [adapter(report(run, begun["run"], "rft")["sft"], "sft")]
         found[begun["stage"]] = [adapter(begun["run"], begun["stage"])]
         found["rl"] = [*found[begun["stage"]], adapter(source, "rl")]
+        if run.hub.files(f"runs/{source}/rl-random/adapter"):
+            found["rl-random"] = [*found[begun["stage"]], adapter(source, "rl-random")]
     elif run.hub.files(f"runs/{source}/rft/adapter"):
         found["sft"] = [adapter(report(run, source, "rft")["sft"], "sft")]
         found["rft"] = [adapter(source, "rft")]
@@ -303,6 +326,7 @@ STAGES: dict[str, Callable[[Run], None]] = {
     "sample": sampling,
     "rft": rft,
     "rl": rl,
+    "rl-random": rl_random,
     "export": export,
 }
 
