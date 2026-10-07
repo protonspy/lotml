@@ -138,6 +138,8 @@ void lt_write(const char *bytes, size_t length);
 void lt_flush(void);
 void lt_init(void);
 int lt_exit(int status);
+/* A program without `fn main()`: it says so and stops with status 2. */
+int lt_no_main(void);
 
 /* Text built up before it is written: `print`, `str`, f-strings. */
 typedef struct lt_buf {

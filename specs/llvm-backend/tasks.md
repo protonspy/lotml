@@ -3,11 +3,11 @@
 ## 1 · The pipeline
 
 - [x] 1.1 (Unit) Find `clang`, check its version, and compile a `.ll` file with the runtime into an executable, naming where it looked when none is found — R1.2, R1.3, R1.5
-- [ ] 1.2 (TDD) Emit functions, locals, numbers and `bool` with checked integer arithmetic, `/`, `//`, `%`, comparisons, and panics naming the `.lot` line — R2.1, R2.3, R2.4, R2.7
+- [x] 1.2 (TDD) Emit functions, locals, numbers and `bool` with checked integer arithmetic, `/`, `//`, `%`, comparisons, and panics naming the `.lot` line — R2.1, R2.3, R2.4, R2.7
   _Depends 1.1, 1.6_
-- [ ] 1.3 (Unit) Emit `if`, `while`, `for` over `range`, `break`, `continue`, calls and recursion — R2.1
+- [x] 1.3 (Unit) Emit `if`, `while`, `for` over `range`, `break`, `continue`, calls and recursion — R2.1
   _Depends 1.2_
-- [ ] 1.4 (Unit) Print numbers, `bool` and string literals through the runtime — R2.1, R2.5
+- [x] 1.4 (Unit) Print numbers, `bool` and string literals through the runtime — R2.1, R2.5
   _Depends 1.2_
 - [ ] 1.5 (Unit) Refuse every construct outside the first ones at the construct — R2.6
   _Depends 1.3_

@@ -94,6 +94,11 @@ void lt_init(void) {
 #endif
 }
 
+int lt_no_main(void) {
+    fputs("the program has no `fn main()`\n", stderr);
+    return lt_exit(2);
+}
+
 int lt_exit(int status) {
     lt_flush();
 #ifdef LT_COUNT_CELLS
