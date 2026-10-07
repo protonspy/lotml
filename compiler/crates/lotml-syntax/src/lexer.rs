@@ -566,7 +566,13 @@ impl Lexer<'_> {
                     self.push(TokenKind::Error, start, self.pos);
                     return;
                 }
-                Some(b'\\') => self.pos += 2,
+                Some(b'\\') => {
+                    // The escaped character whole, so a string's span never ends inside one, nor
+                    // past the text when the backslash is its last character.
+                    self.pos += 1;
+                    self.pos +=
+                        self.text.get(self.pos..).and_then(|rest| rest.chars().next()).map_or(0, char::len_utf8);
+                }
                 Some(b'\n' | b'\r') if !triple => {
                     self.error(start, self.pos, "this string is never closed on its line", None);
                     self.push(TokenKind::Error, start, self.pos);
@@ -732,5 +738,22 @@ mod tests {
         let lexed = lex("x = \"abc\ny = $\n");
         assert_eq!(lexed.errors.len(), 2);
         assert!(lexed.tokens.iter().any(|t| t.kind == Error));
+    }
+
+    #[test]
+    fn an_escape_never_carries_a_string_s_span_past_the_text_or_into_a_character() {
+        for text in ["x = 'abc\\", "x = \"\\", "x = \"\\é\"", "x = '\\é"] {
+            let lexed = lex(text);
+            for token in &lexed.tokens {
+                let end = token.span.end as usize;
+                assert!(end <= text.len() && text.is_char_boundary(end), "{text:?}: {token:?}");
+            }
+            for error in &lexed.errors {
+                let end = error.span.end as usize;
+                assert!(end <= text.len() && text.is_char_boundary(end), "{text:?}: {error:?}");
+            }
+        }
+        let escaped = lex("x = \"\\é\"");
+        assert!(escaped.errors.is_empty(), "{:?}", escaped.errors);
     }
 }

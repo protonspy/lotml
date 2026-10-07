@@ -317,6 +317,17 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// After one pass of a loop over items, statements, methods or arms that began at `before`:
+    /// if the pass read nothing, report it and read the token it stopped at, so the next pass
+    /// starts further on and the loop always ends. The loops over lists end on their own, each
+    /// pass reading a separator or stopping.
+    fn past(&mut self, before: usize) {
+        if self.pos == before && !self.at(T::Eof) {
+            self.error_here("expected something lotml can read here");
+            self.bump();
+        }
+    }
+
     // Items -------------------------------------------------------------------------
 
     fn module(&mut self) -> Module {
@@ -339,7 +350,11 @@ impl<'a> Parser<'a> {
                     );
                     self.bump();
                 }
-                _ => items.push(self.item()),
+                _ => {
+                    let before = self.pos;
+                    items.push(self.item());
+                    self.past(before);
+                }
             }
         }
         Module { items }
@@ -574,6 +589,7 @@ impl<'a> Parser<'a> {
         {
             while !matches!(self.peek(), T::Dedent | T::Eof) {
                 self.reported = false;
+                let before = self.pos;
                 if self.at(T::Fn) {
                     methods.push(self.fn_def(true));
                     if self.reported {
@@ -584,6 +600,7 @@ impl<'a> Parser<'a> {
                     self.error_here("expected a method (`fn`) in the `impl` block");
                     self.skip_line();
                 }
+                self.past(before);
             }
             self.eat(T::Dedent);
         }
@@ -602,6 +619,7 @@ impl<'a> Parser<'a> {
         {
             while !matches!(self.peek(), T::Dedent | T::Eof) {
                 self.reported = false;
+                let before = self.pos;
                 if self.at(T::Fn) {
                     methods.push(self.fn_def(false));
                     if self.reported {
@@ -612,6 +630,7 @@ impl<'a> Parser<'a> {
                     self.error_here("expected a method signature (`fn`) in the trait");
                     self.skip_line();
                 }
+                self.past(before);
             }
             self.eat(T::Dedent);
         }
@@ -726,6 +745,7 @@ impl<'a> Parser<'a> {
             if self.reported && (self.pos == before || !self.at_line_start()) {
                 self.skip_line();
             }
+            self.past(before);
             self.reported = outer && self.reported;
         }
         self.eat(T::Dedent);
@@ -839,6 +859,7 @@ impl<'a> Parser<'a> {
                 }
                 let outer = self.reported;
                 self.reported = false;
+                let before = self.pos;
                 let arm_start = self.span();
                 if !self.eat(T::Case) {
                     let span = self.span();
@@ -857,6 +878,7 @@ impl<'a> Parser<'a> {
                 if self.reported {
                     self.skip_line();
                 }
+                self.past(before);
                 self.reported = outer && self.reported;
             }
             self.eat(T::Dedent);
