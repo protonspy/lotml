@@ -175,4 +175,5 @@ keeps the C compiler from vectorizing the loop as it vectorizes the unchecked C.
 programs are reported apart, as [[memory-model]] asks. The gate was overridden
 (adr:0019-proceed-to-phase-4-past-the-failed-phase-3-gate), and in phase 4 the same suite passes
 on the Python and LLVM targets, each of the 509 programs reporting the same on both
-(`harness/results/parity-llvm.md`).
+(`harness/results/parity-llvm.md`). [[target-parity]] gathers how the prior art keeps such a
+result from regressing: a committed floor, and fuzzing one target against the other.

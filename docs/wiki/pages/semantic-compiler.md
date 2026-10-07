@@ -129,7 +129,7 @@ looping on failing edits accounts for 23.4% of unresolved instances. The guard's
 lessons for lotml: it rejects legitimate intermediate states, and it assumes the file was clean
 before the edit. lotml's check-on-edit reports only the diagnostics an edit introduces, diffed
 against the pre-edit state, and says "no errors" explicitly. The under-100 ms incremental check is
-what makes this affordable.
+what makes this affordable; [[compiler-performance]] says what `lotml-db` needs to stay under it.
 
 ## Checking while the model writes
 

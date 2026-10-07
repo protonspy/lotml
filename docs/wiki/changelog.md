@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-07 — sixteen compilers and interpreters of Python and its derivatives read against lotml's compiler: added [[prior-art-compilers]], [[target-parity]] and [[compiler-performance]]; [[semantic-compiler]], [[transpilation-strategy]] and [[evaluation-harness]] link them
 - 2026-10-07 — the phase 4 targets: [[transpilation-strategy]] tells the C target of phase 3 in the past, adds the one IR both targets read, the LLVM target, `--shared` and their parity and benchmarks; [[memory-model]] and [[evaluation-harness]] add the LLVM target's measurements beside the C target's
 - 2026-10-07 — `lotml build` makes a native executable by default (adr:0022): [[transpilation-strategy]] names `--target python` where `build` writes the module Python imports
 - 2026-10-07 — training a small coder: added [[small-coder-training]], [[grpo]], [[verifiable-rewards]], [[rl-environment]], [[reward-hacking]] and [[repair-training]] from 55 papers checked in [[source-verification]]; corrected Agnostics' model sizes in [[training-prior]] and linked the pages from [[compiler-embedded-model]]
