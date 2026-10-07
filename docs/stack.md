@@ -65,8 +65,10 @@ Outside the default environment: `uv run --group train` trains the guide on the 
 A Cargo workspace, Rust 1.97 and edition 2024 (adr:0006-compiler-written-in-rust), with a lock
 file. Each crate is a stage: `lotml-syntax` (lexer, tolerant parser), `lotml-diag` (diagnostics
 and their codes), `lotml-check` (types, mutability, errors as values), `lotml-db` (the queries),
-`lotml-fmt` (the formatter), `lotml-py` (the Python backend and its runtime), `lotml-c` (the C
-backend and its runtime, adr:0016-c-target-as-monomorphic-c-over-a-counting-runtime), `lotml-ide` (what
+`lotml-fmt` (the formatter), `lotml-ir` (the IR every backend reads, its lowering and its native
+passes, adr:0020-one-ir-between-the-checker-and-every-backend), `lotml-py` (the Python backend and its
+runtime), `lotml-c` (the C backend, adr:0016-c-target-as-monomorphic-c-over-a-counting-runtime),
+`lotml-runtime` (the C runtime native programs run on, apart from the backend that writes them), `lotml-ide` (what
 each name refers to, and the workspace an editor or agent queries), `lotml` (the command, with
 its language and MCP servers — JSON-RPC written over `serde_json`, with no protocol library).
 

@@ -8,6 +8,8 @@ license.workspace = true
 lotml-syntax = { path = "../lotml-syntax" }
 lotml-diag = { path = "../lotml-diag" }
 lotml-check = { path = "../lotml-check" }
+lotml-ir = { path = "../lotml-ir" }
+lotml-runtime = { path = "../lotml-runtime" }
 
 [target.'cfg(windows)'.dependencies]
 find-msvc-tools = "0.1.14"

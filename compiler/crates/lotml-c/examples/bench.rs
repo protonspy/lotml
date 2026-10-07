@@ -32,7 +32,7 @@ fn main() {
         let c = lotml_c::compile(&text, &source)
             .unwrap_or_else(|d| panic!("{name}: {:?}", d.iter().map(|d| &d.message).collect::<Vec<_>>()));
         std::fs::write(out.join("program.c"), c).expect("the C");
-        lotml_c::write_runtime(&out).expect("the runtime");
+        lotml_runtime::write(&out).expect("the runtime");
         let lotml = exe(&out, "program");
         compiler.build(&out.join("program.c"), &lotml, &[]).unwrap_or_else(|e| panic!("{e}"));
         let baseline = exe(&out, "baseline");

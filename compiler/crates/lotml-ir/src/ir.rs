@@ -1,11 +1,265 @@
-//! The typed intermediate form between the checked program and C: monomorphic functions whose
-//! statements work on named locals, so that counting can follow each value's last use
-//! (specs/c-backend/design.md).
+//! The IR: monomorphic functions whose statements work on typed, named locals, so that counting
+//! can follow each value's last use (specs/shared-ir/design.md, specs/c-backend/design.md).
 
 use lotml_check::ty::{IntKind, Ty};
+use lotml_syntax::span::Span;
 
 /// A local of a function: a parameter, a variable or an intermediate value.
 pub type Local = usize;
+
+/// An operation the language defines and a runtime performs, named for what it does, never for
+/// the symbol of one backend's runtime (R1.3); `lotml-runtime` maps each to its C function.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Builtin {
+    AssertCompared,
+    Comb,
+    DictClear,
+    DictContains,
+    DictCopy,
+    DictFromPairs,
+    DictGet,
+    DictGetOptional,
+    DictGetOr,
+    DictItems,
+    DictKeys,
+    DictPop,
+    DictSet,
+    DictValues,
+    Factorial,
+    Gcd,
+    HashValue,
+    HeapPeek,
+    HeapPop,
+    HeapPush,
+    Heapify,
+    Isqrt,
+    ListAll,
+    ListAny,
+    ListClear,
+    ListConcat,
+    ListContains,
+    ListCopy,
+    ListCount,
+    ListExtend,
+    ListExtreme,
+    ListIndex,
+    ListInsert,
+    ListLast,
+    ListPop,
+    ListPush,
+    ListRemove,
+    ListRepeat,
+    ListReverse,
+    ListReversed,
+    ListSlice,
+    ListSort,
+    ListSortByKeys,
+    ListSorted,
+    ListUnique,
+    ListUnpack,
+    MathAtan,
+    MathAtan2,
+    MathCeil,
+    MathCos,
+    MathExp,
+    MathFabs,
+    MathFloor,
+    MathHypot,
+    MathLn,
+    MathLog10,
+    MathLog2,
+    MathPow,
+    MathSin,
+    MathSqrt,
+    MathTan,
+    MathTrunc,
+    Perm,
+    PowMod,
+    RangeList,
+    RoundF64,
+    RoundI64,
+    SetAdd,
+    SetContains,
+    SetCopy,
+    SetDifference,
+    SetDiscard,
+    SetFromList,
+    SetIntersection,
+    SetIssubset,
+    SetList,
+    SetPop,
+    SetRemove,
+    SetUnion,
+    StrCapitalize,
+    StrChars,
+    StrChr,
+    StrConcat,
+    StrCount,
+    StrEndswith,
+    StrFind,
+    StrFloat,
+    StrIndex,
+    StrInt,
+    StrIsalnum,
+    StrIsalpha,
+    StrIsdigit,
+    StrIslower,
+    StrIsspace,
+    StrIsupper,
+    StrJoin,
+    StrLower,
+    StrOrd,
+    StrPad,
+    StrPartitionPart,
+    StrRepeat,
+    StrReplace,
+    StrSlice,
+    StrSplit,
+    StrSplitOnce,
+    StrSplitlines,
+    StrStartswith,
+    StrStrip,
+    StrSwapcase,
+    StrTitle,
+    StrToFloat,
+    StrToInt,
+    StrUpper,
+    StrZfill,
+    SumF64,
+    SumI64,
+    SumU64,
+    TestError,
+    WrappingAdd,
+    WrappingMul,
+    WrappingSub,
+}
+
+impl Builtin {
+    /// Every built-in operation.
+    pub const ALL: &[Builtin] = &[
+        Builtin::AssertCompared,
+        Builtin::Comb,
+        Builtin::DictClear,
+        Builtin::DictContains,
+        Builtin::DictCopy,
+        Builtin::DictFromPairs,
+        Builtin::DictGet,
+        Builtin::DictGetOptional,
+        Builtin::DictGetOr,
+        Builtin::DictItems,
+        Builtin::DictKeys,
+        Builtin::DictPop,
+        Builtin::DictSet,
+        Builtin::DictValues,
+        Builtin::Factorial,
+        Builtin::Gcd,
+        Builtin::HashValue,
+        Builtin::HeapPeek,
+        Builtin::HeapPop,
+        Builtin::HeapPush,
+        Builtin::Heapify,
+        Builtin::Isqrt,
+        Builtin::ListAll,
+        Builtin::ListAny,
+        Builtin::ListClear,
+        Builtin::ListConcat,
+        Builtin::ListContains,
+        Builtin::ListCopy,
+        Builtin::ListCount,
+        Builtin::ListExtend,
+        Builtin::ListExtreme,
+        Builtin::ListIndex,
+        Builtin::ListInsert,
+        Builtin::ListLast,
+        Builtin::ListPop,
+        Builtin::ListPush,
+        Builtin::ListRemove,
+        Builtin::ListRepeat,
+        Builtin::ListReverse,
+        Builtin::ListReversed,
+        Builtin::ListSlice,
+        Builtin::ListSort,
+        Builtin::ListSortByKeys,
+        Builtin::ListSorted,
+        Builtin::ListUnique,
+        Builtin::ListUnpack,
+        Builtin::MathAtan,
+        Builtin::MathAtan2,
+        Builtin::MathCeil,
+        Builtin::MathCos,
+        Builtin::MathExp,
+        Builtin::MathFabs,
+        Builtin::MathFloor,
+        Builtin::MathHypot,
+        Builtin::MathLn,
+        Builtin::MathLog10,
+        Builtin::MathLog2,
+        Builtin::MathPow,
+        Builtin::MathSin,
+        Builtin::MathSqrt,
+        Builtin::MathTan,
+        Builtin::MathTrunc,
+        Builtin::Perm,
+        Builtin::PowMod,
+        Builtin::RangeList,
+        Builtin::RoundF64,
+        Builtin::RoundI64,
+        Builtin::SetAdd,
+        Builtin::SetContains,
+        Builtin::SetCopy,
+        Builtin::SetDifference,
+        Builtin::SetDiscard,
+        Builtin::SetFromList,
+        Builtin::SetIntersection,
+        Builtin::SetIssubset,
+        Builtin::SetList,
+        Builtin::SetPop,
+        Builtin::SetRemove,
+        Builtin::SetUnion,
+        Builtin::StrCapitalize,
+        Builtin::StrChars,
+        Builtin::StrChr,
+        Builtin::StrConcat,
+        Builtin::StrCount,
+        Builtin::StrEndswith,
+        Builtin::StrFind,
+        Builtin::StrFloat,
+        Builtin::StrIndex,
+        Builtin::StrInt,
+        Builtin::StrIsalnum,
+        Builtin::StrIsalpha,
+        Builtin::StrIsdigit,
+        Builtin::StrIslower,
+        Builtin::StrIsspace,
+        Builtin::StrIsupper,
+        Builtin::StrJoin,
+        Builtin::StrLower,
+        Builtin::StrOrd,
+        Builtin::StrPad,
+        Builtin::StrPartitionPart,
+        Builtin::StrRepeat,
+        Builtin::StrReplace,
+        Builtin::StrSlice,
+        Builtin::StrSplit,
+        Builtin::StrSplitOnce,
+        Builtin::StrSplitlines,
+        Builtin::StrStartswith,
+        Builtin::StrStrip,
+        Builtin::StrSwapcase,
+        Builtin::StrTitle,
+        Builtin::StrToFloat,
+        Builtin::StrToInt,
+        Builtin::StrUpper,
+        Builtin::StrZfill,
+        Builtin::SumF64,
+        Builtin::SumI64,
+        Builtin::SumU64,
+        Builtin::TestError,
+        Builtin::WrappingAdd,
+        Builtin::WrappingMul,
+        Builtin::WrappingSub,
+    ];
+}
 
 #[derive(Clone, Debug)]
 pub struct LocalInfo {
@@ -28,16 +282,16 @@ pub struct Function {
     pub ret: Ty,
     pub locals: Vec<LocalInfo>,
     pub body: Block,
-    /// The line of the declaration.
-    pub line: u32,
+    /// The span of the declaration.
+    pub span: Span,
 }
 
 pub type Block = Vec<Stmt>;
 
 #[derive(Clone, Debug)]
 pub struct Stmt {
-    /// The `.lotml` line the statement came from.
-    pub line: u32,
+    /// The span of the source statement this one was lowered from (R1.2).
+    pub span: Span,
     pub kind: StmtKind,
 }
 
@@ -69,10 +323,10 @@ pub enum StmtKind {
     Let(Local, Expr),
     /// `place = value`, the value it held dropped.
     Store(Place, Operand),
-    /// A runtime function that changes the value at `place`, given a pointer to its slot; what
+    /// A built-in operation that changes the value at `place`, given a pointer to its slot; what
     /// it returns is set in `result`, when there is one.
     Mutate {
-        name: &'static str,
+        op: Builtin,
         place: Place,
         args: Vec<Arg>,
         at: bool,
@@ -125,13 +379,38 @@ pub enum Panic {
     Value(String),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Operand {
     Local(Local),
     Const(Const),
 }
 
-#[derive(Clone, Debug)]
+/// `%3` for a local, a constant as `Const` shows it: the form the IR's text writes (R1.5).
+impl std::fmt::Debug for Operand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Operand::Local(l) => write!(f, "%{l}"),
+            Operand::Const(c) => write!(f, "{c:?}"),
+        }
+    }
+}
+
+/// A constant as the IR's text writes it: `7_i64`, `1.5`, `true`, `()`, `"text"`, `null`, `'^'`.
+impl std::fmt::Debug for Const {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Const::Int(v, kind) => write!(f, "{v}_{}", format!("{kind:?}").to_lowercase()),
+            Const::Float(v) => write!(f, "{v:?}"),
+            Const::Bool(b) => write!(f, "{b}"),
+            Const::Unit => write!(f, "()"),
+            Const::Str(s) => write!(f, "{s:?}"),
+            Const::Null => write!(f, "null"),
+            Const::Char(c) => write!(f, "{c:?}"),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub enum Const {
     Int(i128, IntKind),
     Float(f64),
@@ -218,15 +497,15 @@ pub enum Expr {
         sep: Option<Operand>,
         end: Option<Operand>,
     },
-    /// A function of the runtime, given the place in the source when `at` is set.
+    /// A built-in operation, given the place in the source when `at` is set.
     Rt {
-        name: &'static str,
+        op: Builtin,
         args: Vec<Arg>,
         at: bool,
     },
-    /// A runtime function returning a pointer to a value of `ty`, read.
+    /// A built-in operation returning a pointer to a value of `ty`, read.
     RtValue {
-        name: &'static str,
+        op: Builtin,
         args: Vec<Arg>,
         at: bool,
         ty: Ty,
@@ -334,6 +613,15 @@ pub enum Expr {
         params: Vec<Ty>,
         ret: Ty,
     },
+    /// A call of the function `function` of the Python module `module`, declared by its interface
+    /// with `params` and returning `ret`, a `T ! PyError`: the arguments read and converted.
+    CallPython {
+        module: String,
+        function: String,
+        args: Vec<Operand>,
+        params: Vec<Ty>,
+        ret: Ty,
+    },
     /// `parallel(tasks)`: each closure of `tasks` run on a thread, its result of type `result`.
     Parallel {
         tasks: Operand,
@@ -412,7 +700,7 @@ impl Expr {
             Expr::Closure { captures, .. } => captures.iter().for_each(f),
             Expr::FnRef(_) => {}
             Expr::Parallel { tasks, .. } => f(tasks),
-            Expr::CallC { args, .. } => args.iter().for_each(f),
+            Expr::CallC { args, .. } | Expr::CallPython { args, .. } => args.iter().for_each(f),
             Expr::ToDyn { value, .. } => f(value),
             Expr::CallDyn { receiver, args, .. } => {
                 f(receiver);
@@ -615,7 +903,7 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
             f(ret);
         }
         Expr::Parallel { result, .. } => f(&Ty::List(Box::new(result.clone()))),
-        Expr::CallC { params, ret, .. } => {
+        Expr::CallC { params, ret, .. } | Expr::CallPython { params, ret, .. } => {
             params.iter().for_each(&mut *f);
             f(ret);
         }

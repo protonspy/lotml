@@ -276,7 +276,7 @@ fn c_executable(path: &Path, dir: &Path, tests: bool) -> Result<Option<PathBuf>,
     std::fs::create_dir_all(dir).map_err(|e| Failure(format!("cannot create {}: {e}", dir.display())))?;
     let source = dir.join(format!("{stem}.c"));
     write(&source, &program.c)?;
-    lotml_c::write_runtime(dir).map_err(|e| Failure(format!("cannot write the runtime in {}: {e}", dir.display())))?;
+    lotml_runtime::write(dir).map_err(|e| Failure(format!("cannot write the runtime in {}: {e}", dir.display())))?;
     let exe = dir.join(if cfg!(windows) { format!("{stem}.exe") } else { stem });
     let compiler = lotml_c::driver::find().map_err(Failure)?;
     compiler.build(&source, &exe, &program.libraries).map_err(Failure)?;

@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 
 use lotml_check::ty::Ty;
 
-use crate::mir::{Arg, Block, Expr, Function, Local, Operand, Place, Proj, Stmt, StmtKind, place_operands};
+use crate::ir::{Arg, Block, Builtin, Expr, Function, Local, Operand, Place, Proj, Stmt, StmtKind, place_operands};
 
 pub fn hoist_uniqueness(f: &mut Function) {
     let body = std::mem::take(&mut f.body);
@@ -27,9 +27,9 @@ fn block(stmts: Block, f: &Function) -> Block {
                 for local in candidates(body, f) {
                     own(body, local);
                     out.push(Stmt {
-                        line: stmt.line,
+                        span: stmt.span,
                         kind: StmtKind::Mutate {
-                            name: "lt_list_unique",
+                            op: Builtin::ListUnique,
                             place: Place { local, proj: Vec::new() },
                             args: Vec::new(),
                             at: false,

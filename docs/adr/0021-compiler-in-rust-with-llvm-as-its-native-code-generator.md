@@ -30,14 +30,14 @@ The compiler stays in Rust, with the hand-written parser, Salsa and a separate t
 for editors, as adr:0006 decided and for its reasons, Zig and a compiler written in LotML still
 rejected. LLVM is its native code generator: the LLVM backend writes textual LLVM IR from the
 counted IR and `clang` compiles it, with the C runtime, into an executable — `-O0` for a debug
-build, `-O2` for release. Cranelift is dropped. Rejected: Cranelift for debug builds (a second emitter for a gain
-the frontend, not the backend, decides); linking LLVM through `inkwell` or `llvm-sys` (every
-compiler build tied to one LLVM release's libraries, and checked IR construction is not worth that
-here, since the IR is written from a typed program and malformed output is a backend bug the
-tests find); the C target as the only native target, which leaves overflow checks, layout and
-optimisation to whichever C compiler is found; and keeping the C target beside LLVM, as the
-default's alternative or behind a flag of its own, which is a second emitter every construct of the
-language has to reach and a second native result to hold in parity, for a fallback
+build, `-O2` for release. Cranelift is dropped. Rejected: Cranelift for debug builds (a second
+emitter for a gain the frontend, not the backend, decides); linking LLVM through `inkwell` or
+`llvm-sys` (every compiler build tied to one LLVM release's libraries, and checked IR construction
+is not worth that here, since the IR is written from a typed program and malformed output is a
+backend bug the tests find); the C target as the only native target, which leaves overflow checks,
+layout and optimisation to whichever C compiler is found; and keeping the C target beside LLVM, as
+the default's alternative or behind a flag of its own, which is a second emitter every construct of
+the language has to reach and a second native result to hold in parity, for a fallback
 adr:0022-lotml-build-makes-a-native-executable-by-default already rejects. The C target is retired
 once the LLVM target passes the parity suite; its runtime stays, compiled by `clang` with the IR
 the LLVM backend writes.

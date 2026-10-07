@@ -36,7 +36,7 @@ fn build(name: &str, source: &str, interfaces: &Interfaces) -> Result<std::path:
     let program = lotml_c::compile_program(source, &path, interfaces, false)
         .unwrap_or_else(|d| panic!("{source}\n{:#?}", d.iter().map(|d| &d.message).collect::<Vec<_>>()));
     std::fs::write(dir.join("prog.c"), &program.c).unwrap();
-    lotml_c::write_runtime(&dir).unwrap();
+    lotml_runtime::write(&dir).unwrap();
     let exe = dir.join(if cfg!(windows) { "prog.exe" } else { "prog" });
     let compiler = lotml_c::driver::find().expect("a C compiler");
     let sanitize = std::env::var_os("LOTML_SANITIZE").is_some();
@@ -83,6 +83,18 @@ fn a_python_import_is_refused_at_the_import() {
     let refused: Vec<_> = errors.iter().filter(|d| d.code == "E0401").collect();
     assert_eq!(refused.len(), 1, "{:#?}", errors.iter().map(|d| (&d.code, &d.message)).collect::<Vec<_>>());
     assert_eq!(refused[0].span.start, 0, "the import is what is refused");
+}
+
+#[test]
+fn a_python_import_is_refused_first_when_something_else_does_not_compile_either() {
+    let source = "from textwrap import fill\n\nfn main():\n    print(1, flush=True)\n";
+    let read = interfaces(&[("textwrap", "fn fill(text: str, width: int) -> str ! PyError\n")]);
+    let Err(errors) = lotml_c::compile_program(source, Path::new("prog.lotml"), &read, false) else {
+        panic!("compiled to C");
+    };
+    let codes: Vec<&str> = errors.iter().map(|d| d.code).collect();
+    assert_eq!(codes.first(), Some(&"E0401"), "{codes:?}");
+    assert!(codes.contains(&"E0402"), "{codes:?}");
 }
 
 #[test]

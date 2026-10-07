@@ -6,13 +6,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 use lotml_check::ty::{FloatKind, IntKind, Ty};
+use lotml_syntax::span::Span;
 
-use crate::lower::{Lowered, function_name, lambda_name};
+use crate::lower::Lowered;
 use crate::mir::{
     Arg, BinOp, Block, CmpOp, Const, Expr, FormatPart, Function, Local, Operand, Panic, Place, Proj, StmtKind, UnOp,
     block_exprs, block_operands, block_types,
 };
 use crate::types::Types;
+use lotml_ir::symbol;
 
 /// The C of the program; with `tests`, its `main` runs the `test` blocks and reports them.
 pub fn program(lowered: &Lowered, file: &str, tests: bool) -> String {
@@ -63,6 +65,7 @@ pub fn program(lowered: &Lowered, file: &str, tests: bool) -> String {
     let tasks = task_runners(&mut out, lowered, &types);
     for f in &lowered.functions {
         Writer {
+            lowered,
             out: &mut out,
             declared: &lowered.declared,
             function: f,
@@ -83,10 +86,10 @@ pub fn program(lowered: &Lowered, file: &str, tests: bool) -> String {
         out.push_str("    lt_test_report();\n    return lt_exit(0);\n}\n");
         return out;
     }
-    let main = lowered.functions.iter().find(|f| f.name == function_name("main"));
+    let main = lowered.functions.iter().find(|f| f.name == symbol::function("main"));
     if let Some(Ty::Result(_, error)) = main.map(|f| &f.ret) {
         let result = types.c_type(&main.expect("main").ret);
-        let _ = writeln!(out, "    {result} r = {}();", function_name("main"));
+        let _ = writeln!(out, "    {result} r = {}();", symbol::function("main"));
         let drop = types.count(&main.expect("main").ret, false, "r");
         let _ = writeln!(
             out,
@@ -98,7 +101,7 @@ pub fn program(lowered: &Lowered, file: &str, tests: bool) -> String {
         let _ = writeln!(out, "    {drop}");
         out.push_str("    return lt_exit(0);\n");
     } else if lowered.main {
-        let _ = writeln!(out, "    {}();", function_name("main"));
+        let _ = writeln!(out, "    {}();", symbol::function("main"));
         out.push_str("    return lt_exit(0);\n");
     } else {
         out.push_str("    fputs(\"the program has no `fn main()`\\n\", stderr);\n    return lt_exit(2);\n");
@@ -358,6 +361,8 @@ pub fn c_string_text(bytes: &[u8]) -> String {
 }
 
 struct Writer<'a> {
+    /// The program, for the line each span starts on.
+    lowered: &'a Lowered,
     out: &'a mut String,
     declared: &'a BTreeMap<String, lotml_check::TypeDef>,
     function: &'a Function,
@@ -380,7 +385,8 @@ impl Writer<'_> {
         self.out.push('\n');
     }
 
-    fn at(&mut self, line: u32) {
+    fn at(&mut self, span: Span) {
+        let line = self.lowered.line(span);
         let _ = writeln!(self.out, "#line {line} \"{}\"", self.file);
     }
 
@@ -402,7 +408,7 @@ impl Writer<'_> {
     fn function(&mut self) {
         let start = self.out.len();
         let f = self.function;
-        self.at(f.line);
+        self.at(f.span);
         let _ = writeln!(self.out, "{} {{", signature(f, self.types));
         let source = c_string_text(f.source_name.as_bytes());
         self.line(&format!("static const char lt_fn[] = \"{source}\";"));
@@ -423,7 +429,7 @@ impl Writer<'_> {
 
     fn block(&mut self, block: &Block) {
         for stmt in block {
-            self.at(stmt.line);
+            self.at(stmt.span);
             match &stmt.kind {
                 StmtKind::Let(local, Expr::Format(parts)) => {
                     let target = self.name(*local);
@@ -440,7 +446,7 @@ impl Writer<'_> {
                     let values: Vec<String> = captures.iter().map(|c| self.operand(c)).collect();
                     self.line("{");
                     self.line(&format!("    lt_c{lambda} *c = lt_alloc(sizeof(lt_c{lambda}));"));
-                    self.line(&format!("    c->fn = (void *){};", lambda_name(*lambda)));
+                    self.line(&format!("    c->fn = (void *){};", symbol::lambda(*lambda)));
                     self.line(&format!("    c->drop = lt_drop_c{lambda};"));
                     self.line(&format!("    c->share = lt_share_c{lambda};"));
                     for (i, v) in values.iter().enumerate() {
@@ -543,7 +549,8 @@ impl Writer<'_> {
                         self.line(&text);
                     }
                 }
-                StmtKind::Mutate { name, place, args, at, result } => {
+                StmtKind::Mutate { op, place, args, at, result } => {
+                    let name = lotml_runtime::function(*op);
                     let slot = self.slot_of_container(place);
                     let mut all = vec![slot];
                     all.extend(args.iter().map(|a| self.arg(a)));
@@ -820,14 +827,16 @@ impl Writer<'_> {
                     .collect();
                 format!("{name}({})", args.join(", "))
             }
-            Expr::Rt { name, args, at } => {
+            Expr::Rt { op, args, at } => {
+                let name = lotml_runtime::function(*op);
                 let mut args: Vec<String> = args.iter().map(|a| self.arg(a)).collect();
                 if *at {
                     args.push("LT_HERE".to_string());
                 }
                 format!("{name}({})", args.join(", "))
             }
-            Expr::RtValue { name, args, at, ty } => {
+            Expr::RtValue { op, args, at, ty } => {
+                let name = lotml_runtime::function(*op);
                 let mut args: Vec<String> = args.iter().map(|a| self.arg(a)).collect();
                 if *at {
                     args.push("LT_HERE".to_string());
@@ -885,6 +894,7 @@ impl Writer<'_> {
             Expr::Capture { closure, lambda, index } => {
                 format!("((lt_c{lambda} *)({}))->c{index}", self.operand(closure))
             }
+            Expr::CallPython { .. } => unreachable!("a Python import is refused before the C is written"),
             Expr::CallClosure { callee, args, ty } => {
                 let f = self.operand(callee);
                 let mut all = vec![f.clone()];

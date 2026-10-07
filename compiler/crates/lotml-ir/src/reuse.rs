@@ -5,7 +5,7 @@
 
 use lotml_check::ty::Ty;
 
-use crate::mir::{Block, Expr, Function, StmtKind};
+use crate::ir::{Block, Expr, Function, StmtKind};
 
 pub fn insert_reuse(f: &mut Function) {
     let mut tokens = 0;
@@ -48,7 +48,7 @@ fn block(mut stmts: Block, f: &Function, tokens: &mut usize) -> Block {
 
 /// The index of the first constructor in `rest` with no reuse yet, reached on every path: only
 /// straight-line statements before it.
-fn constructor_after(rest: &[crate::mir::Stmt]) -> Option<usize> {
+fn constructor_after(rest: &[crate::ir::Stmt]) -> Option<usize> {
     for (i, stmt) in rest.iter().enumerate() {
         match &stmt.kind {
             StmtKind::Let(_, Expr::Construct { reuse: None, .. }) => return Some(i),

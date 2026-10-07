@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use lotml_c::{driver, write_runtime};
+use lotml_c::driver;
 
 fn scratch(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("c-driver").join(name);
@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
 
 fn build(name: &str) -> PathBuf {
     let dir = scratch(name);
-    write_runtime(&dir).unwrap();
+    lotml_runtime::write(&dir).unwrap();
     std::fs::write(dir.join("prog.c"), PROGRAM).unwrap();
     let compiler = driver::find().expect("a C compiler on this machine");
     let exe = dir.join(if cfg!(windows) { "prog.exe" } else { "prog" });

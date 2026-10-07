@@ -23,7 +23,8 @@ as writing Python.
 (adr:0021-compiler-in-rust-with-llvm-as-its-native-code-generator); `lotml run` and `lotml test`
 keep the Python target; `--target python` and `--target llvm` stay explicit on all three, and
 `--target c` until adr:0021 retires the C target. Where `clang` is missing, `build` stops with a
-diagnostic that names where `clang` was looked for and `--target python`. The default changes only once the LLVM target passes the parity suite.
+diagnostic that names where `clang` was looked for and `--target python`. The default changes
+only once the LLVM target passes the parity suite.
 Rejected: falling back to the C target when `clang` is missing, which makes what a command
 produces depend on the machine it runs on, the kind of hidden variation the language exists to
 remove; and keeping Python as the default, which leaves native code behind a flag in the one

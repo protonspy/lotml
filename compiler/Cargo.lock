@@ -270,6 +270,7 @@ dependencies = [
  "lotml-fmt",
  "lotml-ide",
  "lotml-py",
+ "lotml-runtime",
  "lotml-syntax",
  "salsa",
  "serde_json",
@@ -282,7 +283,9 @@ dependencies = [
  "find-msvc-tools",
  "lotml-check",
  "lotml-diag",
+ "lotml-ir",
  "lotml-py",
+ "lotml-runtime",
  "lotml-syntax",
  "serde_json",
 ]
@@ -336,6 +339,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lotml-ir"
+version = "0.1.0"
+dependencies = [
+ "lotml-check",
+ "lotml-diag",
+ "lotml-syntax",
+]
+
+[[package]]
 name = "lotml-py"
 version = "0.1.0"
 dependencies = [
@@ -343,6 +355,13 @@ dependencies = [
  "lotml-diag",
  "lotml-syntax",
  "serde_json",
+]
+
+[[package]]
+name = "lotml-runtime"
+version = "0.1.0"
+dependencies = [
+ "lotml-ir",
 ]
 
 [[package]]

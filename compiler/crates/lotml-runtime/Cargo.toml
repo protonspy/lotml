@@ -1,0 +1,11 @@
+[package]
+name = "lotml-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lotml-ir = { path = "../lotml-ir" }
+
+[lints]
+workspace = true

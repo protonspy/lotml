@@ -1,14 +1,11 @@
-//! The C backend: a checked lotml program as one C file over a counting runtime (R18, R19;
-//! adr:0014, specs/c-backend).
+//! The C backend: the counted IR of `lotml-ir` as one C file over the runtime of
+//! `lotml-runtime` (R18, R19; adr:0016, specs/c-backend, specs/shared-ir).
 
 pub mod driver;
 mod emit;
-mod hoist;
-mod lower;
-mod mir;
-mod own;
-mod reuse;
 mod types;
+
+use lotml_ir::{ir as mir, lower};
 
 use std::path::Path;
 
@@ -16,22 +13,13 @@ use lotml_check::{Interfaces, check_resolved_with};
 use lotml_diag::{Diagnostic, Severity};
 use lotml_syntax::parse;
 
-/// The runtime's files, written next to every compiled program: `lotml.h` declares it, `lotml.c`
-/// includes the rest, and the program includes both, so it is one translation unit.
-pub const RUNTIME: &[(&str, &str)] = &[
-    ("lotml.h", include_str!("../runtime/lotml.h")),
-    ("lotml.c", include_str!("../runtime/lotml.c")),
-    ("lotml_text.c", include_str!("../runtime/lotml_text.c")),
-    ("lotml_list.c", include_str!("../runtime/lotml_list.c")),
-    ("lotml_dict.c", include_str!("../runtime/lotml_dict.c")),
-];
-
-/// Write the runtime into `dir`, where a compiled program includes it from.
-pub fn write_runtime(dir: &Path) -> std::io::Result<()> {
-    for (name, text) in RUNTIME {
-        std::fs::write(dir.join(name), text)?;
-    }
-    Ok(())
+/// The import of the Python module `path`, refused: the C target runs without Python (R5.3).
+fn python_refused(path: &str, span: lotml_syntax::span::Span) -> Diagnostic {
+    Diagnostic::error(
+        "E0401",
+        span,
+        format!("`{path}` is a Python module, and a program built for the C target runs without Python"),
+    )
 }
 
 /// A compiled program: its C, and the C libraries to link it with.
@@ -66,12 +54,16 @@ pub fn compile_program(
     if !errors.is_empty() {
         return Err(errors);
     }
-    let mut lowered = lower::lower(&parsed.module, &checked, source, tests)?;
-    for f in &mut lowered.functions {
-        own::insert_counts(f);
-        reuse::insert_reuse(f);
-        hoist::hoist_uniqueness(f);
+    let refused: Vec<Diagnostic> =
+        lower::python_imports(&parsed.module).iter().map(|(path, span)| python_refused(path, *span)).collect();
+    let mut lowered = match lower::lower(&parsed.module, &checked, source, tests) {
+        Ok(lowered) => lowered,
+        Err(errors) => return Err(refused.into_iter().chain(errors).collect()),
+    };
+    if !refused.is_empty() {
+        return Err(refused);
     }
+    lotml_ir::native(&mut lowered);
     let c = emit::program(&lowered, &path.display().to_string(), tests);
     Ok(Program { c, libraries: lowered.libraries.iter().filter(|l| !driver::linked_always(l)).cloned().collect() })
 }

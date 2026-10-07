@@ -25,9 +25,17 @@ those of `specs/c-backend/design.md`'s table:
 | a type descriptor | a constant global of the runtime's descriptor struct, one per concrete type, with pointers to emitted `inc`/`dec`/`eq`/`hash`/`repr` functions |
 | `dyn T` | `{ ptr, ptr }`: the cell and a constant vtable global |
 
-The layout of each runtime struct the emitter mirrors is asserted by a test that compiles a C
-file printing `sizeof` and `offsetof` with the same `clang` and compares them with the
-emitter's.
+The layout of each runtime struct the emitter mirrors is asserted by a test that compiles a C file
+printing `sizeof` and `offsetof` with the same `clang` and compares them with the emitter's. Layout
+is half of the contract; the other half is how a value is passed. Tuples, optionals and results
+travel by value only between functions the emitter writes; into and out of the runtime they go
+through a pointer (the rule `specs/llvm-backend/` sets for every call into the runtime), because
+LLVM leaves a by-value aggregate's C ABI to the frontend.
+
+Counting is written in IR, not called. `lt_inc`, `lt_dec`, `lt_unique` and the other `static
+inline` helpers of `lotml.h` are not symbols the runtime exports (n-0079); the emitter writes
+each as the same few instructions on the cell's `i32` count, which `-O2` inlines as the C
+compiler does, rather than paying a call per `Inc` and `Dec` on the path the benchmarks time.
 
 ## Running and tests
 
@@ -43,7 +51,10 @@ Serves R1.4, R2.1, R2.2, R3.2, R3.3, R4.1.
 - `parallel` and shared marking are runtime calls, as on the C target. A `c.<library>` call is a
   direct `call` to a declared symbol, and the library goes on `clang`'s command line.
 - The parity experiment (`harness/lotml_harness/experiments/parity.py`) gains the LLVM target as
-  a third column; `benchmarks.py` builds each benchmark with `--target llvm` as well.
+  a third column, built at `-O2`, the level `build` ships; `benchmarks.py` builds each benchmark
+  with `--target llvm` as well, and the C target's output also with `clang` (R5.3).
+- Debug lines are checked by reading the line table `llvm-dwarfdump --debug-line` prints, not by
+  driving a debugger in CI.
 
 ## Risks
 
