@@ -8,7 +8,7 @@
 
 ## 2 · The library
 
-- [x] 2.1 (Unit) Emit a wrapper per exported function that initialises the runtime once, converts `str` arguments with UTF-8 validation and names the function in panics — R2.1, R2.2, R2.3
+- [x] 2.1 (Unit) Emit a wrapper per exported function that readies the runtime for calls from any thread on the first call, converts `str` arguments with UTF-8 validation and names the function in panics — R2.1, R2.2, R2.3
   _Depends 1.1_
 - [x] 2.2 (Unit) Give `lotml build` the `--shared` option, linking a shared library on Windows and Linux — R1.1
   _Depends 2.1, 1.2_

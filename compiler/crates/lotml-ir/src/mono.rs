@@ -300,7 +300,10 @@ impl Mono {
                 let value = std::mem::replace(value, Operand::Local(0));
                 *e = match self.vtable(&trait_name, from, span) {
                     Some(vtable) => Expr::ToDyn { value, ty: ty.clone(), vtable },
-                    None => Expr::Use(value),
+                    None => {
+                        self.refuse(span, &format!("a `{from}` as a `dyn {trait_name}`"));
+                        Expr::Use(value)
+                    }
                 };
             }
             Expr::Closure { lambda, .. } | Expr::Capture { lambda, .. } => *lambda = self.lambda(*lambda, subst),

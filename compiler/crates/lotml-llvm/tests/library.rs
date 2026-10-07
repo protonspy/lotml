@@ -219,3 +219,52 @@ fn a_string_that_is_not_utf8_stops_the_process_naming_the_function_and_parameter
     assert!(said.contains("the argument `s` is not valid UTF-8"), "{said}");
     assert!(said.contains("in shout"), "{said}");
 }
+
+#[test]
+fn a_library_named_like_the_runtime_is_refused() {
+    let Err(errors) =
+        lotml_llvm::compile_library("fn init() -> int:\n    return 1\n", Path::new("lt.lot"), &Interfaces::new())
+    else {
+        panic!("a library exporting `lt_init`");
+    };
+    assert_eq!(errors[0].code, "E0405", "{:?}", errors.iter().map(|d| &d.message).collect::<Vec<_>>());
+    assert!(errors[0].message.contains("lt_init"), "{}", errors[0].message);
+}
+
+/// The symbols the library exports, as the platform's tool lists them: `llvm-readobj` beside
+/// `clang` on Windows, `nm` elsewhere; `None` when the tool is not there.
+fn exported(clang: &Clang, library: &Path) -> Option<Vec<String>> {
+    let out = if cfg!(windows) {
+        let tool = clang.program.parent()?.join("llvm-readobj.exe");
+        Command::new(tool).arg("--coff-exports").arg(library).output().ok()?
+    } else {
+        Command::new("nm").args(["-D", "--defined-only"]).arg(library).output().ok()?
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    let names = if cfg!(windows) {
+        text.lines().filter_map(|l| l.trim().strip_prefix("Name: ")).map(str::to_string).collect()
+    } else {
+        // `T` is a function in the text section; the rest is what the linker defines itself.
+        text.lines()
+            .filter_map(|l| match l.split_whitespace().collect::<Vec<_>>()[..] {
+                [_, "T", name] if !name.starts_with('_') => Some(name.to_string()),
+                _ => None,
+            })
+            .collect()
+    };
+    Some(names)
+}
+
+#[test]
+fn a_library_exports_its_functions_and_nothing_of_the_runtime() {
+    let Some(clang) = clang() else { return };
+    let exe = built(&clang, "symbols");
+    let library = exe.parent().unwrap().join(library_file("geo"));
+    let Some(mut names) = exported(&clang, &library) else {
+        assert!(std::env::var_os("CI").is_none(), "CI has no tool listing a library's symbols");
+        return;
+    };
+    names.sort();
+    let wanted = ["geo_add", "geo_big", "geo_half", "geo_hello", "geo_pick", "geo_shout", "geo_small"];
+    assert_eq!(names, wanted);
+}

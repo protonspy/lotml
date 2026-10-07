@@ -214,8 +214,25 @@ def wrapping_mul(a: int, b: int) -> int:
 
 
 def copy(obj):
-    """A deep copy: a value entering a `var`, or leaving one, is its own."""
-    return _copy.deepcopy(obj)
+    """A deep copy: a value entering a `var`, or leaving one, is its own, and so is each part of it
+    — a list holding one list twice holds two copies, as a lotml value does, where `deepcopy`
+    would keep the one it met first."""
+    if isinstance(obj, list):
+        return [copy(item) for item in obj]
+    if isinstance(obj, dict):
+        return {key: copy(value) for key, value in obj.items()}
+    if isinstance(obj, tuple):
+        return tuple(copy(item) for item in obj)
+    if isinstance(obj, set):
+        return set(obj)
+    if isinstance(obj, Heap):
+        heap = Heap.__new__(Heap)
+        heap.items = [copy(item) for item in obj.items]
+        return heap
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        fields = {f.name: copy(getattr(obj, f.name)) for f in dataclasses.fields(obj)}
+        return dataclasses.replace(obj, **fields)
+    return obj
 
 
 def shallow(obj):

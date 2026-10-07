@@ -175,7 +175,7 @@ fn wrappers(module: &mut Module, lowered: &Lowered, types: &Types, exports: &[Ex
     let linkage = if cfg!(windows) { "dllexport " } else { "" };
     let mut out = String::new();
     for e in exports {
-        let Some(f) = lowered.functions.iter().find(|f| f.name == symbol::function(&e.name)) else { continue };
+        let f = lowered.functions.iter().find(|f| f.name == symbol::function(&e.name)).expect("an export compiled");
         let mut declared = Vec::new();
         let mut body = String::from("  call void @lt_library_call()\n");
         let mut passed = Vec::new();

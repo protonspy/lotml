@@ -134,6 +134,7 @@ pub fn header(name: &str, file: &str, exports: &[Export], line: impl Fn(Span) ->
     let upper = name.to_ascii_uppercase();
     let guard = format!("LOTML_{upper}_H");
     let api = format!("{upper}_API");
+    let file: String = file.replace("*/", "* /").chars().map(|c| if c.is_control() { '?' } else { c }).collect();
     let mut out = format!(
         "/* {name}.h: the C interface of {file}, written by `lotml build --shared`. A function may stop the\n \
          * process with status 101, as a LotML program stops, when it meets a broken invariant. */\n\
@@ -187,5 +188,12 @@ mod tests {
         assert_eq!(c_name("int", 1), "p1");
         assert_eq!(c_name("é", 2), "p2");
         assert_eq!(c_name("__x", 3), "p3");
+    }
+
+    #[test]
+    fn a_file_name_cannot_end_the_header_s_comment() {
+        let written = header("x", "a*/ #define B 1\n.lot", &[], |_| 1);
+        let comment = written.split("*/").next().unwrap_or("");
+        assert!(comment.contains("a* / #define B 1?.lot"), "the whole name stays in the comment: {written}");
     }
 }

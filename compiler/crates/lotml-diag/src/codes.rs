@@ -315,4 +315,11 @@ pub const ALL: &[Code] = &[
         explanation: "`lotml build --shared` found no top-level function, other than `main`, that C can call. \
         The E0403 warnings beside this error name what left each function out.",
     },
+    Code {
+        code: "E0405",
+        title: "a C library named like the runtime",
+        explanation: "A library's functions are exported as `<module>_<function>`, `<module>` the file's name. A \
+        library whose names come out starting `lt_` would export them under the names the runtime it carries \
+        gives its own functions, and the two would clash when linked. Name the file otherwise.",
+    },
 ];

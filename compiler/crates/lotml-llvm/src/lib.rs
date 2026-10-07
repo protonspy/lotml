@@ -118,8 +118,28 @@ pub fn compile_library(source: &str, path: &Path, interfaces: &Interfaces) -> Re
             );
             return Err(std::iter::once(none).chain(warnings).collect());
         }
+        if let Some(e) = exports.iter().find(|e| e.symbol.starts_with("lt_")) {
+            let clash = Diagnostic::error(
+                "E0405",
+                e.span,
+                format!(
+                    "`{}` would be exported as `{}`, which the runtime's own functions are named like: name the \
+                     file otherwise",
+                    e.name, e.symbol
+                ),
+            );
+            return Err(vec![clash]);
+        }
         Ok((exports, warnings))
     })?;
+    let missing: Vec<Diagnostic> = exports
+        .iter()
+        .filter(|e| !lowered.functions.iter().any(|f| f.name == lotml_ir::symbol::function(&e.name)))
+        .map(|e| Diagnostic::error("E0402", e.span, format!("`{}` was not compiled, so it cannot be exported", e.name)))
+        .collect();
+    if !missing.is_empty() {
+        return Err(missing);
+    }
     let file = path.file_name().map_or(stem.clone(), |n| n.to_string_lossy().into_owned());
     let header = export::header(&name, &file, &exports, |span| lowered.line(span));
     let ll = emit::program(&lowered, &path.display().to_string(), Entry::Library(&exports), false)?;

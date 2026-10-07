@@ -5,7 +5,7 @@
 //! checker's types decide the rest: which arithmetic traps outside its integer type, and which
 //! values are copied — those a `var` or an `inout` holds, as they enter or leave it.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use lotml_check::TypeDef;
 use lotml_check::ty::{FloatKind, IntKind, Ty};
@@ -217,14 +217,15 @@ fn kind_name(kind: IntKind) -> &'static str {
     }
 }
 
-/// What a function of the IR is called in Python: a function by its LotML name, a method as
-/// `__Type_method`, a lambda, a test, a default by its index; and, for a method, its type and name.
+/// What a function of the IR is called in Python: a function by its LotML name; a method, a
+/// lambda, a test, a default under the `__` the checker keeps from the program's own names, a
+/// method's with its type's length, as its symbol has it, so `A_b.c` and `A.b_c` stay apart.
 fn py_name(symbol: &str) -> String {
     if let Some(rest) = symbol.strip_prefix("lf_") {
         return rest.to_string();
     }
     if let Some((owner, method)) = method_of(symbol) {
-        return format!("__{owner}_{method}");
+        return method_name(owner, method);
     }
     for (prefix, python) in [("ll", "__lambda_"), ("lt_test", "__test_"), ("ld", "__default_")] {
         if let Some(k) = symbol.strip_prefix(prefix)
@@ -235,6 +236,11 @@ fn py_name(symbol: &str) -> String {
         }
     }
     symbol.to_string()
+}
+
+/// The Python function of the method `method` of the type `owner`.
+fn method_name(owner: &str, method: &str) -> String {
+    format!("__m{}_{owner}_{method}", owner.len())
 }
 
 /// The type and the method of a method's symbol, `lm<length of the type>_<type>_<method>`.
@@ -262,8 +268,8 @@ struct ModuleWriter<'l> {
     /// Sum types whose variants all have no fields: their values never change.
     enums: HashSet<String>,
     /// Each Python function the program calls, by module and function, with the result its
-    /// interface declares.
-    python_calls: BTreeMap<(String, String), Ty>,
+    /// interface declares, in the order first called: the `k`th is bound to `__py<k>`.
+    python_calls: Vec<(String, String, Ty)>,
     /// The default of each parameter, by the function's symbol and the parameter: its index.
     param_defaults: HashMap<(String, String), usize>,
 }
@@ -287,7 +293,7 @@ impl<'l> ModuleWriter<'l> {
                 DefaultOf::Field { .. } => None,
             })
             .collect();
-        ModuleWriter { lowered, lines, enums, python_calls: BTreeMap::new(), param_defaults }
+        ModuleWriter { lowered, lines, enums, python_calls: Vec::new(), param_defaults }
     }
 
     /// Line (from 1) and UTF-8 column (from 0) of a byte offset.
@@ -328,6 +334,8 @@ impl<'l> ModuleWriter<'l> {
                 let attach =
                     call(rt("attach"), vec![name(owner), text(m), name(&py_name(&f.name)), constant(is_method.into())]);
                 attached.push(self.at(stmt_expr(attach), f.span));
+                let traced = call(rt("rename"), vec![name(&py_name(&f.name)), text(&format!("__{owner}_{m}"))]);
+                attached.push(self.at(stmt_expr(traced), f.span));
             }
             if f.name.starts_with("ll") && f.source_name == "<lambda>" {
                 let rename = call(rt("rename"), vec![name(&py_name(&f.name)), text("<lambda>")]);
@@ -355,13 +363,13 @@ impl<'l> ModuleWriter<'l> {
             );
             imports.push(self.at(assign(vec![target(&format!("__c_{symbol}"))], loaded), Span::new(0, 0)));
         }
-        for ((module, function), ret) in &self.python_calls {
+        for (k, (module, function, ret)) in self.python_calls.iter().enumerate() {
             let returns = match ret {
                 Ty::Result(value, _) => descriptor(value),
                 other => descriptor(other),
             };
             let bound = call(rt("foreign"), vec![text(module), text(function), text(&returns.to_string())]);
-            imports.push(self.at(assign(vec![target(&python_symbol(module, function))], bound), Span::new(0, 0)));
+            imports.push(self.at(assign(vec![target(&format!("__py{k}"))], bound), Span::new(0, 0)));
         }
         let body: Vec<Value> = imports
             .into_iter()
@@ -521,11 +529,6 @@ impl<'l> ModuleWriter<'l> {
     }
 }
 
-/// The name a Python function called through an interface is bound to in the module.
-fn python_symbol(module: &str, function: &str) -> String {
-    format!("__py_{}_{function}", module.replace('.', "_"))
-}
-
 // A function ----------------------------------------------------------------------------------
 
 struct Writer<'m, 'l> {
@@ -554,8 +557,8 @@ impl<'m, 'l> Writer<'m, 'l> {
         for (l, info) in f.locals.iter().enumerate() {
             names.push(match &info.name {
                 Some(n) if f.params.contains(&l) => n.clone(),
-                Some(n) => format!("_l{l}_{n}"),
-                None => format!("_t{l}"),
+                Some(n) => format!("__l{l}_{n}"),
+                None => format!("__t{l}"),
             });
         }
         let mut w = Writer {
@@ -575,7 +578,7 @@ impl<'m, 'l> Writer<'m, 'l> {
 
     fn temporary(&mut self) -> String {
         self.temporaries += 1;
-        format!("_b{}", self.temporaries)
+        format!("__b{}", self.temporaries)
     }
 
     fn ty(&self, l: Local) -> &Ty {
@@ -1089,7 +1092,7 @@ impl<'m, 'l> Writer<'m, 'l> {
             Expr::CallGeneric { callee, args } => match callee {
                 Callee::Function { name: f, .. } => self.call_slots(name(f), args, out),
                 Callee::Method { owner: Ty::Adt(owner, _), method: m, .. } => {
-                    self.call_slots(name(&format!("__{owner}_{m}")), args, out)
+                    self.call_slots(name(&method_name(owner, m)), args, out)
                 }
                 Callee::Method { method: m, .. } => {
                     // A type parameter's method: the method of the class the receiver is.
@@ -1216,9 +1219,15 @@ impl<'m, 'l> Writer<'m, 'l> {
                 call(name(&format!("__c_{symbol}")), args)
             }
             Expr::CallPython { module, function, args, ret, .. } => {
-                self.m.python_calls.insert((module.clone(), function.clone()), ret.clone());
+                let k = match self.m.python_calls.iter().position(|(m, f, _)| m == module && f == function) {
+                    Some(k) => k,
+                    None => {
+                        self.m.python_calls.push((module.clone(), function.clone(), ret.clone()));
+                        self.m.python_calls.len() - 1
+                    }
+                };
                 let args: Vec<Value> = args.iter().map(|o| self.stored(o, false)).collect();
-                call(name(&python_symbol(module, function)), args)
+                call(name(&format!("__py{k}")), args)
             }
             Expr::Parallel { tasks, .. } => {
                 let tasks = self.operand(tasks);

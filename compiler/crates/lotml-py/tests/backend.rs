@@ -333,3 +333,18 @@ fn a_generic_function_is_one_python_function_whatever_it_is_called_with() {
     assert_eq!((definitions, named_first), (2, 1), "first and f, once each: {module}");
     assert_eq!(prints("generic-once", source, "print(m.f(), m.first([True]))"), "7 a True");
 }
+
+#[test]
+fn a_value_holding_one_value_twice_holds_two_once_copied() {
+    let source = "type P(xs: [int])\n\nfn mk(p: P) -> [P]:\n    return [p, p]\n\n\
+                  fn f() -> ([[int]], [int], [int]):\n    x = [1]\n    var grid = [x, x]\n    grid[0].append(2)\n    \
+                  p = P([1])\n    var both = mk(p)\n    both[0].xs.append(3)\n    return (grid, both[0].xs, both[1].xs)\n";
+    assert_eq!(prints("shared-parts", source, "print(m.f())"), "([[1, 2], [1]], [1, 3], [1])");
+}
+
+#[test]
+fn methods_of_two_types_whose_names_join_alike_stay_apart() {
+    let source = "type A_b(n: int)\ntype A(n: int)\n\nimpl A_b:\n    fn c(self) -> int:\n        return 1\n\n\
+                  impl A:\n    fn b_c(self) -> int:\n        return 2\n\nfn f() -> (int, int):\n    return (A_b(0).c(), A(0).b_c())\n";
+    assert_eq!(prints("method-names", source, "print(m.f())"), "(1, 2)");
+}
