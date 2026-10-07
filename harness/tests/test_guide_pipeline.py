@@ -333,3 +333,25 @@ def test_the_next_gpu_is_tried_when_runpod_has_no_card_and_the_cap_uses_the_dear
     with pytest.raises(CapExceeded):
         pipeline.prepare(plan(tmp_path / "c", gpu="A,B", cap=Decimal("1.00")), Store(), ledger,
                          COMMIT, on_github=lambda _: True)  # fmt: skip
+
+
+def test_a_creation_runpod_fails_on_its_side_gives_way_to_the_next_gpu(
+    fake, tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr(pipeline, "head", lambda: COMMIT)
+    monkeypatch.setattr(pipeline, "pushed", lambda _: True)
+    monkeypatch.setattr(pipeline, "watch", lambda *_, **__: None)
+    monkeypatch.setattr(pipeline.runpod, "price", lambda gpu, cloud: 0.3)
+    monkeypatch.setattr(pipeline.runpod, "named", lambda name: None)
+
+    def flaky(request):
+        if request["gpu"]["id"] == "A":
+            raise pipeline.runpod.RunPodError(
+                "RunPod answered 500: Internal Server Error: failed to create pod"
+            )
+        return {"id": "pod_b"}
+
+    monkeypatch.setattr(pipeline.runpod, "create", flaky)
+    ledger = Ledger(tmp_path / "runpod.jsonl", None)
+    pipeline.run(plan(tmp_path, gpu="A,B"), Store(), ledger)
+    assert [r["pod"] for r in ledger.rows()] == ["pod_b"]

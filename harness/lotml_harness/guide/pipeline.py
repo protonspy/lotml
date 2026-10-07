@@ -179,20 +179,21 @@ def create(ready: Ready) -> str:
     """Create the pod on the first GPU RunPod has a card for, in the order given; its id, with
     `ready.gpu` and `ready.hourly` set. A creation RunPod may have made though its answer never
     came back is looked for by the pod's name, unique to the run, so it is terminated like any
-    other."""
+    other; a GPU with no card free, or one RunPod failed to create on its side, gives way to the
+    next."""
     failure: runpod.RunPodError | None = None
     for gpu, hourly, request in ready.options:
         ready.gpu, ready.hourly = gpu, hourly
         try:
             return runpod.create(request)["id"]
         except runpod.RunPodError as error:
-            if UNAVAILABLE in str(error):
+            found = None if UNAVAILABLE in str(error) else runpod.named(request["name"])
+            if found is not None:
+                return found
+            if UNAVAILABLE in str(error) or str(error).startswith("RunPod answered 5"):
                 failure = error
                 continue
-            found = runpod.named(request["name"])
-            if found is None:
-                raise
-            return found
+            raise
     raise failure or runpod.RunPodError("no GPU was named")
 
 
