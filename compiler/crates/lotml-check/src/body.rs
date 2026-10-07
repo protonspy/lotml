@@ -65,6 +65,12 @@ pub struct Body<'p> {
     returned: BTreeSet<String>,
     /// The type of every expression checked, by its span; resolved by `types`.
     seen: HashMap<Span, Ty>,
+    /// Which expression each span of `seen` was recorded from, by address, and whether it stands
+    /// for text the parser could not read. Keying types by span is sound only while no two
+    /// expressions share one, which a debug build checks; two such error nodes at one place,
+    /// both typed as errors, are the exception.
+    #[cfg(debug_assertions)]
+    typed_by: HashMap<Span, (usize, bool)>,
     /// How many type nodes `seen` holds, up to [`BODY_TYPES`]: past it, an expression keeps an
     /// error, and the first one past it is reported.
     stored: usize,
@@ -108,6 +114,8 @@ impl<'p> Body<'p> {
             mutated: BTreeSet::new(),
             returned: BTreeSet::new(),
             seen: HashMap::new(),
+            #[cfg(debug_assertions)]
+            typed_by: HashMap::new(),
             stored: 0,
             full: false,
             locals: Vec::new(),
@@ -1047,6 +1055,16 @@ impl<'p> Body<'p> {
             self.too_large(expr.span, format!("this type has more than {TYPE_LIMIT} parts"));
         }
         let ty = self.kept(expr.span, ty);
+        #[cfg(debug_assertions)]
+        {
+            let node = (std::ptr::from_ref(expr) as usize, matches!(expr.kind, ExprKind::Error));
+            let before = self.typed_by.insert(expr.span, node);
+            debug_assert!(
+                before.is_none_or(|b| b.0 == node.0 || (b.1 && node.1)),
+                "two expressions share the span {:?}, and the type map keeps one of their types",
+                expr.span
+            );
+        }
         self.seen.insert(expr.span, ty.clone());
         ty
     }
