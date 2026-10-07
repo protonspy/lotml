@@ -40,12 +40,12 @@ def test_an_mbpp_problem_is_posed_as_humaneval_s_are():
     task = pose_mbpp(PROBLEM)
     assert task.id == "mbpp-12"
     assert task.workspace_files == {
-        "solution.lotml": (
+        "solution.lot": (
             'fn add(a, b):\n    """Write a function to add two numbers."""\n    return todo()\n'
         )
     }
     assert task.prompt == humaneval.PROMPT.format(name="add")
-    assert task.hidden("solution.lotml").count('test "hidden:') == 3
+    assert task.hidden("solution.lot").count('test "hidden:') == 3
 
 
 def test_setup_code_runs_before_the_asserts_and_recursion_records_the_outermost_call():

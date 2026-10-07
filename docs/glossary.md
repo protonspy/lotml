@@ -4,7 +4,7 @@ One canonical term per concept, and the synonyms nobody should use for it. One e
 line: the term in bold, the definition after an em dash, and an optional `Avoid:` list.
 Every avoided synonym is reported wherever it appears as a whole word under `docs/`.
 
-- **lotml** — the LLM-oriented programming language this repository studies; its source files use the `.lotml` extension. The pilot and the corpus under `research/` call it by the provisional name X, with the `.x` extension. Avoid: language X
+- **LotML** — the LLM-oriented programming language this repository studies, Lot from Lotus and ML from Machine Learning; its source files use `.lot`, or `.lotml` as written before 2026-10-07, and `lotml` is its command (adr:0018-lot-as-the-preferred-source-extension). The pilot and the corpus under `research/` call it by the provisional name X, with the `.x` extension. Avoid: language X
 - **variant A** — lotml's syntax exactly as the original study proposes it: `none`, `match` arms without `case`, `=>`, `use`, `or` for optionals.
 - **variant B** — variant A with its constructs replaced by Python's wherever the semantics match: `None`, `case`, `lambda`, `from … import`, `??`, `is None`.
 - **training prior** — what a model already knows about a construct from having seen it in pretraining; it is why a construct identical to Python's comes out right without instruction.
@@ -23,7 +23,7 @@ Every avoided synonym is reported wherever it appears as a whole word under `doc
 - **compiler-embedded model** — a small language model specialised to one language and shipped inside its compiler or toolchain to repair errors, explain diagnostics or suggest improvements; lotml has none.
 - **prefix check** — the semantic compiler judging a partial file while a model writes it: completable, an error here, or not yet decidable; it never rejects a prefix that can still be completed.
 - **symbol-addressed edit** — an edit that names a syntax entity (a function body, a `match` arm, a method) and gives only its new content; the tool re-indents it and rejects it if it breaks the syntax. Avoid: AST edit
-- **agent guide** — what `lotml init` writes for coding agents: the lotml block in `AGENTS.md` and `lotml.guide.lotml`, the language taught as code that checks and passes its tests.
+- **agent guide** — what `lotml init` writes for coding agents: the lotml block in `AGENTS.md` and `lotml.guide.lot`, the language taught as code that checks and passes its tests.
 - **agent harness** — `harness/lotml_harness/agent/`: a coding agent run on the agent benchmark's development tasks with the compiler's MCP tools, graded on hidden tests.
 - **harness guide** — the compiler-embedded model planned to guide any coding agent over MCP: when `check` refuses code or a test fails, it says where to change it and what kind of change, proposes at most one patch that checks, and stays silent below a calibrated confidence; the agent edits.
 - **trace dataset** — the training data exported from the agent harness's traces: trajectories of runs that passed and repairs that made `check` clean or a failing test pass, taken only from sources and models the licence registry permits.

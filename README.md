@@ -1,10 +1,10 @@
 <p align="center">
-  <img src=".github/assets/banner.png" alt="lotml — a glowing pixel-art lotus with a code chevron at its heart, on a pond at night" width="100%">
+  <img src=".github/assets/banner.png" alt="LotML — a glowing pixel-art lotus with a code chevron at its heart, on a pond at night" width="100%">
 </p>
 
 <h1 align="center">
   <img src=".github/assets/icon.png" alt="" width="48">
-  lotml
+  LotML
 </h1>
 
 <p align="center">
@@ -16,14 +16,15 @@
   <img alt="Compiler in Rust" src="https://img.shields.io/badge/compiler-Rust%202024-orange.svg">
   <img alt="Target: Python, C in progress" src="https://img.shields.io/badge/target-Python%20%C2%B7%20C%20in%20progress-teal.svg">
   <img alt="Status: research preview" src="https://img.shields.io/badge/status-research%20preview-yellow.svg">
-  <img alt="File extension .lotml" src="https://img.shields.io/badge/extension-.lotml-8a2be2.svg">
+  <img alt="File extension .lot" src="https://img.shields.io/badge/extension-.lot-8a2be2.svg">
 </p>
 
 ---
 
-lotml is a statically typed language with Python's syntax wherever its meaning is Python's — and a
-visible difference wherever it is not. It exists so that coding agents write correct code more
-often, and so that the people reviewing that code can trust what they read:
+LotML is a statically typed language with Python's syntax wherever its meaning is Python's — and a
+visible difference wherever it is not. Its name is Lot, from Lotus, and ML, from Machine Learning;
+its files are `.lot`, and `.lotml` is accepted too. It exists so that coding agents write correct
+code more often, and so that the people reviewing that code can trust what they read:
 
 - **Python's vocabulary where the semantics match**, so a model's training prior helps instead of
   misleading it.
@@ -69,10 +70,10 @@ cargo build --manifest-path compiler/Cargo.toml --locked --release -p lotml
 ```
 
 ```bash
-lotml check stats.lotml     # syntax, type and mutability errors
-lotml test  stats.lotml     # run the test blocks
-lotml run   main.lotml      # run fn main()
-lotml build stats.lotml     # compile to a Python module with its runtime
+lotml check stats.lot       # syntax, type and mutability errors
+lotml test  stats.lot       # run the test blocks
+lotml run   main.lot        # run fn main()
+lotml build stats.lot       # compile to a Python module with its runtime
 lotml init                  # set a project up for coding agents: AGENTS.md, guide, MCP server
 lotml explain E0204         # explain an error code
 ```
@@ -96,14 +97,14 @@ starts the language server for them; its README says how to build and install it
 | [`compiler/`](compiler/) | The Rust compiler: syntax, checker, formatter, Python backend, LSP and MCP servers |
 | [`reference/`](reference/) | The language reference and the tree-sitter grammar |
 | [`editors/`](editors/) | The file icon, its Windows Explorer association and the VS Code extension |
-| [`harness/`](harness/) | The evaluation harness that measures models writing lotml |
+| [`harness/`](harness/) | The evaluation harness that measures models writing LotML |
 | [`research/`](research/) | Reproducible experiments: token cost, Python leakage, editing robustness |
 | [`docs/`](docs/) | Knowledge base: wiki, ADRs, glossary, stack |
 | [`plans/`](plans/) · [`specs/`](specs/) | The roadmap and the feature specs it is built from |
 
 ## Status
 
-lotml is a research project, built phase by phase, each phase closed by a measured gate
+LotML is a research project, built phase by phase, each phase closed by a measured gate
 ([roadmap](plans/lotml-roadmap.md)):
 
 - [x] **Phase 0** — syntax settled by measurement (variant B, significant indentation)

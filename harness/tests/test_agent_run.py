@@ -66,7 +66,7 @@ def test_a_solved_task_passes_with_its_metrics(tmp_path: Path):
     model = scripted(
         said(1, ("replace", {"symbol": "median", "part": "body", "text": MEDIAN})),
         said(2, ("replace", {"symbol": "mode", "part": "body", "text": MODE})),
-        said(3, ("check", {"paths": ["/stats.lotml"]}), ("test", {"paths": ["/stats.lotml"]})),
+        said(3, ("check", {"paths": ["/stats.lot"]}), ("test", {"paths": ["/stats.lot"]})),
         said(4, text="Implemented median and mode."),
     )
     row = runner.run(TASKS["median-mode"], "agents", 0, model, "scripted", traces=tmp_path)
@@ -86,7 +86,7 @@ def test_a_solved_task_passes_with_its_metrics(tmp_path: Path):
     assert row["lines_changed"] > 10
     trace = json.loads((tmp_path / "scripted" / "agents" / "median-mode-0.json").read_text("utf-8"))
     assert trace["row"] == row
-    assert "fn median" in trace["final"]["stats.lotml"]
+    assert "fn median" in trace["final"]["stats.lot"]
     assert any(m["type"] == "tool" for m in trace["messages"])
 
 
@@ -215,7 +215,7 @@ def test_the_arms_set_their_context(tmp_path: Path):
     system, memory = runner.prepare(TASKS["median-mode"], tmp_path / "a", "agents", lotml)
     assert memory == ["/AGENTS.md"]
     assert "<!-- lotml:begin -->" in (tmp_path / "a" / "AGENTS.md").read_text("utf-8")
-    assert (tmp_path / "a" / "lotml.guide.lotml").is_file()
+    assert (tmp_path / "a" / "lotml.guide.lot").is_file()
     assert "language reference" not in system
     system, memory = runner.prepare(TASKS["median-mode"], tmp_path / "r", "reference", lotml)
     assert memory == []
@@ -251,24 +251,24 @@ def test_the_trace_keeps_the_files_around_every_check_and_test_and_the_context(t
     broken = "x = 1\nx = 2\nreturn None"
     model = scripted(
         said(1, ("replace", {"symbol": "median", "part": "body", "text": broken})),
-        said(2, ("check", {"paths": ["/stats.lotml"]})),
+        said(2, ("check", {"paths": ["/stats.lot"]})),
         said(3, ("replace", {"symbol": "median", "part": "body", "text": MEDIAN})),
-        said(4, ("check", {"paths": ["/stats.lotml"]})),
-        said(5, ("test", {"paths": ["/stats.lotml"]})),
+        said(4, ("check", {"paths": ["/stats.lot"]})),
+        said(5, ("test", {"paths": ["/stats.lot"]})),
         said(6, text="Done."),
     )
     row = runner.run(TASKS["median-mode"], "agents", 0, model, "scripted", traces=tmp_path)
     trace = json.loads((tmp_path / "scripted" / "agents" / "median-mode-0.json").read_text("utf-8"))
     first, second = trace["checks"]
-    assert first["paths"] == ["stats.lotml"], "the file tools' leading / is stripped"
+    assert first["paths"] == ["stats.lot"], "the file tools' leading / is stripped"
     assert first["status"] == "success" and not first["truncated"]
     assert first["before"] == first["after"], "check changes no file"
-    assert "x = 2" in first["before"]["stats.lotml"]
+    assert "x = 2" in first["before"]["stats.lot"]
     assert first["report"]["summary"]["errors"] > 0
     assert second["report"]["summary"]["errors"] == 0
-    assert "mid = len(s) // 2" in second["before"]["stats.lotml"]
+    assert "mid = len(s) // 2" in second["before"]["stats.lot"]
     [test] = trace["tests"]
-    assert test["paths"] == ["stats.lotml"]
+    assert test["paths"] == ["stats.lot"]
     assert test["status"] == "success" and test["report"]["tests"]
     assert trace["compiler"].startswith("lotml ") and row["compiler"] == trace["compiler"]
     assert runner.SYSTEM in trace["system"]
@@ -288,6 +288,16 @@ def test_a_snapshot_skips_links_and_marks_a_cut(tmp_path: Path, monkeypatch: pyt
         return
     files, _ = runner.bounded_snapshot(tmp_path)
     assert "link.lotml" not in files
+
+
+def test_a_snapshot_takes_lot_and_lotml_files_and_nothing_else(tmp_path: Path):
+    for name in ("a.lot", "b.lotml", "sub/c.lot", "d.lotmli", "e.py"):
+        (tmp_path / name).parent.mkdir(exist_ok=True)
+        (tmp_path / name).write_text("x\n", encoding="utf-8")
+    (tmp_path / "dir.lot").mkdir()
+    files, cut = runner.bounded_snapshot(tmp_path)
+    assert list(files) == ["a.lot", "b.lotml", "sub/c.lot"] and not cut
+    assert list(runner.snapshot(tmp_path)) == ["a.lot", "b.lotml", "sub/c.lot"]
 
 
 def test_a_test_report_names_no_home_directory_or_user():

@@ -115,7 +115,7 @@ impl Server {
 
     /// Read again the files that changed on the disk, add new ones and forget deleted ones.
     fn refresh(&mut self) {
-        let found = files::expand(std::slice::from_ref(&self.root)).unwrap_or_default();
+        let found = files::sources(std::slice::from_ref(&self.root)).unwrap_or_default();
         let gone: Vec<PathBuf> = self.modified.keys().filter(|p| !found.contains(p)).cloned().collect();
         for path in gone {
             self.modified.remove(&path);
@@ -410,7 +410,7 @@ impl Server {
             let before = out.len();
             out.extend(self.workspace.paths().filter(|p| p.starts_with(&wanted)).map(Path::to_path_buf));
             if out.len() == before {
-                return Err(ToolError(format!("no .lotml file at `{name}`")));
+                return Err(ToolError(format!("no .lot or .lotml file at `{name}`")));
             }
         }
         Ok(out)
@@ -480,7 +480,8 @@ impl Server {
         let usage = "give `path`, `line` and `column` (from 1), or a `symbol`";
         let name = args["path"].as_str().ok_or_else(|| ToolError(usage.into()))?;
         let path = self.inside(name)?;
-        let text = self.workspace.text(&path).ok_or_else(|| ToolError(format!("no .lotml file at `{name}`")))?;
+        let text =
+            self.workspace.text(&path).ok_or_else(|| ToolError(format!("no .lot or .lotml file at `{name}`")))?;
         let line = args["line"].as_u64().filter(|&l| l >= 1).ok_or_else(|| ToolError(usage.into()))?;
         let column = args["column"].as_u64().filter(|&c| c >= 1).ok_or_else(|| ToolError(usage.into()))?;
         let lines = Lines::new(text);
@@ -564,7 +565,7 @@ impl Server {
             return if self.workspace.contains(&path) {
                 Ok(path)
             } else {
-                Err(ToolError(format!("no .lotml file at `{named}`")))
+                Err(ToolError(format!("no .lot or .lotml file at `{named}`")))
             };
         }
         let symbol = symbol.ok_or_else(|| ToolError("give the `path` of the file".into()))?;
@@ -713,13 +714,24 @@ fn stamp(path: &Path) -> Option<SystemTime> {
     std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
-/// Write a file whole or not at all: to a file beside it, then moved over it.
+/// Write a file whole or not at all: to a file beside it, then moved over it. Whatever holds that
+/// name already is removed and the file beside it is created new, so a link a repository planted
+/// there is never written through.
 fn save(path: &Path, text: &str) -> Result<(), ToolError> {
-    let partial = path.with_extension("lotml.partial");
-    std::fs::write(&partial, text).and_then(|()| std::fs::rename(&partial, path)).map_err(|e| {
-        let _ = std::fs::remove_file(&partial);
-        ToolError(format!("cannot write {}: {e}", path.display()))
-    })
+    let mut partial = path.as_os_str().to_owned();
+    partial.push(".partial");
+    let partial = PathBuf::from(partial);
+    let _ = std::fs::remove_file(&partial);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&partial)
+        .and_then(|mut file| io::Write::write_all(&mut file, text.as_bytes()))
+        .and_then(|()| std::fs::rename(&partial, path))
+        .map_err(|e| {
+            let _ = std::fs::remove_file(&partial);
+            ToolError(format!("cannot write {}: {e}", path.display()))
+        })
 }
 
 fn supported() -> Vec<&'static str> {
@@ -740,14 +752,14 @@ fn tools(guided: bool) -> Vec<Value> {
     let paths = json!({
         "type": "array",
         "items": {"type": "string"},
-        "description": "Files or directories inside the project; all of its .lotml files when absent."
+        "description": "Files or directories inside the project; all of its .lot and .lotml files when absent."
     });
     let at = |what: &str| {
         json!({
             "type": "object",
             "properties": {
                 "symbol": {"type": "string", "description": "A function, type, trait or variant, or `Type.member` for a field or method."},
-                "path": {"type": "string", "description": "A .lotml file inside the project."},
+                "path": {"type": "string", "description": "A .lot or .lotml file inside the project."},
                 "line": {"type": "integer", "minimum": 1},
                 "column": {"type": "integer", "minimum": 1, "description": "In characters, from 1."}
             },

@@ -32,10 +32,10 @@ test "hidden: 2":
 
 
 def program(problem: str = "humaneval/0", bucket: str = "train") -> Program:
-    files = {"solution.lotml": CODE + BLOCKS}
+    files = {"solution.lot": CODE + BLOCKS}
     return Program(
         "humaneval-0", problem, bucket, "humaneval-original", "Write it.", files,
-        ("solution.lotml",), "the notice",
+        ("solution.lot",), "the notice",
     )  # fmt: skip
 
 
@@ -46,27 +46,27 @@ def mutated(old: str, new: str) -> str:
 
 
 def test_a_mutant_check_refuses_is_kept_with_its_diagnostics():
-    verdict = judge(program(), "solution.lotml", mutated("return total", "return totals"))
+    verdict = judge(program(), "solution.lot", mutated("return total", "return totals"))
     assert (verdict.kept, verdict.reason) == (True, "check")
     assert [d["code"] for d in verdict.diagnostics] == ["E0201"]
 
 
 def test_a_mutant_check_fix_makes_clean_is_dropped():
-    verdict = judge(program(), "solution.lotml", mutated("var total = a", "total = a"))
+    verdict = judge(program(), "solution.lot", mutated("var total = a", "total = a"))
     assert (verdict.kept, verdict.reason) == (False, "fixable")
 
 
 def test_a_mutant_that_checks_and_fails_a_test_is_kept_with_the_block_s_values():
-    verdict = judge(program(), "solution.lotml", mutated("total += b", "total -= b"))
+    verdict = judge(program(), "solution.lot", mutated("total += b", "total -= b"))
     assert (verdict.kept, verdict.reason) == (True, "test")
     assert verdict.failing["name"] == "hidden: 1"
     assert (verdict.failing["left"], verdict.failing["right"]) == ("-1", "3")
 
 
 def test_an_equivalent_mutant_and_a_hang_are_dropped():
-    same = judge(program(), "solution.lotml", mutated("var total = a", "var total = a + 0"))
+    same = judge(program(), "solution.lot", mutated("var total = a", "var total = a + 0"))
     assert (same.kept, same.reason) == (False, "equivalent")
-    hang = judge(program(), "solution.lotml", mutated("k += 1", "pass"), deadline=3)
+    hang = judge(program(), "solution.lot", mutated("k += 1", "pass"), deadline=3)
     assert (hang.kept, hang.reason) == (False, "timeout")
 
 
@@ -74,23 +74,23 @@ def test_mutants_are_listed_from_the_graded_files_outside_the_test_blocks():
     found, failed = seeded.listed(program())
     assert found
     assert failed == {}
-    assert {m["file"] for m in found} == {"solution.lotml"}
+    assert {m["file"] for m in found} == {"solution.lot"}
     assert all(m["start"] < len(CODE) for m in found), "no mutant falls in a test block"
 
 
 def test_seeding_writes_each_kept_mutant_as_a_repair_marked_seeded(monkeypatch):
     found = [
         {"family": "names", "operator": "misspell-name", "declaration": "add",
-         "file": "solution.lotml", "text": mutated("return total", "return totals")},
+         "file": "solution.lot", "text": mutated("return total", "return totals")},
         {"family": "meaning", "operator": "swap-arithmetic", "declaration": "add",
-         "file": "solution.lotml", "text": mutated("var total = a", "var total = a + 0")},
+         "file": "solution.lot", "text": mutated("var total = a", "var total = a + 0")},
     ]  # fmt: skip
     monkeypatch.setattr(seeded, "listed", lambda program: (found, Counter()))
     weighting = seeded.Weights(Counter(dict.fromkeys(seeded.FAMILIES, 1)), Counter(), ["x"])
     records, tally = seeded.seed([program()], weighting, "lotml 0.1.0", workers=2)
     [record] = records
     assert record["before"] == found[0]["text"]
-    assert record["after"] == program().files["solution.lotml"]
+    assert record["after"] == program().files["solution.lot"]
     assert record["diagnostics"][0]["code"] == "E0201"
     assert record["changed"] == [4]
     assert record["prompt"] == "Write it."

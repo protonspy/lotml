@@ -236,8 +236,8 @@ library — JSON-RPC over `serde_json`:
   methods through the checked type of the value they are read from (`c.get()` is `Counter.get`
   because `c` is a `Counter`), keyword arguments to the parameter or field they name. Each file
   is its own module, so a name refers to a declaration in the same file.
-- **`lotml lsp`** loads and checks every `.lotml` file under the workspace's folders when the
-  client connects, so the first question meets a warm index, and publishes their diagnostics —
+- **`lotml lsp`** loads and checks every `.lot` and `.lotml` file under the workspace's folders when
+  the client connects, so the first question meets a warm index, and publishes their diagnostics —
   notes and alternatives in the message, labels as related locations. It answers definitions,
   references, hover (a local's type, a declaration's signature and documentation), outlines,
   workspace symbols, formatting, and the diagnostics' fixes as quick fixes, the
@@ -259,7 +259,7 @@ library — JSON-RPC over `serde_json`:
   diagnostics it introduced against the text before it, or "no errors introduced".
 - **`lotml init`** sets a project up for coding agents: a lotml block in `AGENTS.md` teaching the
   loop above (digest, edit by symbol, `check` after every edit, its fixes, `test`),
-  `lotml.guide.lotml` — the reference rewritten as code that checks, with a `test` block per
+  `lotml.guide.lot` — the reference rewritten as code that checks, with a `test` block per
   section, so an agent reads the language the way it will write it and the guide cannot drift
   from the compiler — and the MCP server registered for the harnesses found in the project:
   Claude Code (`.mcp.json`, and `CLAUDE.md` importing `AGENTS.md`), Codex and Cursor, chosen on
