@@ -7,16 +7,16 @@ ci: wait
 
 ## Purpose
 
-The LLVM target compiling everything the C target compiles, with the same results as the Python
-target, so that it can become `lotml build`'s default
-(adr:0022-lotml-build-makes-a-native-executable-by-default) and the C target can be retired
-(adr:0021-compiler-in-rust-with-llvm-as-its-native-code-generator). Once the C target is gone
-this spec holds the native contract `specs/c-backend/` holds today; the semantic requirements
-below restate that spec's for the LLVM target.
+The LLVM target compiling everything the retired C target compiled, with the same results as the
+Python target, so that it can become `lotml build`'s default
+(adr:0022-lotml-build-makes-a-native-executable-by-default). The C target is retired before this
+spec is built (adr:0025-two-targets-python-for-run-llvm-for-build), and the Python target is the
+reference; this spec holds the native contract `specs/c-backend/` held, its semantic requirements
+restated for the LLVM target.
 
 ## R1 · Same semantics as the Python target
 
-- **R1.1** The LLVM backend shall compile every program the checker accepts, except one importing a Python module before `specs/python-bridge/` and one that `specs/shared-ir/` R3.3 refuses.
+- **R1.1** The LLVM backend shall compile every program the checker accepts, except one importing a Python module, which it refuses at the import (adr:0025-two-targets-python-for-run-llvm-for-build), and one that `specs/shared-ir/` R3.3 refuses.
 - **R1.2** When a compiled program runs, the LLVM backend's program shall write to standard output exactly what the Python target's program writes for the same input, and exit with the same status.
 - **R1.3** When a value is turned into text by `print`, `str` or an f-string, the LLVM backend's program shall render it as specs/c-backend R1.3 defines: CPython's `repr` of floats and strings, records and variants as their dataclass, sets in CPython's order under `PYTHONHASHSEED=0`.
 - **R1.4** When `lotml test --target llvm` runs the `test` blocks of a module, the LLVM backend shall report each one's name and outcome in the JSON `lotml test` writes for the Python target.
@@ -38,12 +38,11 @@ below restate that spec's for the LLVM target.
 
 ## R5 · The measurements
 
-- **R5.1** When the parity experiment runs, the harness shall run every program of the corpus on the Python, C and LLVM targets, the LLVM one built at `-O2`, and report, for each native target, whether it reports the same as the Python target.
-- **R5.2** When the benchmarks run, the harness shall record the LLVM target's times beside the C target's in `harness/results/benchmarks.md`.
-- **R5.3** While the C target exists, when the benchmarks run, the harness shall also build the C target's output with `clang`, so a gap to C is attributed to the lowering or to the C compiler.
+- **R5.1** When the parity experiment runs, the harness shall run every program of the corpus on the Python and LLVM targets, the LLVM one built at `-O2`, and report whether the LLVM target reports the same as the Python target.
+- **R5.2** When the benchmarks run, the harness shall record the LLVM target's times against hand-written C in `harness/results/benchmarks.md`, beside the C target's last recorded run.
 
 ## Out of scope
 
 Closing the numeric gap phase 3 recorded (adr:0019-proceed-to-phase-4-past-the-failed-phase-3-gate):
-measured here, fixed separately. Retiring the C target, which is plan task 2.5 and leaves R5.1
-with two targets.
+measured here, fixed separately. A native program importing a Python module: it runs under `lotml
+run` (adr:0025-two-targets-python-for-run-llvm-for-build).

@@ -27,7 +27,7 @@
 
 ## 3 · Measured
 
-- [ ] 3.1 (Unit) Run the parity suite on the Python, C and LLVM targets and record it — R1.1, R5.1
+- [ ] 3.1 (Unit) Run the parity suite on the Python and LLVM targets and record it — R1.1, R5.1
   _Depends 2.2, 2.3, 2.4_
-- [ ] 3.2 (Unit) Run the benchmarks on the LLVM target, and the C target's output built by `clang`, and record them beside the C run — R5.2, R5.3
+- [ ] 3.2 (Unit) Run the benchmarks on the LLVM target against hand-written C and record them beside the C target's last run — R5.2
   _Depends 3.1_

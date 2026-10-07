@@ -1,5 +1,6 @@
 ---
-status: accepted
+status: superseded
+superseded-by: 0025-two-targets-python-for-run-llvm-for-build
 ---
 
 # 0021 · Compiler in Rust, with LLVM as its native code generator

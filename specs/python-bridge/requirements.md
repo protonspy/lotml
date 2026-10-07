@@ -1,6 +1,7 @@
 ---
 autonomy: auto
 ci: wait
+delivery: abandoned
 ---
 
 # Python bridge — requirements

@@ -5,10 +5,10 @@
 Serves R1.1, R1.2, R1.3, R3.1.
 
 `lotml-llvm`'s emitter grows to every statement and expression of the counted IR; the runtime
-does the rest, as it does for the C target. Every heap value, collection operation, text rule
+does the rest, as it did for the C target. Every heap value, collection operation, text rule
 and hash already lives in the runtime crate (plan task 1.1), so this spec is mostly calls into
-it, and the C target is the oracle: a program whose LLVM output differs from the C target's is
-an emitter bug.
+it, and the Python target is the reference: a program whose LLVM output differs from it is an
+emitter bug.
 
 ## Data
 
@@ -50,9 +50,9 @@ Serves R1.4, R2.1, R2.2, R3.2, R3.3, R4.1.
   `#line`. Written at `-O0`, the level `run` uses.
 - `parallel` and shared marking are runtime calls, as on the C target. A `c.<library>` call is a
   direct `call` to a declared symbol, and the library goes on `clang`'s command line.
-- The parity experiment (`harness/lotml_harness/experiments/parity.py`) gains the LLVM target as
-  a third column, built at `-O2`, the level `build` ships; `benchmarks.py` builds each benchmark
-  with `--target llvm` as well, and the C target's output also with `clang` (R5.3).
+- The parity experiment (`harness/lotml_harness/experiments/parity.py`) compares the LLVM target,
+  built at `-O2`, the level `build` ships, with the Python target; `benchmarks.py` builds each
+  benchmark with `--target llvm` and times it against its hand-written C.
 - Debug lines are checked by reading the line table `llvm-dwarfdump --debug-line` prints, not by
   driving a debugger in CI.
 
