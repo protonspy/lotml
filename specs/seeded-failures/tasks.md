@@ -21,6 +21,6 @@
   _Depends 3.1_
 - [x] 3.3 (Unit) Write the kept mutants as repair records marked seeded with their sources' notices, and the committed report with every count by operator and reason — R3.1, R3.3
   _Depends 2.1, 2.2, 3.2_
-- [ ] 3.4 (Unit) Join two drawn mutants of one program in different declarations and judge them as one mutant — R2.8
+- [x] 3.4 (Unit) Join two drawn mutants of one program in different declarations and judge them as one mutant — R2.8
   _Depends 3.2_
   _Reason the training pipeline's RL needs records the fine-tuned guide does not always solve (adr:0020)_

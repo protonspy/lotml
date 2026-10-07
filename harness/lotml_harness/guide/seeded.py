@@ -344,6 +344,54 @@ def draw(
     return drawn
 
 
+PAIRS = 20
+"""Mutants joined two at a time per program, beside its single ones (R2.8)."""
+
+
+def joined(original: str, first: dict, second: dict) -> str | None:
+    """`original` with both mutants' replacements made — their spans are byte offsets, as
+    `lotml dev mutate` gives them — or None when the spans overlap."""
+    a, b = sorted((first, second), key=lambda m: m["start"])
+    if a["end"] > b["start"]:
+        return None
+    data = original.encode("utf-8")
+    for mutant in (b, a):
+        data = (
+            data[: mutant["start"]] + mutant["replacement"].encode("utf-8") + data[mutant["end"] :]
+        )
+    return data.decode("utf-8")
+
+
+def pairs(program: Program, drawn: list[dict], count: int) -> list[dict]:
+    """Up to `count` mutants that each join two of the program's drawn ones, in one file and in
+    different declarations, so the fix spans more than one (R2.8); drawn by a generator seeded
+    with the program."""
+    generator = random.Random(f"{SEED}:pairs:{program.task}")  # noqa: S311 - a reproducible draw
+    candidates = [
+        (a, b)
+        for i, a in enumerate(drawn)
+        for b in drawn[i + 1 :]
+        if a["file"] == b["file"] and a["declaration"] != b["declaration"]
+    ]
+    found = []
+    for a, b in generator.sample(candidates, len(candidates)):
+        text = joined(program.files[a["file"]], a, b)
+        if text is None:
+            continue
+        found.append(
+            {
+                "operator": f"{a['operator']}+{b['operator']}",
+                "family": "pair",
+                "declaration": f"{a['declaration']}, {b['declaration']}",
+                "file": a["file"],
+                "text": text,
+            }
+        )
+        if len(found) == count:
+            break
+    return found
+
+
 @dataclass
 class Verdict:
     """What judging one mutant found: kept as a failure `check` refuses or a test then fails, or
@@ -448,8 +496,9 @@ class Tally:
 def seed(
     programs: list[Program], weighting: Weights, compiler: str, workers: int = 8
 ) -> tuple[list[dict], Tally]:
-    """Every program's mutants listed, drawn and judged; the kept ones as repair records marked
-    `origin: seeded` (R3.1), and the tally of all of it."""
+    """Every program's mutants listed, drawn and judged, with pairs of its drawn ones joined
+    (R2.8); the kept ones as repair records marked `origin: seeded` (R3.1), and the tally of all
+    of it."""
     tally = Tally()
     seen: dict[str, set[str]] = defaultdict(set)
     jobs = []
@@ -459,7 +508,8 @@ def seed(
         tally.unlisted.update(failed)
         for mutant in found:
             tally.listed[(mutant["family"], mutant["operator"])] += 1
-        for mutant in draw(program, found, dict(weighting.families), seen[program.problem]):
+        singles = draw(program, found, dict(weighting.families), seen[program.problem])
+        for mutant in singles + pairs(program, singles, PAIRS):
             tally.drawn[(mutant["family"], mutant["operator"])] += 1
             jobs.append((program, mutant))
 

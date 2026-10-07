@@ -93,3 +93,13 @@ docstring in the file. A program whose problem `split.py` holds out stops the ru
   keeps thousands of records, and the report says how many.
 - The guide may learn the mutator's tells; the offline evaluation is on real failures only and is
   where that shows (specs/guide-evaluation/).
+
+## Pairs (R2.8)
+
+Beside its single mutants, each program gets up to `PAIRS` (20) that join two of its drawn ones in
+one file and in different declarations, drawn by a generator seeded with the program and judged as
+one mutant, so the fix spans more than one declaration. The two replacements are made on the
+original text by their spans, which `lotml dev mutate` gives in bytes, the later one first; spans
+that overlap are not joined. The tally counts them under the family `pair`. They exist for the
+training pipeline's reinforcement learning, which needs records the fine-tuned guide does not
+always solve (adr:0020-the-guide-trains-by-fine-tuning-then-rejection-sampling-and-rl-on-what-it-sometimes-solves).
