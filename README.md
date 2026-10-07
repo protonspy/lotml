@@ -78,12 +78,25 @@ lotml init                  # set a project up for coding agents: AGENTS.md, gui
 lotml explain E0204         # explain an error code
 ```
 
+### File icons and VS Code
+
+The lotus on a page marks LotML files in Windows Explorer, for the current user, with no
+administrator needed:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File editors\windows\register.ps1   # -Remove takes it back
+```
+
+The VS Code extension in [`editors/vscode/`](editors/vscode/) gives LotML files the same icon and
+starts the language server for them; its README says how to build and install it.
+
 ## Repository
 
 | Path | What lives there |
 |---|---|
 | [`compiler/`](compiler/) | The Rust compiler: syntax, checker, formatter, Python backend, LSP and MCP servers |
 | [`reference/`](reference/) | The language reference and the tree-sitter grammar |
+| [`editors/`](editors/) | The file icon, its Windows Explorer association and the VS Code extension |
 | [`harness/`](harness/) | The evaluation harness that measures models writing LotML |
 | [`research/`](research/) | Reproducible experiments: token cost, Python leakage, editing robustness |
 | [`docs/`](docs/) | Knowledge base: wiki, ADRs, glossary, stack |

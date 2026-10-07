@@ -90,3 +90,16 @@ its language and MCP servers — JSON-RPC written over `serde_json`, with no pro
 - **find-msvc-tools** 0.1 (Windows only) — locates Visual Studio's `cl` and the environment it
   needs (`INCLUDE`, `LIB`, `PATH`), from the rust-lang project that maintains `cc`; chosen over
   running `vcvars64.bat` through `cmd`, which depends on the shell and on one install layout.
+
+## Editors (`editors/`)
+
+- **Node.js** 20 or later — builds and tests the VS Code extension (`npm ci`, `node --test`);
+  the harness test that runs those tests skips without `node`.
+- **vscode-languageclient** 10.1.2 — the VS Code extension's client of `lotml lsp`, Microsoft's
+  own implementation of the protocol for VS Code; the extension's one dependency.
+- **@vscode/vsce** 4.0.0 (development only, a pinned dev dependency in the lockfile) — packages
+  the extension as the `.vsix` it is installed from; nothing is published, so the install script
+  of `@vscode/vsce-sign`, which signs for publishing, is denied.
+- **Windows PowerShell** 5.1 (part of Windows) — runs `editors/windows/register.ps1`, which gives
+  `.lot` and `.lotml` their icon in Explorer; chosen over a `lotml` subcommand, which would link a
+  registry crate into every build for something done once per machine.
