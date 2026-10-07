@@ -16,7 +16,7 @@
 
 ## 2 · The C backend on it
 
-- [ ] 2.1 (Unit) Compile C from the counted IR, removing the lowering and passes from `lotml-c`, and assert that `lotml check` lowers nothing — R4.1, R2.2
+- [x] 2.1 (Unit) Compile C from the counted IR, removing the lowering and passes from `lotml-c`, and assert that `lotml check` lowers nothing — R4.1, R2.2
   _Depends 1.4_
 - [ ] 2.2 (Unit) Run the parity suite and the C benchmarks, against a baseline run on the same machine before the move, and record both unchanged — R4.2, R4.3
   _Depends 2.1_
