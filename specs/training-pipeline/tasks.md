@@ -17,6 +17,6 @@
   _Depends 3.2_
 - [x] 3.5 (Unit) Run the pipeline from the command line: build and upload the records, price and create the pod, watch it, terminate it, record the ledger, and commit the report — R1.4, R2.5, R3.1, R3.5, R5.1, R5.2
   _Depends 2.2, 2.3, 3.1, 3.3, 3.4_
-- [ ] 4.1 (Unit) Record the move to RunPod and Hugging Face in an ADR and in the stack — R1.1, R2.1
+- [x] 4.1 (Unit) Record the move to RunPod and Hugging Face in an ADR and in the stack — R1.1, R2.1
 - [ ] 4.2 (Unit) Run the pipeline on RunPod — SFT, reinforcement learning and export of the 0.5B model — within the cap, and commit its report and ledger — R1.3, R5.1
   _Depends 3.5, 4.1_

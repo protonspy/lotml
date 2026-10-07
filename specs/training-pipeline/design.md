@@ -1,6 +1,6 @@
 # Training pipeline — design
 
-Where training runs changes, and what it runs grows by one stage. adr:0018-guide-training-on-runpod-with-artifacts-in-a-private-hugging-face-repository
+Where training runs changes, and what it runs grows by one stage. adr:0019-guide-training-on-runpod-with-artifacts-in-a-private-hugging-face-repository
 records the move; the base model, the runtime and the records' format stay as adr:0017-a-half-billion-coder-model-tuned-locally-and-served-by-llama-server
 set them.
 

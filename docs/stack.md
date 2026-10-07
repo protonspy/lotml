@@ -44,9 +44,10 @@ group the default environment leaves out.
   `reference/grammar/tree-sitter/` and parses the corpus with it in the harness tests, which
   skip without `npx`; it compiles the parser with the platform's C compiler.
 
-## The harness guide (`harness/`, group `train`, adr:0017-a-half-billion-coder-model-tuned-locally-and-served-by-llama-server)
+## The harness guide (`harness/`, group `train`, adr:0017-a-half-billion-coder-model-tuned-locally-and-served-by-llama-server, adr:0019-guide-training-on-runpod-with-artifacts-in-a-private-hugging-face-repository)
 
-Outside the default environment: `uv run --group train` trains the guide on the local GPU.
+Outside the default environment: `uv run --group train` trains the guide, on the local GPU or in a
+RunPod pod the pipeline creates (`python -m lotml_harness.guide.pipeline`).
 
 - **torch** 2.11.0 built for CUDA 12.8, from PyTorch's own index — the training runtime on the
   local RTX 3060.
@@ -56,7 +57,17 @@ Outside the default environment: `uv run --group train` trains the guide on the 
   with.
 - **llama.cpp** (build b11450, a release binary and its source's `convert_hf_to_gguf.py`, used by
   path) — converts the merged guide to a Q4_K_M GGUF, and `llama-server` serves it on the CPU with
-  JSON-schema answers and log-probabilities, the request the `guide` tool sends.
+  JSON-schema answers and log-probabilities, the request the `guide` tool sends; in a training pod,
+  its CUDA build, checked by SHA-256, asks the validation split on the GPU.
+- **trl**'s `GRPOTrainer` — reinforcement learning of the guide by group-relative policy
+  optimization, the compiler's judgment of each answer its reward; stable in trl 1.0, where PPO is
+  experimental.
+- **RunPod** (a service, its REST API v2 called with the standard library) — the GPU a training run
+  rents, one pod per run, held to a cap by a committed ledger; the key is read from
+  `RUNPOD_API_KEY`.
+- **Hugging Face Hub** (a private model repository, through `huggingface_hub`) — the records, the
+  checkpoints, the adapters, the GGUF files and the reports a run leaves; the token is read from
+  `HF_TOKEN`.
 - **Qwen/Qwen2.5-Coder-0.5B-Instruct** (revision `ea3f2471`, Apache-2.0) — the base model; its
   tokenizer counts the guidance records.
 

@@ -2,9 +2,9 @@
 against the cap, a pod created and watched, then terminated whatever happened, the ledger and the
 run's report committed (specs/training-pipeline/).
 
-    python -m lotml_harness.guide.pipeline run --stages sft,rl,export --hub <user>/<repo> \\
-        --gpu "NVIDIA GeForce RTX 4090" --hours 3 [--from rl=<run>] [--dry-run]
-    python -m lotml_harness.guide.pipeline reconcile
+    uv run --group guide python -m lotml_harness.guide.pipeline run --stages sft,rl,export \\
+        --hub <user>/<repo> --gpu "NVIDIA GeForce RTX 4090" --hours 3 [--from rl=<run>] [--dry-run]
+    uv run --group guide python -m lotml_harness.guide.pipeline reconcile
 
 Keys come from the environment: `RUNPOD_API_KEY` for RunPod, `HF_TOKEN` for the repository.
 """
