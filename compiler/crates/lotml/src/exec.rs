@@ -192,10 +192,16 @@ impl Drop for Scratch {
 }
 
 /// `lotml build`: for the LLVM target, each file as `<name>.ll` and the executable built from it,
-/// in `out`; for the Python target, as `<name>_lotml.py`, next to the runtime.
-pub fn build(paths: &[PathBuf], out: &Path, target: Target) -> Result<u8, Failure> {
-    if target == Target::Llvm {
-        return build_llvm(paths, out);
+/// or with `shared` the library and its header, in `out`; for the Python target, as
+/// `<name>_lotml.py`, next to the runtime.
+pub fn build(paths: &[PathBuf], out: &Path, target: Target, shared: bool) -> Result<u8, Failure> {
+    match (target, shared) {
+        (Target::Llvm, true) => return build_shared(paths, out),
+        (Target::Llvm, false) => return build_llvm(paths, out),
+        (Target::Python, true) => {
+            return Err(Failure("`--shared` builds a native library: build it with `--target llvm`".into()));
+        }
+        (Target::Python, false) => {}
     }
     let Some(modules) = compile_or_report(paths, out)? else { return Ok(1) };
     for module in modules {
@@ -293,6 +299,53 @@ fn build_llvm(paths: &[PathBuf], out: &Path) -> Result<u8, Failure> {
             Some(exe) => println!("{} -> {}", path.display(), exe.display()),
             None => status = 1,
         }
+    }
+    Ok(status)
+}
+
+/// `lotml build --shared`: each file as the shared library C calls, its header and its LLVM IR, in
+/// `out` (specs/c-abi-export R1.1); the warnings for the functions left out written first.
+fn build_shared(paths: &[PathBuf], out: &Path) -> Result<u8, Failure> {
+    let scratch = Scratch::new()?;
+    lotml_runtime::write(&scratch.0)
+        .map_err(|e| Failure(format!("cannot write the runtime in {}: {e}", scratch.0.display())))?;
+    std::fs::create_dir_all(out).map_err(|e| Failure(format!("cannot create {}: {e}", out.display())))?;
+    let mut status = 0;
+    for path in files::expand(paths)? {
+        let text = files::read(&path)?;
+        let absolute = std::path::absolute(&path).map_err(|e| Failure(format!("{}: {e}", path.display())))?;
+        let interfaces: Interfaces = files::interfaces_for(&path)
+            .into_iter()
+            .map(|b| {
+                let read = lotml_check::interface_of(&b.module, &b.text).0;
+                (b.module, read)
+            })
+            .collect();
+        let shown = path.display().to_string();
+        let report = |diagnostics: Vec<lotml_diag::Diagnostic>| {
+            let report = Report { file: &shown, text: &text, diagnostics };
+            print!("{}", lotml_diag::text(&[report], Some(lotml_diag::DEFAULT_LIMIT)));
+        };
+        let library = match lotml_llvm::compile_library(&text, &absolute, &interfaces) {
+            Ok(library) => library,
+            Err(diagnostics) => {
+                report(diagnostics);
+                status = 1;
+                continue;
+            }
+        };
+        if !library.warnings.is_empty() {
+            report(library.warnings.clone());
+        }
+        let stem = path.file_stem().map_or("module".into(), |s| s.to_string_lossy().into_owned());
+        let name = lotml_llvm::export::module_name(&stem);
+        let ll = out.join(format!("{name}.ll"));
+        write(&ll, &library.ll)?;
+        write(&out.join(format!("{name}.h")), &library.header)?;
+        let file = out.join(lotml_llvm::export::library_file(&name));
+        let clang = lotml_llvm::driver::find().map_err(Failure)?;
+        clang.build_shared(&ll, &scratch.0, &file, &library.libraries).map_err(Failure)?;
+        println!("{shown} -> {}", file.display());
     }
     Ok(status)
 }

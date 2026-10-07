@@ -30,6 +30,46 @@ lt_str *lt_str_char_at(const lt_str *s, int64_t *at) {
     return c;
 }
 
+/* Whether the `size` bytes at `s` are UTF-8 as Python decodes it: every sequence complete, none
+ * overlong, no surrogate, nothing past U+10FFFF. */
+static bool lt_utf8_valid(const unsigned char *s, size_t size) {
+    size_t i = 0;
+    while (i < size) {
+        unsigned char c = s[i];
+        size_t n;
+        uint32_t least, code;
+        if (c < 0x80) {
+            i++;
+            continue;
+        } else if ((c & 0xE0) == 0xC0) {
+            n = 2, least = 0x80, code = c & 0x1F;
+        } else if ((c & 0xF0) == 0xE0) {
+            n = 3, least = 0x800, code = c & 0x0F;
+        } else if ((c & 0xF8) == 0xF0) {
+            n = 4, least = 0x10000, code = c & 0x07;
+        } else {
+            return false;
+        }
+        if (size - i < n) return false;
+        for (size_t k = 1; k < n; k++) {
+            if ((s[i + k] & 0xC0) != 0x80) return false;
+            code = (code << 6) | (s[i + k] & 0x3F);
+        }
+        if (code < least || code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF)) return false;
+        i += n;
+    }
+    return true;
+}
+
+lt_str *lt_str_from_c(const char *text, const char *param, const lt_at *at) {
+    if (text == NULL) lt_panicf(at, "ValueError", "the argument `%s` is NULL, not a string", param);
+    size_t size = strlen(text);
+    if (!lt_utf8_valid((const unsigned char *)text, size)) {
+        lt_panicf(at, "UnicodeDecodeError", "the argument `%s` is not valid UTF-8", param);
+    }
+    return lt_str_new(text, (int64_t)size);
+}
+
 static int lt_encode(int32_t code, char out[4]) {
     if (code < 0x80) {
         out[0] = (char)code;

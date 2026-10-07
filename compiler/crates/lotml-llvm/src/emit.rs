@@ -17,6 +17,7 @@ use lotml_ir::symbol;
 use lotml_runtime::abi::CType;
 use lotml_syntax::span::Span;
 
+use crate::export::Export;
 use crate::module::Module;
 use crate::types::{self, Types, int_bits};
 
@@ -34,10 +35,17 @@ const F64: Ty = Ty::Float(FloatKind::F64);
 const I64: Ty = Ty::Int(IntKind::I64);
 const U64: Ty = Ty::Int(IntKind::U64);
 
-/// The LLVM IR of the program; with `tests`, its `main` runs the `test` blocks and reports them;
-/// with `lines`, it carries line tables naming the `.lot` file. A construct this backend does not
-/// compile is a diagnostic at its statement.
-pub fn program(lowered: &Lowered, file: &str, tests: bool, lines: bool) -> Result<String, Vec<Diagnostic>> {
+/// Where a module is entered: the `main` of a program, which runs its `fn main()` or its `test`
+/// blocks, or the functions a library exports (specs/c-abi-export).
+pub enum Entry<'e> {
+    Main,
+    Tests,
+    Library(&'e [Export]),
+}
+
+/// The LLVM IR of the module, entered by `entry`; with `lines`, it carries line tables naming the
+/// `.lot` file. A construct this backend does not compile is a diagnostic at its statement.
+pub fn program(lowered: &Lowered, file: &str, entry: Entry, lines: bool) -> Result<String, Vec<Diagnostic>> {
     let mut types = Types::new(&lowered.declared, &lowered.traits);
     for vtable in &lowered.vtables {
         types.register(&vtable.ty);
@@ -95,7 +103,11 @@ pub fn program(lowered: &Lowered, file: &str, tests: bool, lines: bool) -> Resul
     closures(&mut extra, lowered, &types);
     vtables(&mut extra, lowered, &types);
     task_runners(&mut extra, &types, &results);
-    let main = main(&mut module, lowered, &types, tests);
+    let main = match entry {
+        Entry::Main => main(&mut module, lowered, &types, false),
+        Entry::Tests => main(&mut module, lowered, &types, true),
+        Entry::Library(exports) => wrappers(&mut module, lowered, &types, exports),
+    };
     module.definitions.push_str(&extra);
     let mut out = module.header();
     out.push_str(&bodies);
@@ -149,6 +161,69 @@ fn main(module: &mut Module, lowered: &Lowered, types: &Types, tests: bool) -> S
             module.runtime("lt_no_main");
             out.push_str("  %status = call i32 @lt_no_main()\n  ret i32 %status\n}\n");
         }
+    }
+    out
+}
+
+/// A library's exported functions (specs/c-abi-export R2.1-R2.3): each an external function C
+/// calls, with the attributes `clang` gives the same C declaration, that tells the runtime it is
+/// called, copies each `str` argument into a string, validated, calls the module's function, which
+/// takes the strings over, and writes out what it printed.
+fn wrappers(module: &mut Module, lowered: &Lowered, types: &Types, exports: &[Export]) -> String {
+    module.runtime("lt_library_call");
+    module.runtime("lt_library_return");
+    let linkage = if cfg!(windows) { "dllexport " } else { "" };
+    let mut out = String::new();
+    for e in exports {
+        let Some(f) = lowered.functions.iter().find(|f| f.name == symbol::function(&e.name)) else { continue };
+        let mut declared = Vec::new();
+        let mut body = String::from("  call void @lt_library_call()\n");
+        let mut passed = Vec::new();
+        for (i, ((name, ty), &p)) in e.params.iter().zip(&f.params).enumerate() {
+            declared.push(format!("{} %c{i}", ffi(ty)));
+            let inner = types.value(&f.locals[p].ty);
+            let value = match ty {
+                Ty::Str => {
+                    module.runtime("lt_str_from_c");
+                    let param = module.text_z(name);
+                    let site = module.site(lowered.line(e.span), &f.source_name);
+                    let _ = writeln!(body, "  %a{i} = call ptr @lt_str_from_c(ptr %c{i}, ptr {param}, ptr {site})");
+                    format!("%a{i}")
+                }
+                Ty::Float(FloatKind::F32) => {
+                    let _ = writeln!(body, "  %a{i} = fpext float %c{i} to double");
+                    format!("%a{i}")
+                }
+                _ => format!("%c{i}"),
+            };
+            passed.push(format!("{inner} {value}"));
+        }
+        let inner = ret_ty(types, &f.ret);
+        let call = format!("call {inner} @{}({})", f.name, passed.join(", "));
+        let returned = match &e.ret {
+            Ty::Unit => {
+                let _ = writeln!(body, "  {call}\n  call void @lt_library_return()");
+                "  ret void".to_string()
+            }
+            Ty::Float(FloatKind::F32) => {
+                let _ = writeln!(
+                    body,
+                    "  %r = {call}\n  call void @lt_library_return()\n  %n = fptrunc double %r to float"
+                );
+                "  ret float %n".to_string()
+            }
+            ty => {
+                let _ = writeln!(body, "  %r = {call}\n  call void @lt_library_return()");
+                format!("  ret {} %r", ffi(ty).split(' ').next().unwrap_or("void"))
+            }
+        };
+        let _ = writeln!(
+            out,
+            "define {linkage}{} @{}({}) {{\nentry:\n{body}{returned}\n}}\n",
+            ffi_returned(&e.ret),
+            e.symbol,
+            declared.join(", ")
+        );
     }
     out
 }

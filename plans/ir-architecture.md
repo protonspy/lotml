@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: c4adae1955d4a1b2b563d64602d114391085b779363894db2d9188951c94536d
+checksum: c5aa7ddea300db04d6e620f9a056ee0e56428a6f2df7c10b4d13ef7d1c079ee4
 ---
 
 # IR architecture
@@ -97,7 +97,7 @@ makes an executable.
   _Depends 2.5_
   _Status removed_
   _Reason dropped: native programs do not load CPython; a program importing Python runs under lotml run (adr:0025-two-targets-python-for-run-llvm-for-build)_
-- [ ] 3.2 (Unit) Write and build the spec c-abi-export: a C program calling a function from a
+- [x] 3.2 (Unit) Write and build the spec c-abi-export: a C program calling a function from a
   library `lotml build` wrote
   _Depends 2.5_
 - [ ] 4.1 (Unit) Narrate the pipeline in `docs/codewiki/` and bring the README's

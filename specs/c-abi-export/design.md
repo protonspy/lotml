@@ -32,9 +32,13 @@ The header includes `<stdint.h>` and `<stdbool.h>` and wraps its declarations in
 LLVM function with `dllexport` on Windows; the functions it wraps stay `internal`, so the library
 exports exactly R1.2's symbols.
 
-A wrapper initialises the runtime once (an atomic flag, so a first call from two threads is
-safe), converts each `str` argument into a runtime string — validating UTF-8 first — calls the
-function, releases what it allocated, and returns. A panic inside names its function through
+A wrapper tells the runtime it is called (`lt_library_call`, an atomic flag, so a first call
+from two threads is safe; from then on the output buffer is written under its lock), converts
+each `str` argument into a runtime string — `lt_str_from_c`, validating UTF-8 first — calls the
+function, which takes the strings over as any callee does, writes out what it printed
+(`lt_library_return`), and returns. On Unix the runtime is compiled with `-fvisibility=hidden`,
+so the library exports exactly R1.2's symbols there as well. `--shared` with `--target python`
+is an error. A panic inside names its function through
 the constant place every site that can stop carries (`specs/llvm-backend/`); the runtime keeps
 no stack of active functions, so the wrapper pushes nothing. Its narrow integer and `bool`
 parameters and results carry the `signext` or `zeroext` `clang` gives the same C declaration,

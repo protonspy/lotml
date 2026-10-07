@@ -515,7 +515,11 @@ struct Context<'a> {
 
 impl<'a> Context<'a> {
     fn unsupported(&mut self, span: Span, what: &str) {
-        self.diagnostics.push(Diagnostic::error("E0402", span, format!("the C backend does not compile {what} yet")));
+        self.diagnostics.push(Diagnostic::error(
+            "E0402",
+            span,
+            format!("`--target llvm` does not compile {what} yet: run it with `--target python`"),
+        ));
     }
 
     fn source(&self, span: Span) -> &'a str {

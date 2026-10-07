@@ -100,3 +100,30 @@ fn test_on_the_llvm_target_reports_what_the_python_target_reports() {
     assert!(llvm.contains("\"outcome\":\"fail\"") || llvm.contains("\"outcome\": \"fail\""), "{llvm}");
     assert_eq!(llvm, report("python"));
 }
+
+#[test]
+fn build_shared_writes_a_library_and_its_header_warning_for_what_it_leaves_out() {
+    if !has_clang() {
+        return;
+    }
+    let module =
+        "fn add(a: int, b: int) -> int:\n    return a + b\n\nfn total(xs: [int]) -> int:\n    return sum(xs)\n";
+    let dir = scratch("shared", &[("my-math.lot", module)]);
+    let out = lotml(&["build", "--shared", "my-math.lot", "-o", "out"], &dir);
+    let said = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{said}{}", String::from_utf8_lossy(&out.stderr));
+    assert!(said.contains("warning[E0403]") && said.contains("`total`"), "{said}");
+    let header = std::fs::read_to_string(dir.join("out").join("my_math.h")).expect("the header");
+    assert!(header.contains("int64_t my_math_add(int64_t a, int64_t b);"), "{header}");
+    let library = if cfg!(windows) {
+        "my_math.dll"
+    } else if cfg!(target_os = "macos") {
+        "libmy_math.dylib"
+    } else {
+        "libmy_math.so"
+    };
+    assert!(dir.join("out").join(library).is_file(), "{library}");
+    let python = lotml(&["build", "--shared", "--target", "python", "my-math.lot", "-o", "out"], &dir);
+    assert_eq!(python.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&python.stderr).contains("--target llvm"));
+}

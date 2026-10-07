@@ -92,6 +92,10 @@ enum Command {
         /// What to compile to.
         #[arg(long, value_enum, default_value = "llvm")]
         target: Target,
+        /// Write each file as a shared library C calls, with its C header, instead of an
+        /// executable (specs/c-abi-export).
+        #[arg(long)]
+        shared: bool,
     },
     /// Run a program's `fn main()`.
     Run {
@@ -247,7 +251,7 @@ fn run() -> ExitCode {
             print!("{}", index::digest(&s));
             true
         }),
-        Command::Build { paths, out, target } => return status(exec::build(&paths, &out, target)),
+        Command::Build { paths, out, target, shared } => return status(exec::build(&paths, &out, target, shared)),
         Command::Run { path, target } => return status(exec::run(&path, target)),
         Command::Test { paths, json, target } => return status(exec::test(&paths, json, target)),
         Command::Bind { module, stub, out } => exec::bind(&module, stub.as_deref(), &out),
