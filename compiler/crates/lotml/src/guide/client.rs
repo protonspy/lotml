@@ -7,7 +7,7 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
 
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use super::Endpoint;
 
@@ -43,44 +43,45 @@ impl Silence {
 }
 
 /// The JSON schema the guide's answer is held to: one to three ranked locations, the kind of
-/// change, and at most one edit as an edit tool's call.
-pub fn answer_schema() -> Value {
-    json!({
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["locations", "kind", "edit"],
-        "properties": {
-            "locations": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": 3,
-                "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": ["path", "symbol", "lines"],
-                    "properties": {
-                        "path": {"type": "string", "maxLength": 512},
-                        "symbol": {"type": ["string", "null"], "maxLength": 256},
-                        "lines": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 1}}
-                    }
+/// change, and at most one edit as an edit tool's call. Text rather than a [`Value`]: serde_json
+/// sorts an object's keys, and a runtime that compiles the schema to a grammar — llama.cpp's does —
+/// writes the properties in the order they come, so this order is the order the guide was trained
+/// to answer in: `locations` before `kind` before `edit`, `path` before `symbol` before `lines`.
+pub const ANSWER_SCHEMA: &str = r#"{
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["locations", "kind", "edit"],
+    "properties": {
+        "locations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["path", "symbol", "lines"],
+                "properties": {
+                    "path": {"type": "string", "maxLength": 512},
+                    "symbol": {"type": ["string", "null"], "maxLength": 256},
+                    "lines": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 1}}
                 }
-            },
-            "kind": {"enum": ["arm", "body", "definition", "add", "remove", "lines", "several"]},
-            "edit": {"anyOf": [
-                {"type": "null"},
-                {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": ["tool", "arguments"],
-                    "properties": {
-                        "tool": {"enum": ["replace", "add", "remove", "edit"]},
-                        "arguments": {"type": "object"}
-                    }
+            }
+        },
+        "kind": {"enum": ["arm", "body", "definition", "add", "remove", "lines", "several"]},
+        "edit": {"anyOf": [
+            {"type": "null"},
+            {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["tool", "arguments"],
+                "properties": {
+                    "tool": {"enum": ["replace", "add", "remove", "edit"]},
+                    "arguments": {"type": "object"}
                 }
-            ]}
-        }
-    })
-}
+            }
+        ]}
+    }
+}"#;
 
 /// The guide server's response to `messages`, asked at temperature zero within `answer` tokens,
 /// held to the answer schema, with the log-probabilities of its tokens; everything before
@@ -95,15 +96,10 @@ pub fn ask(
     if messages.to_string().len() >= PROMPT_LIMIT {
         return Err(Silence::TooLong);
     }
-    let body = json!({
-        "model": model,
-        "messages": messages,
-        "temperature": 0,
-        "max_tokens": answer,
-        "response_format": {"type": "json_schema", "json_schema": {"name": "guide", "strict": true, "schema": answer_schema()}},
-        "logprobs": true,
-    })
-    .to_string();
+    let body = format!(
+        r#"{{"model":{},"messages":{messages},"temperature":0,"max_tokens":{answer},"response_format":{{"type":"json_schema","json_schema":{{"name":"guide","strict":true,"schema":{ANSWER_SCHEMA}}}}},"logprobs":true,"top_logprobs":1}}"#,
+        Value::from(model),
+    );
     let request = format!(
         "POST /v1/chat/completions HTTP/1.1\r\nHost: {}:{}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\nAccept-Encoding: identity\r\n\r\n{body}",
         endpoint.host,
@@ -301,6 +297,10 @@ mod tests {
         (Endpoint { host: "127.0.0.1".into(), port: address.port(), address }, received)
     }
 
+    fn answer_schema() -> Value {
+        serde_json::from_str(ANSWER_SCHEMA).expect("the answer schema is JSON")
+    }
+
     fn messages() -> Value {
         json!([{"role": "system", "content": "s"}, {"role": "user", "content": "u"}])
     }
@@ -326,15 +326,21 @@ mod tests {
         {
             assert!(head.contains(header), "{header} missing from {head}");
         }
+        let text = body;
         let body: Value = serde_json::from_str(body).unwrap();
         assert_eq!(body["model"], "lotml-guide");
         assert_eq!(body["temperature"], 0);
         assert_eq!(body["max_tokens"], 512);
         assert_eq!(body["logprobs"], true);
-        assert!(body.get("top_logprobs").is_none());
+        assert_eq!(body["top_logprobs"], 1, "one alternative per token keeps a long answer under the body's cap");
         assert_eq!(body["messages"], messages());
         assert_eq!(body["response_format"]["type"], "json_schema");
         assert_eq!(body["response_format"]["json_schema"]["schema"], answer_schema());
+        let schema = &text[text.find(r#""schema":"#).unwrap()..];
+        let at = |key: &str| schema.find(&format!(r#""{key}":"#)).unwrap_or_else(|| panic!("{key} missing"));
+        assert!(at("locations") < at("kind") && at("kind") < at("edit"), "the answer's keys in the order trained");
+        assert!(at("path") < at("symbol") && at("symbol") < at("lines"), "a location's keys in the order trained");
+        assert!(at("tool") < at("arguments"), "an edit's keys in the order trained");
     }
 
     #[test]
