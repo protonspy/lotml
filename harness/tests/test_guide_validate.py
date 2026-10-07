@@ -125,17 +125,19 @@ def test_the_threshold_keeps_the_answers_at_or_above_it_at_the_target_precision(
 
 
 class Store:
-    def __init__(self, files: list[str], rl_report: dict | None = None):
-        self.listed, self.rl_report = files, rl_report
+    """A repository listing `files`, serving each `<stage>.json` report from `reports`."""
+
+    def __init__(self, files: list[str], reports: dict[str, dict] | None = None):
+        self.listed, self.reports = files, reports or {}
 
     def files(self, remote: str) -> list[str]:
-        return [f for f in self.listed if f.startswith(remote + "/")]
+        return [f for f in self.listed if f == remote or f.startswith(remote + "/")]
 
     def get(self, remote: str, local: Path) -> Path:
         target = local / remote
-        if remote.endswith("rl.json"):
+        if remote in self.reports:
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(json.dumps(self.rl_report), encoding="utf-8")
+            target.write_text(json.dumps(self.reports[remote]), encoding="utf-8")
         return target
 
 
@@ -145,12 +147,41 @@ def test_export_merges_the_supervised_adapter_and_then_the_reinforcement_learned
     work = tmp_path / "work"
     alone = stages.Run("r3", tmp_path, {}, Store(["runs/r1/sft/adapter/a"]), work)
     assert stages.adapters(alone, "r1") == {"sft": [work / "runs/r1/sft/adapter"]}
-    store = Store(["runs/r2/rl/adapter/a"], {"sft": "r1"})
+    store = Store(["runs/r2/rl/adapter/a"], {"runs/r2/rl/rl.json": {"sft": "r1"}})
     both = stages.adapters(stages.Run("r3", tmp_path, {}, store, work), "r2")
     assert both == {
         "sft": [work / "runs/r1/sft/adapter"],
         "rl": [work / "runs/r1/sft/adapter", work / "runs/r2/rl/adapter"],
     }
+
+
+def test_export_follows_the_rejection_sampled_adapter_into_reinforcement_learning(tmp_path: Path):
+    work = tmp_path / "work"
+    reports = {
+        "runs/r4/rft/rft.json": {"sft": "r2", "samples": "r4"},
+        "runs/r4/rl/rl.json": {"start": {"run": "r4", "stage": "rft"}},
+    }
+    chained = Store(["runs/r4/rft/adapter/a", "runs/r4/rl/adapter/a"], reports)
+    found = stages.adapters(stages.Run("r5", tmp_path, {}, chained, work), "r4")
+    assert found == {
+        "sft": [work / "runs/r2/sft/adapter"],
+        "rft": [work / "runs/r4/rft/adapter"],
+        "rl": [work / "runs/r4/rft/adapter", work / "runs/r4/rl/adapter"],
+    }
+    only = Store(["runs/r4/rft/adapter/a"], reports)
+    assert stages.adapters(stages.Run("r5", tmp_path, {}, only, work), "r4") == {
+        "sft": [work / "runs/r2/sft/adapter"],
+        "rft": [work / "runs/r4/rft/adapter"],
+    }
+
+
+def test_a_later_stage_starts_from_the_rejection_sampled_adapter_when_there_is_one(tmp_path: Path):
+    work = tmp_path / "work"
+    with_rft = Store(["runs/r4/rft/adapter/a"])
+    assert stages.starting(stages.Run("r5", tmp_path, {}, with_rft, work), "r4") == ("r4", "rft")
+    sampled = Store(["runs/r4/sample/sample.json"], {"runs/r4/sample/sample.json": {"sft": "r2"}})
+    assert stages.starting(stages.Run("r5", tmp_path, {}, sampled, work), "r4") == ("r2", "sft")
+    assert stages.starting(stages.Run("r5", tmp_path, {}, Store([]), work), "r4") == ("r4", "sft")
 
 
 def test_every_slot_gets_the_whole_context():

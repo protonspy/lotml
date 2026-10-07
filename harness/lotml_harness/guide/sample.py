@@ -153,9 +153,13 @@ def load(model: str, revision: str, adapters: list[Path]) -> tuple[object, objec
 def sample(
     model: object, tokenizer: object, records: list[dict], settings: Settings, out: Path
 ) -> list[dict]:
-    """Sample and judge every drawn record, writing the rows to `out` as JSON lines; the rows."""
-    chosen = drawn(records, settings.records, settings.seed)
+    """Sample and judge every drawn record, writing the rows to `out` as JSON lines, each with
+    its record's index among `records`; the rows."""
+    indices = drawn(list(range(len(records))), settings.records, settings.seed)
+    chosen = [records[i] for i in indices]
     rows = judged(chosen, generate(model, tokenizer, chosen, settings), settings.workers)
+    for index, row in zip(indices, rows, strict=True):
+        row["index"] = index
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
         "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8"

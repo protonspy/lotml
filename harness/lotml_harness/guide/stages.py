@@ -119,17 +119,55 @@ def sft(run: Run) -> None:
     run.hub.put(out / "train.json", f"runs/{run.run}/sft/train.json", f"run {run.run}: sft report")
 
 
+def report(run: Run, source: str, stage: str) -> dict:
+    """The JSON report `source`'s `stage` left, as `rl/rl.json` or `sample/sample.json`."""
+    path = run.hub.get(f"runs/{source}/{stage}/{stage}.json", run.work)
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def starting(run: Run, source: str) -> tuple[str, str]:
+    """The run and stage whose adapter `source`'s later stages start from: its rejection-sampled
+    one when it has one, else the supervised one of the run it sampled from, else its own."""
+    if run.hub.files(f"runs/{source}/rft/adapter"):
+        return source, "rft"
+    if run.hub.files(f"runs/{source}/sample/sample.json"):
+        return report(run, source, "sample")["sft"], "sft"
+    return source, "sft"
+
+
+def rft(run: Run) -> None:
+    """Train the supervised guide further on its own sampled answers that passed, the record's
+    target where none did (R3.7)."""
+    from lotml_harness.guide import rft as rejection
+
+    source = run.source("rft")
+    supervised = report(run, source, "sample")["sft"]
+    samples = run.hub.get(f"runs/{source}/sample/samples.jsonl", run.work)
+    rows = [json.loads(line) for line in samples.read_text(encoding="utf-8").splitlines() if line]
+    adapter = run.hub.get(f"runs/{supervised}/sft/adapter", run.work)
+    out = run.out("rft")
+    resume(run, "rft")
+    found = rejection.fit(
+        rejection.Settings(), rows, run.records, adapter, out, callbacks=[uploader(run, "rft")]
+    )
+    found |= {"samples": source, "sft": supervised}
+    (out / "rft.json").write_text(json.dumps(found, indent=2), encoding="utf-8")
+    run.hub.put(out / "adapter", f"runs/{run.run}/rft/adapter", f"run {run.run}: rft adapter")
+    run.hub.put(out / "rft.json", f"runs/{run.run}/rft/rft.json", f"run {run.run}: rft report")
+
+
 def rl(run: Run) -> None:
-    """Train the supervised guide further by group-relative policy optimization, the compiler's
-    judgment its reward (R3.3)."""
+    """Train the guide further by group-relative policy optimization, the compiler's judgment its
+    reward, from the adapter its source's earlier stages left (R3.3)."""
     from lotml_harness.guide import grpo
 
-    adapter = run.hub.get(f"runs/{run.source('rl')}/sft/adapter", run.work)
+    begun, stage = starting(run, run.source("rl"))
+    adapter = run.hub.get(f"runs/{begun}/{stage}/adapter", run.work)
     out = run.out("rl")
     resume(run, "rl")
-    report = grpo.fit(grpo.Settings(), run.records, adapter, out, callbacks=[uploader(run, "rl")])
-    report["sft"] = run.source("rl")
-    (out / "rl.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    found = grpo.fit(grpo.Settings(), run.records, adapter, out, callbacks=[uploader(run, "rl")])
+    found["start"] = {"run": begun, "stage": stage}
+    (out / "rl.json").write_text(json.dumps(found, indent=2), encoding="utf-8")
     run.hub.put(out / "adapter", f"runs/{run.run}/rl/adapter", f"run {run.run}: rl adapter")
     run.hub.put(out / "rl.json", f"runs/{run.run}/rl/rl.json", f"run {run.run}: rl report")
 
@@ -161,18 +199,26 @@ def sampling(run: Run) -> None:
 
 def adapters(run: Run, source: str) -> dict[str, list[Path]]:
     """The models `source`'s adapters make, each as the adapters merged in order: the supervised
-    one, and when `source` ran reinforcement learning, that one on top of the supervised one it
-    started from."""
-    if not run.hub.files(f"runs/{source}/rl/adapter"):
-        return {"sft": [run.hub.get(f"runs/{source}/sft/adapter", run.work)]}
-    report = json.loads(
-        run.hub.get(f"runs/{source}/rl/rl.json", run.work).read_text(encoding="utf-8")
-    )
-    supervised = run.hub.get(f"runs/{report['sft']}/sft/adapter", run.work)
-    return {
-        "sft": [supervised],
-        "rl": [supervised, run.hub.get(f"runs/{source}/rl/adapter", run.work)],
-    }
+    one; the rejection-sampled one, which continues it; and the reinforcement-learned one on top of
+    whichever it started from."""
+
+    def adapter(at: str, stage: str) -> Path:
+        return run.hub.get(f"runs/{at}/{stage}/adapter", run.work)
+
+    found: dict[str, list[Path]] = {}
+    if run.hub.files(f"runs/{source}/rl/adapter"):
+        rl = report(run, source, "rl")
+        begun = rl.get("start") or {"run": rl["sft"], "stage": "sft"}
+        if begun["stage"] == "rft":
+            found["sft"] = [adapter(report(run, begun["run"], "rft")["sft"], "sft")]
+        found[begun["stage"]] = [adapter(begun["run"], begun["stage"])]
+        found["rl"] = [*found[begun["stage"]], adapter(source, "rl")]
+    elif run.hub.files(f"runs/{source}/rft/adapter"):
+        found["sft"] = [adapter(report(run, source, "rft")["sft"], "sft")]
+        found["rft"] = [adapter(source, "rft")]
+    else:
+        found["sft"] = [adapter(source, "sft")]
+    return found
 
 
 def export(run: Run) -> None:
@@ -255,6 +301,7 @@ STAGES: dict[str, Callable[[Run], None]] = {
     "diagnose": diagnose,
     "sft": sft,
     "sample": sampling,
+    "rft": rft,
     "rl": rl,
     "export": export,
 }
