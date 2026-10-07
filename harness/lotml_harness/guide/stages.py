@@ -244,30 +244,42 @@ def adapters(run: Run, source: str) -> dict[str, list[Path]]:
     return found
 
 
+FINAL = ("rl", "rft", "sft")
+"""The model the threshold is calibrated on: the furthest trained there is, never the twin."""
+PASSED_AT = 200
+"""Validation records each model answers eight times for pass@k."""
+
+
 def export(run: Run) -> None:
     """Each model as a Q4_K_M GGUF file, asked about the validation split through the guide tool,
-    and the threshold calibrated on the last one — the reinforcement-learned guide when there is
-    one, so the report has the split before and after it (R3.4, R5.1)."""
-    from lotml_harness.guide import train, validate
+    with pass@k over answers it samples, and the threshold calibrated on the furthest trained one,
+    so the report has the split before and after each stage (R3.4, R5.1)."""
+    from lotml_harness.guide import sample, train, validate
 
     if run.llama_cpp is None:
         raise ValueError("the export stage needs --llama-cpp")
     source = run.source("export")
     out = run.out("export")
     report: dict = {"run": run.run, "source": source, "models": {}}
-    rows: list[dict] = []
+    answered: dict[str, list[dict]] = {}
+    validation = train.load(run.records, "validation")
+    passing = sample.Settings(
+        answers=8, records=PASSED_AT, workers=max(2, (os.cpu_count() or 4) - 2)
+    )
     for name, merged_from in adapters(run, source).items():
         base = train.Settings()
         merged = train.merge(base.model, base.revision, merged_from, out / name / "merged")
+        passed = sample.validated(merged, validation, passing)
         gguf = train.export(merged, run.llama_cpp, out / name)
-        rows, found = validate.validate(gguf, run.llama_cpp, run.records)
-        report["models"][name] = found
+        answered[name], found = validate.validate(gguf, run.llama_cpp, run.records)
+        report["models"][name] = found | {"pass": passed}
         run.hub.put(
             gguf, f"runs/{run.run}/export/{name}/{gguf.name}", f"run {run.run}: {name} gguf"
         )
-        report["final"] = name
-    threshold, precision, shown = validate.calibrated(rows)
+    final = next(name for name in FINAL if name in answered)
+    threshold, precision, shown = validate.calibrated(answered[final])
     report |= {
+        "final": final,
         "threshold": threshold,
         "precision": precision,
         "shown": shown,

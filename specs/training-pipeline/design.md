@@ -108,7 +108,10 @@ stage trains, `train.load` checks every record against the split, as it does tod
   order and `top_logprobs: 1` (plans/guide-request.md). The first location's confidence and
   whether it is right go to `calibrate.threshold` for a target precision of 0.9; the threshold, the
   precision it reached and the metrics of R5.1 go to `report.json`. The same validation run is made
-  on the SFT model first, so the report has before and after.
+  on the SFT model first, so the report has before and after. Before the GGUF is served, each model also answers 200 validation records eight times at
+  temperature 1.0 with transformers, judged by the compiler, for pass@1, pass@4 and pass@8 of the
+  first location and of the whole answer (R5.1). The threshold is calibrated on the furthest
+  trained model — rl, else rft, else sft — never on the random-reward twin.
 
 ## The reward (R4)
 

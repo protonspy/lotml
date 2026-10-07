@@ -150,6 +150,30 @@ def load(model: str, revision: str, adapters: list[Path]) -> tuple[object, objec
     return merged.to("cuda").eval(), tokenizer
 
 
+def load_merged(path: Path) -> tuple[object, object]:
+    """A merged model saved with its tokenizer, on the GPU in bfloat16."""
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    model = AutoModelForCausalLM.from_pretrained(str(path), dtype=torch.bfloat16)
+    return model.to("cuda").eval(), AutoTokenizer.from_pretrained(str(path))
+
+
+def validated(path: Path, records: list[dict], settings: Settings) -> dict:
+    """pass@1, pass@4 and pass@8 of the merged model at `path` on `settings.records` of `records`,
+    eight answers each at temperature 1.0, judged by the compiler (R5.1); the GPU freed after."""
+    import torch
+
+    model, tokenizer = load_merged(path)
+    try:
+        chosen = drawn(records, settings.records, settings.seed)
+        rows = judged(chosen, generate(model, tokenizer, chosen, settings), settings.workers)
+    finally:
+        del model
+        torch.cuda.empty_cache()
+    return {"records": len(rows), **pass_rates(rows, ks=(1, 4, 8))}
+
+
 def sample(
     model: object, tokenizer: object, records: list[dict], settings: Settings, out: Path
 ) -> list[dict]:

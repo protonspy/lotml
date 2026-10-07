@@ -289,7 +289,10 @@ def fetched(store: Hub, run: str) -> dict:
     for name, remote in (
         ("run", f"runs/{run}/run.json"),
         ("sft", f"runs/{run}/sft/train.json"),
+        ("sample", f"runs/{run}/sample/sample.json"),
+        ("rft", f"runs/{run}/rft/rft.json"),
         ("rl", f"runs/{run}/rl/rl.json"),
+        ("rl-random", f"runs/{run}/rl-random/rl.json"),
         ("export", f"runs/{run}/report.json"),
     ):
         if store.files(remote):
@@ -318,17 +321,36 @@ def markdown(run: str, plan: Plan, row: dict, seen: dict | None, found: dict) ->
         + (f" in {seen['stage']}" if seen and seen.get("stage") else "")
         + ".",
     ]
-    for name in ("sft", "rl"):
+    for name in ("sft", "rft", "rl", "rl-random"):
         if name in found:
             report = found[name]
             settings = ", ".join(f"{k} {v}" for k, v in report.get("settings", {}).items())
             lines.append(f"- {name}: {report.get('seconds')} s on {report.get('gpu')}; {settings}.")
-    if "rl" in found:
-        rl = found["rl"]
+    if "sample" in found:
+        sampled = found["sample"]
         lines.append(
-            f"- Reward: {rl.get('reward_first')} at the start, {rl.get('reward_last')} at the end; "
-            f"{rl.get('unjudged', 0)} answers the judge could not score."
+            f"- Sampled: {sampled.get('records')} train records, mean reward "
+            f"{sampled.get('mean', 0):.3f}, {sampled.get('always')} always solved, "
+            f"{sampled.get('never')} never, {sampled.get('unjudged', 0)} answers unjudged."
         )
+    if "rft" in found:
+        rft = found["rft"]
+        lines.append(
+            f"- Rejection sampling: {rft.get('answers')} passing answers and {rft.get('targets')} "
+            f"targets over {rft.get('records')} records."
+        )
+    for name in ("rl", "rl-random"):
+        if name in found:
+            rl = found[name]
+            alike = rl.get("alike")
+            lines.append(
+                f"- {name}: a pool of {rl.get('pool')} of {rl.get('sampled')} sampled records; "
+                f"reward {rl.get('reward_first')} at the start, "
+                f"{rl.get('reward_last')} at the end; "
+                + (f"{_share(alike)} of groups scored alike; " if alike is not None else "")
+                + f"validation rewards {rl.get('eval_rewards')}; best at {rl.get('best')}; "
+                f"{rl.get('unjudged', 0)} answers unjudged."
+            )
     export = found.get("export")
     if export:
         lines += [
@@ -344,6 +366,21 @@ def markdown(run: str, plan: Plan, row: dict, seen: dict | None, found: dict) ->
                 f"| {name} | {m['records']} | {_share(m['within_schema'])} | {_share(m['top1'])} "
                 f"| {_share(m['top3'])} | {_share(m['edits_pass'])} | {silent} |"
             )
+        passed = {name: m["pass"] for name, m in export["models"].items() if "pass" in m}
+        if passed:
+            lines += [
+                "",
+                "Sampled eight times at temperature 1.0, judged by the compiler:",
+                "",
+                "| model | records | location@1 | answer@1 | answer@4 | answer@8 |",
+                "|---|---:|---:|---:|---:|---:|",
+            ]
+            for name, p in passed.items():
+                cells = " | ".join(
+                    _share(p[k]) if k in p else "—"
+                    for k in ("location@1", "answer@1", "answer@4", "answer@8")
+                )
+                lines.append(f"| {name} | {p.get('records')} | {cells} |")
         lines += [
             "",
             f"Threshold for {export['final']}: {export['threshold']:.4f}, at which "

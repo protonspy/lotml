@@ -157,7 +157,7 @@ def test_a_run_is_watched_terminated_recorded_and_reported(fake, tmp_path: Path,
     text = path.read_text(encoding="utf-8")
     assert "| rl | 2 | 100.0% | 100.0% | 100.0% | 100.0% | none |" in text
     assert "Ended: done in export." in text
-    assert "Reward: 0.2 at the start, 0.6 at the end; 1 answers" in text
+    assert "reward 0.2 at the start, 0.6 at the end;" in text and "1 answers unjudged" in text
     assert "hf_secret_token_0123456789" not in text
     assert (tmp_path / "runpod.md").exists()
 
@@ -355,3 +355,23 @@ def test_a_creation_runpod_fails_on_its_side_gives_way_to_the_next_gpu(
     ledger = Ledger(tmp_path / "runpod.jsonl", None)
     pipeline.run(plan(tmp_path, gpu="A,B"), Store(), ledger)
     assert [r["pod"] for r in ledger.rows()] == ["pod_b"]
+
+
+def test_the_report_gives_pass_at_k_and_each_stage_s_numbers(tmp_path: Path):
+    metrics = {"records": 2, "within_schema": 1.0, "top1": 1.0, "top3": 1.0, "edits_pass": 0.5,
+               "silent": {}, "pass": {"records": 200, "location@1": 0.9, "answer@1": 0.5,
+                                      "answer@4": 0.75, "answer@8": 0.8}}  # fmt: skip
+    found = {
+        "export": {"models": {"rft": metrics}, "final": "rft", "threshold": 0.8, "precision": 1.0,
+                   "shown": 1.0, "target": 0.9},
+        "sample": {"records": 4272, "mean": 0.81, "always": 2000, "never": 30, "unjudged": 2},
+        "rft": {"answers": 5000, "targets": 300, "records": 4272},
+        "rl": {"pool": 900, "sampled": 4272, "reward_first": 0.5, "reward_last": 0.7, "alike": 0.25,
+               "eval_rewards": [0.6, 0.65], "best": "checkpoint-100", "unjudged": 0},
+    }  # fmt: skip
+    row = {"gpu": "g", "cloud": "COMMUNITY", "hourly": "0.22", "minutes": 90, "cost": "0.33"}
+    text = pipeline.markdown("r1", plan(tmp_path), row, {"state": "done", "stage": "export"}, found)
+    assert "| rft | 200 | 90.0% | 50.0% | 75.0% | 80.0% |" in text
+    assert "Sampled: 4272 train records, mean reward 0.810, 2000 always solved, 30 never" in text
+    assert "Rejection sampling: 5000 passing answers and 300 targets over 4272 records." in text
+    assert "- rl: a pool of 900 of 4272 sampled records;" in text and "25.0% of groups" in text
