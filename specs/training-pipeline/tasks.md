@@ -9,7 +9,7 @@
   _Depends 2.1_
 - [x] 2.3 (Unit) Keep artifacts in a private Hugging Face repository: refuse a public one, put and get, records by digest, a run's lineage — R2.1, R2.2, R2.4
 - [x] 3.1 (Unit) Bootstrap a pod at a commit and terminate it from inside at the deadline or on exit — R1.5, R1.6
-- [ ] 3.2 (Unit) Upload checkpoints as they are saved and resume a stage from its run's latest — R2.3, R3.2
+- [x] 3.2 (Unit) Upload checkpoints as they are saved and resume a stage from its run's latest — R2.3, R3.2
   _Depends 2.3_
 - [ ] 3.3 (Unit) Train by group-relative policy optimization on the fine-tuned model with the reward — R3.3
   _Depends 1.3, 3.2_

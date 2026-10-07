@@ -67,8 +67,9 @@ def examples(records: list[dict]) -> list[dict]:
     return [{"prompt": r["messages"][:-1], "completion": r["messages"][-1:]} for r in records]
 
 
-def train(settings: Settings, records: Path, out: Path) -> dict:
-    """Train the adapter on the train split and write it to `out/adapter`; the run's report."""
+def train(settings: Settings, records: Path, out: Path, callbacks: list | None = None) -> dict:
+    """Train the adapter on the train split and write it to `out/adapter`; the run's report.
+    `callbacks` are the trainer's, such as the one uploading each checkpoint."""
     os.environ.setdefault(
         "PYTORCH_CUDA_ALLOC_CONF", "garbage_collection_threshold:0.6,max_split_size_mb:256"
     )
@@ -115,6 +116,7 @@ def train(settings: Settings, records: Path, out: Path) -> dict:
         train_dataset=Dataset.from_list(rows),
         peft_config=lora,
         processing_class=tokenizer,
+        callbacks=callbacks,
     )
     torch.cuda.reset_peak_memory_stats()
     started = time.time()
