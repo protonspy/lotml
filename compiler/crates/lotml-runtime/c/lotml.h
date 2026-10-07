@@ -57,18 +57,20 @@ typedef struct lt_at {
     const char *function;
 } lt_at;
 
-/* Where the code being run is: generated functions declare `lt_fn`, their lotml name, and the
- * `#line` directives make `__FILE__` and `__LINE__` the `.lotml` file and line. */
-#define LT_HERE ((lt_at){__FILE__, __LINE__, lt_fn})
+/* Where the code being run is, as the runtime takes it: by pointer, so code that cannot pass a
+ * struct through the platform's C ABI, as LLVM IR cannot, calls the same functions (specs/llvm-backend
+ * R2.7). Generated functions declare `lt_fn`, their lotml name, and the `#line` directives make
+ * `__FILE__` and `__LINE__` the `.lotml` file and line. */
+#define LT_HERE (&(lt_at){__FILE__, __LINE__, lt_fn})
 
 /* Stop the program: `panic: <kind>: <message>` and the place, exit status 101 (R2.2). */
-LT_NORETURN void lt_panic(lt_at at, const char *kind, const char *message);
-LT_NORETURN void lt_panicf(lt_at at, const char *kind, const char *format, ...);
-LT_NORETURN void lt_overflow(lt_at at, const char *type);
-LT_NORETURN void lt_zero_division(lt_at at, const char *message);
-LT_NORETURN void lt_value_error(lt_at at, const char *message);
-LT_NORETURN void lt_todo(lt_at at);
-LT_NORETURN void lt_assert_failed(lt_at at, const char *expression);
+LT_NORETURN void lt_panic(const lt_at *at, const char *kind, const char *message);
+LT_NORETURN void lt_panicf(const lt_at *at, const char *kind, const char *format, ...);
+LT_NORETURN void lt_overflow(const lt_at *at, const char *type);
+LT_NORETURN void lt_zero_division(const lt_at *at, const char *message);
+LT_NORETURN void lt_value_error(const lt_at *at, const char *message);
+LT_NORETURN void lt_todo(const lt_at *at);
+LT_NORETURN void lt_assert_failed(const lt_at *at, const char *expression);
 
 /* The header of every heap cell. */
 typedef struct lt_cell {
@@ -156,7 +158,7 @@ void lt_buf_bool(lt_buf *b, bool value);
 /* Integer arithmetic, checked against the type's range (R2.1). `int` is i64; the narrower kinds
  * compute in i64 and are checked against their own range; u64 has its own functions. */
 
-static inline int64_t lt_add_i64(int64_t a, int64_t b, lt_at at) {
+static inline int64_t lt_add_i64(int64_t a, int64_t b, const lt_at *at) {
 #if LT_GNU
     int64_t r;
     if (__builtin_add_overflow(a, b, &r)) lt_overflow(at, "int");
@@ -167,7 +169,7 @@ static inline int64_t lt_add_i64(int64_t a, int64_t b, lt_at at) {
 #endif
 }
 
-static inline int64_t lt_sub_i64(int64_t a, int64_t b, lt_at at) {
+static inline int64_t lt_sub_i64(int64_t a, int64_t b, const lt_at *at) {
 #if LT_GNU
     int64_t r;
     if (__builtin_sub_overflow(a, b, &r)) lt_overflow(at, "int");
@@ -178,7 +180,7 @@ static inline int64_t lt_sub_i64(int64_t a, int64_t b, lt_at at) {
 #endif
 }
 
-static inline int64_t lt_mul_i64(int64_t a, int64_t b, lt_at at) {
+static inline int64_t lt_mul_i64(int64_t a, int64_t b, const lt_at *at) {
 #if LT_GNU
     int64_t r;
     if (__builtin_mul_overflow(a, b, &r)) lt_overflow(at, "int");
@@ -198,18 +200,18 @@ static inline int64_t lt_mul_i64(int64_t a, int64_t b, lt_at at) {
 #endif
 }
 
-static inline int64_t lt_neg_i64(int64_t a, lt_at at) {
+static inline int64_t lt_neg_i64(int64_t a, const lt_at *at) {
     if (a == INT64_MIN) lt_overflow(at, "int");
     return -a;
 }
 
-static inline int64_t lt_abs_i64(int64_t a, lt_at at) {
+static inline int64_t lt_abs_i64(int64_t a, const lt_at *at) {
     if (a == INT64_MIN) lt_overflow(at, "int");
     return a < 0 ? -a : a;
 }
 
 /* `//`: the quotient rounded toward negative infinity, as Python. */
-static inline int64_t lt_floordiv_i64(int64_t a, int64_t b, lt_at at) {
+static inline int64_t lt_floordiv_i64(int64_t a, int64_t b, const lt_at *at) {
     if (b == 0) lt_zero_division(at, "integer division or modulo by zero");
     if (b == -1) return lt_neg_i64(a, at);
     int64_t q = a / b;
@@ -218,7 +220,7 @@ static inline int64_t lt_floordiv_i64(int64_t a, int64_t b, lt_at at) {
 }
 
 /* `%`: the remainder with the divisor's sign, as Python. */
-static inline int64_t lt_mod_i64(int64_t a, int64_t b, lt_at at) {
+static inline int64_t lt_mod_i64(int64_t a, int64_t b, const lt_at *at) {
     if (b == 0) lt_zero_division(at, "integer division or modulo by zero");
     if (b == -1) return 0;
     int64_t r = a % b;
@@ -226,27 +228,27 @@ static inline int64_t lt_mod_i64(int64_t a, int64_t b, lt_at at) {
     return r;
 }
 
-static inline double lt_truediv_i64(int64_t a, int64_t b, lt_at at) {
+static inline double lt_truediv_i64(int64_t a, int64_t b, const lt_at *at) {
     if (b == 0) lt_zero_division(at, "division by zero");
     return (double)a / (double)b;
 }
 
-int64_t lt_pow_i64(int64_t base, int64_t exponent, lt_at at);
-int64_t lt_shl_i64(int64_t value, int64_t amount, lt_at at);
-int64_t lt_shr_i64(int64_t value, int64_t amount, lt_at at);
+int64_t lt_pow_i64(int64_t base, int64_t exponent, const lt_at *at);
+int64_t lt_shl_i64(int64_t value, int64_t amount, const lt_at *at);
+int64_t lt_shr_i64(int64_t value, int64_t amount, const lt_at *at);
 
-static inline uint64_t lt_add_u64(uint64_t a, uint64_t b, lt_at at) {
+static inline uint64_t lt_add_u64(uint64_t a, uint64_t b, const lt_at *at) {
     uint64_t r = a + b;
     if (r < a) lt_overflow(at, "u64");
     return r;
 }
 
-static inline uint64_t lt_sub_u64(uint64_t a, uint64_t b, lt_at at) {
+static inline uint64_t lt_sub_u64(uint64_t a, uint64_t b, const lt_at *at) {
     if (a < b) lt_overflow(at, "u64");
     return a - b;
 }
 
-static inline uint64_t lt_mul_u64(uint64_t a, uint64_t b, lt_at at) {
+static inline uint64_t lt_mul_u64(uint64_t a, uint64_t b, const lt_at *at) {
 #if LT_GNU
     uint64_t r;
     if (__builtin_mul_overflow(a, b, &r)) lt_overflow(at, "u64");
@@ -262,65 +264,65 @@ static inline uint64_t lt_mul_u64(uint64_t a, uint64_t b, lt_at at) {
 #endif
 }
 
-static inline uint64_t lt_floordiv_u64(uint64_t a, uint64_t b, lt_at at) {
+static inline uint64_t lt_floordiv_u64(uint64_t a, uint64_t b, const lt_at *at) {
     if (b == 0) lt_zero_division(at, "integer division or modulo by zero");
     return a / b;
 }
 
-static inline uint64_t lt_mod_u64(uint64_t a, uint64_t b, lt_at at) {
+static inline uint64_t lt_mod_u64(uint64_t a, uint64_t b, const lt_at *at) {
     if (b == 0) lt_zero_division(at, "integer division or modulo by zero");
     return a % b;
 }
 
-static inline double lt_truediv_u64(uint64_t a, uint64_t b, lt_at at) {
+static inline double lt_truediv_u64(uint64_t a, uint64_t b, const lt_at *at) {
     if (b == 0) lt_zero_division(at, "division by zero");
     return (double)a / (double)b;
 }
 
 /* `-x` and `~x` of a u64 are negative, outside u64, unless `-0`. */
-static inline uint64_t lt_neg_u64(uint64_t a, lt_at at) {
+static inline uint64_t lt_neg_u64(uint64_t a, const lt_at *at) {
     if (a != 0) lt_overflow(at, "u64");
     return 0;
 }
 
-uint64_t lt_pow_u64(uint64_t base, uint64_t exponent, lt_at at);
-uint64_t lt_shl_u64(uint64_t value, uint64_t amount, lt_at at);
-uint64_t lt_shr_u64(uint64_t value, uint64_t amount, lt_at at);
+uint64_t lt_pow_u64(uint64_t base, uint64_t exponent, const lt_at *at);
+uint64_t lt_shl_u64(uint64_t value, uint64_t amount, const lt_at *at);
+uint64_t lt_shr_u64(uint64_t value, uint64_t amount, const lt_at *at);
 
 /* A narrower integer's result, computed in i64, checked against its own range. */
-static inline int64_t lt_fit(int64_t value, int64_t low, int64_t high, const char *type, lt_at at) {
+static inline int64_t lt_fit(int64_t value, int64_t low, int64_t high, const char *type, const lt_at *at) {
     if (value < low || value > high) lt_overflow(at, type);
     return value;
 }
 
 /* Conversions: `int(x)`, `float(n)`, `i32(n)` and the rest. */
-int64_t lt_f64_to_i64(double value, lt_at at);
-uint64_t lt_f64_to_u64(double value, lt_at at);
-static inline uint64_t lt_i64_to_u64(int64_t value, lt_at at) {
+int64_t lt_f64_to_i64(double value, const lt_at *at);
+uint64_t lt_f64_to_u64(double value, const lt_at *at);
+static inline uint64_t lt_i64_to_u64(int64_t value, const lt_at *at) {
     if (value < 0) lt_overflow(at, "u64");
     return (uint64_t)value;
 }
-static inline int64_t lt_u64_to_i64(uint64_t value, lt_at at) {
+static inline int64_t lt_u64_to_i64(uint64_t value, const lt_at *at) {
     if (value > (uint64_t)INT64_MAX) lt_overflow(at, "int");
     return (int64_t)value;
 }
 
 /* Float arithmetic as Python's: division by zero stops the program, `//` and `%` floor. */
-static inline double lt_truediv_f64(double a, double b, lt_at at) {
+static inline double lt_truediv_f64(double a, double b, const lt_at *at) {
     if (b == 0.0) lt_zero_division(at, "float division by zero");
     return a / b;
 }
-double lt_floordiv_f64(double a, double b, lt_at at);
-double lt_mod_f64(double a, double b, lt_at at);
-double lt_pow_f64(double a, double b, lt_at at);
+double lt_floordiv_f64(double a, double b, const lt_at *at);
+double lt_mod_f64(double a, double b, const lt_at *at);
+double lt_pow_f64(double a, double b, const lt_at *at);
 
 /* The prelude's arithmetic, as Python computes it ----------------------------------------- */
 
-int64_t lt_round_i64(double x, lt_at at);
+int64_t lt_round_i64(double x, const lt_at *at);
 double lt_round_f64(double x, int64_t digits);
-int64_t lt_pow_mod(int64_t base, int64_t exponent, int64_t modulus, lt_at at);
-int64_t lt_isqrt(int64_t n, lt_at at);
-int64_t lt_gcd(int64_t a, int64_t b, lt_at at);
+int64_t lt_pow_mod(int64_t base, int64_t exponent, int64_t modulus, const lt_at *at);
+int64_t lt_isqrt(int64_t n, const lt_at *at);
+int64_t lt_gcd(int64_t a, int64_t b, const lt_at *at);
 static inline int64_t lt_wrapping_add(int64_t a, int64_t b) {
     return (int64_t)((uint64_t)a + (uint64_t)b);
 }
@@ -333,57 +335,57 @@ static inline int64_t lt_wrapping_mul(int64_t a, int64_t b) {
 
 /* `math`: a result that is not a number, or infinite, from finite arguments stops the program as
  * CPython's module does. */
-double lt_math_1(double (*f)(double), double x, bool can_overflow, lt_at at);
-double lt_math_2(double (*f)(double, double), double x, double y, lt_at at);
-double lt_math_log(double (*f)(double), double x, lt_at at);
-double lt_math_pow(double x, double y, lt_at at);
-int64_t lt_factorial(int64_t n, lt_at at);
-int64_t lt_comb(int64_t n, int64_t k, lt_at at);
-int64_t lt_perm(int64_t n, int64_t k, lt_at at);
-static inline double lt_math_sqrt(double x, lt_at at) {
+double lt_math_1(double (*f)(double), double x, bool can_overflow, const lt_at *at);
+double lt_math_2(double (*f)(double, double), double x, double y, const lt_at *at);
+double lt_math_log(double (*f)(double), double x, const lt_at *at);
+double lt_math_pow(double x, double y, const lt_at *at);
+int64_t lt_factorial(int64_t n, const lt_at *at);
+int64_t lt_comb(int64_t n, int64_t k, const lt_at *at);
+int64_t lt_perm(int64_t n, int64_t k, const lt_at *at);
+static inline double lt_math_sqrt(double x, const lt_at *at) {
     return lt_math_1(sqrt, x, false, at);
 }
-static inline double lt_math_exp(double x, lt_at at) {
+static inline double lt_math_exp(double x, const lt_at *at) {
     return lt_math_1(exp, x, true, at);
 }
-static inline double lt_math_sin(double x, lt_at at) {
+static inline double lt_math_sin(double x, const lt_at *at) {
     return lt_math_1(sin, x, false, at);
 }
-static inline double lt_math_cos(double x, lt_at at) {
+static inline double lt_math_cos(double x, const lt_at *at) {
     return lt_math_1(cos, x, false, at);
 }
-static inline double lt_math_tan(double x, lt_at at) {
+static inline double lt_math_tan(double x, const lt_at *at) {
     return lt_math_1(tan, x, false, at);
 }
-static inline double lt_math_atan(double x, lt_at at) {
+static inline double lt_math_atan(double x, const lt_at *at) {
     return lt_math_1(atan, x, false, at);
 }
-static inline double lt_math_fabs(double x, lt_at at) {
+static inline double lt_math_fabs(double x, const lt_at *at) {
     (void)at;
     return fabs(x);
 }
-static inline double lt_math_ln(double x, lt_at at) {
+static inline double lt_math_ln(double x, const lt_at *at) {
     return lt_math_log(log, x, at);
 }
-static inline double lt_math_log2(double x, lt_at at) {
+static inline double lt_math_log2(double x, const lt_at *at) {
     return lt_math_log(log2, x, at);
 }
-static inline double lt_math_log10(double x, lt_at at) {
+static inline double lt_math_log10(double x, const lt_at *at) {
     return lt_math_log(log10, x, at);
 }
-static inline double lt_math_atan2(double y, double x, lt_at at) {
+static inline double lt_math_atan2(double y, double x, const lt_at *at) {
     return lt_math_2(atan2, y, x, at);
 }
-static inline double lt_math_hypot(double x, double y, lt_at at) {
+static inline double lt_math_hypot(double x, double y, const lt_at *at) {
     return lt_math_2(hypot, x, y, at);
 }
-static inline int64_t lt_math_floor(double x, lt_at at) {
+static inline int64_t lt_math_floor(double x, const lt_at *at) {
     return lt_f64_to_i64(floor(x), at);
 }
-static inline int64_t lt_math_ceil(double x, lt_at at) {
+static inline int64_t lt_math_ceil(double x, const lt_at *at) {
     return lt_f64_to_i64(ceil(x), at);
 }
-static inline int64_t lt_math_trunc(double x, lt_at at) {
+static inline int64_t lt_math_trunc(double x, const lt_at *at) {
     return lt_f64_to_i64(trunc(x), at);
 }
 
@@ -402,7 +404,7 @@ typedef struct lt_range {
     bool done;
 } lt_range;
 
-lt_range lt_range_new(int64_t start, int64_t stop, int64_t step, lt_at at);
+lt_range lt_range_new(int64_t start, int64_t stop, int64_t step, const lt_at *at);
 
 static inline bool lt_range_step(lt_range *r, int64_t *value) {
     if (r->done || (r->step > 0 ? r->next >= r->stop : r->next <= r->stop)) {
@@ -455,14 +457,14 @@ lt_str *lt_str_of_bool(bool value);
 lt_str *lt_str_none(void);
 
 lt_str *lt_str_concat(const lt_str *a, const lt_str *b);
-lt_str *lt_str_repeat(const lt_str *s, int64_t times, lt_at at);
+lt_str *lt_str_repeat(const lt_str *s, int64_t times, const lt_at *at);
 int lt_str_compare(const lt_str *a, const lt_str *b);
 bool lt_str_eq(const lt_str *a, const lt_str *b);
 bool lt_str_contains(const lt_str *haystack, const lt_str *needle);
-lt_str *lt_str_index(const lt_str *s, int64_t index, lt_at at);
-lt_str *lt_str_slice(const lt_str *s, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step, lt_at at);
-int64_t lt_str_ord(const lt_str *s, lt_at at);
-lt_str *lt_str_chr(int64_t code, lt_at at);
+lt_str *lt_str_index(const lt_str *s, int64_t index, const lt_at *at);
+lt_str *lt_str_slice(const lt_str *s, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step, const lt_at *at);
+int64_t lt_str_ord(const lt_str *s, const lt_at *at);
+lt_str *lt_str_chr(int64_t code, const lt_at *at);
 
 lt_str *lt_str_lower(const lt_str *s);
 lt_str *lt_str_upper(const lt_str *s);
@@ -481,7 +483,7 @@ bool lt_str_isalnum(const lt_str *s);
 bool lt_str_isupper(const lt_str *s);
 bool lt_str_islower(const lt_str *s);
 lt_str *lt_str_zfill(const lt_str *s, int64_t width);
-lt_str *lt_str_pad(const lt_str *s, int64_t width, const lt_str *fill, char align, lt_at at);
+lt_str *lt_str_pad(const lt_str *s, int64_t width, const lt_str *fill, char align, const lt_at *at);
 
 /* Types ------------------------------------------------------------------------------------ */
 
@@ -494,7 +496,7 @@ typedef struct lt_type {
     void (*inc)(void *value);
     void (*dec)(void *value);
     bool (*eq)(const void *a, const void *b);
-    int (*cmp)(const void *a, const void *b, lt_at at);
+    int (*cmp)(const void *a, const void *b, const lt_at *at);
     int64_t (*hash)(const void *value);
     void (*repr)(lt_buf *b, const void *value);
     void (*str)(lt_buf *b, const void *value);
@@ -508,11 +510,11 @@ typedef struct lt_type {
 typedef void (*lt_test_fn)(void);
 void lt_run_test(const char *name, lt_test_fn test);
 void lt_test_report(void);
-LT_NORETURN void lt_assert_fail(lt_at at, const char *expression, const char *op, const lt_type *lt, const void *l,
+LT_NORETURN void lt_assert_fail(const lt_at *at, const char *expression, const char *op, const lt_type *lt, const void *l,
                                 const lt_type *rt, const void *r, const lt_type *mt, const void *m);
-LT_NORETURN void lt_test_error(const lt_type *type, const void *error, lt_at at);
+LT_NORETURN void lt_test_error(const lt_type *type, const void *error, const lt_at *at);
 LT_NORETURN void lt_assert_compared(const lt_str *expression, const lt_str *op, const lt_type *lt, const void *l,
-                                    const lt_type *rt, const void *r, const lt_type *mt, const void *m, lt_at at);
+                                    const lt_type *rt, const void *r, const lt_type *mt, const void *m, const lt_at *at);
 void lt_buf_json(lt_buf *b, const char *text, size_t length);
 
 extern const lt_type lt_type_i8, lt_type_i16, lt_type_i32, lt_type_i64;
@@ -522,8 +524,8 @@ extern const lt_type lt_type_f64, lt_type_bool, lt_type_none, lt_type_str, lt_ty
 /* A value of any type as text: `str(value)`, and the f-string field `{value:spec}`. */
 void lt_buf_value(lt_buf *b, const lt_type *type, const void *value);
 lt_str *lt_str_of_value(const lt_type *type, const void *value);
-void lt_format_value(lt_buf *b, const lt_type *type, const void *value, const char *spec, size_t size, lt_at at);
-LT_NORETURN void lt_unorderable(lt_at at, const char *type);
+void lt_format_value(lt_buf *b, const lt_type *type, const void *value, const char *spec, size_t size, const lt_at *at);
+LT_NORETURN void lt_unorderable(const lt_at *at, const char *type);
 
 int64_t lt_hash_i64(int64_t value);
 int64_t lt_hash_u64(uint64_t value);
@@ -542,10 +544,10 @@ typedef struct lt_list {
     char *data;
 } lt_list;
 
-LT_NORETURN void lt_index_error(lt_at at, const char *message);
+LT_NORETURN void lt_index_error(const lt_at *at, const char *message);
 
 /* `index` of a sequence of `len`, negative from the end, checked. */
-static inline int64_t lt_index(int64_t len, int64_t index, lt_at at) {
+static inline int64_t lt_index(int64_t len, int64_t index, const lt_at *at) {
     if (index < 0) index += len;
     if (LT_UNLIKELY(index < 0 || index >= len)) lt_index_error(at, "list index out of range");
     return index;
@@ -558,7 +560,7 @@ void lt_list_dec(void *value);
 void lt_list_unique(lt_list **slot);
 
 /* A pointer to the element `index` of the list in `slot`, made the slot's own first (R3.5). */
-static inline void *lt_list_slot(lt_list **slot, int64_t index, lt_at at) {
+static inline void *lt_list_slot(lt_list **slot, int64_t index, const lt_at *at) {
     if (LT_UNLIKELY(!lt_unique(*slot))) lt_list_unique(slot);
     lt_list *l = *slot;
     return l->data + (size_t)lt_index(l->len, index, at) * l->type->size;
@@ -566,51 +568,51 @@ static inline void *lt_list_slot(lt_list **slot, int64_t index, lt_at at) {
 void lt_list_push(lt_list **slot, const void *value);
 void lt_list_extend(lt_list **slot, const lt_list *other);
 void lt_list_insert(lt_list **slot, int64_t index, const void *value);
-void lt_list_remove(lt_list **slot, const void *value, lt_at at);
+void lt_list_remove(lt_list **slot, const void *value, const lt_at *at);
 void lt_list_clear(lt_list **slot);
 void lt_list_reverse(lt_list **slot);
-void lt_list_sort(lt_list **slot, bool reverse, lt_at at);
+void lt_list_sort(lt_list **slot, bool reverse, const lt_at *at);
 lt_list *lt_list_copy(const lt_list *l);
-lt_list *lt_list_sorted(const lt_list *l, bool reverse, lt_at at);
+lt_list *lt_list_sorted(const lt_list *l, bool reverse, const lt_at *at);
 lt_list *lt_list_reversed(const lt_list *l);
-lt_list *lt_list_slice(const lt_list *l, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step, lt_at at);
+lt_list *lt_list_slice(const lt_list *l, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step, const lt_at *at);
 lt_list *lt_list_concat(const lt_list *a, const lt_list *b);
-lt_list *lt_list_repeat(const lt_list *l, int64_t times, lt_at at);
+lt_list *lt_list_repeat(const lt_list *l, int64_t times, const lt_at *at);
 bool lt_list_contains(const lt_list *l, const void *value);
 int64_t lt_list_count(const lt_list *l, const void *value);
-const void *lt_list_extreme(const lt_list *l, bool max, lt_at at);
+const void *lt_list_extreme(const lt_list *l, bool max, const lt_at *at);
 bool lt_list_any(const lt_list *l);
 bool lt_list_all(const lt_list *l);
-int64_t lt_sum_i64(const lt_list *l, lt_at at);
-uint64_t lt_sum_u64(const lt_list *l, lt_at at);
+int64_t lt_sum_i64(const lt_list *l, const lt_at *at);
+uint64_t lt_sum_u64(const lt_list *l, const lt_at *at);
 double lt_sum_f64(const lt_list *l);
-lt_list *lt_range_list(int64_t start, int64_t stop, int64_t step, lt_at at);
+lt_list *lt_range_list(int64_t start, int64_t stop, int64_t step, const lt_at *at);
 lt_list *lt_str_chars(const lt_str *s);
-lt_list *lt_str_split(const lt_str *s, const lt_str *sep, int64_t maxsplit, lt_at at);
+lt_list *lt_str_split(const lt_str *s, const lt_str *sep, int64_t maxsplit, const lt_at *at);
 lt_list *lt_str_splitlines(const lt_str *s);
 lt_str *lt_str_join(const lt_str *sep, const lt_list *parts);
-lt_str *lt_str_partition_part(const lt_str *s, const lt_str *sep, int which, lt_at at);
+lt_str *lt_str_partition_part(const lt_str *s, const lt_str *sep, int which, const lt_at *at);
 
 /* Functions giving an optional value: true and the value written to `out`, or false and `out`
  * zeroed — a NULL string or list — so that the local it names is always set. */
-bool lt_str_to_int(const lt_str *s, int64_t *out, lt_at at);
+bool lt_str_to_int(const lt_str *s, int64_t *out, const lt_at *at);
 bool lt_str_to_float(const lt_str *s, double *out);
 bool lt_str_find(const lt_str *s, const lt_str *sub, bool last, int64_t *out);
-bool lt_str_split_once(const lt_str *s, const lt_str *sep, lt_str **head, lt_str **tail, lt_at at);
+bool lt_str_split_once(const lt_str *s, const lt_str *sep, lt_str **head, lt_str **tail, const lt_at *at);
 bool lt_list_index(const lt_list *l, const void *value, int64_t *out);
-bool lt_list_pop(lt_list **slot, bool has_index, int64_t index, void *out, lt_at at);
+bool lt_list_pop(lt_list **slot, bool has_index, int64_t index, void *out, const lt_at *at);
 bool lt_list_last(const lt_list *l, void *out);
-void lt_list_unpack(const lt_list *l, int64_t n, lt_at at);
+void lt_list_unpack(const lt_list *l, int64_t n, const lt_at *at);
 
 /* `Heap[T]`: a list kept in the order Python's `heapq` keeps it, so ties pop as they do there. */
 extern const lt_type lt_type_heap;
-void lt_heapify(lt_list **slot, lt_at at);
-void lt_heap_push(lt_list **slot, const void *value, lt_at at);
-bool lt_heap_pop(lt_list **slot, void *out, lt_at at);
+void lt_heapify(lt_list **slot, const lt_at *at);
+void lt_heap_push(lt_list **slot, const void *value, const lt_at *at);
+bool lt_heap_pop(lt_list **slot, void *out, const lt_at *at);
 bool lt_heap_peek(const lt_list *l, void *out);
-int64_t lt_hash_value(const lt_type *type, const void *value, lt_at at);
+int64_t lt_hash_value(const lt_type *type, const void *value, const lt_at *at);
 void lt_slice_indices(int64_t length, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step,
-                      int64_t *start, int64_t *count, int64_t *by, lt_at at);
+                      int64_t *start, int64_t *count, int64_t *by, const lt_at *at);
 
 /* Functions as values --------------------------------------------------------------------- */
 
@@ -632,14 +634,14 @@ void lt_closure_drop(lt_closure *c);
  * tasks capture is marked shared first (R3.3). A task that panics stops the program once the
  * others have finished, with the first such task's panic. */
 typedef void (*lt_task_fn)(lt_closure *task, void *out);
-lt_list *lt_parallel(const lt_list *tasks, const lt_type *result, lt_task_fn run, lt_at at);
+lt_list *lt_parallel(const lt_list *tasks, const lt_type *result, lt_task_fn run, const lt_at *at);
 
 /* `xs.sort(key=f)`: the elements ordered by `keys`, one per element, stably. */
-void lt_list_sort_by_keys(lt_list **slot, const lt_list *keys, bool reverse, lt_at at);
+void lt_list_sort_by_keys(lt_list **slot, const lt_list *keys, bool reverse, const lt_at *at);
 
 /* `int(s)` and `float(s)` of a string: the number, or the program stops with ValueError. */
-int64_t lt_str_int(const lt_str *s, lt_at at);
-double lt_str_float(const lt_str *s, lt_at at);
+int64_t lt_str_int(const lt_str *s, const lt_at *at);
+double lt_str_float(const lt_str *s, const lt_at *at);
 
 /* Dicts and sets --------------------------------------------------------------------------- */
 
@@ -674,10 +676,10 @@ lt_dict *lt_dict_new(const lt_type *key, const lt_type *value);
 void lt_dict_drop(lt_dict *d);
 lt_dict *lt_dict_copy(const lt_dict *d);
 void lt_dict_set(lt_dict **slot, const void *key, const void *value);
-const void *lt_dict_get(const lt_dict *d, const void *key, lt_at at);
+const void *lt_dict_get(const lt_dict *d, const void *key, const lt_at *at);
 const void *lt_dict_get_or(const lt_dict *d, const void *key, const void *otherwise);
 bool lt_dict_get_optional(const lt_dict *d, const void *key, void *out);
-void *lt_dict_slot(lt_dict **slot, const void *key, lt_at at);
+void *lt_dict_slot(lt_dict **slot, const void *key, const lt_at *at);
 void *lt_dict_setdefault(lt_dict **slot, const void *key, const void *otherwise);
 bool lt_dict_contains(const lt_dict *d, const void *key);
 bool lt_dict_pop(lt_dict **slot, const void *key, void *out);
@@ -692,7 +694,7 @@ void lt_set_drop(lt_set *s);
 lt_set *lt_set_copy(const lt_set *s);
 void lt_set_add(lt_set **slot, const void *key);
 void lt_set_discard(lt_set **slot, const void *key);
-void lt_set_remove(lt_set **slot, const void *key, lt_at at);
+void lt_set_remove(lt_set **slot, const void *key, const lt_at *at);
 bool lt_set_pop(lt_set **slot, void *out);
 bool lt_set_contains(const lt_set *s, const void *key);
 lt_list *lt_set_list(const lt_set *s);
@@ -704,11 +706,11 @@ lt_set *lt_set_difference(const lt_set *a, const lt_set *b);
 bool lt_set_issubset(const lt_set *a, const lt_set *b);
 
 /* The format mini-language: `format(value, spec)` as Python writes it, into `b`. */
-void lt_format_i64(lt_buf *b, int64_t value, const char *spec, size_t size, lt_at at);
-void lt_format_u64(lt_buf *b, uint64_t value, const char *spec, size_t size, lt_at at);
-void lt_format_f64(lt_buf *b, double value, const char *spec, size_t size, lt_at at);
-void lt_format_bool(lt_buf *b, bool value, const char *spec, size_t size, lt_at at);
-void lt_format_str(lt_buf *b, const lt_str *value, const char *spec, size_t size, lt_at at);
-void lt_format_none(lt_buf *b, const char *spec, size_t size, lt_at at);
+void lt_format_i64(lt_buf *b, int64_t value, const char *spec, size_t size, const lt_at *at);
+void lt_format_u64(lt_buf *b, uint64_t value, const char *spec, size_t size, const lt_at *at);
+void lt_format_f64(lt_buf *b, double value, const char *spec, size_t size, const lt_at *at);
+void lt_format_bool(lt_buf *b, bool value, const char *spec, size_t size, const lt_at *at);
+void lt_format_str(lt_buf *b, const lt_str *value, const char *spec, size_t size, const lt_at *at);
+void lt_format_none(lt_buf *b, const char *spec, size_t size, const lt_at *at);
 
 #endif

@@ -42,10 +42,10 @@ and passes its address (n-0080).
 **The boundary with the runtime.** The runtime's functions take `lt_at` by value — 112
 declarations in `lotml.h` — and LLVM does not lower an aggregate argument to the platform's C
 ABI: `clang` passes that 24-byte struct through a hidden pointer on Win64 and `byval` on SysV, so
-a call written with the struct as a value reads the wrong bytes (n-0078). The runtime gains,
-for each function the emitter calls, an entry point taking `const lt_at *`, the C target's
-callers unchanged, and the rule is general (R2.7): what crosses into the runtime is a scalar or
-a pointer. Integers narrower than 32 bits and `bool` cross with the `signext` or `zeroext`
+a call written with the struct as a value reads the wrong bytes (n-0078). So every function of
+the runtime takes the place by pointer, `const lt_at *` — one API for both native backends, the
+C target passing the address of the static site it already declares (`&lt_site_<line>`) —
+and the rule is general (R2.7): what crosses into the runtime is a scalar or a pointer. Integers narrower than 32 bits and `bool` cross with the `signext` or `zeroext`
 `clang` gives them.
 
 **Printing.** `print` calls the runtime functions the built-in table names for each type, so a

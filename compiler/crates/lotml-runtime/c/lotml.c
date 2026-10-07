@@ -106,7 +106,7 @@ int lt_exit(int status) {
 void *lt_alloc(size_t size) {
     void *cell = malloc(size);
     if (cell == NULL) {
-        lt_panic((lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
+        lt_panic(&(lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
     }
     ((lt_cell *)cell)->count = 1;
     ((lt_cell *)cell)->aux = 0;
@@ -119,7 +119,7 @@ void *lt_alloc(size_t size) {
 /* `size` bytes that are not a cell: the program stops when there are none to give. */
 void *lt_malloc(size_t size) {
     void *p = malloc(size == 0 ? 1 : size);
-    if (p == NULL) lt_panic((lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
+    if (p == NULL) lt_panic(&(lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
     return p;
 }
 
@@ -127,7 +127,7 @@ void *lt_malloc(size_t size) {
  * rather than allocate a size that wrapped around. */
 size_t lt_bytes(int64_t count, size_t size) {
     if (count < 0 || (size > 0 && (uint64_t)count > (uint64_t)PTRDIFF_MAX / size)) {
-        lt_panic((lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
+        lt_panic(&(lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
     }
     return (size_t)count * size;
 }
@@ -171,7 +171,7 @@ typedef struct lt_failure {
     int outcome;
     const char *kind;
     char message[512];
-    lt_at at;
+    const lt_at *at;
     const char *expression;
     const char *op;
     char *left;
@@ -207,14 +207,14 @@ static LT_NORETURN void lt_raise(lt_failure *f) {
     if (f->left != NULL && f->right != NULL) {
         fprintf(stderr, "  left:  %s\n  right: %s\n", f->left, f->right);
     }
-    if (f->at.file != NULL) {
-        fprintf(stderr, "  File \"%s\", line %d, in %s\n", f->at.file, f->at.line, f->at.function);
+    if (f->at->file != NULL) {
+        fprintf(stderr, "  File \"%s\", line %d, in %s\n", f->at->file, f->at->line, f->at->function);
     }
     fflush(stderr);
     exit(101);
 }
 
-void lt_panic(lt_at at, const char *kind, const char *message) {
+void lt_panic(const lt_at *at, const char *kind, const char *message) {
     lt_failure f;
     memset(&f, 0, sizeof f);
     f.outcome = LT_PANICKED;
@@ -232,7 +232,7 @@ static char *lt_shown(const lt_type *type, const void *value) {
     return b.data;
 }
 
-void lt_assert_fail(lt_at at, const char *expression, const char *op, const lt_type *lt, const void *l,
+void lt_assert_fail(const lt_at *at, const char *expression, const char *op, const lt_type *lt, const void *l,
                     const lt_type *rt, const void *r, const lt_type *mt, const void *m) {
     lt_failure f;
     memset(&f, 0, sizeof f);
@@ -253,11 +253,11 @@ void lt_assert_fail(lt_at at, const char *expression, const char *op, const lt_t
 /* A failed `assert` as the compiled program reports it: its text and operator as literals, `op`
  * NULL when it is not one comparison, `mt` NULL when it has no message. */
 void lt_assert_compared(const lt_str *expression, const lt_str *op, const lt_type *lt, const void *l,
-                        const lt_type *rt, const void *r, const lt_type *mt, const void *m, lt_at at) {
+                        const lt_type *rt, const void *r, const lt_type *mt, const void *m, const lt_at *at) {
     lt_assert_fail(at, expression->bytes, op != NULL ? op->bytes : NULL, lt, l, rt, r, mt, m);
 }
 
-void lt_test_error(const lt_type *type, const void *error, lt_at at) {
+void lt_test_error(const lt_type *type, const void *error, const lt_at *at) {
     lt_failure f;
     memset(&f, 0, sizeof f);
     f.outcome = LT_ERRED;
@@ -352,7 +352,7 @@ void lt_test_report(void) {
             lt_buf_puts(&b, ", \"outcome\": \"pass\"}");
             continue;
         }
-        int line = f->at.file != NULL ? f->at.line : 0;
+        int line = f->at->file != NULL ? f->at->line : 0;
         if (f->outcome == LT_FAILED) {
             lt_json_field(&b, "outcome", "fail");
             lt_json_field(&b, "expression", f->expression);
@@ -373,9 +373,9 @@ void lt_test_report(void) {
             lt_json_field(&b, "message", f->message);
             lt_json_line(&b, line);
             lt_buf_puts(&b, ", \"trace\": [");
-            if (f->at.file != NULL) {
+            if (f->at->file != NULL) {
                 lt_buf_puts(&b, "{\"function\": ");
-                lt_buf_json(&b, f->at.function, strlen(f->at.function));
+                lt_buf_json(&b, f->at->function, strlen(f->at->function));
                 lt_json_line(&b, line);
                 lt_buf_puts(&b, "}");
             }
@@ -393,7 +393,7 @@ void lt_test_report(void) {
     lt_test_count = 0;
 }
 
-void lt_panicf(lt_at at, const char *kind, const char *format, ...) {
+void lt_panicf(const lt_at *at, const char *kind, const char *format, ...) {
     char message[512];
     va_list args;
     va_start(args, format);
@@ -402,23 +402,23 @@ void lt_panicf(lt_at at, const char *kind, const char *format, ...) {
     lt_panic(at, kind, message);
 }
 
-void lt_overflow(lt_at at, const char *type) {
+void lt_overflow(const lt_at *at, const char *type) {
     lt_panicf(at, "Overflow", "the result does not fit in %s", type);
 }
 
-void lt_zero_division(lt_at at, const char *message) {
+void lt_zero_division(const lt_at *at, const char *message) {
     lt_panic(at, "ZeroDivisionError", message);
 }
 
-void lt_value_error(lt_at at, const char *message) {
+void lt_value_error(const lt_at *at, const char *message) {
     lt_panic(at, "ValueError", message);
 }
 
-void lt_todo(lt_at at) {
+void lt_todo(const lt_at *at) {
     lt_panic(at, "Todo", "not written yet");
 }
 
-void lt_assert_failed(lt_at at, const char *expression) {
+void lt_assert_failed(const lt_at *at, const char *expression) {
     lt_assert_fail(at, expression, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
@@ -430,7 +430,7 @@ void lt_buf_put(lt_buf *b, const char *bytes, size_t length) {
         size_t cap = b->cap < 64 ? 64 : b->cap * 2;
         while (cap < b->len + length) cap *= 2;
         char *data = realloc(b->data, cap);
-        if (data == NULL) lt_panic((lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
+        if (data == NULL) lt_panic(&(lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
         b->data = data;
         b->cap = cap;
     }
@@ -533,7 +533,7 @@ void lt_buf_f64(lt_buf *b, double value) {
 
 /* Integers --------------------------------------------------------------------------------- */
 
-int64_t lt_pow_i64(int64_t base, int64_t exponent, lt_at at) {
+int64_t lt_pow_i64(int64_t base, int64_t exponent, const lt_at *at) {
     if (exponent < 0) lt_value_error(at, "a negative exponent of an int");
     int64_t result = 1;
     while (exponent > 0) {
@@ -544,7 +544,7 @@ int64_t lt_pow_i64(int64_t base, int64_t exponent, lt_at at) {
     return result;
 }
 
-uint64_t lt_pow_u64(uint64_t base, uint64_t exponent, lt_at at) {
+uint64_t lt_pow_u64(uint64_t base, uint64_t exponent, const lt_at *at) {
     uint64_t result = 1;
     while (exponent > 0) {
         if (exponent & 1) result = lt_mul_u64(result, base, at);
@@ -554,7 +554,7 @@ uint64_t lt_pow_u64(uint64_t base, uint64_t exponent, lt_at at) {
     return result;
 }
 
-int64_t lt_shl_i64(int64_t value, int64_t amount, lt_at at) {
+int64_t lt_shl_i64(int64_t value, int64_t amount, const lt_at *at) {
     if (amount < 0) lt_value_error(at, "negative shift count");
     if (value == 0) return 0;
     if (amount >= 64) lt_overflow(at, "int");
@@ -563,13 +563,13 @@ int64_t lt_shl_i64(int64_t value, int64_t amount, lt_at at) {
     return shifted;
 }
 
-int64_t lt_shr_i64(int64_t value, int64_t amount, lt_at at) {
+int64_t lt_shr_i64(int64_t value, int64_t amount, const lt_at *at) {
     if (amount < 0) lt_value_error(at, "negative shift count");
     if (amount >= 64) return value < 0 ? -1 : 0;
     return value >> amount;
 }
 
-uint64_t lt_shl_u64(uint64_t value, uint64_t amount, lt_at at) {
+uint64_t lt_shl_u64(uint64_t value, uint64_t amount, const lt_at *at) {
     if (value == 0) return 0;
     if (amount >= 64) lt_overflow(at, "u64");
     uint64_t shifted = value << amount;
@@ -577,12 +577,12 @@ uint64_t lt_shl_u64(uint64_t value, uint64_t amount, lt_at at) {
     return shifted;
 }
 
-uint64_t lt_shr_u64(uint64_t value, uint64_t amount, lt_at at) {
+uint64_t lt_shr_u64(uint64_t value, uint64_t amount, const lt_at *at) {
     (void)at;
     return amount >= 64 ? 0 : value >> amount;
 }
 
-int64_t lt_f64_to_i64(double value, lt_at at) {
+int64_t lt_f64_to_i64(double value, const lt_at *at) {
     if (isnan(value)) lt_value_error(at, "cannot convert float NaN to integer");
     if (isinf(value)) lt_panic(at, "OverflowError", "cannot convert float infinity to integer");
     double whole = trunc(value);
@@ -590,7 +590,7 @@ int64_t lt_f64_to_i64(double value, lt_at at) {
     return (int64_t)whole;
 }
 
-uint64_t lt_f64_to_u64(double value, lt_at at) {
+uint64_t lt_f64_to_u64(double value, const lt_at *at) {
     if (isnan(value)) lt_value_error(at, "cannot convert float NaN to integer");
     if (isinf(value)) lt_panic(at, "OverflowError", "cannot convert float infinity to integer");
     double whole = trunc(value);
@@ -598,7 +598,7 @@ uint64_t lt_f64_to_u64(double value, lt_at at) {
     return (uint64_t)whole;
 }
 
-lt_range lt_range_new(int64_t start, int64_t stop, int64_t step, lt_at at) {
+lt_range lt_range_new(int64_t start, int64_t stop, int64_t step, const lt_at *at) {
     if (step == 0) lt_value_error(at, "range() arg 3 must not be zero");
     return (lt_range){start, stop, step, false};
 }
@@ -627,21 +627,21 @@ static void lt_divmod_f64(double a, double b, double *floordiv, double *mod) {
     *mod = m;
 }
 
-double lt_floordiv_f64(double a, double b, lt_at at) {
+double lt_floordiv_f64(double a, double b, const lt_at *at) {
     if (b == 0.0) lt_zero_division(at, "float floor division by zero");
     double q, r;
     lt_divmod_f64(a, b, &q, &r);
     return q;
 }
 
-double lt_mod_f64(double a, double b, lt_at at) {
+double lt_mod_f64(double a, double b, const lt_at *at) {
     if (b == 0.0) lt_zero_division(at, "float modulo by zero");
     double q, r;
     lt_divmod_f64(a, b, &q, &r);
     return r;
 }
 
-double lt_pow_f64(double a, double b, lt_at at) {
+double lt_pow_f64(double a, double b, const lt_at *at) {
     if (b == 0.0) return 1.0;
     if (a == 0.0 && b < 0.0 && isfinite(b)) {
         lt_zero_division(at, "zero to a negative power");
@@ -715,7 +715,7 @@ static void *lt_worker(void *job) {
 }
 #endif
 
-lt_list *lt_parallel(const lt_list *tasks, const lt_type *result, lt_task_fn run, lt_at at) {
+lt_list *lt_parallel(const lt_list *tasks, const lt_type *result, lt_task_fn run, const lt_at *at) {
     int64_t n = tasks->len;
     lt_list *results = lt_list_new(result, n);
     if (n == 0) return results;
@@ -775,7 +775,7 @@ lt_list *lt_parallel(const lt_list *tasks, const lt_type *result, lt_task_fn run
 /* The prelude's arithmetic ---------------------------------------------------------------- */
 
 /* `round(x)`: the nearest integer, a tie to the even one. */
-int64_t lt_round_i64(double x, lt_at at) {
+int64_t lt_round_i64(double x, const lt_at *at) {
     if (isnan(x)) lt_value_error(at, "cannot convert float NaN to integer");
     if (isinf(x)) lt_panic(at, "OverflowError", "cannot convert float infinity to integer");
     return lt_f64_to_i64(nearbyint(x), at);
@@ -835,7 +835,7 @@ static uint64_t lt_mulmod(uint64_t a, uint64_t b, uint64_t m) {
 
 /* `pow(base, exponent, modulus)`: a negative exponent raises the inverse; the result has the
  * modulus's sign, as Python's does. */
-int64_t lt_pow_mod(int64_t base, int64_t exponent, int64_t modulus, lt_at at) {
+int64_t lt_pow_mod(int64_t base, int64_t exponent, int64_t modulus, const lt_at *at) {
     if (modulus == 0) lt_value_error(at, "pow() 3rd argument cannot be 0");
     uint64_t m = modulus < 0 ? (uint64_t)0 - (uint64_t)modulus : (uint64_t)modulus;
     uint64_t b = base >= 0 ? (uint64_t)base % m : (m - ((uint64_t)0 - (uint64_t)base) % m) % m;
@@ -863,7 +863,7 @@ int64_t lt_pow_mod(int64_t base, int64_t exponent, int64_t modulus, lt_at at) {
     return modulus < 0 && r != 0 ? (int64_t)(r - m) : (int64_t)r;
 }
 
-int64_t lt_isqrt(int64_t n, lt_at at) {
+int64_t lt_isqrt(int64_t n, const lt_at *at) {
     if (n < 0) lt_value_error(at, "isqrt() argument must be nonnegative");
     uint64_t r = (uint64_t)sqrt((double)n);
     while (r * r > (uint64_t)n) r--;
@@ -871,7 +871,7 @@ int64_t lt_isqrt(int64_t n, lt_at at) {
     return (int64_t)r;
 }
 
-int64_t lt_gcd(int64_t a, int64_t b, lt_at at) {
+int64_t lt_gcd(int64_t a, int64_t b, const lt_at *at) {
     uint64_t x = a < 0 ? (uint64_t)0 - (uint64_t)a : (uint64_t)a;
     uint64_t y = b < 0 ? (uint64_t)0 - (uint64_t)b : (uint64_t)b;
     while (y != 0) {
@@ -885,7 +885,7 @@ int64_t lt_gcd(int64_t a, int64_t b, lt_at at) {
 
 /* math_1 of CPython's module: NaN from a number is a domain error, infinity from a finite
  * number a range error when the function can overflow. */
-double lt_math_1(double (*f)(double), double x, bool can_overflow, lt_at at) {
+double lt_math_1(double (*f)(double), double x, bool can_overflow, const lt_at *at) {
     double r = f(x);
     if (isnan(r) && !isnan(x)) lt_value_error(at, "math domain error");
     if (isinf(r) && isfinite(x)) {
@@ -895,20 +895,20 @@ double lt_math_1(double (*f)(double), double x, bool can_overflow, lt_at at) {
     return r;
 }
 
-double lt_math_2(double (*f)(double, double), double x, double y, lt_at at) {
+double lt_math_2(double (*f)(double, double), double x, double y, const lt_at *at) {
     double r = f(x, y);
     if (isnan(r) && !isnan(x) && !isnan(y)) lt_value_error(at, "math domain error");
     if (isinf(r) && isfinite(x) && isfinite(y)) lt_panic(at, "OverflowError", "math range error");
     return r;
 }
 
-double lt_math_log(double (*f)(double), double x, lt_at at) {
+double lt_math_log(double (*f)(double), double x, const lt_at *at) {
     if (isnan(x) || x == INFINITY) return x;
     if (x <= 0.0) lt_value_error(at, "math domain error");
     return f(x);
 }
 
-double lt_math_pow(double x, double y, lt_at at) {
+double lt_math_pow(double x, double y, const lt_at *at) {
     if (isfinite(x) && isfinite(y)) {
         if (x == 0.0 && y < 0.0) lt_value_error(at, "math domain error");
         if (x < 0.0 && y != floor(y)) lt_value_error(at, "math domain error");
@@ -919,7 +919,7 @@ double lt_math_pow(double x, double y, lt_at at) {
     return pow(x, y);
 }
 
-int64_t lt_factorial(int64_t n, lt_at at) {
+int64_t lt_factorial(int64_t n, const lt_at *at) {
     if (n < 0) lt_value_error(at, "factorial() not defined for negative values");
     int64_t r = 1;
     for (int64_t i = 2; i <= n; i++) r = lt_mul_i64(r, i, at);
@@ -937,7 +937,7 @@ static uint64_t lt_gcd_u64(uint64_t x, uint64_t y) {
 
 /* `math.comb(n, k)`: C(n, i + 1) from C(n, i) exactly, dividing before multiplying, so a step
  * leaves i64 only when the result does. */
-int64_t lt_comb(int64_t n, int64_t k, lt_at at) {
+int64_t lt_comb(int64_t n, int64_t k, const lt_at *at) {
     if (n < 0) lt_value_error(at, "n must be a non-negative integer");
     if (k < 0) lt_value_error(at, "k must be a non-negative integer");
     if (k > n) return 0;
@@ -952,7 +952,7 @@ int64_t lt_comb(int64_t n, int64_t k, lt_at at) {
     return r;
 }
 
-int64_t lt_perm(int64_t n, int64_t k, lt_at at) {
+int64_t lt_perm(int64_t n, int64_t k, const lt_at *at) {
     if (n < 0) lt_value_error(at, "n must be a non-negative integer");
     if (k < 0) lt_value_error(at, "k must be a non-negative integer");
     if (k > n) return 0;

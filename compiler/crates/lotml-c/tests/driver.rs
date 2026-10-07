@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
     lt_init();
     lt_write("one\ntwo\n", 8);
     if (argc > 1) {
-        lt_panic((lt_at){"prog.lotml", 3, "main"}, "Overflow", "9223372036854775808 does not fit in int");
+        lt_panic(&(lt_at){"prog.lotml", 3, "main"}, "Overflow", "9223372036854775808 does not fit in int");
     }
     return lt_exit(0);
 }

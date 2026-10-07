@@ -296,7 +296,7 @@ fn local_name(f: &Function, local: Local) -> String {
     }
 }
 
-/// A function's C with each `LT_HERE` naming a location of its own: `lt_site_<line>`, a static
+/// A function's C with each `LT_HERE` naming a location of its own: `&lt_site_<line>`, a static
 /// constant declared at the function's top for each line that needs one. `LT_HERE` builds the
 /// location afresh at each use, which a compiler may do on every pass of a loop even though only a
 /// failing check reads it; a static one costs nothing until then. The line is the one `__LINE__`
@@ -314,7 +314,7 @@ fn with_sites(text: &str) -> String {
         match current {
             Some(line) if raw.contains("LT_HERE") => {
                 used.insert(line);
-                body.push_str(&raw.replace("LT_HERE", &format!("lt_site_{line}")));
+                body.push_str(&raw.replace("LT_HERE", &format!("&lt_site_{line}")));
             }
             _ => body.push_str(raw),
         }

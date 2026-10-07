@@ -277,7 +277,7 @@ impl<'d> Types<'d> {
                 out,
                 "static void lt_inc_t{id}(void *p);\nstatic void lt_dec_t{id}(void *p);\n\
                  static bool lt_eq_t{id}(const void *a, const void *b);\n\
-                 static int lt_cmp_t{id}(const void *a, const void *b, lt_at at);\n\
+                 static int lt_cmp_t{id}(const void *a, const void *b, const lt_at *at);\n\
                  static int64_t lt_hash_t{id}(const void *p);\nstatic void lt_repr_t{id}(lt_buf *b, const void *p);\n\
                  static void lt_share_t{id}(void *p);\nstatic void lt_show_t{id}(lt_buf *b, const void *p);"
             );
@@ -425,7 +425,7 @@ impl<'d> Types<'d> {
         );
         let _ = writeln!(
             out,
-            "static int lt_cmp_t{id}(const void *a, const void *b, lt_at at) {{ const lt_t{id} *x = a, *y = b; (void)x; (void)y; (void)at;{} return 0; }}",
+            "static int lt_cmp_t{id}(const void *a, const void *b, const lt_at *at) {{ const lt_t{id} *x = a, *y = b; (void)x; (void)y; (void)at;{} return 0; }}",
             self.cmp_fields(items, "x", "y")
         );
         let _ = writeln!(
@@ -461,7 +461,7 @@ impl<'d> Types<'d> {
         );
         let _ = writeln!(
             out,
-            "static int lt_cmp_t{id}(const void *a, const void *b, lt_at at) {{ const lt_t{id} *x = a, *y = b; \
+            "static int lt_cmp_t{id}(const void *a, const void *b, const lt_at *at) {{ const lt_t{id} *x = a, *y = b; \
              if (!x->some || !y->some) lt_unorderable(at, \"NoneType\"); return ({d})->cmp(&x->value, &y->value, at); }}"
         );
         let _ = writeln!(
@@ -499,7 +499,7 @@ impl<'d> Types<'d> {
         );
         let _ = writeln!(
             out,
-            "static int lt_cmp_t{id}(const void *a, const void *b, lt_at at) {{ (void)a; (void)b; lt_unorderable(at, \"Ok\"); }}"
+            "static int lt_cmp_t{id}(const void *a, const void *b, const lt_at *at) {{ (void)a; (void)b; lt_unorderable(at, \"Ok\"); }}"
         );
         let _ = writeln!(
             out,
@@ -542,7 +542,7 @@ impl<'d> Types<'d> {
         );
         let _ = writeln!(
             out,
-            "static int lt_cmp_t{id}(const void *a, const void *b, lt_at at) {{ const lt_t{id} *x = *(lt_t{id} *const *)a, *y = *(lt_t{id} *const *)b; \
+            "static int lt_cmp_t{id}(const void *a, const void *b, const lt_at *at) {{ const lt_t{id} *x = *(lt_t{id} *const *)a, *y = *(lt_t{id} *const *)b; \
              (void)at;{} return 0; }}",
             self.cmp_fields(&types, "x", "y")
         );
@@ -628,7 +628,7 @@ impl<'d> Types<'d> {
         });
         let _ = writeln!(
             out,
-            "static int lt_cmp_t{id}(const void *a, const void *b, lt_at at) {{ static const char *names[] = {{{}}}; static const bool unit[] = {{{}}}; \
+            "static int lt_cmp_t{id}(const void *a, const void *b, const lt_at *at) {{ static const char *names[] = {{{}}}; static const bool unit[] = {{{}}}; \
              const lt_t{id} *x = *(lt_t{id} *const *)a, *y = *(lt_t{id} *const *)b; \
              if (x->cell.aux != y->cell.aux) {{ if (unit[x->cell.aux] && unit[y->cell.aux]) {{ int c = strcmp(names[x->cell.aux], names[y->cell.aux]); return c < 0 ? -1 : c > 0; }} \
              lt_unorderable(at, names[x->cell.aux]); }} switch (x->cell.aux) {{{cmp} default: break; }} return 0; }}",
@@ -701,7 +701,7 @@ fn dyn_functions(out: &mut String, id: usize, name: &str) {
     );
     let _ = writeln!(
         out,
-        "static int lt_cmp_t{id}(const void *a, const void *b, lt_at at) {{ {both} \
+        "static int lt_cmp_t{id}(const void *a, const void *b, const lt_at *at) {{ {both} \
          if (x->v->type != y->v->type) lt_unorderable(at, \"dyn {}\"); return x->v->type->cmp(&x->cell, &y->cell, at); }}",
         c_string_text(name.as_bytes())
     );

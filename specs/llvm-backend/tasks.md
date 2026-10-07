@@ -11,7 +11,7 @@
   _Depends 1.2_
 - [ ] 1.5 (Unit) Refuse every construct outside the first ones at the construct — R2.6
   _Depends 1.3_
-- [ ] 1.6 (Unit) Give the runtime an entry point taking `const lt_at *` for each function the emitter calls, and declare narrow integers and `bool` as `clang` does — R2.7
+- [x] 1.6 (Unit) Make every function of the runtime take the place it stops at as `const lt_at *`, the C target passing the address of its static sites — R2.7
   _Depends 1.1_
 
 ## 2 · On the command line

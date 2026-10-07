@@ -260,7 +260,7 @@ lt_str *lt_str_concat(const lt_str *a, const lt_str *b) {
     return s;
 }
 
-lt_str *lt_str_repeat(const lt_str *s, int64_t times, lt_at at) {
+lt_str *lt_str_repeat(const lt_str *s, int64_t times, const lt_at *at) {
     if (times <= 0 || s->size == 0) return lt_str_new("", 0);
     if (s->size > INT64_MAX / times) lt_panic(at, "MemoryError", "the repeated string is too long");
     lt_str *r = lt_str_alloc(s->size * times, s->length * times);
@@ -295,7 +295,7 @@ bool lt_str_contains(const lt_str *haystack, const lt_str *needle) {
     return lt_find_bytes(haystack, needle, 0) >= 0;
 }
 
-lt_str *lt_str_index(const lt_str *s, int64_t index, lt_at at) {
+lt_str *lt_str_index(const lt_str *s, int64_t index, const lt_at *at) {
     if (index < 0) index += s->length;
     if (index < 0 || index >= s->length) lt_panic(at, "IndexError", "string index out of range");
     int64_t from = lt_offset(s, index);
@@ -307,7 +307,7 @@ lt_str *lt_str_index(const lt_str *s, int64_t index, lt_at at) {
 /* Python's slice indices: the first index, and how many elements, of `s[lo:hi:step]` over a
  * sequence of `length`. */
 void lt_slice_indices(int64_t length, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step,
-                      int64_t *start, int64_t *count, int64_t *by, lt_at at) {
+                      int64_t *start, int64_t *count, int64_t *by, const lt_at *at) {
     if (!has_step) step = 1;
     if (step == 0) lt_value_error(at, "slice step cannot be zero");
     if (step > 0) {
@@ -331,7 +331,7 @@ void lt_slice_indices(int64_t length, bool has_lo, int64_t lo, bool has_hi, int6
     *by = step;
 }
 
-lt_str *lt_str_slice(const lt_str *s, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step, lt_at at) {
+lt_str *lt_str_slice(const lt_str *s, bool has_lo, int64_t lo, bool has_hi, int64_t hi, bool has_step, int64_t step, const lt_at *at) {
     int64_t start, count, by;
     lt_slice_indices(s->length, has_lo, lo, has_hi, hi, has_step, step, &start, &count, &by, at);
     if (count <= 0) return lt_str_new("", 0);
@@ -358,7 +358,7 @@ lt_str *lt_str_slice(const lt_str *s, bool has_lo, int64_t lo, bool has_hi, int6
     return lt_str_from_buf(&b);
 }
 
-int64_t lt_str_ord(const lt_str *s, lt_at at) {
+int64_t lt_str_ord(const lt_str *s, const lt_at *at) {
     if (s->length != 1) {
         lt_panicf(at, "TypeError", "ord() expected a character, but string of length %lld found", (long long)s->length);
     }
@@ -366,7 +366,7 @@ int64_t lt_str_ord(const lt_str *s, lt_at at) {
     return lt_decode(s->bytes, &n);
 }
 
-lt_str *lt_str_chr(int64_t code, lt_at at) {
+lt_str *lt_str_chr(int64_t code, const lt_at *at) {
     if (code < 0 || code > 0x10FFFF) lt_value_error(at, "chr() arg not in range(0x110000)");
     char bytes[4];
     return lt_str_new(bytes, lt_encode((int32_t)code, bytes));
@@ -383,7 +383,7 @@ static int lt_digit_value(int32_t c) {
 
 /* `s.to_int()`: Python's int(s.strip()) in base 10, or false where it raises ValueError; a value
  * outside i64 stops the program, as the Python target's does. */
-bool lt_str_to_int(const lt_str *s, int64_t *out, lt_at at) {
+bool lt_str_to_int(const lt_str *s, int64_t *out, const lt_at *at) {
     *out = 0;
     lt_str *t = lt_str_strip(s, NULL, true, true);
     int64_t i = 0;
@@ -497,7 +497,7 @@ bool lt_str_to_float(const lt_str *s, double *out) {
 }
 
 /* `int(s)`: what to_int gives, or ValueError as Python raises it. */
-int64_t lt_str_int(const lt_str *s, lt_at at) {
+int64_t lt_str_int(const lt_str *s, const lt_at *at) {
     int64_t value;
     if (!lt_str_to_int(s, &value, at)) {
         lt_buf b = LT_BUF;
@@ -510,7 +510,7 @@ int64_t lt_str_int(const lt_str *s, lt_at at) {
 }
 
 /* `float(s)`: what to_float gives, or ValueError as Python raises it. */
-double lt_str_float(const lt_str *s, lt_at at) {
+double lt_str_float(const lt_str *s, const lt_at *at) {
     double value;
     if (!lt_str_to_float(s, &value)) {
         lt_buf b = LT_BUF;
@@ -543,7 +543,7 @@ bool lt_str_find(const lt_str *s, const lt_str *sub, bool last, int64_t *out) {
 }
 
 /* `s.split_once(sep)`: what comes before the first `sep` and what comes after it. */
-bool lt_str_split_once(const lt_str *s, const lt_str *sep, lt_str **head, lt_str **tail, lt_at at) {
+bool lt_str_split_once(const lt_str *s, const lt_str *sep, lt_str **head, lt_str **tail, const lt_at *at) {
     *head = NULL;
     *tail = NULL;
     if (sep->size == 0) lt_value_error(at, "empty separator");
@@ -802,7 +802,7 @@ lt_str *lt_str_zfill(const lt_str *s, int64_t width) {
 }
 
 /* `ljust`, `rjust` and `center` (`align` '<', '>' and '^'), as str methods lay them out. */
-lt_str *lt_str_pad(const lt_str *s, int64_t width, const lt_str *fill, char align, lt_at at) {
+lt_str *lt_str_pad(const lt_str *s, int64_t width, const lt_str *fill, char align, const lt_at *at) {
     int32_t code = ' ';
     if (fill != NULL) {
         if (fill->length != 1) lt_panic(at, "TypeError", "The fill character must be exactly one character long");
@@ -838,13 +838,13 @@ typedef struct lt_spec {
 #define LT_SPEC_LIMIT 10000
 
 /* `value` with the decimal digit `digit` appended, stopping past the limit. */
-static int64_t lt_spec_digit(int64_t value, char digit, lt_at at) {
+static int64_t lt_spec_digit(int64_t value, char digit, const lt_at *at) {
     value = value * 10 + (digit - '0');
     if (value > LT_SPEC_LIMIT) lt_panic(at, "ValueError", "Too many decimal digits in format string");
     return value;
 }
 
-static LT_NORETURN void lt_bad_spec(const char *spec, size_t size, const char *kind, lt_at at) {
+static LT_NORETURN void lt_bad_spec(const char *spec, size_t size, const char *kind, const lt_at *at) {
     lt_panicf(at, "ValueError", "Invalid format specifier '%.*s' for object of type '%s'", (int)size, spec, kind);
 }
 
@@ -853,7 +853,7 @@ static bool lt_is_align(char c) {
 }
 
 /* Parse `[[fill]align][sign][z][#][0][width][grouping][.precision][type]`. */
-static lt_spec lt_parse_spec(const char *spec, size_t size, const char *kind, lt_at at) {
+static lt_spec lt_parse_spec(const char *spec, size_t size, const char *kind, const lt_at *at) {
     lt_spec s = {' ', 0, 0, false, false, -1, 0, -1, 0};
     size_t i = 0;
     int n = 1;
@@ -970,7 +970,7 @@ static void lt_put_number(lt_buf *b, const lt_spec *s, bool negative, const char
 }
 
 static void lt_format_integer(lt_buf *b, bool negative, uint64_t magnitude, const lt_spec *s, const char *spec, size_t size,
-                              lt_at at) {
+                              const lt_at *at) {
     char digits[80];
     const char *prefix = "";
     int every = 3;
@@ -1019,7 +1019,7 @@ static void lt_format_integer(lt_buf *b, bool negative, uint64_t magnitude, cons
     lt_put_number(b, s, negative, prefix, digits, (size_t)n, every);
 }
 
-void lt_format_i64(lt_buf *b, int64_t value, const char *spec, size_t size, lt_at at) {
+void lt_format_i64(lt_buf *b, int64_t value, const char *spec, size_t size, const lt_at *at) {
     if (size == 0) {
         lt_buf_i64(b, value);
         return;
@@ -1034,7 +1034,7 @@ void lt_format_i64(lt_buf *b, int64_t value, const char *spec, size_t size, lt_a
     lt_format_integer(b, value < 0, magnitude, &s, spec, size, at);
 }
 
-void lt_format_u64(lt_buf *b, uint64_t value, const char *spec, size_t size, lt_at at) {
+void lt_format_u64(lt_buf *b, uint64_t value, const char *spec, size_t size, const lt_at *at) {
     if (size == 0) {
         lt_buf_u64(b, value);
         return;
@@ -1048,7 +1048,7 @@ void lt_format_u64(lt_buf *b, uint64_t value, const char *spec, size_t size, lt_
     lt_format_integer(b, false, value, &s, spec, size, at);
 }
 
-void lt_format_bool(lt_buf *b, bool value, const char *spec, size_t size, lt_at at) {
+void lt_format_bool(lt_buf *b, bool value, const char *spec, size_t size, const lt_at *at) {
     if (size == 0) {
         lt_buf_bool(b, value);
         return;
@@ -1056,7 +1056,7 @@ void lt_format_bool(lt_buf *b, bool value, const char *spec, size_t size, lt_at 
     lt_format_i64(b, value ? 1 : 0, spec, size, at);
 }
 
-void lt_format_none(lt_buf *b, const char *spec, size_t size, lt_at at) {
+void lt_format_none(lt_buf *b, const char *spec, size_t size, const lt_at *at) {
     (void)spec;
     if (size != 0) lt_panic(at, "TypeError", "unsupported format string passed to NoneType.__format__");
     lt_buf_puts(b, "None");
@@ -1067,7 +1067,7 @@ void lt_format_none(lt_buf *b, const char *spec, size_t size, lt_at at) {
 static char *lt_print_double(const char *format, int precision, double value, int *length) {
     int n = snprintf(NULL, 0, format, precision, value);
     char *text = n < 0 ? NULL : malloc((size_t)n + 1);
-    if (text == NULL) lt_panic((lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
+    if (text == NULL) lt_panic(&(lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
     snprintf(text, (size_t)n + 1, format, precision, value);
     *length = n;
     return text;
@@ -1126,7 +1126,7 @@ static void lt_general(lt_buf *out, double magnitude, int precision, bool keep, 
     free(digits);
 }
 
-void lt_format_f64(lt_buf *b, double value, const char *spec, size_t size, lt_at at) {
+void lt_format_f64(lt_buf *b, double value, const char *spec, size_t size, const lt_at *at) {
     if (size == 0) {
         lt_buf_f64(b, value);
         return;
@@ -1202,7 +1202,7 @@ void lt_format_f64(lt_buf *b, double value, const char *spec, size_t size, lt_at
     lt_buf_free(&digits);
 }
 
-void lt_format_str(lt_buf *b, const lt_str *value, const char *spec, size_t size, lt_at at) {
+void lt_format_str(lt_buf *b, const lt_str *value, const char *spec, size_t size, const lt_at *at) {
     if (size == 0) {
         lt_buf_str(b, value);
         return;

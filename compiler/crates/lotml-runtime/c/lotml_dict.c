@@ -217,7 +217,7 @@ void lt_dict_set(lt_dict **slot, const void *key, const void *value) {
     if (d->used == d->cap) {
         int64_t cap = d->cap < 8 ? 8 : d->cap * 2;
         char *entries = realloc(d->entries, lt_bytes(cap, lt_dict_entry_size(d)));
-        if (entries == NULL) lt_panic((lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
+        if (entries == NULL) lt_panic(&(lt_at){NULL, 0, NULL}, "MemoryError", "out of memory");
         d->entries = entries;
         d->cap = cap;
     }
@@ -242,7 +242,7 @@ static char *lt_dict_find(const lt_dict *d, const void *key) {
     return found ? lt_dict_entry(d, d->index[at]) : NULL;
 }
 
-LT_NORETURN static void lt_key_error(const lt_dict *d, const void *key, lt_at at) {
+LT_NORETURN static void lt_key_error(const lt_dict *d, const void *key, const lt_at *at) {
     lt_buf b = LT_BUF;
     d->key->repr(&b, key);
     lt_buf_put(&b, "", 1);
@@ -250,7 +250,7 @@ LT_NORETURN static void lt_key_error(const lt_dict *d, const void *key, lt_at at
 }
 
 /* `d[key]`: the value, read; a missing key stops the program. */
-const void *lt_dict_get(const lt_dict *d, const void *key, lt_at at) {
+const void *lt_dict_get(const lt_dict *d, const void *key, const lt_at *at) {
     char *e = lt_dict_find(d, key);
     if (e == NULL) lt_key_error(d, key, at);
     return LT_ENTRY_VALUE(d, e);
@@ -263,7 +263,7 @@ const void *lt_dict_get_or(const lt_dict *d, const void *key, const void *otherw
 }
 
 /* The slot of `key`'s value, the dict made unique first: `d[key].append(x)`. */
-void *lt_dict_slot(lt_dict **slot, const void *key, lt_at at) {
+void *lt_dict_slot(lt_dict **slot, const void *key, const lt_at *at) {
     lt_dict_unique(slot);
     char *e = lt_dict_find(*slot, key);
     if (e == NULL) lt_key_error(*slot, key, at);
@@ -399,7 +399,7 @@ static void lt_repr_dict(lt_buf *b, const void *a) {
     lt_buf_put(b, "}", 1);
 }
 
-static int lt_cmp_dict(const void *a, const void *b, lt_at at) {
+static int lt_cmp_dict(const void *a, const void *b, const lt_at *at) {
     (void)a;
     (void)b;
     lt_unorderable(at, "dict");
@@ -674,7 +674,7 @@ void lt_set_discard(lt_set **slot, const void *key) {
     lt_set_take(slot, key);
 }
 
-void lt_set_remove(lt_set **slot, const void *key, lt_at at) {
+void lt_set_remove(lt_set **slot, const void *key, const lt_at *at) {
     if (lt_set_take(slot, key)) return;
     lt_buf b = LT_BUF;
     (*slot)->type->repr(&b, key);
@@ -824,7 +824,7 @@ static void lt_repr_set(lt_buf *b, const void *a) {
     lt_buf_put(b, "}", 1);
 }
 
-static int lt_cmp_set(const void *a, const void *b, lt_at at) {
+static int lt_cmp_set(const void *a, const void *b, const lt_at *at) {
     (void)a;
     (void)b;
     lt_unorderable(at, "set");
