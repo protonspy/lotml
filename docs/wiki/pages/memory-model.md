@@ -136,7 +136,10 @@ Measured on the C target against the same programs in C, built by MSVC
 takes 10.5×; copy-on-write of a shared list costs what the explicit copy costs in C (1.01×). A
 dict of strings takes 3.33× and parallel tasks over a shared list 3.41×, the shared counts paid
 atomically. Of the numeric programs, the ones that index lists the most are the furthest from C
-(matmul 7.48×), from bounds checks rather than counting.
+(matmul 7.48×), from bounds checks rather than counting. The LLVM target that replaced it, on the
+same counting runtime and built by `clang` against C built by the same `clang`
+(`harness/results/benchmarks-llvm.md`), keeps the picture: binary trees 1.32×, the shared list's
+copy-on-write 0.93×, the dict of strings 3.22×, the parallel tasks 3.22×, matmul 5.03×.
 
 ## Recommendations
 

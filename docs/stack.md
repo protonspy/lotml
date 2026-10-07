@@ -66,8 +66,9 @@ A Cargo workspace, Rust 1.97 and edition 2024 (adr:0006-compiler-written-in-rust
 file. Each crate is a stage: `lotml-syntax` (lexer, tolerant parser), `lotml-diag` (diagnostics
 and their codes), `lotml-check` (types, mutability, errors as values), `lotml-db` (the queries),
 `lotml-fmt` (the formatter), `lotml-ir` (the IR every backend reads, its lowering and its native
-passes, adr:0020-one-ir-between-the-checker-and-every-backend), `lotml-py` (the Python backend and
-its runtime), `lotml-llvm` (the LLVM backend and its `clang` driver,
+passes, adr:0020-one-ir-between-the-checker-and-every-backend), `lotml-py` (the Python backend,
+writing its module from the generic IR, and its runtime), `lotml-llvm` (the LLVM backend, the C
+library export and its `clang` driver,
 adr:0025-two-targets-python-for-run-llvm-for-build), `lotml-runtime` (the C runtime native programs
 run on, adr:0016-c-target-as-monomorphic-c-over-a-counting-runtime), `lotml-ide` (what each name
 refers to, and the workspace an editor or agent queries), `lotml` (the command, with its language
@@ -88,10 +89,14 @@ and MCP servers — JSON-RPC written over `serde_json`, with no protocol library
 - **CPython** 3.11 or later — runs what the Python backend writes (`lotml run`, `lotml test`);
   found as `LOTML_PYTHON`, `python3`, `python` or `py -3`. Not a library the compiler links.
 - **clang** 17 or later — compiles the LLVM IR the LLVM backend writes, with the C runtime, into
-  an executable (`--target llvm`, adr:0021-compiler-in-rust-with-llvm-as-its-native-code-generator):
+  an executable, or with `--shared` a shared library
+  (`--target llvm`, adr:0021-compiler-in-rust-with-llvm-as-its-native-code-generator):
   found as `LOTML_CLANG`, `clang` on `PATH`, then where the LLVM installer for Windows puts it.
   Not a library the compiler links; textual IR keeps the compiler's own build free of LLVM's
   libraries. On Windows it links with Visual Studio's linker and libraries.
+- **llvm-dwarfdump**, **llvm-objdump**, **llvm-readobj** and **nm** (development only) — what the
+  LLVM target's tests read a line table and a library's exported symbols with, found beside
+  `clang` or on `PATH`; CI checks it has `llvm-dwarfdump`.
 
 ## Editors (`editors/`)
 
