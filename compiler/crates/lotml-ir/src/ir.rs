@@ -588,6 +588,15 @@ pub enum Expr {
         params: Vec<Ty>,
         ret: Ty,
     },
+    /// A call of the function `function` of the Python module `module`, declared by its interface
+    /// with `params` and returning `ret`, a `T ! PyError`: the arguments read and converted.
+    CallPython {
+        module: String,
+        function: String,
+        args: Vec<Operand>,
+        params: Vec<Ty>,
+        ret: Ty,
+    },
     /// `parallel(tasks)`: each closure of `tasks` run on a thread, its result of type `result`.
     Parallel {
         tasks: Operand,
@@ -666,7 +675,7 @@ impl Expr {
             Expr::Closure { captures, .. } => captures.iter().for_each(f),
             Expr::FnRef(_) => {}
             Expr::Parallel { tasks, .. } => f(tasks),
-            Expr::CallC { args, .. } => args.iter().for_each(f),
+            Expr::CallC { args, .. } | Expr::CallPython { args, .. } => args.iter().for_each(f),
             Expr::ToDyn { value, .. } => f(value),
             Expr::CallDyn { receiver, args, .. } => {
                 f(receiver);
@@ -869,7 +878,7 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
             f(ret);
         }
         Expr::Parallel { result, .. } => f(&Ty::List(Box::new(result.clone()))),
-        Expr::CallC { params, ret, .. } => {
+        Expr::CallC { params, ret, .. } | Expr::CallPython { params, ret, .. } => {
             params.iter().for_each(&mut *f);
             f(ret);
         }

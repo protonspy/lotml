@@ -894,6 +894,7 @@ impl Writer<'_> {
             Expr::Capture { closure, lambda, index } => {
                 format!("((lt_c{lambda} *)({}))->c{index}", self.operand(closure))
             }
+            Expr::CallPython { .. } => unreachable!("a Python import is refused before the C is written"),
             Expr::CallClosure { callee, args, ty } => {
                 let f = self.operand(callee);
                 let mut all = vec![f.clone()];

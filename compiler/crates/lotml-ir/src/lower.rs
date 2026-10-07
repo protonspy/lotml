@@ -41,6 +41,9 @@ pub struct Lowered {
     pub libraries: BTreeSet<String>,
     /// Where each line of the source starts, as a byte offset: what turns a span into a line.
     pub line_starts: Vec<u32>,
+    /// Each Python module the program imports, with the span of its import: what a target that
+    /// cannot call Python refuses.
+    pub python_imports: Vec<(String, Span)>,
 }
 
 impl Lowered {
@@ -310,6 +313,8 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
         vtable_ids: HashMap::new(),
         math_names: HashSet::new(),
         c_imports: HashMap::new(),
+        py_imports: HashMap::new(),
+        python_imports: Vec::new(),
         c_functions: BTreeMap::new(),
         libraries: BTreeSet::new(),
         diagnostics: Vec::new(),
@@ -445,6 +450,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
         c_functions: std::mem::take(&mut cx.c_functions),
         libraries: std::mem::take(&mut cx.libraries),
         line_starts: std::mem::take(&mut cx.line_starts),
+        python_imports: std::mem::take(&mut cx.python_imports),
     })
 }
 
@@ -478,6 +484,11 @@ struct Context<'a> {
     math_names: HashSet<String>,
     /// The names `from c.<library> import …` brought into scope, with their signatures.
     c_imports: HashMap<String, FnSig>,
+    /// The names `from <module> import …` brought into scope from a Python module, with the
+    /// module and their signatures.
+    py_imports: HashMap<String, (String, FnSig)>,
+    /// Each Python module imported, with the span of its import.
+    python_imports: Vec<(String, Span)>,
     /// The C functions called so far, by symbol.
     c_functions: BTreeMap<String, (Vec<Ty>, Ty)>,
     libraries: BTreeSet<String>,
@@ -588,11 +599,12 @@ impl<'a> Context<'a> {
     fn import(&mut self, import: &'a ast::Import) {
         let path = import.module.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(".");
         if !lotml_check::is_c_library(&path) {
-            self.diagnostics.push(Diagnostic::error(
-                "E0401",
-                import.span,
-                format!("`{path}` is a Python module, and a program built for the C target runs without Python"),
-            ));
+            for name in &import.names {
+                if let Some(sig) = self.checked.foreign.get(&path).and_then(|fs| fs.get(&name.name)) {
+                    self.py_imports.insert(name.name.clone(), (path.clone(), sig.clone()));
+                }
+            }
+            self.python_imports.push((path, import.span));
             return;
         }
         let Some(functions) = self.checked.foreign.get(&path) else { return };
@@ -2331,6 +2343,9 @@ impl<'c, 'a> Builder<'c, 'a> {
             self.cx.c_functions.insert(name.clone(), (params.clone(), sig.ret.clone()));
             return Value::Expr(Expr::CallC { symbol: name.clone(), args: operands, params, ret: sig.ret });
         }
+        if let Some((module, sig)) = self.cx.py_imports.get(name.as_str()).cloned() {
+            return self.python_call(module, name, &sig, args);
+        }
         if matches!(self.cx.checked.declared.get(name), Some(TypeDef::Record { .. })) {
             let ty = self.ty(whole);
             return self.construct(whole, ty, None, args);
@@ -3060,12 +3075,29 @@ impl<'c, 'a> Builder<'c, 'a> {
     }
 
     /// `object.name(args)`: a method of a declared type, or of a built-in one.
+    /// A call of `function` of the Python module `module` through its interface's `sig` (R1.3).
+    fn python_call(&mut self, module: String, function: &str, sig: &FnSig, args: &[AstArg]) -> Value {
+        let mut operands = Vec::new();
+        for (a, p) in args.iter().zip(&sig.params) {
+            let v = self.value(a.expr());
+            operands.push(self.coerce(v, &p.ty));
+        }
+        let params = sig.params.iter().map(|p| p.ty.clone()).collect();
+        let ret = call_ret(sig);
+        Value::Expr(Expr::CallPython { module, function: function.to_string(), args: operands, params, ret })
+    }
+
     fn method(&mut self, whole: &ast::Expr, object: &ast::Expr, name: &str, args: &[AstArg]) -> Value {
         let ty = self.ty(object);
         let owner = match &ty {
             Ty::Adt(owner, _) | Ty::TypeName(owner) => Some(owner.clone()),
             Ty::Dyn(trait_name) => return self.dyn_method(whole, object, trait_name, name, args),
-            Ty::Module(_) => return self.math_call(whole, name, args),
+            Ty::Module(module) => {
+                if let Some(sig) = self.cx.checked.foreign.get(module).and_then(|fs| fs.get(name)).cloned() {
+                    return self.python_call(module.clone(), name, &sig, args);
+                }
+                return self.math_call(whole, name, args);
+            }
             Ty::Heap(elem) => return self.heap_method(whole, object, elem, name, args),
             _ => None,
         };

@@ -1,14 +1,22 @@
 //! Lowering a checked program into the IR (specs/shared-ir).
 
-use lotml_ir::ir::{Block, Function, Stmt, StmtKind};
+use lotml_check::ty::Ty;
+use lotml_check::{Interfaces, interface_of};
+use lotml_ir::ir::{Block, Expr, Function, Stmt, StmtKind};
 use lotml_ir::lower::{Lowered, lower};
 use lotml_syntax::parse;
 use lotml_syntax::span::Span;
 
 fn lowered(source: &str) -> Lowered {
+    lowered_with(source, &Interfaces::new())
+}
+
+fn lowered_with(source: &str, interfaces: &Interfaces) -> Lowered {
     let parsed = parse(source);
     assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
-    let checked = lotml_check::check_resolved(&parsed.module, source);
+    let checked = lotml_check::check_resolved_with(&parsed.module, source, interfaces);
+    let errors: Vec<_> = checked.diagnostics.iter().filter(|d| d.severity == lotml_diag::Severity::Error).collect();
+    assert!(errors.is_empty(), "{:#?}", errors.iter().map(|d| &d.message).collect::<Vec<_>>());
     lower(&parsed.module, &checked, source, false).unwrap_or_else(|d| panic!("{d:#?}"))
 }
 
@@ -66,4 +74,48 @@ fn a_span_names_the_line_it_starts_on_counting_from_one() {
     assert_eq!(at(PROGRAM.find("y = x").unwrap()), 2);
     assert_eq!(at(PROGRAM.find("return y\n").unwrap()), 5);
     assert_eq!(at(PROGRAM.find('\n').unwrap()), 1, "a line's own newline is on it");
+}
+
+fn textwrap() -> Interfaces {
+    let (found, problems) = interface_of("textwrap", "fn dedent(text: str) -> str ! PyError\n");
+    assert!(problems.is_empty(), "{:?}", problems.iter().map(|d| &d.message).collect::<Vec<_>>());
+    Interfaces::from([("textwrap".to_string(), found)])
+}
+
+fn python_calls(lowered: &Lowered) -> Vec<(String, String, Ty)> {
+    let mut calls = Vec::new();
+    for f in &lowered.functions {
+        each_stmt(&f.body, &mut |stmt| {
+            if let StmtKind::Let(_, Expr::CallPython { module, function, ret, .. }) = &stmt.kind {
+                calls.push((module.clone(), function.clone(), ret.clone()));
+            }
+        });
+    }
+    calls
+}
+
+#[test]
+fn a_call_into_a_python_module_is_a_python_call_whichever_way_it_was_imported() {
+    let py_error = Ty::Adt("PyError".into(), vec![]);
+    let returns = Ty::Result(Box::new(Ty::Str), Box::new(py_error));
+    for source in [
+        "from textwrap import dedent\n\nfn f(s: str) -> str ! PyError:\n    return dedent(s)?\n",
+        "import textwrap\n\nfn f(s: str) -> str ! PyError:\n    return textwrap.dedent(s)?\n",
+    ] {
+        let lowered = lowered_with(source, &textwrap());
+        assert_eq!(
+            python_calls(&lowered),
+            [("textwrap".to_string(), "dedent".to_string(), returns.clone())],
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn each_python_import_is_kept_with_its_span_for_a_target_without_python() {
+    let source = "from textwrap import dedent\n\nfn f(s: str) -> str ! PyError:\n    return dedent(s)?\n";
+    let lowered = lowered_with(source, &textwrap());
+    let [(module, span)] = lowered.python_imports.as_slice() else { panic!("{:?}", lowered.python_imports) };
+    assert_eq!(module, "textwrap");
+    assert!(source[span.start as usize..span.end as usize].starts_with("from textwrap import dedent"));
 }

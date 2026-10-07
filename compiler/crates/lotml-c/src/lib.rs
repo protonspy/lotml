@@ -13,6 +13,15 @@ use lotml_check::{Interfaces, check_resolved_with};
 use lotml_diag::{Diagnostic, Severity};
 use lotml_syntax::parse;
 
+/// The import of the Python module `path`, refused: the C target runs without Python (R5.3).
+fn python_refused(path: &str, span: lotml_syntax::span::Span) -> Diagnostic {
+    Diagnostic::error(
+        "E0401",
+        span,
+        format!("`{path}` is a Python module, and a program built for the C target runs without Python"),
+    )
+}
+
 /// A compiled program: its C, and the C libraries to link it with.
 pub struct Program {
     pub c: String,
@@ -46,6 +55,9 @@ pub fn compile_program(
         return Err(errors);
     }
     let mut lowered = lower::lower(&parsed.module, &checked, source, tests)?;
+    if !lowered.python_imports.is_empty() {
+        return Err(lowered.python_imports.iter().map(|(path, span)| python_refused(path, *span)).collect());
+    }
     lotml_ir::native(&mut lowered);
     let c = emit::program(&lowered, &path.display().to_string(), tests);
     Ok(Program { c, libraries: lowered.libraries.iter().filter(|l| !driver::linked_always(l)).cloned().collect() })

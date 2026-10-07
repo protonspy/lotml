@@ -3,7 +3,7 @@
 ## 1 · The crate
 
 - [x] 1.1 (Unit) Create `lotml-ir` with the C backend's intermediate form moved into it, a span on every statement, built-ins as an enum, and symbols made by `lotml_ir::symbol` — R1.1, R1.2, R1.3
-- [ ] 1.2 (Unit) Move lowering into `lotml-ir`, one instance per set of type arguments with the refusal of generics that need instances without end, and calls into Python modules lowered to `CallPython` — R1.1, R1.3, R1.4, R2.1, R3.3
+- [x] 1.2 (Unit) Move lowering into `lotml-ir`, one instance per set of type arguments with the refusal of generics that need instances without end, and calls into Python modules lowered to `CallPython` — R1.1, R1.3, R1.4, R2.1, R3.3
   _Depends 1.1_
 - [ ] 1.3 (Unit) Split instantiation out of lowering into the `mono` pass, with the refusal of generics that need instances without end — R3.1, R3.3
   _Depends 1.2_
