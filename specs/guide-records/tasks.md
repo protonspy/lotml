@@ -16,3 +16,6 @@
   _Depends 2.1_
 - [x] 2.3 (Unit) Drop and count a record over the context budget, then write the records to the cache and the committed report with every count by reason — R2.6, R2.7
   _Depends 2.2_
+- [x] 2.4 (Unit) Keep each record's state beside its messages — R2.8
+  _Depends 2.1_
+  _Reason the training pipeline's reward judges an answer against the raw file (specs/training-pipeline/ 1.2)_

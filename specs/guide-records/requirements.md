@@ -35,6 +35,7 @@ taken from the fix, never from the diagnostic.
 - **R2.5** The guide records builder shall mark every record with its problem, split, origin — `real` or `seeded` — source, model, compiler version and renderer version, write train and validation to separate files, and refuse a held-out record.
 - **R2.6** If a record's rendered messages and the answer budget together exceed the guide's context, counted with the base model's tokenizer, then the guide records builder shall leave it out and count it.
 - **R2.7** The guide records builder shall write the records to the git-ignored cache and commit `harness/results/guide-records.md` with the records by origin, split, kind and source, and every record left out by reason.
+- **R2.8** The guide records builder shall keep with each record the state it was rendered from, so an answer can be judged against the raw file (specs/training-pipeline/ R4.2).
 
 ## Out of scope
 

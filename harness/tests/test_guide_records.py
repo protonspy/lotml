@@ -1,4 +1,4 @@
-"""Guidance records from repairs (specs/guide-records/ R2.1-R2.7)."""
+"""Guidance records from repairs (specs/guide-records/ R2.1-R2.8)."""
 
 import json
 from pathlib import Path
@@ -89,6 +89,18 @@ def test_a_repair_becomes_a_chat_example_with_and_without_its_task():
         "task": True,
         "kind": "body",
     }
+
+
+def test_a_record_keeps_the_state_it_was_rendered_from():
+    with_task, without = build(repair(), ROOMY)[0]
+    assert with_task["state"] == {
+        "task": "Write `add`.",
+        "path": "solution.lotml",
+        "text": BEFORE,
+        "diagnostics": [DIAGNOSTIC],
+        "failing": None,
+    }
+    assert without["state"] == with_task["state"] | {"task": None}
 
 
 def test_the_split_is_read_again_and_a_held_out_repair_stops_the_build():

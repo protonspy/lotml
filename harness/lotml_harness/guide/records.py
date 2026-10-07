@@ -96,7 +96,8 @@ class Budget:
 def build(
     repair: dict, budget: Budget, deadline: float = safe.DEADLINE
 ) -> tuple[list[dict], list[str]]:
-    """A repair's guidance records — with the task and without it — and why any was left out."""
+    """A repair's guidance records — with the task and without it — and why any was left out.
+    Each keeps the state it was rendered from, for judging an answer against the raw file."""
     meta = repair["meta"]
     problem = meta.get("problem") or split.problem(meta["task"])
     bucket = split.split(problem)
@@ -131,6 +132,7 @@ def build(
             records.append(
                 {
                     "messages": [*messages, {"role": "assistant", "content": answer}],
+                    "state": state(repair, task),
                     "meta": {
                         "problem": problem,
                         "split": bucket,

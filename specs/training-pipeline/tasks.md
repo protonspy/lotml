@@ -1,7 +1,7 @@
 # Training pipeline — tasks
 
 - [x] 1.1 (Unit) Add `lotml dev judge`: read an answer with the guide tool's reader, make its edit with the gate, check it, and run a failing block in a scratch directory — R4.2, R4.4
-- [ ] 1.2 (Unit) Keep each guidance record's state beside its messages, as a delta to specs/guide-records/ — R4.2
+- [x] 1.2 (Unit) Keep each guidance record's state beside its messages, as a delta to specs/guide-records/ — R4.2
 - [ ] 1.3 (TDD) Score answers through the judge: zero outside the schema or on a failed judgment, else the mean of the location and edit parts — R4.1, R4.2, R4.3, R4.4
   _Depends 1.1, 1.2_
 - [ ] 2.1 (Unit) Speak RunPod's REST API: price from the catalog, create, status, terminate and confirm gone, the key from the environment — R1.1, R1.4
