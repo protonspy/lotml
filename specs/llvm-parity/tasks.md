@@ -22,12 +22,12 @@
   _Depends 2.1_
 - [ ] 2.4 (Unit) Run `test` blocks through the runtime's test runner on `lotml test --target llvm` — R1.4
   _Depends 2.1_
-- [ ] 2.5 (Unit) Write line tables at `-O0` and check a debugger's backtrace names the `.lot` line — R2.2
+- [ ] 2.5 (Unit) Write line tables at `-O0` and check, with `llvm-dwarfdump --debug-line`, that they name the `.lot` lines — R2.2
   _Depends 2.1_
 
 ## 3 · Measured
 
 - [ ] 3.1 (Unit) Run the parity suite on the Python, C and LLVM targets and record it — R1.1, R5.1
   _Depends 2.2, 2.3, 2.4_
-- [ ] 3.2 (Unit) Run the benchmarks on the LLVM target and record them beside the C run — R5.2
+- [ ] 3.2 (Unit) Run the benchmarks on the LLVM target, and the C target's output built by `clang`, and record them beside the C run — R5.2, R5.3
   _Depends 3.1_

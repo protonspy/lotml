@@ -38,8 +38,9 @@ below restate that spec's for the LLVM target.
 
 ## R5 · The measurements
 
-- **R5.1** When the parity experiment runs, the harness shall run every program of the corpus on the Python, C and LLVM targets and report, for each native target, whether it reports the same as the Python target.
+- **R5.1** When the parity experiment runs, the harness shall run every program of the corpus on the Python, C and LLVM targets, the LLVM one built at `-O2`, and report, for each native target, whether it reports the same as the Python target.
 - **R5.2** When the benchmarks run, the harness shall record the LLVM target's times beside the C target's in `harness/results/benchmarks.md`.
+- **R5.3** While the C target exists, when the benchmarks run, the harness shall also build the C target's output with `clang`, so a gap to C is attributed to the lowering or to the C compiler.
 
 ## Out of scope
 
