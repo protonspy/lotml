@@ -54,9 +54,14 @@ pub fn compile_program(
     if !errors.is_empty() {
         return Err(errors);
     }
-    let mut lowered = lower::lower(&parsed.module, &checked, source, tests)?;
-    if !lowered.python_imports.is_empty() {
-        return Err(lowered.python_imports.iter().map(|(path, span)| python_refused(path, *span)).collect());
+    let refused: Vec<Diagnostic> =
+        lower::python_imports(&parsed.module).iter().map(|(path, span)| python_refused(path, *span)).collect();
+    let mut lowered = match lower::lower(&parsed.module, &checked, source, tests) {
+        Ok(lowered) => lowered,
+        Err(errors) => return Err(refused.into_iter().chain(errors).collect()),
+    };
+    if !refused.is_empty() {
+        return Err(refused);
     }
     lotml_ir::native(&mut lowered);
     let c = emit::program(&lowered, &path.display().to_string(), tests);

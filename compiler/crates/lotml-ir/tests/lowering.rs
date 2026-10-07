@@ -113,9 +113,11 @@ fn a_call_into_a_python_module_is_a_python_call_whichever_way_it_was_imported() 
 
 #[test]
 fn each_python_import_is_kept_with_its_span_for_a_target_without_python() {
-    let source = "from textwrap import dedent\n\nfn f(s: str) -> str ! PyError:\n    return dedent(s)?\n";
+    let source = "from math import sqrt\nfrom textwrap import dedent\n\nfn f(s: str) -> str ! PyError:\n    print(sqrt(2.0))\n    return dedent(s)?\n";
     let lowered = lowered_with(source, &textwrap());
-    let [(module, span)] = lowered.python_imports.as_slice() else { panic!("{:?}", lowered.python_imports) };
+    let [(module, span)] = lowered.python_imports.as_slice() else {
+        panic!("only textwrap is Python, math is the language's: {:?}", lowered.python_imports)
+    };
     assert_eq!(module, "textwrap");
     assert!(source[span.start as usize..span.end as usize].starts_with("from textwrap import dedent"));
 }

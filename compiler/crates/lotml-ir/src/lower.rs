@@ -292,6 +292,23 @@ fn exceeds(ty: &Ty, budget: &mut usize) -> bool {
     }
 }
 
+/// Each Python module `module` imports — neither a module of the language, as `math` is, nor a C
+/// library — with the span of its import: what a target that cannot call Python refuses, whether
+/// or not the rest of the module lowers.
+pub fn python_imports(module: &Module) -> Vec<(String, Span)> {
+    let path = |import: &ast::Import| import.module.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(".");
+    module
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Import(import) if !is_math(import) && !lotml_check::is_c_library(&path(import)) => {
+                Some((path(import), import.span))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 /// The module as functions of the IR; with `tests`, its `test` blocks too.
 pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Result<Lowered, Vec<Diagnostic>> {
     let mut cx = Context {
@@ -314,7 +331,6 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
         math_names: HashSet::new(),
         c_imports: HashMap::new(),
         py_imports: HashMap::new(),
-        python_imports: Vec::new(),
         c_functions: BTreeMap::new(),
         libraries: BTreeSet::new(),
         diagnostics: Vec::new(),
@@ -453,7 +469,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
         c_functions: std::mem::take(&mut cx.c_functions),
         libraries: std::mem::take(&mut cx.libraries),
         line_starts: std::mem::take(&mut cx.line_starts),
-        python_imports: std::mem::take(&mut cx.python_imports),
+        python_imports: python_imports(module),
     })
 }
 
@@ -490,8 +506,6 @@ struct Context<'a> {
     /// The names `from <module> import …` brought into scope from a Python module, with the
     /// module and their signatures.
     py_imports: HashMap<String, (String, FnSig)>,
-    /// Each Python module imported, with the span of its import.
-    python_imports: Vec<(String, Span)>,
     /// The C functions called so far, by symbol.
     c_functions: BTreeMap<String, (Vec<Ty>, Ty)>,
     libraries: BTreeSet<String>,
@@ -607,7 +621,6 @@ impl<'a> Context<'a> {
                     self.py_imports.insert(name.name.clone(), (path.clone(), sig.clone()));
                 }
             }
-            self.python_imports.push((path, import.span));
             return;
         }
         let Some(functions) = self.checked.foreign.get(&path) else { return };
@@ -3077,7 +3090,6 @@ impl<'c, 'a> Builder<'c, 'a> {
         Operand::Local(best)
     }
 
-    /// `object.name(args)`: a method of a declared type, or of a built-in one.
     /// A call of `function` of the Python module `module` through its interface's `sig` (R1.3).
     fn python_call(&mut self, module: String, function: &str, sig: &FnSig, args: &[AstArg]) -> Value {
         let mut operands = Vec::new();
@@ -3090,6 +3102,7 @@ impl<'c, 'a> Builder<'c, 'a> {
         Value::Expr(Expr::CallPython { module, function: function.to_string(), args: operands, params, ret })
     }
 
+    /// `object.name(args)`: a method of a declared type, or of a built-in one.
     fn method(&mut self, whole: &ast::Expr, object: &ast::Expr, name: &str, args: &[AstArg]) -> Value {
         let ty = self.ty(object);
         let owner = match &ty {

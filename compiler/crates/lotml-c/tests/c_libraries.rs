@@ -86,6 +86,18 @@ fn a_python_import_is_refused_at_the_import() {
 }
 
 #[test]
+fn a_python_import_is_refused_first_when_something_else_does_not_compile_either() {
+    let source = "from textwrap import fill\n\nfn main():\n    print(1, flush=True)\n";
+    let read = interfaces(&[("textwrap", "fn fill(text: str, width: int) -> str ! PyError\n")]);
+    let Err(errors) = lotml_c::compile_program(source, Path::new("prog.lotml"), &read, false) else {
+        panic!("compiled to C");
+    };
+    let codes: Vec<&str> = errors.iter().map(|d| d.code).collect();
+    assert_eq!(codes.first(), Some(&"E0401"), "{codes:?}");
+    assert!(codes.contains(&"E0402"), "{codes:?}");
+}
+
+#[test]
 fn a_missing_library_stops_the_build() {
     let source = "from c.no_such_library_here import f\n\nfn main():\n    print(f(1))\n";
     let read = interfaces(&[("c.no_such_library_here", "fn f(x: i32) -> i32\n")]);
