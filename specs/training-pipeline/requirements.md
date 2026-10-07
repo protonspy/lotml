@@ -42,20 +42,24 @@ a cap, and never leaves a pod running.
 
 - **R3.1** The training pipeline shall build the guidance records on the local machine and upload them before any pod starts.
 - **R3.2** The training pipeline shall fine-tune the base model on the train split's records with the loss on the answer alone.
-- **R3.3** The training pipeline shall then train the fine-tuned model by reinforcement learning with group-relative policy optimization, sampling several answers to each train record and scoring each with the reward of R4.
+- **R3.3** The training pipeline shall then train the guide by group-relative policy optimization only on the pool of R3.8, sampling several answers to each record and scoring each with the reward of R4, and keep the checkpoint that scores best on a sample of the validation split.
 - **R3.4** The training pipeline shall merge the trained adapter into the base model, export it as a Q4_K_M GGUF file with llama.cpp build b11450, and calibrate the threshold on the validation split for a target precision.
 - **R3.5** Where a run names stages, the training pipeline shall run only those, each from the outputs of the run it names for its input.
+- **R3.6** The training pipeline shall sample several answers to each train record from the fine-tuned guide at temperature 1.0 and judge each as R4 does.
+- **R3.7** The training pipeline shall fine-tune the guide further on the sampled answers whose edit passes and whose first location names a declaration the real fix changed, with the record's own target where none of its answers did.
+- **R3.8** The training pipeline shall build the reinforcement-learning pool from the train records whose sampled answers' mean reward lies strictly between zero and one, with a share of the records always solved.
+- **R3.9** Where a run asks for a random reward, the training pipeline shall train by group-relative policy optimization with a reward drawn at random in place of R4's, as the control beside a run with R4's.
 
 ## R4 · The reward
 
 - **R4.1** The training pipeline shall score an answer outside the answer schema zero.
-- **R4.2** The training pipeline shall score any other answer as the mean of two parts: its locations — one when the first names a declaration the real fix changed, one half when only a later one does, else zero — and its edit — one when the edit, made as the `guide` tool's gate makes it, leaves the file checking clean and, for a failing test block, makes that block pass, else zero.
+- **R4.2** The training pipeline shall score any other answer as the mean of two parts: its locations — the F-score, with beta 3, of the declarations it names against those the real fix changed, and zero when it names one that the file does not declare — and its edit — one when the edit, made as the `guide` tool's gate makes it, leaves the file checking clean and, for a failing test block, makes that block pass, else zero.
 - **R4.3** If judging an answer passes its deadline or the compiler fails, then the training pipeline shall score that answer zero and count it in the run's report.
 - **R4.4** The training pipeline shall judge every answer in a scratch copy, never in the repository or the records.
 
 ## R5 · Reports
 
-- **R5.1** When a run ends, the training pipeline shall commit its report: the stages, their settings, the records' digest, the GPU, the time and the cost, and on the validation split, before and after reinforcement learning, the share of answers within the schema, top-1 and top-3 location, the share of edits that pass, and the calibrated threshold with its precision.
+- **R5.1** When a run ends, the training pipeline shall commit its report: the stages, their settings, the records' digest, the GPU, the time and the cost, and on the validation split, before and after reinforcement learning, the share of answers within the schema, top-1 and top-3 location, the share of edits that pass, pass@1, pass@4 and pass@8 of the first location and of the edit over answers sampled at temperature 1.0, and the calibrated threshold with its precision; and for every reinforcement-learning stage the size of its pool and the share of groups whose answers all scored alike.
 - **R5.2** The training pipeline shall hold no key, token or path under the user's home in the ledger or in a report.
 
 ## Out of scope

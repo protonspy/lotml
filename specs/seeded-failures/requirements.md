@@ -35,6 +35,7 @@ with the program as its known fix — and the guide is judged on real failures o
 - **R2.4** If `check --fix` makes a mutant check clean, then the seeded failure generator shall drop it and count it.
 - **R2.5** The seeded failure generator shall give each program a fixed budget of mutants, shared among the families in proportion to how often agents' failures fall in each family, from the counts the harness's committed reports give, with a family's unused share passed to the others, and name those counts in its report.
 - **R2.6** The seeded failure generator shall draw within a family uniformly over its operators' mutants, and keep each identical mutant once per problem.
+- **R2.8** The seeded failure generator shall also make mutants that join two drawn mutants of one program in different declarations, judged as one mutant, so the fix spans more than one declaration (specs/training-pipeline/, adr:0020-the-guide-trains-by-fine-tuning-then-rejection-sampling-and-rl-on-what-it-sometimes-solves).
 - **R2.7** The seeded failure generator shall judge each mutant in a scratch copy written through the agent harness's safe layer, running every `lotml` call in the harness's clean environment, with its files after `--`, a memory cap and a deadline that ends its process tree.
 
 ## R3 · The output

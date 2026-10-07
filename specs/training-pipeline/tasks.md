@@ -20,3 +20,15 @@
 - [x] 4.1 (Unit) Record the move to RunPod and Hugging Face in an ADR and in the stack — R1.1, R2.1
 - [ ] 4.2 (Unit) Run the pipeline on RunPod — SFT, reinforcement learning and export of the 0.5B model — within the cap, and commit its report and ledger — R1.3, R5.1
   _Depends 3.5, 4.1_
+- [ ] 5.1 (TDD) Score an answer's locations by the F-score with beta 3 of the declarations it names, zero when one is not declared in the file, the judge saying which are not — R4.2
+- [ ] 5.2 (Unit) Sample several answers to each train record from the fine-tuned guide and judge each — R3.6
+- [ ] 5.3 (Unit) Fine-tune the guide further on the sampled answers that pass, with the record's target where none did — R3.7
+  _Depends 5.2_
+- [ ] 5.4 (Unit) Build the reinforcement-learning pool from the records sometimes solved, with a share of those always solved — R3.8
+  _Depends 5.2_
+- [ ] 5.5 (Unit) Train by group-relative policy optimization on the pool with adr:0020's settings, keep the best checkpoint on a validation sample, and offer a random-reward twin — R3.3, R3.9
+  _Depends 5.1, 5.4_
+- [ ] 5.6 (Unit) Report pass@1, pass@4 and pass@8 sampled on the validation split, the pool's size and the share of groups that scored alike — R5.1
+  _Depends 5.2_
+- [ ] 5.7 (Unit) Run the recipe on RunPod beside its random-reward twin and commit their reports — R5.1
+  _Depends 5.3, 5.5, 5.6_
