@@ -18,6 +18,13 @@ pub struct ParamSig {
     pub span: Span,
 }
 
+impl ParamSig {
+    /// Whether the parameter lends the caller's own slot: `inout`.
+    pub fn is_inout(&self) -> bool {
+        self.convention == Convention::Inout
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct FnSig {
     pub name: String,

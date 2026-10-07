@@ -35,10 +35,29 @@ lotml-ir::lower    generic IR       ──► Python backend
 
 Serves R1.1, R1.2, R2.1, R3.1.
 
-`compiler/crates/lotml-py/src/emit.rs` is rewritten against `lotml_ir::lower`'s output; nothing
-else in the crate moves. The output keeps its shape: a stub module that hands
+`compiler/crates/lotml-py/src/emit.rs` is replaced by `from_ir.rs`, written against
+`lotml_ir::lower`'s output. The output keeps its shape: a stub module that hands
 `lotml_rt.load_module` the program as a Python syntax tree in JSON, every node at a LotML
-position, so `lotml_rt.py`, `boundary.rs` and the `.pyi` writer are untouched.
+position, so `lotml_rt.py`'s protocol, `boundary.rs` and the `.pyi` writer are unchanged; the
+runtime gains only the few operations the IR names that Python has no one expression for
+(`MISSING`, `rename`, `closure`, `out`, `lookup`, `popped`, `split_pair`, `unpack`,
+`sort_by_keys`) and lets a `Heap` be read by index.
+
+- **What the IR carries for it.** Each statement keeps, beside its own span, the span of the
+  expression it computes (`Stmt.at`, a delta to `specs/shared-ir/`). Each default of a
+  parameter or field is lowered as a function of no parameters (`Lowered.defaults`), which a
+  Python caller leaving it out gets: a LotML call fills defaults in where it is made. A
+  built-in method the IR has no operation of its own for is `Expr::Method`, the method of the
+  value at a place, which the Python target calls and a native target refuses; a `bytes`
+  literal is `Const::Bytes`, and `PyError`'s fields are the checker prelude's.
+- **Copies.** The native targets copy on write; Python shares, so the emitter copies where a
+  `var` or an `inout` is involved, as the syntax tree's emitter did. A local is *mutated* when it
+  is the root of an in-place change, an `inout` or a lent slot; it is *rooted* when it may hold
+  what a mutated one holds, through a read of it, an element, a field or a built-in result. A
+  value entering a mutated local is copied unless it was built where it is; a rooted value is
+  copied where it is stored — a container, an argument, a binding, a returned value — and a
+  value stored into a mutated container is copied unless it is new. A temporary holding the
+  whole value of a mutated local — the snapshot a loop walks — is a copy.
 
 - **Statements.** Each IR statement becomes Python statements at its span. A `Let` of an
   intermediate value becomes an assignment to a Python local named for the IR local (`_t12`),

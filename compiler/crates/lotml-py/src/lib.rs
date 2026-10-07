@@ -1,14 +1,15 @@
-//! The Python backend: a checked lotml program as a Python module (R13, R26; adr:0008).
+//! The Python backend: a checked lotml program as a Python module (R13, R26; adr:0008), written
+//! from the generic IR the native targets compile too (adr:0020, specs/python-on-ir).
 //!
 //! The module is a stub that hands the runtime the program as a Python syntax tree in JSON,
 //! every node at its lotml position; the runtime compiles that tree under the `.lotml` file's
-//! name, so a traceback names the lotml line and underlines the lotml expression. The checker's
-//! types decide the rest: which arithmetic traps outside its integer type, which values are
-//! copied — only those entering or leaving a `var` or an `inout` — and how a built-in method
-//! whose lotml meaning differs from Python's is called.
+//! name, so a traceback names the lotml line and underlines the lotml expression. The IR's types
+//! decide the rest: which arithmetic traps outside its integer type, which values are copied —
+//! only those entering or leaving a `var` or an `inout` — and how a built-in operation whose
+//! lotml meaning differs from Python's is called.
 
 mod boundary;
-mod emit;
+mod from_ir;
 
 use std::path::Path;
 
@@ -66,7 +67,8 @@ pub fn compile_with(source: &str, path: &Path, interfaces: &Interfaces) -> Resul
         diagnostics.sort_by_key(|d| d.span.start);
         return Err(diagnostics);
     }
-    let module = emit::module(source, &parsed.module, &checked.types, &checked.foreign, &checked.locals);
+    let lowered = lotml_ir::lower::lower(&parsed.module, &checked, source, true)?;
+    let module = from_ir::module(source, &lowered);
     let exports = boundary::exports(&checked);
     let payload = serde_json::json!({"source": source, "module": module, "exports": exports}).to_string();
     let file = path.display().to_string();

@@ -60,10 +60,10 @@ over this file answers with the example above as well as with the notes. -->
 - n-0020 2026-10-05 #gotcha @harness/lotml_harness/lang/transpile.py — inout arguments are boxed and written back with a walrus after the call; an &x inside a lambda cannot write back to the enclosing x
 - n-0021 2026-10-05 #gotcha @harness/lotml_harness/lang/dialects.py — llguidance's lexer decides a lexeme one byte ahead: a lexeme that can run on into the next line (a multi-line end of line, a fused 'is not') rejects valid code
 - n-0022 2026-10-06 #ceiling @compiler/crates/lotml-fmt/src/lib.rs — the formatter joins every statement onto one line and never wraps; a long call stays long until line breaking is designed
-- n-0023 2026-10-06 #ceiling @compiler/crates/lotml-py/src/emit.rs — an `inout` argument and a plain read of the same place in one call alias each other on the Python target; the checker rejects only two `inout`s of one place (E0307)
-- n-0024 2026-10-06 #ceiling @compiler/crates/lotml-py/src/emit.rs — `inout self` is the object itself, not a box: a method assigning `self = …` does not reach the caller
-- n-0025 2026-10-06 #ceiling @compiler/crates/lotml-py/src/emit.rs — `&obj.f` and `&xs[i]` evaluate `obj` and `i` again for the write-back; a place with a call in it runs that call twice
-- n-0026 2026-10-06 #gotcha @compiler/crates/lotml-py/src/emit.rs — `:=` is not allowed in a comprehension's iterable or a default value; integer traps there go through `__rt.check`, the slower helper
+<!-- n-0023 removed -->
+<!-- n-0024 removed -->
+<!-- n-0025 removed -->
+<!-- n-0026 removed -->
 - n-0027 2026-10-06 #ceiling @compiler/crates/lotml-check/src/body.rs — E0308 fires only for a `var` copy of a parameter changed in a function returning nothing, and for `var self` not returned; other dropped changes go unreported
 - n-0028 2026-10-06 #ceiling @compiler/crates/lotml-check/src/prefix.rs — `check --prefix` holds every E0205, since a diagnostic does not say whether the receiver is a user type an `impl` below could extend
 - n-0029 2026-10-06 #gotcha @compiler/crates/lotml-py/src/lib.rs — on Windows `python.exe` in WindowsApps only opens the Store and prints nothing to `--version`; discovery requires a version on stdout and falls back to `py -3`
@@ -99,7 +99,7 @@ over this file answers with the example above as well as with the notes. -->
 - n-0074 2026-10-06 #ceiling @harness/lotml_harness/guide/seeded.py — on Windows a deadline kill ends the call's tree asynchronously, so its scratch directory can still be in use when removed; seeded's copies ignore cleanup errors and may leave lotml-seeded-* directories in TEMP
 - n-0056 2026-10-06 #gotcha @compiler/crates/lotml-syntax/src/strings.rs — an f-string spec with a nested field, f"{x:{w}}", is parsed as the literal text {w}: both targets stop with ValueError Invalid format specifier at run time
 - n-0057 2026-10-06 #ceiling @compiler/crates/lotml-runtime/c/lotml_text.c — the C runtime's character classes and case mapping cover ASCII, Latin-1, Latin Extended-A, Greek and Cyrillic; other scripts are uncased letters, so isalpha/upper there can differ from CPython
-- n-0058 2026-10-06 #gotcha @compiler/crates/lotml-py/src/emit.rs — on the Python target, assigning self inside an inout self method (self = T.new()) does not reach the caller; the C target writes it through the pointer, so a program doing it differs between targets
+<!-- n-0058 removed -->
 - n-0059 2026-10-06 #ceiling @compiler/crates/lotml-ir/src/lower.rs — C target: a trait method taking inout self, generic itself, or naming Self beyond its receiver has no vtable slot, so calling it through dyn is E0402; a typed slot per such method lifts it
 - n-0060 2026-10-06 #ceiling @compiler/crates/lotml-runtime/c/lotml_list.c — C target: hash() of a record holding a list, dict or set stops with TypeError, where the Python target hashes that field as a tuple; a hash per collection type that matches _hashable lifts it
 - n-0061 2026-10-06 #gotcha @compiler/crates/lotml-py/runtime/lotml_rt.py — Python target: a parallel task returning a value it captured hands back the same object, so changing that result through a var changes the captured binding too; the C target copies on write

@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: c5aa7ddea300db04d6e620f9a056ee0e56428a6f2df7c10b4d13ef7d1c079ee4
+checksum: 86c346a589a5546b8e82399bfa6d605047736e64ec73fc6b972aeb87946aa044
 ---
 
 # IR architecture
@@ -116,7 +116,7 @@ makes an executable.
   _Depends 2.1_
   _Priority 1_
   _Reason the user chose LLVM as the only native target (adr:0021)_
-- [ ] 3.3 (Unit) Write and build the spec python-on-ir: one lowering from the syntax
+- [x] 3.3 (Unit) Write and build the spec python-on-ir: one lowering from the syntax
       tree to the IR, read with generics intact by the Python backend and after
       monomorphization by the native ones, the parity suite unchanged
   _Depends 1.2_

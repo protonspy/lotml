@@ -295,6 +295,9 @@ pub type Block = Vec<Stmt>;
 pub struct Stmt {
     /// The span of the source statement this one was lowered from (R1.2).
     pub span: Span,
+    /// The span of the expression the statement computes, the statement's own where it computes
+    /// none: what a Python traceback underlines (specs/python-on-ir R2.1).
+    pub at: Span,
     pub kind: StmtKind,
 }
 
@@ -407,6 +410,7 @@ impl std::fmt::Debug for Const {
             Const::Bool(b) => write!(f, "{b}"),
             Const::Unit => write!(f, "()"),
             Const::Str(s) => write!(f, "{s:?}"),
+            Const::Bytes(b) => write!(f, "b{:?}", String::from_utf8_lossy(b)),
             Const::Null => write!(f, "null"),
             Const::Char(c) => write!(f, "{c:?}"),
         }
@@ -421,6 +425,8 @@ pub enum Const {
     Unit,
     /// A string literal's text.
     Str(String),
+    /// A bytes literal's bytes.
+    Bytes(Vec<u8>),
     /// No value, for an optional argument of the runtime left out: C's `NULL`.
     Null,
     /// A single ASCII character, for an option of the runtime: `'^'`.
@@ -666,6 +672,16 @@ pub enum Expr {
         ty: Ty,
         from: Ty,
     },
+    /// The built-in method `method` of the value at `place`, of type `ty`, which the IR has no
+    /// operation of its own for: the Python target calls Python's own method, which may change the
+    /// value in place; a native target refuses it.
+    Method {
+        place: Place,
+        ty: Ty,
+        method: String,
+        args: Vec<Operand>,
+        keywords: Vec<(String, Operand)>,
+    },
     /// A call of the closure `callee`, of type `ty`; the closure and the arguments taken over.
     CallClosure {
         callee: Operand,
@@ -735,6 +751,12 @@ impl Expr {
             Expr::Parallel { tasks, .. } => f(tasks),
             Expr::CallC { args, .. } | Expr::CallPython { args, .. } => args.iter().for_each(f),
             Expr::ToDyn { value, .. } | Expr::ToDynOf { value, .. } => f(value),
+            Expr::Method { place, args, keywords, .. } => {
+                f(&Operand::Local(place.local));
+                place_operands(place, f);
+                args.iter().for_each(&mut *f);
+                keywords.iter().for_each(|(_, o)| f(o));
+            }
             Expr::FnRefGeneric { .. } => {}
             Expr::CallDyn { receiver, args, .. } => {
                 f(receiver);
@@ -931,6 +953,7 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
         | Expr::CallClosure { ty, .. }
         | Expr::ToDyn { ty, .. }
         | Expr::ToDynOf { ty, .. }
+        | Expr::Method { ty, .. }
         | Expr::Compare(_, _, _, ty) => f(ty),
         Expr::CallDyn { ty, params, ret, .. } => {
             f(ty);
@@ -1055,6 +1078,7 @@ fn expr_types_mut(e: &mut Expr, f: &mut impl FnMut(&mut Ty)) {
         | Expr::Closure { ty, .. }
         | Expr::Parallel { result: ty, .. }
         | Expr::ToDyn { ty, .. }
+        | Expr::Method { ty, .. }
         | Expr::CallClosure { ty, .. }
         | Expr::OptIf { ty, .. } => f(ty),
         Expr::Convert(_, from, to) => {

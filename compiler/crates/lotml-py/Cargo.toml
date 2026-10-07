@@ -9,6 +9,7 @@ serde_json = { workspace = true }
 lotml-syntax = { path = "../lotml-syntax" }
 lotml-diag = { path = "../lotml-diag" }
 lotml-check = { path = "../lotml-check" }
+lotml-ir = { path = "../lotml-ir" }
 
 [lints]
 workspace = true

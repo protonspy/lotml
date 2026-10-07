@@ -6,10 +6,9 @@ use std::fmt::Write as _;
 
 use lotml_check::ty::Ty;
 use lotml_check::{Checked, FieldSig, FnSig, TypeDef};
-use lotml_syntax::ast::Convention;
 use serde_json::{Map, Value, json};
 
-use crate::emit::range_of;
+use crate::from_ir::range_of;
 
 /// A type as the runtime's `accept` reads it: a list naming the kind, then its parts.
 pub fn descriptor(ty: &Ty) -> Value {
@@ -58,7 +57,7 @@ pub fn exports(checked: &Checked) -> Value {
                 "params": sig.params.iter().map(|p| json!([p.name, descriptor(&p.ty), p.has_default])).collect::<Vec<_>>(),
                 "returns": descriptor(&sig.ret),
                 "error": sig.error.as_ref().map(descriptor),
-                "inout": sig.params.iter().any(|p| p.convention == Convention::Inout),
+                "inout": sig.params.iter().any(|p| p.is_inout()),
             }),
         );
     }
@@ -162,7 +161,7 @@ pub fn stub(source: &str, module: &str, checked: &Checked) -> String {
             let _ =
                 writeln!(out, "# Raises lotml_rt.LotmlError when it fails; its `error` is a {}.", annotation(error));
         }
-        if sig.params.iter().any(|p| p.convention == Convention::Inout) {
+        if sig.params.iter().any(|p| p.is_inout()) {
             out += "# Changes an argument in place (`inout`): call it from lotml.\n";
         }
         out += &signature(name, sig);

@@ -47,6 +47,26 @@ pub struct Lowered {
     /// Each Python module the program imports, with the span of its import: what a target that
     /// cannot call Python refuses.
     pub python_imports: Vec<(String, Span)>,
+    /// Each default a parameter or a field has, for a Python caller that leaves it out: a LotML
+    /// call fills a default in where it is made, so only the Python target reads these.
+    pub defaults: Vec<DefaultValue>,
+    /// The C library each C function the program calls is in, by its symbol.
+    pub c_libraries: BTreeMap<String, String>,
+}
+
+/// A default a parameter or a field is given when a caller leaves it out: the function of no
+/// parameters that computes it.
+pub struct DefaultValue {
+    pub of: DefaultOf,
+    pub function: Function,
+}
+
+/// What a default is the default of.
+pub enum DefaultOf {
+    /// The parameter `param` of the function or method whose symbol is `function`.
+    Param { function: String, param: String },
+    /// The field `field` of the record or variant `owner`, by name.
+    Field { owner: String, field: String },
 }
 
 impl Lowered {
@@ -93,6 +113,13 @@ impl Subst {
     }
 }
 
+/// A record every program has without declaring it: `PyError`, what a call into Python fails
+/// with, as the checker's prelude declares it.
+pub fn prelude_type(name: &str) -> Option<TypeDef> {
+    let text = |n: &str| FieldSig { name: Some(n.into()), ty: Ty::Str, has_default: false };
+    (name == "PyError").then(|| TypeDef::Record { params: Vec::new(), fields: vec![text("kind"), text("message")] })
+}
+
 /// The type parameters a method is generic over: its type's, then its own.
 fn method_params(method: &Method) -> Vec<String> {
     let mut names = method.owner_params.clone();
@@ -109,6 +136,15 @@ fn generic_call(call: Value, callee: Callee) -> Value {
         }
         Value::Expr(Expr::CallSlots(_, args)) => Value::Expr(Expr::CallGeneric { callee, args }),
         other => other,
+    }
+}
+
+/// The name of the record or sum type `item` declares, if it declares one.
+fn item_type(item: &Item) -> Option<&str> {
+    match item {
+        Item::Record(r) => Some(&r.name.name),
+        Item::Sum(s) => Some(&s.name.name),
+        _ => None,
     }
 }
 
@@ -332,6 +368,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
         c_imports: HashMap::new(),
         py_imports: HashMap::new(),
         c_functions: BTreeMap::new(),
+        c_libraries: BTreeMap::new(),
         libraries: BTreeSet::new(),
         diagnostics: Vec::new(),
     };
@@ -464,6 +501,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
             Item::Import(_) | Item::Test(_) | Item::Error(_) | Item::Record(_) | Item::Sum(_) => {}
         }
     }
+    let defaults = cx.defaults_of(module);
     if !cx.diagnostics.is_empty() {
         return Err(cx.diagnostics);
     }
@@ -494,8 +532,10 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
         tests: test_names,
         c_functions: std::mem::take(&mut cx.c_functions),
         libraries: std::mem::take(&mut cx.libraries),
-        line_starts: std::mem::take(&mut cx.line_starts),
         python_imports: python_imports(module),
+        defaults,
+        c_libraries: std::mem::take(&mut cx.c_libraries),
+        line_starts: std::mem::take(&mut cx.line_starts),
     })
 }
 
@@ -526,6 +566,8 @@ struct Context<'a> {
     py_imports: HashMap<String, (String, FnSig)>,
     /// The C functions called so far, by symbol.
     c_functions: BTreeMap<String, (Vec<Ty>, Ty)>,
+    /// The C library each C function imported is in, by its symbol.
+    c_libraries: BTreeMap<String, String>,
     libraries: BTreeSet<String>,
     fn_refs: BTreeSet<String>,
     diagnostics: Vec<Diagnostic>,
@@ -568,8 +610,105 @@ impl<'a> Context<'a> {
         for name in &import.names {
             if let Some(sig) = functions.get(&name.name) {
                 self.c_imports.insert(name.name.clone(), sig.clone());
+                self.c_libraries.insert(name.name.clone(), path["c.".len()..].to_string());
             }
         }
+    }
+
+    /// Each default of a parameter of the module's functions and methods and of a field of its
+    /// records and variants, as a function of no parameters returning it.
+    fn defaults_of(&mut self, module: &'a Module) -> Vec<DefaultValue> {
+        let mut out = Vec::new();
+        let mut functions: Vec<(String, &'a FnDef, FnSig)> = Vec::new();
+        for item in &module.items {
+            match item {
+                Item::Fn(f) => {
+                    if let Some(sig) = self.checked.functions.get(&f.name.name) {
+                        functions.push((symbol::function(&f.name.name), f, sig.clone()));
+                    }
+                }
+                Item::Impl(imp) => {
+                    let ast::TypeKind::Named { name, .. } = &imp.target.kind else { continue };
+                    for m in &imp.methods {
+                        if let Some(method) = self.checked.methods.get(&name.name).and_then(|ms| ms.get(&m.name.name)) {
+                            functions.push((symbol::method(&name.name, &m.name.name), m, method.sig.clone()));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        for (function, def, sig) in functions {
+            for (param, p) in def.params.iter().zip(&sig.params) {
+                if let Some(default) = &param.default {
+                    let lowered = self.default(default, &p.ty, out.len());
+                    out.push(DefaultValue {
+                        of: DefaultOf::Param { function: function.clone(), param: p.name.clone() },
+                        function: lowered,
+                    });
+                }
+            }
+        }
+        let mut fields: Vec<(String, String, &'a ast::Expr, Ty)> = Vec::new();
+        let mut field_defaults = |owner: &str, defs: &'a [ast::Field], types: &[FieldSig]| {
+            for (i, (f, t)) in defs.iter().zip(types).enumerate() {
+                if let Some(default) = &f.default {
+                    let field = f.name.as_ref().map_or(format!("_{i}"), |n| n.name.clone());
+                    fields.push((owner.to_string(), field, default, t.ty.clone()));
+                }
+            }
+        };
+        for item in &module.items {
+            match (item, item_type(item).and_then(|n| self.checked.declared.get(n))) {
+                (Item::Record(r), Some(TypeDef::Record { fields: types, .. })) => {
+                    field_defaults(&r.name.name, &r.fields, types.as_slice());
+                }
+                (Item::Sum(s), Some(TypeDef::Sum { variants, .. })) => {
+                    for (v, sig) in s.variants.iter().zip(variants) {
+                        if let (Some(defs), Some(types)) = (&v.fields, &sig.fields) {
+                            field_defaults(&v.name.name, defs.as_slice(), types.as_slice());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        for (owner, field, default, ty) in fields {
+            let lowered = self.default(default, &ty, out.len());
+            out.push(DefaultValue { of: DefaultOf::Field { owner, field }, function: lowered });
+        }
+        out
+    }
+
+    /// The default `e`, of type `ty`, as the `index`th function of no parameters returning it.
+    fn default(&mut self, e: &'a ast::Expr, ty: &Ty, index: usize) -> Function {
+        let span = e.span;
+        let mut b = Builder {
+            cx: self,
+            function: Function {
+                name: symbol::default(index),
+                source_name: "<default>".to_string(),
+                type_params: Vec::new(),
+                params: Vec::new(),
+                ret: ty.clone(),
+                locals: Vec::new(),
+                body: Vec::new(),
+                span,
+            },
+            vars: HashMap::new(),
+            blocks: vec![Vec::new()],
+            span,
+            subst: Subst::default(),
+            bounds: HashMap::new(),
+            at: None,
+        };
+        let v = b.value(e);
+        let v = b.coerce(v, ty);
+        let returned = if is_unit(ty) { None } else { Some(v) };
+        b.push(StmtKind::Return(returned));
+        let mut function = b.function;
+        function.body = b.blocks.pop().unwrap_or_default();
+        function
     }
 
     /// The `test` block `t`, the `k`th, as a function of no parameters: named in a report's trace
@@ -593,6 +732,7 @@ impl<'a> Context<'a> {
             span,
             subst: Subst::default(),
             bounds: HashMap::new(),
+            at: None,
         };
         b.statements(&t.body.stmts);
         let mut function = b.function;
@@ -633,6 +773,7 @@ impl<'a> Context<'a> {
             span,
             subst,
             bounds: sig.type_params.iter().filter_map(|(n, b)| Some((n.clone(), b.clone()?))).collect(),
+            at: None,
         };
         for p in &sig.params {
             let local = b.declare(p.span, &p.name, p.ty.clone());
@@ -667,6 +808,8 @@ struct Builder<'c, 'a> {
     subst: Subst,
     /// The trait each bounded type parameter of the function is bound by.
     bounds: HashMap<String, String>,
+    /// The span of the expression whose value is being held, while it is.
+    at: Option<Span>,
 }
 
 /// What a loop gives its body: the element, and its type.
@@ -711,7 +854,8 @@ fn element(ty: &Ty) -> Ty {
 impl<'c, 'a> Builder<'c, 'a> {
     fn push(&mut self, kind: StmtKind) {
         let span = self.span;
-        self.blocks.last_mut().expect("a block").push(Stmt { span, kind });
+        let at = self.at.unwrap_or(span);
+        self.blocks.last_mut().expect("a block").push(Stmt { span, at, kind });
     }
 
     fn new_local(&mut self, ty: Ty, name: Option<&str>) -> Local {
@@ -812,6 +956,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             Operand::Const(Const::Float(_)) => Ty::Float(lotml_check::ty::FloatKind::F64),
             Operand::Const(Const::Bool(_)) => Ty::Bool,
             Operand::Const(Const::Str(_)) => Ty::Str,
+            Operand::Const(Const::Bytes(_)) => Ty::Bytes,
             Operand::Const(_) => Ty::Unit,
         }
     }
@@ -1135,7 +1280,8 @@ impl<'c, 'a> Builder<'c, 'a> {
         let substitute = |fields: &[FieldSig], params: &[String]| {
             fields.iter().map(|f| f.ty.substitute(params, args)).collect::<Vec<Ty>>()
         };
-        match (self.cx.checked.declared.get(name), variant) {
+        let def = self.cx.checked.declared.get(name).cloned().or_else(|| prelude_type(name));
+        match (def.as_ref(), variant) {
             (Some(TypeDef::Record { params, fields }), None) => substitute(fields, params),
             (Some(TypeDef::Sum { params, variants }), Some(k)) => {
                 variants.get(k).and_then(|v| v.fields.as_deref()).map(|f| substitute(f, params)).unwrap_or_default()
@@ -1147,7 +1293,8 @@ impl<'c, 'a> Builder<'c, 'a> {
     /// The names of the fields of a record or of a variant: `None` for a positional one.
     fn field_names(&self, ty: &Ty, variant: Option<usize>) -> Vec<Option<String>> {
         let Ty::Adt(name, _) = ty else { return Vec::new() };
-        match (self.cx.checked.declared.get(name), variant) {
+        let def = self.cx.checked.declared.get(name).cloned().or_else(|| prelude_type(name));
+        match (def.as_ref(), variant) {
             (Some(TypeDef::Record { fields, .. }), None) => fields.iter().map(|f| f.name.clone()).collect(),
             (Some(TypeDef::Sum { variants, .. }), Some(k)) => variants
                 .get(k)
@@ -1818,11 +1965,15 @@ impl<'c, 'a> Builder<'c, 'a> {
             Value::Done(operand) => operand,
             Value::Expr(expr) => {
                 let ty = self.ty(e);
-                if is_unit(&ty) || matches!(ty, Ty::Never) {
+                let outer = self.at.replace(e.span);
+                let held = if is_unit(&ty) || matches!(ty, Ty::Never) {
                     self.push(StmtKind::Do(expr));
-                    return Operand::Const(Const::Unit);
-                }
-                self.hold(ty, expr)
+                    Operand::Const(Const::Unit)
+                } else {
+                    self.hold(ty, expr)
+                };
+                self.at = outer;
+                held
             }
         }
     }
@@ -1850,6 +2001,17 @@ impl<'c, 'a> Builder<'c, 'a> {
                 _ => Value::Done(Operand::Const(Const::Unit)),
             },
             ExprKind::Unit => Value::Done(Operand::Const(Const::Unit)),
+            ExprKind::Str(literals) if literals.iter().any(|l| l.bytes) => {
+                let bytes = literals
+                    .iter()
+                    .flat_map(|l| &l.parts)
+                    .filter_map(
+                        |p| if let StrPart::Text(t) = p { Some(t.chars().map(|c| c as u32 as u8)) } else { None },
+                    )
+                    .flatten()
+                    .collect();
+                Value::Done(Operand::Const(Const::Bytes(bytes)))
+            }
             ExprKind::Str(literals) => {
                 let parts: Vec<&StrPart> = literals.iter().flat_map(|l| &l.parts).collect();
                 if parts.iter().all(|p| matches!(p, StrPart::Text(_))) {
@@ -2182,6 +2344,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                     Expr::Unary(UnOp::Not, some, Ty::Bool)
                 }
             }
+            ast::CmpOp::Is | ast::CmpOp::IsNot if none_on_right => Expr::Use(flag(*op == ast::CmpOp::IsNot)),
             ast::CmpOp::In | ast::CmpOp::NotIn => {
                 let contains = match &right_ty {
                     Ty::Str | Ty::List(_) | Ty::Dict(..) | Ty::Set(_) => {
@@ -2871,6 +3034,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             span,
             subst: self.subst.clone(),
             bounds: self.bounds.clone(),
+            at: None,
         };
         let closure = b.new_local(ty.clone(), Some("self"));
         b.function.params.push(closure);
@@ -3135,6 +3299,29 @@ impl<'c, 'a> Builder<'c, 'a> {
         }
     }
 
+    /// `object.name(args, keywords)`, a built-in method the IR has no operation for, on the value
+    /// at `object`'s place.
+    fn builtin_method(
+        &mut self,
+        object: &ast::Expr,
+        name: &str,
+        positional: &[&ast::Expr],
+        keywords: &[(&str, &ast::Expr)],
+    ) -> Value {
+        let place = self.place_or_hold(object);
+        let ty = self.ty(object);
+        let args = positional.iter().map(|e| self.value(e)).collect();
+        let keywords = keywords.iter().map(|(k, e)| (k.to_string(), self.value(e))).collect();
+        Value::Expr(Expr::Method { place, ty, method: name.to_string(), args, keywords })
+    }
+
+    /// `receiver.name(args)`, a built-in method the IR has no operation for, on a value read.
+    fn method_of_value(&mut self, receiver: Operand, ty: Ty, name: &str, args: Vec<Operand>) -> Value {
+        let Operand::Local(local) = self.hold(ty.clone(), Expr::Use(receiver)) else { unreachable!("a held value") };
+        let place = Place { local, proj: Vec::new() };
+        Value::Expr(Expr::Method { place, ty, method: name.to_string(), args, keywords: Vec::new() })
+    }
+
     /// The place of a container a method changes: the place it is, or a temporary holding it.
     fn place_or_hold(&mut self, object: &ast::Expr) -> Place {
         match self.place(object) {
@@ -3249,7 +3436,17 @@ impl<'c, 'a> Builder<'c, 'a> {
                         ))
                     }
                     ("copy", []) => Value::Expr(rt(Builtin::DictCopy, vec![d], false)),
-                    _ => Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
+                    _ => {
+                        let place = self.place_or_hold(object);
+                        let ty = self.ty(object);
+                        Value::Expr(Expr::Method {
+                            place,
+                            ty,
+                            method: name.to_string(),
+                            args: values,
+                            keywords: Vec::new(),
+                        })
+                    }
                 }
             }
         }
@@ -3294,7 +3491,16 @@ impl<'c, 'a> Builder<'c, 'a> {
                     });
                     return Value::Expr(Expr::OptIf { ty, cond: Operand::Local(ok), value: Operand::Local(found) });
                 }
-                _ => return Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
+                _ => {
+                    let ty = self.ty(object);
+                    return Value::Expr(Expr::Method {
+                        place,
+                        ty,
+                        method: name.to_string(),
+                        args: values,
+                        keywords: Vec::new(),
+                    });
+                }
             };
             self.push(stmt);
             return Value::Done(Operand::Const(Const::Unit));
@@ -3315,7 +3521,11 @@ impl<'c, 'a> Builder<'c, 'a> {
             ("intersection", [other]) => Value::Expr(rt(Builtin::SetIntersection, vec![s, other.clone()], false)),
             ("difference", [other]) => Value::Expr(rt(Builtin::SetDifference, vec![s, other.clone()], false)),
             ("copy", []) => Value::Expr(rt(Builtin::SetCopy, vec![s], false)),
-            _ => Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
+            _ => {
+                let place = self.place_or_hold(object);
+                let ty = self.ty(object);
+                Value::Expr(Expr::Method { place, ty, method: name.to_string(), args: values, keywords: Vec::new() })
+            }
         }
     }
 
@@ -3351,7 +3561,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             return Value::Expr(rt(Builtin::StrSplit, vec![receiver, sep, maxsplit], true));
         }
         if !keywords.is_empty() {
-            return Value::Done(self.unsupported(whole.span, &format!("keyword arguments of `{name}`")));
+            return self.builtin_method(object, name, positional, keywords);
         }
         let receiver = self.value(object);
         let mut values = Vec::new();
@@ -3464,7 +3674,7 @@ impl<'c, 'a> Builder<'c, 'a> {
                 }
                 return Value::Expr(Expr::TupleNew { ty: self.ty(whole), items: parts });
             }
-            _ => return Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
+            _ => return self.method_of_value(receiver, Ty::Str, name, values),
         };
         Value::Expr(call)
     }
@@ -3514,7 +3724,10 @@ impl<'c, 'a> Builder<'c, 'a> {
                     });
                     Value::Done(Operand::Local(result))
                 }
-                _ => Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
+                _ => {
+                    let ty = Ty::list(elem.clone());
+                    self.method_of_value(list, ty, name, values)
+                }
             };
         }
         let place = match self.place(object) {
@@ -3574,7 +3787,11 @@ impl<'c, 'a> Builder<'c, 'a> {
                 }
                 mutate(Builtin::ListSort, vec![Arg::Value(reverse)], true)
             }
-            _ => return Value::Done(self.unsupported(whole.span, &format!("the method `{name}` here"))),
+            _ => {
+                let ty = self.ty(object);
+                let keywords = keywords.iter().map(|(k, e)| (k.to_string(), self.value(e))).collect();
+                return Value::Expr(Expr::Method { place, ty, method: name.to_string(), args: values, keywords });
+            }
         };
         self.push(stmt);
         Value::Done(Operand::Const(Const::Unit))

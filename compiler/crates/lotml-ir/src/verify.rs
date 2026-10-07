@@ -72,6 +72,7 @@ impl Check<'_> {
             Operand::Const(Const::Bool(_)) => Some(Ty::Bool),
             Operand::Const(Const::Unit) => Some(Ty::Unit),
             Operand::Const(Const::Str(_)) => Some(Ty::Str),
+            Operand::Const(Const::Bytes(_)) => Some(Ty::Bytes),
             Operand::Const(Const::Null | Const::Char(_)) => None,
         }
     }

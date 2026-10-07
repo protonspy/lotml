@@ -8,7 +8,7 @@ use lotml_syntax::span::Span;
 const INT: Ty = Ty::Int(IntKind::I64);
 
 fn stmt(at: usize, kind: StmtKind) -> Stmt {
-    Stmt { span: Span::new(at, at + 1), kind }
+    Stmt { span: Span::new(at, at + 1), at: Span::new(at, at + 1), kind }
 }
 
 /// A function of `params` and `locals` (the parameters first) returning `int`.

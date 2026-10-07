@@ -642,6 +642,7 @@ impl Writer<'_, '_> {
             Operand::Const(Const::Unit) => Ok(Value::unit()),
             Operand::Const(Const::Str(text)) => Ok(Value { text: self.module.literal(text), ty: Ty::Str }),
             Operand::Const(Const::Null) => Ok(Value { text: "null".into(), ty: Ty::Str }),
+            Operand::Const(Const::Bytes(_)) => self.refuse("a bytes value"),
             Operand::Const(Const::Char(c)) => {
                 Ok(Value { text: (u32::from(*c) as u8 as i8).to_string(), ty: Ty::Int(IntKind::I8) })
             }
@@ -1571,6 +1572,7 @@ impl Writer<'_, '_> {
                 self.call_through(&f, &c, args, params, ret)
             }
             Expr::CallPython { .. } => self.refuse("a call into a Python module"),
+            Expr::Method { method, .. } => self.refuse(format!("the method `{method}` here")),
             Expr::CallGeneric { .. } | Expr::FnRefGeneric { .. } | Expr::ToDynOf { .. } => {
                 self.refuse("a generic call `mono` did not resolve")
             }

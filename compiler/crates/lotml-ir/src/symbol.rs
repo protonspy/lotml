@@ -23,6 +23,11 @@ pub fn lambda(index: usize) -> String {
     format!("ll{index}")
 }
 
+/// The `index`th default of a parameter or a field, as a function of no parameters.
+pub fn default(index: usize) -> String {
+    format!("ld{index}")
+}
+
 /// The `k`th `test` block of the module.
 pub fn test(k: usize) -> String {
     format!("lt_test{k}")

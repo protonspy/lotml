@@ -28,6 +28,7 @@ fn block(stmts: Block, f: &Function) -> Block {
                     own(body, local);
                     out.push(Stmt {
                         span: stmt.span,
+                        at: stmt.span,
                         kind: StmtKind::Mutate {
                             op: Builtin::ListUnique,
                             place: Place { local, proj: Vec::new() },

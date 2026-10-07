@@ -12,6 +12,7 @@ import ast
 import builtins
 import copy as _copy
 import dataclasses
+import functools
 import heapq
 import json
 import linecache
@@ -624,6 +625,10 @@ class Heap:
     def __len__(self):
         return len(self.items)
 
+    def __getitem__(self, index):
+        """An element in the heap's own order, as code compiled from the IR walks it."""
+        return self.items[index]
+
     def __eq__(self, other):
         return isinstance(other, Heap) and sorted(self.items) == sorted(other.items)
 
@@ -881,6 +886,56 @@ def items(mapping: dict) -> list:
 
 def set_pop(items: set):
     return items.pop() if items else None
+
+
+# What a module compiled from the IR calls --------------------------------------------------
+# An operation the IR names that Python has no one expression for (specs/python-on-ir).
+
+MISSING = object()
+"""What a parameter a Python caller left out holds until its function gives it its default."""
+
+
+def rename(function, name: str):
+    """`function`, named `name` in a traceback: a lambda's `<lambda>`."""
+    function.__code__ = function.__code__.replace(co_name=name, co_qualname=name)
+    return function
+
+
+def closure(function, captures: tuple):
+    """A lambda's value: `function` called with what it captured first."""
+    return functools.partial(function, captures)
+
+
+def out(value):
+    """A value that is None when there is none, as a flag saying whether there is and the value."""
+    return value is not None, value
+
+
+def lookup(mapping: dict, key):
+    return (True, mapping[key]) if key in mapping else (False, None)
+
+
+def popped(mapping: dict, key):
+    return (True, mapping.pop(key)) if key in mapping else (False, None)
+
+
+def split_pair(text: str, sep: str):
+    head, found, tail = text.partition(sep)
+    return bool(found), head, tail
+
+
+def unpack(items: list, n: int):
+    """A list unpacked into `n` names: stops, as Python does, when it holds another number."""
+    if len(items) < n:
+        raise ValueError(f"not enough values to unpack (expected {n}, got {len(items)})")
+    if len(items) > n:
+        raise ValueError(f"too many values to unpack (expected {n})")
+
+
+def sort_by_keys(items: list, keys: list, reverse: bool):
+    """`items.sort(key=…)` with each element's key computed once, in `keys`."""
+    order = sorted(range(len(items)), key=keys.__getitem__, reverse=reverse)
+    items[:] = [items[i] for i in order]
 
 
 # Tests and runs ----------------------------------------------------------------------------
