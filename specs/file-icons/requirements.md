@@ -2,7 +2,8 @@
 autonomy: auto
 ci: wait
 branch: feat/file-icons
-delivery: in-progress
+delivery: in-review
+pr: 26
 ---
 
 # File icons — requirements
