@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: d4d61a34fe53965f98af835d775a4111c210e7bc41ab4477be9abd1ba5515abf
+checksum: d5767f25fa0002e2e3820ce41a64691c76393acbace5cac7b7b48f0e7cb95193
 ---
 
 # IR architecture
@@ -104,7 +104,7 @@ makes an executable.
       architecture and
   status, `docs/stack.md` and the wiki's transpilation strategy up to date
   _Depends 2.3, 3.2, 3.3_
-- [ ] 2.4 (Unit) Pass `--target python` where the harness experiments call `lotml build`
+- [x] 2.4 (Unit) Pass `--target python` where the harness experiments call `lotml build`
       and import the module it wrote (`gate2.py`, `phase1.py`), so moving the default
       does not change what they run
   _Depends 2.6_
@@ -121,7 +121,7 @@ makes an executable.
       monomorphization by the native ones, the parity suite unchanged
   _Depends 1.2_
   _Reason reorder after analysing the research report: the LLVM target needs only the monomorphic IR, so the first executable lands before the Python backend's rewrite; replaces 1.3_
-- [ ] 2.6 (Unit) Write and build the spec llvm-parity: the parity suite identical on the
+- [x] 2.6 (Unit) Write and build the spec llvm-parity: the parity suite identical on the
       Python and LLVM targets, and the benchmarks run on LLVM recorded beside the C
       target's last run
   _Depends 2.5_

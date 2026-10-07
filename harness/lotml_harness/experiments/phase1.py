@@ -163,7 +163,9 @@ class Lotml:
                 return Verdict(False, "does not check", "`lotml check` did not finish in time.")
             if check.returncode != 0:
                 return Verdict(False, "does not check", "`lotml check` reports:\n\n" + check.stdout)
-            built = self.compiler(["build", "-o", ".", source.name], directory)
+            built = self.compiler(
+                ["build", "--target", "python", "-o", ".", source.name], directory
+            )
             stub = Path(directory) / "solution_lotml.py"
             if built is None or built.returncode != 0 or not stub.exists():
                 report = (built.stdout + built.stderr) if built else "build timed out"
