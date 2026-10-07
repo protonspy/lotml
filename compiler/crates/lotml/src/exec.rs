@@ -10,6 +10,7 @@ use lotml_diag::Report;
 use serde_json::{Value, json};
 
 use crate::{Failure, Target, files};
+use lotml_llvm::driver::Level;
 
 /// A compiled module: the name it is imported by, its source's absolute path, which tracebacks
 /// name, and the path as the user wrote it.
@@ -195,6 +196,9 @@ pub fn build(paths: &[PathBuf], out: &Path, target: Target) -> Result<u8, Failur
     if target == Target::C {
         return build_c(paths, out);
     }
+    if target == Target::Llvm {
+        return build_llvm(paths, out);
+    }
     let Some(modules) = compile_or_report(paths, out)? else { return Ok(1) };
     for module in modules {
         println!("{} -> {}", module.shown, out.join(format!("{}.py", module.name)).display());
@@ -206,8 +210,13 @@ pub fn build(paths: &[PathBuf], out: &Path, target: Target) -> Result<u8, Failur
 /// error, 101 when it panicked; the C target's program exits as Python's does.
 pub fn run(path: &Path, target: Target) -> Result<u8, Failure> {
     let scratch = Scratch::new()?;
-    if target == Target::C {
-        let Some(exe) = c_executable(path, &scratch.0, false)? else { return Ok(1) };
+    let native = match target {
+        Target::C => c_executable(path, &scratch.0, false)?,
+        Target::Llvm => llvm_executable(path, &scratch.0, false, Level::Debug)?,
+        Target::Python => None,
+    };
+    if target != Target::Python {
+        let Some(exe) = native else { return Ok(1) };
         let status = Command::new(&exe).status().map_err(|e| Failure(format!("cannot run {}: {e}", exe.display())))?;
         return Ok(exit_status(status));
     }
@@ -245,6 +254,14 @@ pub fn test(paths: &[PathBuf], as_json: bool, target: Target) -> Result<u8, Fail
     let (status, report) = match target {
         Target::Python => test_report(paths, as_json, None)?,
         Target::C => c_test_report(paths, as_json)?,
+        Target::Llvm => {
+            for path in files::expand(paths)? {
+                if llvm_executable(&path, &Scratch::new()?.0, true, Level::Debug)?.is_none() {
+                    return Ok(1);
+                }
+            }
+            (0, String::new())
+        }
     };
     print!("{report}");
     Ok(status)
@@ -281,6 +298,51 @@ fn c_executable(path: &Path, dir: &Path, tests: bool) -> Result<Option<PathBuf>,
     let compiler = lotml_c::driver::find().map_err(Failure)?;
     compiler.build(&source, &exe, &program.libraries).map_err(Failure)?;
     Ok(Some(exe))
+}
+
+/// The native program of `path` through LLVM, built into `dir` at `level`: the executable, or
+/// `None` once the diagnostics that stop it are printed (specs/llvm-backend R1.1).
+fn llvm_executable(path: &Path, dir: &Path, tests: bool, level: Level) -> Result<Option<PathBuf>, Failure> {
+    let text = files::read(path)?;
+    let absolute = std::path::absolute(path).map_err(|e| Failure(format!("{}: {e}", path.display())))?;
+    let interfaces: Interfaces = files::interfaces_for(path)
+        .into_iter()
+        .map(|b| {
+            let read = lotml_check::interface_of(&b.module, &b.text).0;
+            (b.module, read)
+        })
+        .collect();
+    let program = match lotml_llvm::compile_program(&text, &absolute, &interfaces, tests) {
+        Ok(program) => program,
+        Err(diagnostics) => {
+            let shown = path.display().to_string();
+            let report = Report { file: &shown, text: &text, diagnostics };
+            print!("{}", lotml_diag::text(&[report], Some(lotml_diag::DEFAULT_LIMIT)));
+            return Ok(None);
+        }
+    };
+    let stem =
+        path.file_stem().map_or("program".into(), |s| s.to_string_lossy().replace(|c: char| !c.is_alphanumeric(), "_"));
+    std::fs::create_dir_all(dir).map_err(|e| Failure(format!("cannot create {}: {e}", dir.display())))?;
+    let ll = dir.join(format!("{stem}.ll"));
+    write(&ll, &program.ll)?;
+    lotml_runtime::write(dir).map_err(|e| Failure(format!("cannot write the runtime in {}: {e}", dir.display())))?;
+    let exe = dir.join(if cfg!(windows) { format!("{stem}.exe") } else { stem });
+    let clang = lotml_llvm::driver::find().map_err(Failure)?;
+    clang.build(&ll, dir, &exe, level, &program.libraries).map_err(Failure)?;
+    Ok(Some(exe))
+}
+
+/// `lotml build --target llvm`: each file built into `out` at `-O2`, its LLVM IR beside it.
+fn build_llvm(paths: &[PathBuf], out: &Path) -> Result<u8, Failure> {
+    let mut status = 0;
+    for path in files::expand(paths)? {
+        match llvm_executable(&path, out, false, Level::Release)? {
+            Some(exe) => println!("{} -> {}", path.display(), exe.display()),
+            None => status = 1,
+        }
+    }
+    Ok(status)
 }
 
 /// `lotml build --target c`: each file built into `out`, its C beside it.

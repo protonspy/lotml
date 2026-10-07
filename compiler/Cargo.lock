@@ -269,6 +269,7 @@ dependencies = [
  "lotml-diag",
  "lotml-fmt",
  "lotml-ide",
+ "lotml-llvm",
  "lotml-py",
  "lotml-runtime",
  "lotml-syntax",

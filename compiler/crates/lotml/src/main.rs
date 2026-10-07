@@ -201,12 +201,13 @@ enum Dev {
     },
 }
 
-/// What a program is compiled to: Python modules run by Python, or C built by a C compiler
-/// (adr:0014).
+/// What a program is compiled to: Python modules run by CPython, or native code through LLVM
+/// (adr:0025); C built by a C compiler until the C target is retired.
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum Target {
     Python,
     C,
+    Llvm,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
