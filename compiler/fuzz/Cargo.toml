@@ -1,0 +1,35 @@
+# The frontend's fuzzer (plans/frontend-robustness.md 3.1, adr:0027): cargo-fuzz over libFuzzer,
+# on nightly, kept out of the workspace so the compiler still builds on the pinned stable toolchain.
+# How to run it is in README.md.
+
+[package]
+name = "lotml-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4.13"
+serde_json = "1"
+lotml-check = { path = "../crates/lotml-check" }
+lotml-llvm = { path = "../crates/lotml-llvm" }
+lotml-py = { path = "../crates/lotml-py" }
+
+[[bin]]
+name = "frontend"
+path = "fuzz_targets/frontend.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "seed"
+path = "src/seed.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
