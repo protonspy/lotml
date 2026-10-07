@@ -51,3 +51,10 @@ def test_the_report_shows_every_label_in_the_order_measured_with_the_runtime_s_s
     assert "A build with the runtime cached takes 25% at `-O0` of one without." in report
     after_section = report[report.index("## after") :]
     assert "| runtime |" not in after_section and "of the whole build" not in after_section
+
+
+def test_a_label_names_a_file_in_the_records_and_nothing_outside_them():
+    for good in ["before", "after-cache", "v1.2_windows"]:
+        assert build_speed.LABEL.fullmatch(good)
+    for bad in ["", "../x", "a/b", ".hidden", "a b"]:
+        assert not build_speed.LABEL.fullmatch(bad), bad

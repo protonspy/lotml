@@ -159,10 +159,13 @@ Python, so a Python module's import is refused there; a C library is called dire
 
 The runtime stays a separate unit, as adr:0025-two-targets-python-for-run-llvm-for-build has it,
 and is compiled once per toolchain and flags rather than with every program. Its object is kept in
-a per-user cache readable by its owner alone (`LOTML_CACHE_DIR`, or the system's cache directory),
-keyed by the runtime's sources, `clang`'s path and `--version`, and the flags it was compiled with.
-An entry is written to a temporary file, renamed into place, and checked against the SHA-256 its
-name carries before it is linked. The runtime was 58% of a small `-O0` build and 92% of an `-O2`
+a per-user cache readable by its owner alone (`LOTML_CACHE_DIR`, or the system's cache directory;
+on Windows, where the profile's permissions are what keep it private, only inside the profile).
+It is keyed by everything the compile reads: the runtime the compiler carries, compiled from a
+private copy rather than the build directory, `clang`'s path and `--version`, the flags, and the
+variables through which `clang` finds headers. An entry is written to a temporary file, renamed
+into place, and checked against the SHA-256 its name carries before it is linked; the digest finds
+a damaged entry, and the directory's ownership is what keeps out a planted one. The runtime was 58% of a small `-O0` build and 92% of an `-O2`
 one; with its object cached, the build takes 35% and 9% of its time
 (`harness/results/build-speed.md`).
 

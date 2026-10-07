@@ -31,7 +31,7 @@ loses no inlining. The cache key must cover:
 
 That cache is built (plans/build-and-check-speed.md): the runtime's object is kept per user,
 keyed by all four, and a second build takes it from there. On the same machine a small build
-went from 0.37 s to 0.12 s at `-O0` and from 0.92 s to 0.08 s at `-O2`
+went from 0.37 s to 0.13 s at `-O0` and from 0.92 s to 0.08 s at `-O2`
 (`harness/results/build-speed.md`); [[transpilation-strategy]] says how an entry is kept sound.
 
 This also answers the Cranelift question. A faster code generator could replace only the `.ll`

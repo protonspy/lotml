@@ -30,10 +30,10 @@ The runtime's compile is 58% at `-O0` and 92% at `-O2` of the whole build.
 
 | step | -O0 (s) | -O2 (s) |
 | --- | ---: | ---: |
-| runtime | 0.220 | 0.785 |
-| program | 0.027 | 0.023 |
-| link | 0.104 | 0.058 |
-| cold | 0.349 | 0.884 |
-| warm | 0.121 | 0.079 |
+| runtime | 0.223 | 0.788 |
+| program | 0.022 | 0.024 |
+| link | 0.104 | 0.057 |
+| cold | 0.360 | 0.891 |
+| warm | 0.126 | 0.078 |
 
 A build with the runtime cached takes 35% at `-O0` and 9% at `-O2` of one without.

@@ -159,10 +159,11 @@ impl Clang {
         self.link_with(ll, runtime_dir, exe, libraries, build, Cache::user().as_ref()).map(|_| ())
     }
 
-    /// Compile the LLVM IR `ll` and link it with the runtime of `runtime_dir` into `out`, as
-    /// `build` asks. The runtime's object is taken from `cache` when it holds one for this `clang`,
-    /// these flags and these sources, and compiled into it otherwise; with no cache, it is compiled
-    /// beside `out`. Whether the runtime was compiled is returned.
+    /// Compile the LLVM IR `ll` and link it with the runtime into `out`, as `build` asks. With a
+    /// `cache`, the runtime is the one this compiler carries: its object is taken from the cache
+    /// when it holds one for this `clang`, these flags and that runtime, and otherwise compiled from
+    /// a private copy into it. With no cache, the runtime in `runtime_dir` is compiled beside `out`.
+    /// Whether the runtime was compiled is returned.
     pub fn link_with(
         &self,
         ll: &Path,
@@ -187,56 +188,74 @@ impl Clang {
         Err(rejected(&text, Some(ll)))
     }
 
-    /// The runtime of `runtime_dir` as an object for `build`, and whether it was compiled for it.
+    /// The runtime as an object for `build`, and whether it was compiled for it.
     fn runtime(&self, runtime_dir: &Path, build: Build, cache: Option<&Cache>) -> Result<(Object, Runtime), String> {
-        let compile = |object: &Path| {
-            let mut command = Command::new(&self.program);
-            command.args(build.flags(true)).arg("-c").arg(runtime_dir.join("lotml.c"));
-            command.arg("-I").arg(runtime_dir).arg("-o").arg(object);
-            let output = command.output().map_err(|e| format!("could not run {}: {e}", self.program.display()))?;
-            if output.status.success() {
-                return Ok(());
-            }
-            let text =
-                format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
-            Err(rejected(&text, None))
-        };
         let Some(cache) = cache else {
             let object = runtime_dir.join(if cfg!(windows) { "lotml.obj" } else { "lotml.o" });
-            compile(&object)?;
+            self.compile_runtime(runtime_dir, &object, build)?;
             return Ok((Object::kept(object), Runtime::Compiled));
         };
-        let key = self.runtime_key(runtime_dir, build)?;
+        let key = self.runtime_key(lotml_runtime::FILES, build, |name| std::env::var_os(name));
         if let Some(entry) = cache.get(&key) {
             return Ok((Object::kept(entry), Runtime::Cached));
         }
-        Ok((cache.put(&key, compile)?, Runtime::Compiled))
+        let workspace = cache.workspace(&key)?;
+        lotml_runtime::write(&workspace.path)
+            .map_err(|e| format!("cannot write the runtime in {}: {e}", workspace.path.display()))?;
+        let object = cache.put(&key, |object| self.compile_runtime(&workspace.path, object, build))?;
+        Ok((object, Runtime::Compiled))
     }
 
-    /// What a runtime object is keyed by: this `clang` and all it says of itself, the flags it is
-    /// compiled with, and each of the runtime's files as `runtime_dir` holds them.
-    fn runtime_key(&self, runtime_dir: &Path, build: Build) -> Result<String, String> {
+    /// Compile the runtime in `dir` into `object`. The directory's name is mapped away, so the
+    /// object's debug information does not name a directory that is gone once it is removed.
+    fn compile_runtime(&self, dir: &Path, object: &Path, build: Build) -> Result<(), String> {
+        let mut command = Command::new(&self.program);
+        command.args(build.flags(true)).arg(format!("-ffile-prefix-map={}=lotml-runtime", dir.display()));
+        command.arg("-c").arg(dir.join("lotml.c")).arg("-I").arg(dir).arg("-o").arg(object);
+        let output = command.output().map_err(|e| format!("could not run {}: {e}", self.program.display()))?;
+        if output.status.success() {
+            return Ok(());
+        }
+        let text = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        Err(rejected(&text, None))
+    }
+
+    /// What a runtime object is keyed by: everything its compile reads. That is this `clang` and
+    /// all it says of itself, the flags, the variables of the environment `var` reads through
+    /// which `clang` finds headers and SDKs, and each of the runtime's `sources`.
+    fn runtime_key(
+        &self,
+        sources: &[(&str, &str)],
+        build: Build,
+        var: impl Fn(&str) -> Option<std::ffi::OsString>,
+    ) -> String {
         let mut hash = Sha256::new();
         let mut field = |bytes: &[u8]| {
             hash.update(&(bytes.len() as u64).to_le_bytes());
             hash.update(bytes);
         };
-        field(b"lotml runtime object 1");
+        field(b"lotml runtime object 2");
         field(self.program.as_os_str().as_encoded_bytes());
         field(self.identity.as_bytes());
         for flag in build.flags(true) {
             field(flag.as_bytes());
         }
-        for (name, _) in lotml_runtime::FILES {
-            let path = runtime_dir.join(name);
-            let text =
-                std::fs::read(&path).map_err(|e| format!("cannot read the runtime's {}: {e}", path.display()))?;
+        for name in COMPILE_ENVIRONMENT {
             field(name.as_bytes());
-            field(&text);
+            field(var(name).unwrap_or_default().as_encoded_bytes());
         }
-        Ok(sha256::hex(&hash.finish())[..32].to_string())
+        for (name, text) in sources {
+            field(name.as_bytes());
+            field(text.as_bytes());
+        }
+        sha256::hex(&hash.finish())[..32].to_string()
     }
 }
+
+/// The variables of the environment through which `clang` finds the headers and SDKs a compile
+/// reads, or takes further options: a runtime object compiled under one value is not another's.
+const COMPILE_ENVIRONMENT: &[&str] =
+    &["CPATH", "C_INCLUDE_PATH", "INCLUDE", "SDKROOT", "MACOSX_DEPLOYMENT_TARGET", "CCC_OVERRIDE_OPTIONS"];
 
 /// Whether a build compiled the runtime, or took its object from the cache.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -394,11 +413,11 @@ fn missing_tool(output: &str, windows: bool) -> Option<String> {
                 format!("the C library's headers were not found (`{header}` is missing): {install}, {OTHERWISE}"),
             );
         }
-        let no_linker =
-            ["unable to execute command", "invalid linker name", "unable to find a visual studio installation"]
-                .iter()
-                .any(|p| lower.contains(p))
-                || lower.starts_with("xcrun: error");
+        let not_there = ["program not executable", "doesn't exist", "no such file or directory"];
+        let no_linker = (lower.contains("unable to execute command") && not_there.iter().any(|p| lower.contains(p)))
+            || lower.contains("invalid linker name")
+            || lower.contains("unable to find a visual studio installation")
+            || lower.starts_with("xcrun: error");
         if no_linker {
             let linker = if windows {
                 format!("clang links with Visual Studio's `link.exe`, which comes with {WORKLOAD}")
@@ -561,6 +580,55 @@ mod tests {
         let message = missing_tool(unix, false).expect("named");
         assert!(message.contains("the system's `ld`"), "{message}");
         assert!(missing_tool("xcrun: error: invalid active developer path\n", false).is_some());
+        for crash in [
+            "clang: error: unable to execute command: Segmentation fault (core dumped)\n",
+            "clang: error: unable to execute command: Killed\n",
+        ] {
+            assert_eq!(missing_tool(crash, false), None, "a linker that crashed is not a missing one: {crash}");
+        }
+    }
+
+    fn clang_for_keys() -> Clang {
+        Clang { program: PathBuf::from("/usr/bin/clang"), version: 23, identity: "clang version 23.1.3\n".into() }
+    }
+
+    #[test]
+    fn the_runtime_key_covers_each_input_of_its_compile() {
+        let clang = clang_for_keys();
+        let debug = Build { level: Level::Debug, counting: false, shared: false };
+        let sources: &[(&str, &str)] = &[("lotml.h", "int f(void);"), ("lotml.c", "int f(void) { return 1; }")];
+        let none = |_: &str| None;
+        let base = clang.runtime_key(sources, debug, none);
+        assert_eq!(base.len(), 32);
+        assert_eq!(base, clang.runtime_key(sources, debug, none), "the same inputs, the same key");
+        let edited: &[(&str, &str)] = &[("lotml.h", "int f(void);"), ("lotml.c", "int f(void) { return 2; }")];
+        let other = Clang { identity: "clang version 23.1.4\n".into(), ..clang_for_keys() };
+        let elsewhere = Clang { program: PathBuf::from("/opt/llvm/bin/clang"), ..clang_for_keys() };
+        let headers = |name: &str| (name == "CPATH").then(|| "/tmp/headers".into());
+        let differing = [
+            clang.runtime_key(edited, debug, none),
+            other.runtime_key(sources, debug, none),
+            elsewhere.runtime_key(sources, debug, none),
+            clang.runtime_key(sources, Build { level: Level::Release, ..debug }, none),
+            clang.runtime_key(sources, Build { counting: true, ..debug }, none),
+            clang.runtime_key(sources, debug, headers),
+        ];
+        for (k, key) in differing.iter().enumerate() {
+            assert_ne!(*key, base, "input {k} changes the key");
+        }
+    }
+
+    #[test]
+    fn the_runtime_is_compiled_for_a_library_as_the_single_build_compiled_it() {
+        let library = Build { level: Level::Release, counting: false, shared: true };
+        let runtime = library.flags(true);
+        assert!(!runtime.contains(&"-shared"), "`-shared` is the link's, not the compile's");
+        assert_eq!(runtime.contains(&"-fPIC"), !cfg!(windows));
+        assert!(library.flags(false).contains(&"-shared"));
+        let counting = Build { level: Level::Debug, counting: true, shared: false };
+        assert!(counting.flags(true).contains(&"-DLT_COUNT_CELLS"));
+        assert!(!counting.flags(false).contains(&"-DLT_COUNT_CELLS"));
+        assert!(counting.flags(true).contains(&"-g") && counting.flags(false).contains(&"-g"));
     }
 
     #[test]

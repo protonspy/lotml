@@ -2,58 +2,58 @@
   "label": "after",
   "compiler": "clang 23",
   "program": "fib.lotml",
-  "taken": "2026-10-07T22:51:18+00:00",
+  "taken": "2026-10-07T23:03:32+00:00",
   "system": "Windows AMD64",
   "rows": [
     {
       "level": "-O0",
       "step": "runtime",
-      "seconds": 0.2199428
+      "seconds": 0.2226496
     },
     {
       "level": "-O0",
       "step": "program",
-      "seconds": 0.0266815
+      "seconds": 0.0216476
     },
     {
       "level": "-O0",
       "step": "link",
-      "seconds": 0.1042599
+      "seconds": 0.1038387
     },
     {
       "level": "-O0",
       "step": "cold",
-      "seconds": 0.348511
+      "seconds": 0.3595904
     },
     {
       "level": "-O0",
       "step": "warm",
-      "seconds": 0.1213523
+      "seconds": 0.1263312
     },
     {
       "level": "-O2",
       "step": "runtime",
-      "seconds": 0.7849544
+      "seconds": 0.7883776
     },
     {
       "level": "-O2",
       "step": "program",
-      "seconds": 0.023205
+      "seconds": 0.0235848
     },
     {
       "level": "-O2",
       "step": "link",
-      "seconds": 0.0575352
+      "seconds": 0.057184
     },
     {
       "level": "-O2",
       "step": "cold",
-      "seconds": 0.883737
+      "seconds": 0.8914077
     },
     {
       "level": "-O2",
       "step": "warm",
-      "seconds": 0.0787003
+      "seconds": 0.078183
     }
   ]
 }

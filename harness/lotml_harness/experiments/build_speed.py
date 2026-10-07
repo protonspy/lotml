@@ -13,6 +13,7 @@ beside the one taken after it.
 
 import json
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,8 @@ from lotml_harness.experiments.phase1 import RESULTS
 RECORDS = RESULTS / "build-speed"
 REPORT = RESULTS / "build-speed.md"
 PROGRAM = BENCHMARKS / "fib.lotml"
+LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+"""What a label may be: it names a file in `RECORDS`."""
 RUNS = 5
 """Runs of each step; the fastest is kept, the one least disturbed by the rest of the machine."""
 LEVELS = ("-O0", "-O2")
@@ -169,8 +172,11 @@ def markdown(records: list[Record]) -> str:
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: python -m lotml_harness.experiments.build_speed <label>")
+    if len(sys.argv) != 2 or not LABEL.fullmatch(sys.argv[1]):
+        raise SystemExit(
+            "usage: python -m lotml_harness.experiments.build_speed <label>, "
+            "a label of letters, digits, `.`, `_` and `-`"
+        )
     taken = datetime.now(UTC).isoformat(timespec="seconds")
     system = f"{platform.system()} {platform.machine()}"
     record = parse(sys.argv[1], run(), taken, system)
