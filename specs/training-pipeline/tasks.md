@@ -13,7 +13,7 @@
   _Depends 2.3_
 - [x] 3.3 (Unit) Train by group-relative policy optimization on the fine-tuned model with the reward — R3.3
   _Depends 1.3, 3.2_
-- [ ] 3.4 (Unit) Export the GGUF file, ask the validation split through llama-server, calibrate the threshold, and write the run's report — R3.4, R5.1
+- [x] 3.4 (Unit) Export the GGUF file, ask the validation split through llama-server, calibrate the threshold, and write the run's report — R3.4, R5.1
   _Depends 3.2_
 - [ ] 3.5 (Unit) Run the pipeline from the command line: build and upload the records, price and create the pod, watch it, terminate it, record the ledger, and commit the report — R1.4, R2.5, R3.1, R3.5, R5.1, R5.2
   _Depends 2.2, 2.3, 3.1, 3.3, 3.4_

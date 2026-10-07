@@ -130,7 +130,56 @@ def rl(run: Run) -> None:
     run.hub.put(out / "rl.json", f"runs/{run.run}/rl/rl.json", f"run {run.run}: rl report")
 
 
-STAGES: dict[str, Callable[[Run], None]] = {"sft": sft, "rl": rl}
+def adapters(run: Run, source: str) -> dict[str, list[Path]]:
+    """The models `source`'s adapters make, each as the adapters merged in order: the supervised
+    one, and when `source` ran reinforcement learning, that one on top of the supervised one it
+    started from."""
+    if not run.hub.files(f"runs/{source}/rl/adapter"):
+        return {"sft": [run.hub.get(f"runs/{source}/sft/adapter", run.work)]}
+    report = json.loads(
+        run.hub.get(f"runs/{source}/rl/rl.json", run.work).read_text(encoding="utf-8")
+    )
+    supervised = run.hub.get(f"runs/{report['sft']}/sft/adapter", run.work)
+    return {
+        "sft": [supervised],
+        "rl": [supervised, run.hub.get(f"runs/{source}/rl/adapter", run.work)],
+    }
+
+
+def export(run: Run) -> None:
+    """Each model as a Q4_K_M GGUF file, asked about the validation split through the guide tool,
+    and the threshold calibrated on the last one — the reinforcement-learned guide when there is
+    one, so the report has the split before and after it (R3.4, R5.1)."""
+    from lotml_harness.guide import train, validate
+
+    if run.llama_cpp is None:
+        raise ValueError("the export stage needs --llama-cpp")
+    source = run.source("export")
+    out = run.out("export")
+    report: dict = {"run": run.run, "source": source, "models": {}}
+    rows: list[dict] = []
+    for name, merged_from in adapters(run, source).items():
+        base = train.Settings()
+        merged = train.merge(base.model, base.revision, merged_from, out / name / "merged")
+        gguf = train.export(merged, run.llama_cpp, out / name)
+        rows, found = validate.validate(gguf, run.llama_cpp, run.records)
+        report["models"][name] = found
+        run.hub.put(
+            gguf, f"runs/{run.run}/export/{name}/{gguf.name}", f"run {run.run}: {name} gguf"
+        )
+        report["final"] = name
+    threshold, precision, shown = validate.calibrated(rows)
+    report |= {
+        "threshold": threshold,
+        "precision": precision,
+        "shown": shown,
+        "target": validate.PRECISION,
+    }
+    (out / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    run.hub.put(out / "report.json", f"runs/{run.run}/report.json", f"run {run.run}: report")
+
+
+STAGES: dict[str, Callable[[Run], None]] = {"sft": sft, "rl": rl, "export": export}
 
 
 def execute(run: Run, stages: list[str], known: dict[str, Callable[[Run], None]]) -> None:
