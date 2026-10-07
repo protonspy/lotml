@@ -57,10 +57,11 @@ which the pod's own environment authorizes; so a laptop that sleeps does not lea
 **The pod** is `runpod/pytorch` at a pinned tag with CUDA 12.8, community cloud first, 40 GB of
 container disk, no volume (R2 holds what must outlive it), no ports. Its environment carries
 `HF_TOKEN`, the run's id, the commit, the stages and the deadline; the RunPod key is not passed in.
-The clone of the public repository at the commit (R1.6) runs under the deadline with the rest.
-The bootstrap holds the token aside while it installs uv (a pinned version) and rustup over https
-only and builds the release `lotml`, `uv sync --locked --group train`, and fetches llama.cpp b11450's Linux release and
-`convert_hf_to_gguf.py` from its source archive.
+The clone of the public repository at the commit (R1.6) runs under the deadline with the rest. The
+bootstrap holds the token aside while it installs uv (a pinned version) and rustup over https only
+and builds the release `lotml`, then syncs the environment on uv's own CPython 3.13.14 — the image's
+3.13 failed torch's import — `uv sync --locked --group train`, and fetches llama.cpp b11450's Linux
+release and `convert_hf_to_gguf.py` from its source archive.
 
 ## Artifacts (R2)
 
