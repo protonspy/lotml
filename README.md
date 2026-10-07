@@ -12,6 +12,10 @@
 </p>
 
 <p align="center">
+  <a href="https://protonspy.github.io/lotml/"><strong>protonspy.github.io/lotml</strong></a>
+</p>
+
+<p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="Compiler in Rust" src="https://img.shields.io/badge/compiler-Rust%202024-orange.svg">
   <img alt="Targets: Python and native through LLVM" src="https://img.shields.io/badge/targets-Python%20%C2%B7%20LLVM-teal.svg">

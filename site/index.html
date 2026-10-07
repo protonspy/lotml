@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LotML</title>
+  <meta name="description" content="LotML is a statically typed programming language designed to be written by LLMs and reviewed by people.">
+  <meta name="theme-color" content="#0a0d22">
+  <meta property="og:title" content="LotML — written by models, reviewed by people">
+  <meta property="og:description" content="A statically typed language with Python's syntax wherever its meaning is Python's, and a compiler built as the agent's tool.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://protonspy.github.io/lotml/">
+  <meta property="og:image" content="https://raw.githubusercontent.com/protonspy/lotml/main/.github/assets/banner.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/png" href="assets/icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Pixelify+Sans:wght@500;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    try {
+      var saved = localStorage.getItem("lotml-theme");
+      if (saved === "light" || saved === "dark") document.documentElement.dataset.theme = saved;
+    } catch (e) {}
+  </script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav" id="top">
+    <div class="nav-inner">
+      <a class="brand" href="#top" aria-label="LotML, back to top">
+        <img src="assets/icon.png" alt="" width="28" height="28">
+        <span class="wordmark"><span class="lot">Lot</span><span class="ml">ML</span></span>
+      </a>
+      <nav class="nav-links" aria-label="Sections">
+        <a href="#why">Why</a>
+        <a href="#language">Language</a>
+        <a href="#agents">Agents</a>
+        <a href="#guide">Guide</a>
+        <a href="#pipeline">Pipeline</a>
+        <a href="#get-started">Get started</a>
+      </nav>
+      <div class="nav-actions">
+        <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch between light and dark theme">
+          <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+        </button>
+        <a class="btn btn-ghost btn-sm" href="https://github.com/protonspy/lotml">
+          <svg viewBox="0 0 24 24" aria-hidden="true" class="gh"><path d="M12 .5a11.5 11.5 0 0 0-3.6 22.4c.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.9 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A11.5 11.5 0 0 0 12 .5z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <canvas class="fireflies" aria-hidden="true"></canvas>
+      <div class="container hero-inner">
+        <img class="hero-lotus" src="assets/icon.png" alt="" width="104" height="104">
+        <p class="pill"><span class="dot"></span>v0.1.0 · research preview</p>
+        <h1>Written by models.<br><span class="grad">Reviewed by people.</span></h1>
+        <p class="lead">LotML is a statically typed language with Python's syntax wherever its meaning is Python's — and a visible difference wherever it is not. Coding agents write correct code more often; the people reviewing it can trust what they read.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="#get-started">Get started <span aria-hidden="true">→</span></a>
+          <a class="btn btn-ghost" href="https://github.com/protonspy/lotml/blob/main/reference/lotml.md">Read the reference</a>
+        </div>
+
+        <dl class="stats">
+          <div><dt>0</dt><dd>exceptions, ever</dd></div>
+          <div><dt>.lot</dt><dd>file extension</dd></div>
+          <div><dt>2</dt><dd>targets: Python · LLVM</dd></div>
+          <div><dt>MIT</dt><dd>open source</dd></div>
+        </dl>
+
+        <div class="window hero-window" data-tabs>
+          <div class="window-bar">
+            <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="tabs" role="tablist" aria-label="Example">
+              <button role="tab" aria-selected="true" aria-controls="hero-src" id="hero-src-tab">stats.lot</button>
+              <button role="tab" aria-selected="false" aria-controls="hero-check" id="hero-check-tab">lotml check</button>
+              <button role="tab" aria-selected="false" aria-controls="hero-test" id="hero-test-tab">lotml test</button>
+            </div>
+          </div>
+          <div class="panel" role="tabpanel" id="hero-src" aria-labelledby="hero-src-tab">
+<pre><code class="lang-lot">fn median(xs: [f64]) -&gt; f64?:
+    """The middle value of `xs` once sorted; None when `xs` is empty."""
+    if len(xs) == 0:
+        return None
+    var s = xs
+    s.sort()
+    mid = len(s) // 2
+    if len(s) % 2 == 1:
+        return s[mid]
+    return (s[mid - 1] + s[mid]) / 2.0
+
+fn spread(xs: [f64]) -&gt; f64:
+    m = median(xs) ?? 0.0
+    return m - xs[0]
+
+test "median of three":
+    assert median([3.0, 1.0, 2.0]) == 2.0
+
+test "median of four":
+    assert median([4.0, 1.0, 3.0, 2.0]) == 2.5</code></pre>
+          </div>
+          <div class="panel" role="tabpanel" id="hero-check" aria-labelledby="hero-check-tab" hidden>
+<pre><code class="lang-term"><span class="t-prompt">$</span> lotml check stats.lot      <span class="t-dim"># before `?? 0.0` was there</span>
+stats.lot:13:12: <span class="t-err">error[E0207]</span>: this is a `f64?`, which may be `None`
+        return median(xs) - xs[0]
+               <span class="t-err">^^^^^^^^^^^^^^^^^^</span>
+  <span class="t-note">note:</span> test it with `if x is not None:`, give a default with `x ?? default`, or fail with `x ?? fail error`
+
+<span class="t-prompt">$</span> lotml check stats.lot
+stats.lot: <span class="t-ok">no errors</span></code></pre>
+          </div>
+          <div class="panel" role="tabpanel" id="hero-test" aria-labelledby="hero-test-tab" hidden>
+<pre><code class="lang-term"><span class="t-prompt">$</span> lotml test stats.lot
+<span class="t-ok">ok</span>     median of three
+<span class="t-ok">ok</span>     median of four
+2 passed, 0 failed, 0 errors, 0 panics
+
+<span class="t-dim"># a median that forgot the even case: a failed comparison reports both values</span>
+<span class="t-err">FAIL</span>   median of four  stats.lot:10
+       assert median([4.0, 1.0, 3.0, 2.0]) == 2.5
+       left:  3.0
+       right: 2.5</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="why">
+      <div class="container">
+        <p class="eyebrow">The loop</p>
+        <h2>One program, <span class="grad">two readers</span></h2>
+        <p class="sub">The model writes it, the compiler answers in a form the model can act on, and a person reads what is left — with nothing hidden from either.</p>
+        <div class="flow">
+          <article class="flow-card">
+            <h3><span class="step">01</span> The model writes</h3>
+            <ul>
+              <li>Python's vocabulary, so its prior helps</li>
+              <li>One canonical form, enforced by <code>lotml fmt</code></li>
+              <li><code>todo()</code> fills a hole and still compiles</li>
+              <li>Edits addressed by symbol, not by line</li>
+            </ul>
+          </article>
+          <span class="flow-arrow" aria-hidden="true">→</span>
+          <article class="flow-card flow-card-mid">
+            <h3><span class="step">02</span> The compiler answers</h3>
+            <ul>
+              <li>Types checked on prefixes, mid-write</li>
+              <li>Diagnostics as versioned JSON with a fix hint</li>
+              <li><code>explain</code>, <code>digest</code>, <code>show</code> for context</li>
+              <li>The same tools over LSP and MCP</li>
+            </ul>
+          </article>
+          <span class="flow-arrow" aria-hidden="true">→</span>
+          <article class="flow-card">
+            <h3><span class="step">03</span> The person reviews</h3>
+            <ul>
+              <li>Every failure path in the signature</li>
+              <li>No aliasing: an assignment copies</li>
+              <li>Every <code>match</code> covers every case</li>
+              <li><code>test</code> blocks live beside the code</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="features">
+      <div class="container">
+        <p class="eyebrow">What's inside</p>
+        <h2>A small language with <span class="grad">checked guarantees</span></h2>
+        <p class="sub">Static types, value semantics and errors as values, in a syntax a Python reader already knows.</p>
+        <div class="grid">
+          <article class="card">
+            <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/></svg></div>
+            <h3>Python where it means Python</h3>
+            <p>Same keywords, same indentation, same <code>for</code> and <code>match</code> — so a model's training prior helps instead of misleading it.</p>
+          </article>
+          <article class="card">
+            <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></div>
+            <h3>Errors as values</h3>
+            <p>No exceptions. <code>T ! E</code> is a result, <code>fail</code> returns the error, <code>?</code> passes it up. Every failure path is in the signature.</p>
+          </article>
+          <article class="card">
+            <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="8" height="14" rx="2"/><rect x="13" y="5" width="8" height="14" rx="2"/></svg></div>
+            <h3>Value semantics</h3>
+            <p>An assignment copies, with reference counting and reuse underneath. Nothing changes behind a caller's back.</p>
+          </article>
+          <article class="card">
+            <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h7M4 12h11M4 18h5"/><path d="M17 15l2 2 3-4"/></svg></div>
+            <h3>Types checked on prefixes</h3>
+            <p>Static types the checker can judge while the code is still being written — feedback before the function is finished.</p>
+          </article>
+          <article class="card">
+            <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg></div>
+            <h3>A compiler built as a tool</h3>
+            <p><code>check</code>, <code>explain</code>, <code>digest</code>, <code>show</code>, an LSP server and an MCP server, all answering in versioned JSON.</p>
+          </article>
+          <article class="card">
+            <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 18l-5-9V3"/></svg></div>
+            <h3><code>test</code> blocks in the language</h3>
+            <p>Tests sit beside the code they cover, and a failed comparison reports both values it saw.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="language">
+      <div class="container">
+        <p class="eyebrow">A tour</p>
+        <h2>Familiar where it can be, <span class="grad">explicit where it must be</span></h2>
+        <p class="sub">Each difference from Python is one a reviewer can see on the page.</p>
+        <div class="tour" data-tabs>
+          <div class="tour-tabs" role="tablist" aria-label="Language tour">
+            <button role="tab" aria-selected="true" aria-controls="tour-opt" id="tour-opt-tab">Optionals</button>
+            <button role="tab" aria-selected="false" aria-controls="tour-err" id="tour-err-tab">Errors</button>
+            <button role="tab" aria-selected="false" aria-controls="tour-val" id="tour-val-tab">Values</button>
+            <button role="tab" aria-selected="false" aria-controls="tour-sum" id="tour-sum-tab">Sum types</button>
+            <button role="tab" aria-selected="false" aria-controls="tour-inout" id="tour-inout-tab">inout</button>
+          </div>
+
+          <div class="tour-panel" role="tabpanel" id="tour-opt" aria-labelledby="tour-opt-tab">
+            <div class="window">
+              <div class="window-bar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span><span class="file">users.lot</span></div>
+<pre><code class="lang-lot">type User(name: str, age: int, email: str? = None)
+
+fn find_email(users: [User], name: str) -&gt; str?:
+    for u in users:
+        if u.name == name:
+            return u.email
+    return None
+
+fn contact(users: [User], name: str) -&gt; str:
+    email = find_email(users, name)
+    if email is not None:
+        return email
+    return "no email"</code></pre>
+            </div>
+            <div class="tour-text">
+              <h3><code>T?</code> is the only type that admits <code>None</code></h3>
+              <p><code>x is not None</code> narrows <code>x</code> to <code>T</code> inside the block, and <code>x ?? default</code> unwraps with a fallback.</p>
+              <p class="not-python"><strong>Not Python:</strong> no truthiness. <code>if</code> and <code>while</code> take only <code>bool</code>.</p>
+            </div>
+          </div>
+
+          <div class="tour-panel" role="tabpanel" id="tour-err" aria-labelledby="tour-err-tab" hidden>
+            <div class="window">
+              <div class="window-bar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span><span class="file">parse.lot</span></div>
+<pre><code class="lang-lot">type ParseErr = Empty | NotNumber(text: str) | Negative(value: int)
+
+fn parse(s: str) -&gt; int ! ParseErr:
+    if s == "":
+        fail Empty
+    n = s.to_int() ?? fail NotNumber(s)
+    if n &lt; 0:
+        fail Negative(n)
+    return n
+
+fn double(s: str) -&gt; int ! ParseErr:
+    n = parse(s)?
+    return n * 2</code></pre>
+            </div>
+            <div class="tour-text">
+              <h3>A failure is a value of the return type</h3>
+              <p><code>T ! E</code> is a <code>T</code> or an error of type <code>E</code>. <code>fail e</code> returns the error; <code>expr?</code> unwraps or passes it up.</p>
+              <p class="not-python"><strong>Not Python:</strong> no <code>raise</code>, <code>try</code> or <code>except</code>. The program stops only on a broken invariant.</p>
+            </div>
+          </div>
+
+          <div class="tour-panel" role="tabpanel" id="tour-val" aria-labelledby="tour-val-tab" hidden>
+            <div class="window">
+              <div class="window-bar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span><span class="file">point.lot</span></div>
+<pre><code class="lang-lot">type Point(x: f64, y: f64)
+
+fn nudged(p: Point) -&gt; Point:
+    var q = p
+    q.x = q.x + 1.0
+    return q
+
+test "the original is untouched":
+    p = Point(1.0, 2.0)
+    q = nudged(p)
+    assert p.x == 1.0
+    assert q.x == 2.0</code></pre>
+            </div>
+            <div class="tour-text">
+              <h3>Records are values</h3>
+              <p><code>q = p</code> copies. A field changes only through a <code>var</code>, and a plain parameter is read-only.</p>
+              <p class="not-python"><strong>Not Python:</strong> no aliasing surprises — reference counting and reuse keep the copy cheap.</p>
+            </div>
+          </div>
+
+          <div class="tour-panel" role="tabpanel" id="tour-sum" aria-labelledby="tour-sum-tab" hidden>
+            <div class="window">
+              <div class="window-bar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span><span class="file">shape.lot</span></div>
+<pre><code class="lang-lot">type Shape = Circle(r: f64) | Rect(w: f64, h: f64) | Empty
+
+fn area(s: Shape) -&gt; f64:
+    match s:
+        case Circle(r):
+            return 3.14159 * r * r
+        case Rect(w, h):
+            return w * h
+        case Empty:
+            return 0.0</code></pre>
+            </div>
+            <div class="tour-text">
+              <h3>Sum types and exhaustive <code>match</code></h3>
+              <p>Variants are constructors in scope; patterns bind fields by position or name.</p>
+              <p class="not-python"><strong>Not Python:</strong> <code>match</code> must cover every case — a missing variant is a compile error.</p>
+            </div>
+          </div>
+
+          <div class="tour-panel" role="tabpanel" id="tour-inout" aria-labelledby="tour-inout-tab" hidden>
+            <div class="window">
+              <div class="window-bar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span><span class="file">append.lot</span></div>
+<pre><code class="lang-lot">fn add_all(inout xs: [int], values: [int]):
+    for v in values:
+        xs.append(v)
+
+test "inout changes the caller's var":
+    var xs = [1]
+    add_all(&amp;xs, [2, 3])
+    assert xs == [1, 2, 3]</code></pre>
+            </div>
+            <div class="tour-text">
+              <h3>Mutation is spelled at the call</h3>
+              <p>To change a caller's value, the parameter says <code>inout</code> and the call passes <code>&amp;x</code>, where <code>x</code> is a <code>var</code>.</p>
+              <p class="not-python"><strong>Not Python:</strong> a function gets a copy through a plain parameter; <code>sink</code> takes the value over.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="agents">
+      <div class="container split">
+        <div>
+          <p class="eyebrow">For agents</p>
+          <h2>A compiler that <span class="grad">answers in JSON</span></h2>
+          <p class="sub left">Every command an agent needs, with a stable, versioned output. <code>lotml init</code> writes <code>AGENTS.md</code>, the guide, and registers the MCP server in each harness.</p>
+          <ul class="commands">
+            <li><code>check</code><span>syntax, type and mutability errors</span></li>
+            <li><code>explain</code><span>what an error code means and how to fix it</span></li>
+            <li><code>digest</code><span>a project's signatures, without bodies</span></li>
+            <li><code>show</code><span>a symbol as written, and what it uses</span></li>
+            <li><code>fmt</code><span>the one canonical form</span></li>
+            <li><code>test</code><span>run the <code>test</code> blocks</span></li>
+            <li><code>run</code> · <code>build</code><span>Python for run, native through LLVM for build</span></li>
+            <li><code>lsp</code> · <code>mcp</code><span>the same tools, served to editors and agents</span></li>
+          </ul>
+        </div>
+        <div class="window">
+          <div class="window-bar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span><span class="file">lotml check --json stats.lot (abridged)</span></div>
+<pre><code class="lang-json">{
+  "version": 1,
+  "diagnostics": [{
+    "code": "E0207",
+    "severity": "error",
+    "message": "this is a `f64?`, which may be `None`",
+    "file": "stats.lot",
+    "location": { "line": 13, "column": 12,
+                  "end_line": 13, "end_column": 30 },
+    "notes": ["test it with `if x is not None:`, give a default with `x ?? default`, or fail with `x ?? fail error`"],
+    "explanation": "lotml explain E0207",
+    "fixes": []
+  }],
+  "summary": { "clean": false, "errors": 1, "warnings": 0 }
+}</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="guide">
+      <div class="container">
+        <p class="eyebrow">The harness guide</p>
+        <h2>A small model that points, <span class="grad">and knows when to stay quiet</span></h2>
+        <p class="sub">When <code>check</code> refuses the code or a test fails, a half-billion-parameter coder model tuned on LotML tells any coding agent where to change it and what kind of change it needs. It runs on your own CPU. The agent still does the editing.</p>
+        <div class="split guide">
+          <ol class="guide-steps">
+            <li>
+              <h3>The agent asks</h3>
+              <p><code>guide</code> is one more tool of the compiler's MCP server, so any harness and any model can call it — or run <code>lotml guide ask</code> from a shell.</p>
+            </li>
+            <li>
+              <h3>The compiler finds the state</h3>
+              <p>The first file with errors and its diagnostics, or the first failing <code>test</code> block with the values each side of its comparison had.</p>
+            </li>
+            <li>
+              <h3>The model points</h3>
+              <p>One to three ranked locations — a path, a symbol and a line span — and a kind of change, held to a JSON schema at temperature zero.</p>
+            </li>
+            <li>
+              <h3>The compiler checks the answer</h3>
+              <p>A location must name a real file and a declared symbol. Below a calibrated confidence the guide says nothing rather than guess.</p>
+            </li>
+            <li>
+              <h3>An edit is shown only once it holds</h3>
+              <p>Applied to a copy: the tests unchanged, the file checking clean, the failing test passing. Your files are never written.</p>
+            </li>
+          </ol>
+          <div class="guide-side">
+            <div class="window">
+              <div class="window-bar"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span><span class="file">the shape of an answer</span></div>
+<pre><code class="lang-json">{
+  "locations": [{
+    "path": "stats.lot",
+    "symbol": "median",
+    "lines": [1, 10]
+  }],
+  "kind": "body",
+  "edit": {
+    "tool": "replace",
+    "arguments": {
+      "symbol": "median",
+      "part": "body",
+      "text": "…"
+    }
+  },
+  "confidence": 0.81,
+  "withheld": null
+}
+
+{ "guidance": null, "reason": "not-confident" }</code></pre>
+            </div>
+            <ul class="chips">
+              <li>Qwen2.5-Coder 0.5B, LoRA-tuned</li>
+              <li>served by llama-server on the CPU</li>
+              <li>localhost only</li>
+              <li>silent below its threshold</li>
+              <li>never writes your files</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="pipeline">
+      <div class="container">
+        <p class="eyebrow">How it compiles</p>
+        <h2>One IR. <span class="grad">Two targets.</span></h2>
+        <p class="sub">One lowering turns the checked program into one IR, which every backend reads, and every target is held to the same parity suite.</p>
+        <div class="pipeline">
+          <div class="pipe-row">
+            <span class="node">source</span><span class="edge" aria-hidden="true"></span>
+            <span class="node">parser</span><span class="edge" aria-hidden="true"></span>
+            <span class="node">checker</span>
+          </div>
+          <span class="edge edge-down" aria-hidden="true"></span>
+          <div class="pipe-row">
+            <span class="node node-ir">IR <small>lotml-ir</small></span>
+          </div>
+          <span class="edge-stub" aria-hidden="true"></span>
+          <div class="pipe-targets">
+            <div class="target target-py">
+              <p class="target-name">Python target</p>
+              <p class="target-path">Python backend → CPython</p>
+              <p class="target-cmd"><code>lotml run</code> · <code>lotml test</code></p>
+              <p>Reaches every Python library through checked boundaries and interface files.</p>
+            </div>
+            <div class="target target-llvm">
+              <p class="target-name">LLVM target</p>
+              <p class="target-path">monomorphize → counts → LLVM → native</p>
+              <p class="target-cmd"><code>lotml build</code> · <code>--shared</code></p>
+              <p>A native executable with no Python at run time, or a library C calls through its header.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+
+    <section class="section" id="get-started">
+      <div class="container narrow">
+        <p class="eyebrow">Get started</p>
+        <h2>Up and running <span class="grad">in a minute</span></h2>
+        <p class="sub">Releases hold <code>lotml</code> for Linux x86_64, Windows x86_64 and macOS on Apple silicon, beside the VS Code extension. <code>run</code> and <code>test</code> need Python 3.11+; a native build needs clang 17+.</p>
+        <div class="window" data-tabs>
+          <div class="window-bar">
+            <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div class="tabs" role="tablist" aria-label="Install">
+              <button role="tab" aria-selected="true" aria-controls="gs-use" id="gs-use-tab">Use</button>
+              <button role="tab" aria-selected="false" aria-controls="gs-build" id="gs-build-tab">Build from source</button>
+            </div>
+            <button class="copy" type="button" data-copy aria-label="Copy the commands">Copy</button>
+          </div>
+          <div class="panel" role="tabpanel" id="gs-use" aria-labelledby="gs-use-tab">
+<pre><code class="lang-term">lotml init                  <span class="t-dim"># AGENTS.md, the guide, the MCP server</span>
+lotml check stats.lot       <span class="t-dim"># syntax, type and mutability errors</span>
+lotml test  stats.lot       <span class="t-dim"># run the test blocks</span>
+lotml run   main.lot        <span class="t-dim"># run fn main()</span>
+lotml build stats.lot       <span class="t-dim"># a native executable, through LLVM</span>
+lotml explain E0207         <span class="t-dim"># explain an error code</span></code></pre>
+          </div>
+          <div class="panel" role="tabpanel" id="gs-build" aria-labelledby="gs-build-tab" hidden>
+<pre><code class="lang-term">git clone https://github.com/protonspy/lotml
+cd lotml
+cargo build --manifest-path compiler/Cargo.toml --locked --release -p lotml</code></pre>
+          </div>
+        </div>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/protonspy/lotml/releases">Download a release <span aria-hidden="true">→</span></a>
+          <a class="btn btn-ghost" href="https://github.com/protonspy/lotml/blob/main/reference/lotml.md">Language reference</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <a class="brand" href="#top" aria-label="LotML, back to top">
+        <img src="assets/icon.png" alt="" width="24" height="24">
+        <span class="wordmark"><span class="lot">Lot</span><span class="ml">ML</span></span>
+      </a>
+      <p>Lot, from Lotus · ML, from Machine Learning. MIT licensed.</p>
+      <nav aria-label="Project">
+        <a href="https://github.com/protonspy/lotml">GitHub</a>
+        <a href="https://github.com/protonspy/lotml/blob/main/reference/lotml.md">Reference</a>
+        <a href="https://github.com/protonspy/lotml/releases">Releases</a>
+        <a href="https://github.com/protonspy/lotml/blob/main/LICENSE">License</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>
