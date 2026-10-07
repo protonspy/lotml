@@ -33,3 +33,5 @@ Every avoided synonym is reported wherever it appears as a whole word under `doc
 - **verifiable reward** — a reward computed by a program, such as the compiler or a test run, rather than by a learned model.
 - **reward hacking** — a policy raising its reward by exploiting the grader, such as exiting before the tests run or editing them, instead of solving the task.
 - **on-policy distillation** — distillation in which the student samples its own answers and a teacher scores every token of them; it needs the teacher's probabilities and a shared tokenizer.
+- **IR** — the typed, structured intermediate form between the checker and every backend, in `compiler/crates/lotml-ir`: nested blocks, every intermediate value a named local, every statement its source line; the Python backend reads it with generics intact, the native backends after it is made monomorphic and counted (adr:0020-one-ir-between-the-checker-and-every-backend). Avoid: MIR
+- **target** — what `--target` compiles a program to: `python`, `c` or `llvm`; the C and LLVM targets are the native targets, and a backend is the crate that compiles to one.

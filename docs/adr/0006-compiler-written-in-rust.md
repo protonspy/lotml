@@ -1,5 +1,6 @@
 ---
-status: accepted
+status: superseded
+superseded-by: 0021-compiler-in-rust-with-llvm-as-its-native-code-generator
 ---
 
 # 0006 · Compiler written in Rust

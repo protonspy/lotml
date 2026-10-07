@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: 3a0a3c6f1c85ea590dfdb65109a05bb68442ddec00ced4173d161e4e296def59
+checksum: 860384944bb0755589525704f3e9597d039745e6acc9618c4d45f57b51d90b6f
 ---
 
 # lotml roadmap
@@ -123,10 +123,13 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
   _Depends 4.1_
 - [x] 4.3 (Unit) Benchmark numeric, allocation-heavy and sharing-heavy programs separately against C (docs/wiki/pages/memory-model.md)
   _Depends 4.1_
-- [ ] 4.4 (Unit) Review the phase 3 gate — the suite green on both targets, ≤ 2× C on numeric benchmarks
+- [x] 4.4 (Unit) Review the phase 3 gate — the suite green on both targets, ≤ 2× C on numeric benchmarks
   _Depends 4.2, 4.3_
-- [ ] 5.1 (Unit) Add the native backend, Cranelift in debug and LLVM in release (R21; adr:0006)
+- [ ] 5.1 (Unit) Add the native backend, Cranelift in debug and LLVM in release (R21;
+      adr:0006)
   _Depends 4.4_
+  _Status removed_
+  _Reason replaced by plans/ir-architecture.md: LLVM as the only native code generator over a shared IR, Cranelift dropped (adr:0021-compiler-in-rust-with-llvm-as-its-native-code-generator); gate 4.4 recorded as failed on numeric performance and overridden by adr:0019-proceed-to-phase-4-past-the-failed-phase-3-gate_
 - [ ] 5.2 (TDD) Add effects as capabilities passed as parameters, and measure whether marking them changes what models write (R22; docs/wiki/pages/type-system.md)
   _Depends 4.4_
 - [ ] 5.3 (Unit) Add `where` contracts checked in debug (R23; docs/wiki/pages/type-system.md)
