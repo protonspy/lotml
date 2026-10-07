@@ -412,3 +412,73 @@ fn f() -> int:
         ])
     );
 }
+
+fn judged(name: &str, file: &str, answer: &serde_json::Value, failing: Option<&str>) -> serde_json::Value {
+    let dir = scratch(name, &[("a.lotml", file), ("answer.json", &answer.to_string())]);
+    let mut args = vec!["dev", "judge", "a.lotml", "--answer", "answer.json", "--path", "solution.lotml"];
+    if let Some(block) = failing {
+        args.extend(["--failing", block]);
+    }
+    let out = lotml(&args, &dir);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    serde_json::from_str(&stdout(&out)).unwrap()
+}
+
+fn answer(symbol: &str, body: &str) -> serde_json::Value {
+    serde_json::json!({
+        "locations": [{"path": "solution.lotml", "symbol": symbol, "lines": [1, 4]}],
+        "kind": "body",
+        "edit": {"tool": "replace", "arguments": {
+            "path": "solution.lotml", "symbol": symbol, "part": "body", "text": body}}
+    })
+}
+
+#[test]
+fn dev_judge_passes_an_edit_that_makes_the_file_check_and_says_why_another_is_withheld() {
+    let broken = "fn count() -> int:\n    n = 0\n    n += 1\n    return n\n";
+    let fixed = judged("judge-fix", broken, &answer("count", "    var n = 0\n    n += 1\n    return n"), None);
+    assert_eq!(fixed, serde_json::json!({"valid": true, "symbols": ["count"], "edit": "passes"}));
+    let copied = judged("judge-copy", broken, &answer("count", "    n = 0\n    n += 1\n    return n"), None);
+    assert_eq!(copied["edit"], "edit-fails-check", "a copy of the broken body is withheld");
+    let elsewhere = serde_json::json!({
+        "locations": [{"path": "solution.lotml", "symbol": "count", "lines": [1, 4]}],
+        "kind": "body",
+        "edit": {"tool": "remove", "arguments": {"path": "other.lotml", "symbol": "count"}}
+    });
+    assert_eq!(judged("judge-other", broken, &elsewhere, None)["edit"], "edit-fails-check");
+    let silent = serde_json::json!({
+        "locations": [{"path": "solution.lotml", "symbol": null, "lines": [1, 1]}], "kind": "lines", "edit": null
+    });
+    assert_eq!(
+        judged("judge-none", broken, &silent, None),
+        serde_json::json!({"valid": true, "symbols": [null], "edit": "none"})
+    );
+}
+
+#[test]
+fn dev_judge_reads_an_answer_outside_the_schema_as_invalid() {
+    let broken = "fn count() -> int:\n    return 1\n";
+    for (name, found) in [
+        ("judge-extra", serde_json::json!({"locations": [], "kind": "body", "edit": null, "why": "x"})),
+        (
+            "judge-kind",
+            serde_json::json!({
+                "locations": [{"path": "a", "symbol": null, "lines": [1, 1]}], "kind": "rewrite", "edit": null
+            }),
+        ),
+    ] {
+        assert_eq!(
+            judged(name, broken, &found, None),
+            serde_json::json!({"valid": false, "symbols": [], "edit": "none"})
+        );
+    }
+}
+
+#[test]
+fn dev_judge_runs_the_failing_block_with_the_edit_made() {
+    let wrong = "fn add(a: int, b: int) -> int:\n    return a - b\n\ntest \"adds\":\n    assert add(1, 2) == 3\n";
+    let right = judged("judge-test-pass", wrong, &answer("add", "    return a + b"), Some("adds"));
+    assert_eq!(right["edit"], "passes");
+    let still = judged("judge-test-fail", wrong, &answer("add", "    return a * b"), Some("adds"));
+    assert_eq!(still["edit"], "edit-fails-test");
+}

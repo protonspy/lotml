@@ -191,6 +191,23 @@ enum Dev {
         #[arg(long)]
         json: bool,
     },
+    /// Judge a guide's answer about a file as the `guide` tool's gate would, and print it as JSON.
+    Judge {
+        /// The file the answer is about.
+        file: PathBuf,
+        /// The answer's text, as the guide wrote it.
+        #[arg(long)]
+        answer: PathBuf,
+        /// The file's path in the project, as the answer names it.
+        #[arg(long)]
+        path: String,
+        /// The test block that fails, when it is a test the guide was asked about.
+        #[arg(long)]
+        failing: Option<String>,
+        /// Seconds the failing block may run.
+        #[arg(long, default_value_t = 20)]
+        deadline: u64,
+    },
     /// List a file's mutants: each a span replaced, with its operator and declaration.
     Mutate {
         /// The file.
@@ -255,6 +272,9 @@ fn run() -> ExitCode {
         Command::Mcp { root } => return status(mcp::serve(&root)),
         Command::Dev(Dev::Mutate { path, json }) => dev::mutate(&path, json),
         Command::Dev(Dev::Outline { path }) => dev::outline(&path),
+        Command::Dev(Dev::Judge { file, answer, path, failing, deadline }) => {
+            dev::judge(&file, &answer, &path, failing.as_deref(), deadline)
+        }
         Command::Dev(Dev::Diff { before, after, path, json }) => dev::diff(&before, &after, &path, json),
         Command::Guide(Guide::Render { state }) => guide::render_file(&state),
         Command::Guide(Guide::Ask { root, task, files }) => return status(mcp::ask_guide(&root, task, &files)),

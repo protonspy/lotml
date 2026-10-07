@@ -66,3 +66,11 @@ a cap, and never leaves a pod running.
 - The verdict on held-out real failures: specs/guide-evaluation/.
 - Serving the guide from RunPod: it is served on the user's machine (adr:0017-a-half-billion-coder-model-tuned-locally-and-served-by-llama-server).
 - More than one GPU per run.
+- Distillation. The supervised targets come from the compiler — the diff between the failing file
+  and its real fix — so they are always right and no teacher bounds them. The study found a
+  teacher that does not know the language passes on its explanations and not its fixes (10.0%
+  correct code on low-resource languages), and distillation giving nothing at 100M parameters
+  (docs/wiki/pages/compiler-embedded-model.md). A frontier teacher's outputs are also held by the
+  licence registry. Distilling a larger Qwen2.5-Coder guide trained by this pipeline into the 0.5B
+  is the case left open, for when the larger one wins on held-out real failures and the 0.5B is
+  needed for its latency on the CPU.

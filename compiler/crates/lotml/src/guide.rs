@@ -6,7 +6,7 @@ mod answer;
 mod client;
 mod gate;
 
-pub use answer::{Edit, ProjectFile, judge};
+pub use answer::{Edit, ProjectFile, judge, read as read_answer};
 pub use client::ask;
 pub use gate::withheld;
 
