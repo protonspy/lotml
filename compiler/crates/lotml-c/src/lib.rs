@@ -1,14 +1,11 @@
-//! The C backend: a checked lotml program as one C file over the counting runtime of
-//! `lotml-runtime` (R18, R19; adr:0016, specs/c-backend).
+//! The C backend: the counted IR of `lotml-ir` as one C file over the runtime of
+//! `lotml-runtime` (R18, R19; adr:0016, specs/c-backend, specs/shared-ir).
 
 pub mod driver;
 mod emit;
-mod hoist;
-mod lower;
-mod mir;
-mod own;
-mod reuse;
 mod types;
+
+use lotml_ir::{ir as mir, lower};
 
 use std::path::Path;
 
@@ -49,11 +46,7 @@ pub fn compile_program(
         return Err(errors);
     }
     let mut lowered = lower::lower(&parsed.module, &checked, source, tests)?;
-    for f in &mut lowered.functions {
-        own::insert_counts(f);
-        reuse::insert_reuse(f);
-        hoist::hoist_uniqueness(f);
-    }
+    lotml_ir::native(&mut lowered);
     let c = emit::program(&lowered, &path.display().to_string(), tests);
     Ok(Program { c, libraries: lowered.libraries.iter().filter(|l| !driver::linked_always(l)).cloned().collect() })
 }

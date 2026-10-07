@@ -1,10 +1,10 @@
-//! Counting (adr:0014; specs/c-backend/design.md, "Counting"): the counts inserted into a
+//! Counting (adr:0016; specs/c-backend/design.md, "Counting"): the counts inserted into a
 //! function so that, at every point, the counted locals holding a count are exactly the live
 //! ones. A use that stores a value moves it at its last use and increments it before; a use
 //! that only reads it lets it be decremented right after, when it was the last. A branch
 //! decrements on entry what it never uses; a spent loop, on exit, what is not used after it.
 
-use crate::mir::{Arg, Block, Expr, Function, Local, LocalInfo, Operand, Place, Proj, Stmt, StmtKind, counted, outs};
+use crate::ir::{Arg, Block, Expr, Function, Local, LocalInfo, Operand, Place, Proj, Stmt, StmtKind, counted, outs};
 
 /// A set of locals, as bits.
 #[derive(Clone, PartialEq, Eq)]
@@ -149,7 +149,7 @@ impl Pass {
             StmtKind::Store(place, v) => {
                 let mut s = out.clone();
                 self.add(&mut s, &Operand::Local(place.local));
-                crate::mir::place_operands(place, &mut |o| self.add(&mut s, o));
+                crate::ir::place_operands(place, &mut |o| self.add(&mut s, o));
                 self.add(&mut s, v);
                 s
             }
@@ -159,7 +159,7 @@ impl Pass {
                     s.remove(o);
                 }
                 self.add(&mut s, &Operand::Local(place.local));
-                crate::mir::place_operands(place, &mut |o| self.add(&mut s, o));
+                crate::ir::place_operands(place, &mut |o| self.add(&mut s, o));
                 self.add_args(&mut s, args);
                 s
             }

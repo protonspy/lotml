@@ -1,6 +1,5 @@
-//! The typed intermediate form between the checked program and C: monomorphic functions whose
-//! statements work on named locals, so that counting can follow each value's last use
-//! (specs/c-backend/design.md).
+//! The IR: monomorphic functions whose statements work on typed, named locals, so that counting
+//! can follow each value's last use (specs/shared-ir/design.md, specs/c-backend/design.md).
 
 use lotml_check::ty::{IntKind, Ty};
 

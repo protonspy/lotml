@@ -11,7 +11,7 @@ use lotml_syntax::ast::{
 };
 use lotml_syntax::span::Span;
 
-use crate::mir::{
+use crate::ir::{
     Arg, BinOp, Block, CmpOp, Const, Expr, FormatPart, Function, Local, LocalInfo, Operand, Panic, Place, Proj, Stmt,
     StmtKind, UnOp, counted,
 };

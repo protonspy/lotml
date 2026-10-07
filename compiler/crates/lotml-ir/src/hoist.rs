@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 
 use lotml_check::ty::Ty;
 
-use crate::mir::{Arg, Block, Expr, Function, Local, Operand, Place, Proj, Stmt, StmtKind, place_operands};
+use crate::ir::{Arg, Block, Expr, Function, Local, Operand, Place, Proj, Stmt, StmtKind, place_operands};
 
 pub fn hoist_uniqueness(f: &mut Function) {
     let body = std::mem::take(&mut f.body);
