@@ -218,6 +218,8 @@ switch.
 6. **Open:** no study measures an agent consuming a small model's repairs. The harness can: the same
    tasks with `check` alone and with `check` plus a fixer, scored on pass@1 and tokens
    ([[evaluation-harness]]).
+7. **How such a model is trained** — distillation, reinforcement learning against the compiler, and
+   the bugs to train on — is [[small-coder-training]] and [[repair-training]].
 
 ## Not machine-checked
 

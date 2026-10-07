@@ -88,9 +88,11 @@ of lotml drew the C family's `else if`. Every neighbour's prior leaks where lotm
    teaches a model lotml needs larger, more varied programs than these.
 4. **RL with verifiable rewards.** [Agnostics](https://arxiv.org/abs/2508.04865) trained Qwen3-4B with an
    input/output verifier: Lua 11→23%, Julia 10→22%, OCaml 1→7% on its LiveCodeBench port. It needed a
-   5,369-problem dataset, a prompt of language tips and a nonzero starting success rate, and it failed
-   on models of 3B and below. Preference tuning helps a new language less than a familiar one, because
-   it only reweights correct samples the model already produces.
+   5,369-problem dataset, a prompt of language tips and a nonzero starting success rate. It did not
+   improve Qwen3-1.7B or Llama-3.2-3B on its competition problems, though SmolLM3-3B, starting at
+   1–2%, did improve; [[small-coder-training]] has the rest of the training evidence. Preference
+   tuning helps a new language less than a familiar one, because it only reweights correct samples
+   the model already produces.
 5. **Continued pretraining, fine-tuning and instruction transfer** of open models (the Gleam and
    MoonBit numbers above; Mojo-Coder reached 66.4% with 6 million tokens and 3,200 instructions).
 6. **Explicit identity.** Its own extension, the language's name in the prompt and at the top of the
