@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-07 — the runtime's object cached per user: [[transpilation-strategy]] says it is compiled once per toolchain and flags (adr:0025), [[compiler-performance]] gives the build before and after
 - 2026-10-07 — languages for models, coding-agent harnesses and new-language adaptation surveyed: added [[language-design-evidence]] and [[agent-harness-design]]; [[languages-for-agents]] gains the languages since the first survey and corrects MoonBit, Anka, NanoLang and Zero; [[evaluation-harness]] adds clustered intervals, non-inferiority and the tasks' known flaws; [[training-prior]] adds examples over rules; [[small-coder-training]] marks the seed as untrainable until rebuilt and adds RL at small sizes; [[semantic-compiler]] corrects when Claude Code reports LSP diagnostics
 - 2026-10-07 — sixteen compilers and interpreters of Python and its derivatives read against lotml's compiler: added [[prior-art-compilers]], [[target-parity]] and [[compiler-performance]]; [[semantic-compiler]], [[transpilation-strategy]] and [[evaluation-harness]] link them
 - 2026-10-07 — the phase 4 targets: [[transpilation-strategy]] tells the C target of phase 3 in the past, adds the one IR both targets read, the LLVM target, `--shared` and their parity and benchmarks; [[memory-model]] and [[evaluation-harness]] add the LLVM target's measurements beside the C target's

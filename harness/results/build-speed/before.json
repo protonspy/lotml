@@ -1,0 +1,49 @@
+{
+  "label": "before",
+  "compiler": "clang 23",
+  "program": "fib.lotml",
+  "taken": "2026-10-07T22:43:57+00:00",
+  "system": "Windows AMD64",
+  "rows": [
+    {
+      "level": "-O0",
+      "step": "runtime",
+      "seconds": 0.2145963
+    },
+    {
+      "level": "-O0",
+      "step": "program",
+      "seconds": 0.0224597
+    },
+    {
+      "level": "-O0",
+      "step": "link",
+      "seconds": 0.1289197
+    },
+    {
+      "level": "-O0",
+      "step": "build",
+      "seconds": 0.3688059
+    },
+    {
+      "level": "-O2",
+      "step": "runtime",
+      "seconds": 0.8464789
+    },
+    {
+      "level": "-O2",
+      "step": "program",
+      "seconds": 0.0225865
+    },
+    {
+      "level": "-O2",
+      "step": "link",
+      "seconds": 0.0620205
+    },
+    {
+      "level": "-O2",
+      "step": "build",
+      "seconds": 0.9225962
+    }
+  ]
+}

@@ -2,10 +2,12 @@
 //! the runtime of `lotml-runtime` (adr:0021, specs/llvm-backend); a module as a program, or as a
 //! library C calls (specs/c-abi-export).
 
+pub mod cache;
 pub mod driver;
 mod emit;
 pub mod export;
 mod module;
+mod sha256;
 mod types;
 
 #[cfg(test)]
