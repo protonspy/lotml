@@ -67,11 +67,27 @@ pub fn is_source(path: &Path) -> bool {
 }
 
 /// The interface of a Python module a file may import (adr:0012): the bindings file it was read
-/// from, or `None` for one the compiler generated from the module's stub.
+/// from, or `None` for one the compiler generated from the module's stub; and whether that file
+/// shadows an interface the compiler would generate (specs/bind-on-import/ R1.6).
 pub struct Binding {
     pub module: String,
     pub path: Option<PathBuf>,
     pub text: String,
+    pub shadows: bool,
+}
+
+impl Binding {
+    /// The module's name with the text the checker reads: a shadowing file's marked so.
+    pub fn input(self) -> (String, String) {
+        let text = if self.shadows { lotml_check::shadowing(&self.text) } else { self.text };
+        (self.module, text)
+    }
+
+    /// The interface the checker reads from it.
+    pub fn read(&self) -> lotml_check::Interface {
+        let marked = self.shadows.then(|| lotml_check::shadowing(&self.text));
+        lotml_check::interface_of(&self.module, marked.as_deref().unwrap_or(&self.text)).0
+    }
 }
 
 /// The interfaces a file whose text is `text` may import from: its bindings files
@@ -99,7 +115,7 @@ fn bindings_for(path: &Path) -> Vec<Binding> {
                     continue;
                 }
                 if let Ok(text) = std::fs::read_to_string(&file) {
-                    found.push(Binding { module, path: Some(file), text });
+                    found.push(Binding { module, path: Some(file), text, shadows: false });
                 }
             }
         }
@@ -112,19 +128,23 @@ fn bindings_for(path: &Path) -> Vec<Binding> {
 }
 
 /// `bindings`, and after them the generated interface of each `py.` module `text` imports that
-/// none of them covers and a stub binds.
+/// none of them covers and a stub binds; a bindings file an import uses where a stub binds is
+/// marked as shadowing the interface generated from it.
 fn with_generated(mut bindings: Vec<Binding>, path: &Path, text: &str) -> Vec<Binding> {
     let imports = python_imports(text);
-    if imports.iter().all(|m| bindings.iter().any(|b| &b.module == m)) {
+    if imports.is_empty() {
         return bindings;
     }
     let project = crate::exec::project_of(path);
     for module in imports {
-        if bindings.iter().any(|b| b.module == module) {
-            continue;
-        }
-        if let Some(text) = generated(project.as_deref(), &module) {
-            bindings.push(Binding { module, path: None, text });
+        let made = generated(project.as_deref(), &module);
+        match bindings.iter_mut().find(|b| b.module == module) {
+            Some(file) => file.shadows = made.is_some(),
+            None => {
+                if let Some(text) = made {
+                    bindings.push(Binding { module, path: None, text, shadows: false });
+                }
+            }
         }
     }
     bindings
@@ -190,9 +210,9 @@ impl InterfaceCache {
             .entry(dir)
             .or_insert_with(|| bindings_for(path).into_iter().map(|b| (b.module, b.text)).collect())
             .iter()
-            .map(|(module, text)| Binding { module: module.clone(), path: None, text: text.clone() })
+            .map(|(module, text)| Binding { module: module.clone(), path: None, text: text.clone(), shadows: false })
             .collect();
-        with_generated(bindings, path, text).into_iter().map(|b| (b.module, b.text)).collect()
+        with_generated(bindings, path, text).into_iter().map(Binding::input).collect()
     }
 }
 

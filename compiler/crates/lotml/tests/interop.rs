@@ -267,6 +267,28 @@ fn main() -> None ! PyError:
     assert!(checked.status.success(), "{}", stdout(&checked));
 }
 
+#[test]
+fn a_bindings_file_where_a_stub_binds_is_used_and_warned_and_one_where_none_does_is_not() {
+    let program = "from py.textwrap import dedent
+import py.liar
+
+fn main() -> None ! PyError:
+    print(dedent(\"  x\")?)
+    print(py.liar.count()?)
+";
+    let dir = scratch(
+        "shadowing",
+        &[(".git", ""), ("stubs/textwrap.pyi", TEXTWRAP_PYI), ("stubs/liar.pyi", LIAR_PYI), ("main.lotml", program)],
+    );
+    assert!(lotml(&["bind", "textwrap", "--stub", "stubs/textwrap.pyi"], &dir).status.success());
+    assert!(lotml(&["bind", "liar", "--stub", "stubs/liar.pyi"], &dir).status.success());
+    let checked = lotml(&["check", "main.lotml"], &dir);
+    assert!(checked.status.success(), "a warning stops nothing: {}", stdout(&checked));
+    let said = stdout(&checked);
+    assert_eq!(said.matches("E0224").count(), 1, "textwrap's file shadows typeshed's, liar's shadows nothing: {said}");
+    assert!(said.contains("bindings/py.textwrap.lotmli shadows"), "{said}");
+}
+
 /// A Python module whose values no stub types: an object, a dataclass, and functions that change
 /// what they are given.
 const OBJS_PY: &str = "\

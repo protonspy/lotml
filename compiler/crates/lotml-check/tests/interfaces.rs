@@ -65,6 +65,23 @@ fn every_call_into_python_can_fail() {
 }
 
 #[test]
+fn a_bindings_file_shadowing_a_generated_interface_is_warned_at_the_import() {
+    let source = "from py.textwrap import dedent
+
+fn f(s: str) -> str ! PyError:
+    return dedent(s)?
+";
+    let (marked, problems) = interface(&lotml_check::shadowing(TEXTWRAP));
+    assert!(problems.is_empty(), "the mark is a comment");
+    let shadowing = Interfaces::from([("py.textwrap".to_string(), marked)]);
+    let found = check_resolved_with(&parse(source).module, source, &shadowing).diagnostics;
+    assert_eq!(found.iter().map(|d| d.code).collect::<Vec<_>>(), vec!["E0224"]);
+    assert_eq!(found[0].severity, lotml_diag::Severity::Warning);
+    assert!(found[0].message.contains("bindings/py.textwrap.lotmli shadows"), "{}", found[0].message);
+    clean(source);
+}
+
+#[test]
 fn a_function_or_module_without_an_interface_is_reported() {
     assert_eq!(codes("from py.textwrap import fill\n\nfn f() -> int:\n    return 1\n"), vec!["E0216"]);
     assert_eq!(

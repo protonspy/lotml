@@ -39,7 +39,7 @@ fn compile(paths: &[PathBuf], dir: &Path) -> Result<Result<Vec<Module>, String>,
         let interfaces: Interfaces = files::interfaces_for(&path, &text)
             .into_iter()
             .map(|b| {
-                let read = lotml_check::interface_of(&b.module, &b.text).0;
+                let read = b.read();
                 (b.module, read)
             })
             .collect();
@@ -389,7 +389,7 @@ fn llvm_executable(path: &Path, dir: &Path, tests: bool, level: Level) -> Result
     let interfaces: Interfaces = files::interfaces_for(path, &text)
         .into_iter()
         .map(|b| {
-            let read = lotml_check::interface_of(&b.module, &b.text).0;
+            let read = b.read();
             (b.module, read)
         })
         .collect();
@@ -440,7 +440,7 @@ fn build_shared(paths: &[PathBuf], out: &Path) -> Result<u8, Failure> {
         let interfaces: Interfaces = files::interfaces_for(&path, &text)
             .into_iter()
             .map(|b| {
-                let read = lotml_check::interface_of(&b.module, &b.text).0;
+                let read = b.read();
                 (b.module, read)
             })
             .collect();

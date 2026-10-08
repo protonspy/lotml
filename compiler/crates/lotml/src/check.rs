@@ -36,7 +36,7 @@ pub fn run(options: &Options) -> Result<bool, Failure> {
                 interfaces.entry(file.display().to_string()).or_insert_with(|| (b.module.clone(), b.text.clone()));
             }
         }
-        let bindings = bindings.into_iter().map(|b| (b.module, b.text)).collect();
+        let bindings = bindings.into_iter().map(files::Binding::input).collect();
         sources.push(SourceFile::create(&db, path.display().to_string(), text, bindings));
     }
     if options.prefix {

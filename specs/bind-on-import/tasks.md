@@ -13,7 +13,7 @@
   _Depends 1.3_
 - [x] 1.6 (Unit) Offer the fix that writes `py.<name>` on a bare import the embedded typeshed covers — R1.5
   _Depends 1.3_
-- [ ] 1.7 (Unit) Warn at an import whose bindings file shadows the interface the compiler would generate — R1.6
+- [x] 1.7 (Unit) Warn at an import whose bindings file shadows the interface the compiler would generate — R1.6
   _Depends 1.3_
 
 ## 2 · The lock and the cache

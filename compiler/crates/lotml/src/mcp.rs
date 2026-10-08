@@ -282,10 +282,8 @@ impl Server {
             return Some("edit-fails-check");
         };
         let text = self.workspace.text(&path).unwrap_or_default().to_string();
-        let interfaces: lotml_check::Interfaces = files::interfaces_for(&path, &text)
-            .into_iter()
-            .map(|b| (b.module.clone(), lotml_check::interface_of(&b.module, &b.text).0))
-            .collect();
+        let interfaces: lotml_check::Interfaces =
+            files::interfaces_for(&path, &text).into_iter().map(|b| (b.module.clone(), b.read())).collect();
         let clean =
             |new: &str| lotml_check::check_source_with(new, &interfaces).iter().all(|d| d.severity != Severity::Error);
         let binds = self

@@ -2,7 +2,7 @@
 //! file of function signatures with no body, over the types every program has, each returning
 //! `T ! PyError` — a stub says nothing about what a Python call raises, so every one can fail.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use lotml_diag::Diagnostic;
 use lotml_syntax::ast::Item;
@@ -15,12 +15,27 @@ use crate::ty::Ty;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Interface {
     pub(crate) functions: BTreeMap<String, FnSig>,
+    /// Whether a bindings file gives it where the compiler would generate one from the module's
+    /// stub ([`shadowing`]).
+    pub(crate) shadows: bool,
 }
 
 impl Interface {
     pub fn names(&self) -> impl Iterator<Item = &str> {
         self.functions.keys().map(String::as_str)
     }
+}
+
+/// The first line the compiler puts before a bindings file's text when the module's stub would
+/// give an interface of its own (specs/bind-on-import/ R1.6).
+const SHADOWS: &str = "# This file shadows the interface lotml generates from the module's stub.";
+
+/// `text`, a bindings file's, marked as shadowing the interface the compiler would generate.
+pub fn shadowing(text: &str) -> String {
+    format!(
+        "{SHADOWS}
+{text}"
+    )
 }
 
 /// The interfaces a file may import from, by module name.
@@ -115,7 +130,7 @@ pub fn c_interface(text: &str) -> (Interface, Vec<Diagnostic>) {
     }
     diagnostics.append(&mut program.diagnostics);
     diagnostics.sort_by_key(|d| d.span.start);
-    (Interface { functions }, diagnostics)
+    (Interface { functions, shadows: false }, diagnostics)
 }
 
 /// Read an interface: the functions it declares, and what is wrong with it. A function that
@@ -176,7 +191,13 @@ pub fn interface(text: &str) -> (Interface, Vec<Diagnostic>) {
     }
     diagnostics.append(&mut program.diagnostics);
     diagnostics.sort_by_key(|d| d.span.start);
-    (Interface { functions }, diagnostics)
+    let shadows = text.lines().next() == Some(SHADOWS);
+    (Interface { functions, shadows }, diagnostics)
+}
+
+/// The modules whose interface is a bindings file shadowing the one the compiler would generate.
+pub(crate) fn shadowed(interfaces: &Interfaces) -> HashSet<String> {
+    interfaces.iter().filter(|(_, i)| i.shadows).map(|(module, _)| module.clone()).collect()
 }
 
 /// The functions of each interface, as the checker keeps them.
