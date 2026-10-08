@@ -86,7 +86,7 @@ The language needs explicit conventions, like Swift (`inout` with `&` at the cal
 
 | convention | meaning | at the call |
 | --- | --- | --- |
-| default | read; the compiler borrows without copying | `f(x)` |
+| default | read; passed without a copy, counted as owned rather than borrowed (adr:0016) | `f(x)` |
 | `inout` | the function changes the caller's value | `f(&x)` — the mutation is visible |
 | `sink` | the function takes ownership; the caller no longer uses it | `f(x)`, with the compiler forbidding later use |
 
@@ -125,7 +125,7 @@ Graphs use the arena-and-index idiom, like the adjacency-dictionary graph in the
 - **"10–100× faster than CPython"** is conservative: CPython 3.13 is 33× to 486× behind C++ on
   benchmarks that do not call a C library.
 - **Checked arithmetic is not free:** the MVS benchmarks disabled overflow and bounds checks, so
-  they do not show what lotml's trap-on-overflow costs on the C target; on the Python target it is
+  they do not show what lotml's trap-on-overflow costs on the native target; on the Python target it is
   measured in [[transpilation-strategy]].
 
 The project's own benchmark must include allocation-heavy and sharing-heavy programs, not just

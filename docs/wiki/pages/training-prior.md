@@ -35,8 +35,9 @@ follows is in [[lotml-syntax]]. Every number taken from a paper in `research/lit
 - **Familiar syntax with a new meaning is worse than new syntax.** Models predicting what programs
   do under supplied rules lost 40–70 points when familiar operators carried new meanings, much more
   than with novel symbols for the same rules, and chain-of-thought did not help
-  ([arXiv 2510.03415](https://arxiv.org/abs/2510.03415)). It measures reading, not writing, but it is
-  the closest measurement of lotml's case: Python's `=` and argument passing with copy semantics.
+  ([arXiv 2510.03415](https://arxiv.org/abs/2510.03415)). It used a featherweight C, adversarial swaps such as `+` evaluated as subtraction, and final-state
+  prediction: it measures reading, not writing, and the rule at its extreme, but it is the closest
+  measurement of lotml's case: Python's `=` and argument passing with copy semantics.
 - **Paradigm priors persist.** Asked for Haskell, OCaml and Scala, GPT-5 wrote mutable variables,
   loops and in-place updates in 80–94% of outputs, and error rates were significantly higher in the
   purely functional languages ([FPEval](https://arxiv.org/abs/2601.02060)). lotml's immutability by

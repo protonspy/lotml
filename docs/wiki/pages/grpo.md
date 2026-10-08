@@ -32,9 +32,9 @@ from a paper in `research/literature/sources.json` is quoted in `claims.json` th
 - **Dr. GRPO** ([arXiv 2503.20783](https://arxiv.org/abs/2503.20783)) found two biases. Dividing each
   answer's loss by its length punishes long wrong answers less than short ones, so wrong answers grow;
   dividing by the group's standard deviation over-weights prompts that are almost always solved or
-  almost never. It removes both and divides by a constant. At the time every open implementation the
-  authors examined, trl and verl among them, normalized by response length: which loss a framework
-  computes has to be checked.
+  almost never. It removes both and divides by a constant. Every open PPO implementation the authors
+  examined normalized by length — OpenRLHF by each response's, trl and verl by the batch's token
+  count — so which loss a framework computes has to be checked.
 - **The variant matters less than it seems.** On one 7B math run, PPO, GRPO, Reinforce++, RLOO,
   ReMax and DAPO left similar gaps to the base model's large-k pass rate, from 43.9 for GRPO to 42.6
   for RLOO; DAPO's dynamic sampling needed about 3–6× more samples per batch

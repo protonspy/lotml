@@ -14,8 +14,8 @@ The harness guide reaches an agent as one more tool of the compiler's MCP server
 `lotml init` already registers in Claude Code, Codex and Cursor (specs/agent-guide/), so any
 harness and any model can call it (plans/harness-guide.md). The study behind it says how it must
 behave: systems that held up showed only what their checker accepted — Lean Copilot, Eiffel-tools,
-PyFiXV — and PyFiXV bought its precision with silence; the line a compiler reports is often not the
-one to fix; and an agent, not a person, is the reader (docs/wiki/pages/compiler-embedded-model.md).
+PyFiXV — and PyFiXV bought its precision with silence; DrRepair predicts the line to fix itself rather
+than trusting the reported one; and an agent, not a person, is the reader (docs/wiki/pages/compiler-embedded-model.md).
 So the tool says where to change the code and what kind of change, shows an edit only once it
 checks, says nothing when it is unsure, and never edits. The model's answer is untrusted input: it
 is validated before anything acts on it, and the code it proposes runs only where nothing it can

@@ -164,7 +164,10 @@ documentation and model cards are cited by link, without numbers.
    distilled model; at 0.5B the evidence is repair behind a checker ([[repair-training]]).
 6. **Measure the shipped artifact.** The guide ships quantized to Q4_K_M; drift toward Python, or
    any other language, is measured on that file.
-7. **RL at this size needs a non-zero start, built on purpose.** Qwen2.5-Coder-0.5B under GRPO
+7. **RL at this size needs a non-zero start, built on purpose.** The Prolog, Q, Lean and Verilog
+   numbers in this item come from `research/llm-landscape/evaluation-and-adaptation.md`, not from
+   `sources.json`: they are not machine-checked ([[source-verification]]); Agnostics' is.
+   Qwen2.5-Coder-0.5B under GRPO
    learned nothing on Prolog zero-shot (0.00), and reached 0.13 with one example in the prompt as a
    syntax anchor ([arXiv 2506.11027](https://arxiv.org/abs/2506.11027)). On Q, a language the base
    models scored 0.0% on from 1.5B to 7B, GRPO at 1.5B made pass rates decline, and solutions and

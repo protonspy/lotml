@@ -65,6 +65,14 @@ reads a closure's variable when it is called, so lambdas made in a loop all saw 
 each captured local is now a default bound when the lambda is made. With the GIL the threads
 interleave rather than run in parallel; free-threaded CPython runs them at once.
 
+On the native target, `parallel` runs each task on an operating-system thread, at most 256 at once
+(`LT_TASK_THREADS` in `lotml.c`), each reserving 64 MiB of stack, and returns the results in
+order. What the tasks capture is marked shared first: a shared cell's count turns negative and only
+then changes atomically, so cells no task reaches keep plain counts
+(adr:0016-c-target-as-monomorphic-c-over-a-counting-runtime). A blocking C call holds up only its
+own task's thread, and a native program loads no CPython
+(adr:0025-two-targets-python-for-run-llvm-for-build).
+
 ## The forgotten-`await` hypothesis, measured
 
 No source found measures how often "forgot the `await`" or spreading `async` happens in

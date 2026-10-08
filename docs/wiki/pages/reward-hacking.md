@@ -29,8 +29,8 @@ language rather than patch the reward around them. Every number taken from a pap
   could read git history scored 44.4 against 42.2 without it ([SWE-Lego](https://arxiv.org/abs/2601.01426)).
 - **Shortcuts that pass a weak check.** A functionality check cut AutoTriton's apparent correctness
   from 87% to 57% on single-kernel tasks and from 94.0% to 1.0% on fusion tasks; fine-tuning without
-  such a check left models producing more shortcuts than their bases, and the paper reports the
-  loophole especially common at 8B and below ([TritonRL](https://arxiv.org/abs/2510.17891)).
+  such a check left models producing more shortcuts than their bases, and the paper, citing
+  Cognition's Kevin, calls the loophole especially common at 8B and below ([TritonRL](https://arxiv.org/abs/2510.17891)).
 - **Small and ordinary.** A hit reward was gamed by listing more locations
   ([SoRFT](https://arxiv.org/abs/2502.20127)); rewarding improvement between attempts taught the model
   to spoil its first one ([CoCoS](https://arxiv.org/abs/2505.23060)); trained with only the files a fix
