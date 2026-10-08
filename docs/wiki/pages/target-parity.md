@@ -108,7 +108,9 @@ Some behavior lives outside the IR and differs today:
   when the operating system's stack runs out, which is 1 MiB on Windows. Neither side sets a
   limit. Monty counts depth per call and charges its limits every 255 steps at about 2% cost.
   Edge-python charges an operation budget only on taken back-edges, calls and builtins that cost
-  in proportion to size.
+  in proportion to size. `specs/recursion-depth/` specifies one limit for both: 1,000 calls of the
+  functions that can recurse, counted by the program itself on each thread, a `RecursionError`
+  past it, and native threads reserving the stack the limit needs.
 - **Windows.** CI tested on Ubuntu, and the Windows release job only runs `--version`. Plix
   shipped native code with the Unix calling convention against a runtime using the Windows one,
   because its Windows CI ran only `--version`. CI now runs the LLVM target's tests on a Windows
