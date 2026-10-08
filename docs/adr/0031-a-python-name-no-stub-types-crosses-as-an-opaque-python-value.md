@@ -20,9 +20,8 @@ is what to do with the remainder, which today is nothing: a program cannot call 
 ## Decision
 
 The owner accepted this on 2026-10-08. A type a stub writes that lotml has no type for is bound
-as `PyObject`, an opaque handle to a
-Python value, and the function is bound instead of left out. Plans/python-compatibility.md 2.2
-specifies it as `specs/python-object/`.
+as `PyObject`, an opaque handle to a Python value, and the function is bound instead of left out.
+`plans/python-compatibility.md` 2.2 specifies it as `specs/python-object/`.
 
 - **Opaque.** A `PyObject` has no operations of its own: no attribute, no method, no operator, no
   comparison, no iteration, no `print`. It can be stored, passed and returned, and given to a
