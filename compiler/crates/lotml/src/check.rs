@@ -30,9 +30,11 @@ pub fn run(options: &Options) -> Result<bool, Failure> {
     let mut interfaces: BTreeMap<String, (String, String)> = BTreeMap::new();
     for path in &paths {
         let text = files::read(path)?;
-        let bindings = files::interfaces_for(path);
+        let bindings = files::interfaces_for(path, &text);
         for b in &bindings {
-            interfaces.entry(b.path.display().to_string()).or_insert_with(|| (b.module.clone(), b.text.clone()));
+            if let Some(file) = &b.path {
+                interfaces.entry(file.display().to_string()).or_insert_with(|| (b.module.clone(), b.text.clone()));
+            }
         }
         let bindings = bindings.into_iter().map(|b| (b.module, b.text)).collect();
         sources.push(SourceFile::create(&db, path.display().to_string(), text, bindings));

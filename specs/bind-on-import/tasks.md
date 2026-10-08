@@ -5,7 +5,7 @@
 - [x] 1.1 (Unit) Move `lotml bind`'s stub resolution into one function the compiler shares: the embedded typeshed for the standard library, else the packages of the lock's environment, never `VIRTUAL_ENV` or `.venv`, answering the stub's text, source and SHA-256 or why there is none — R1.2
 - [x] 1.2 (Unit) Find the lock's environment without running Python: a completed environment under `python-environments/` whose copied `uv.lock` and `pyproject.toml` equal the project's, newest first — R1.2
   _Depends 1.1_
-- [ ] 1.3 (Unit) Generate, in `files::interfaces_for`, the interface of each `py.` module a file imports that no bindings file covers, and key `InterfaceCache` by the imports too, so `check`, `run`, `test`, the language server and the MCP server all bind on import — R1.1
+- [x] 1.3 (Unit) Generate, in `files::interfaces_for`, the interface of each `py.` module a file imports that no bindings file covers, and key `InterfaceCache` by the imports too, so `check`, `run`, `test`, the language server and the MCP server all bind on import — R1.1
   _Depends 1.2_
 - [ ] 1.4 (Unit) Make the lock's environment in `run` and `test` before their interfaces are collected — R1.3
   _Depends 1.3_

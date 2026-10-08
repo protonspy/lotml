@@ -36,7 +36,7 @@ fn compile(paths: &[PathBuf], dir: &Path) -> Result<Result<Vec<Module>, String>,
     for path in files::expand(paths)? {
         let text = files::read(&path)?;
         let absolute = std::path::absolute(&path).map_err(|e| Failure(format!("{}: {e}", path.display())))?;
-        let interfaces: Interfaces = files::interfaces_for(&path)
+        let interfaces: Interfaces = files::interfaces_for(&path, &text)
             .into_iter()
             .map(|b| {
                 let read = lotml_check::interface_of(&b.module, &b.text).0;
@@ -154,7 +154,7 @@ fn executable_of(python: &[String]) -> Result<(String, String), Failure> {
 
 /// The project a file or directory belongs to: the nearest directory holding `.git` or a
 /// `pyproject.toml`, from a directory itself or from a file's own; none without one.
-fn project_of(path: &Path) -> Option<PathBuf> {
+pub(crate) fn project_of(path: &Path) -> Option<PathBuf> {
     let path = std::path::absolute(path).ok()?;
     let dir = if path.is_dir() { path } else { path.parent()?.to_path_buf() };
     dir.ancestors().find(|d| d.join(".git").exists() || d.join("pyproject.toml").is_file()).map(Path::to_path_buf)
@@ -374,7 +374,7 @@ pub fn test(paths: &[PathBuf], as_json: bool, target: Target, offline: bool) -> 
 fn llvm_executable(path: &Path, dir: &Path, tests: bool, level: Level) -> Result<Option<PathBuf>, Failure> {
     let text = files::read(path)?;
     let absolute = std::path::absolute(path).map_err(|e| Failure(format!("{}: {e}", path.display())))?;
-    let interfaces: Interfaces = files::interfaces_for(path)
+    let interfaces: Interfaces = files::interfaces_for(path, &text)
         .into_iter()
         .map(|b| {
             let read = lotml_check::interface_of(&b.module, &b.text).0;
@@ -425,7 +425,7 @@ fn build_shared(paths: &[PathBuf], out: &Path) -> Result<u8, Failure> {
     for path in files::expand(paths)? {
         let text = files::read(&path)?;
         let absolute = std::path::absolute(&path).map_err(|e| Failure(format!("{}: {e}", path.display())))?;
-        let interfaces: Interfaces = files::interfaces_for(&path)
+        let interfaces: Interfaces = files::interfaces_for(&path, &text)
             .into_iter()
             .map(|b| {
                 let read = lotml_check::interface_of(&b.module, &b.text).0;
@@ -571,28 +571,10 @@ fn report_rows(rows: Vec<Value>, as_json: bool, python: Option<Value>) -> (u8, S
 /// `lotml bind`: the interface of a Python module, read from its stub by the binder lotml carries,
 /// which runs no Python (specs/rust-binder), and written to `out/py.<module>.lotmli`, the name a
 /// program imports it by (adr:0012, adr:0029); the module may be given with its `py.` or without.
-/// With no stub given, a standard-library module's is typeshed's, embedded in lotml, and any other
-/// module's is found in the project's packages, in PEP 561's order (plans/bind-sources.md 1.1).
+/// With no stub given, it is found as the compiler finds it ([`crate::stubs::find`]).
 pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failure> {
     let module = module.strip_prefix("py.").unwrap_or(module);
-    // The name becomes a file name: identifiers and dots only, so it cannot leave `out`.
-    let valid = module.split('.').all(|part| {
-        part.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-            && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-    });
-    if !valid {
-        return Err(Failure(format!("`{module}` is not a Python module name")));
-    }
-    let device = |part: &str| {
-        let lower = part.to_ascii_lowercase();
-        matches!(lower.as_str(), "con" | "prn" | "aux" | "nul")
-            || ((lower.starts_with("com") || lower.starts_with("lpt"))
-                && lower.len() == 4
-                && lower.as_bytes()[3].is_ascii_digit())
-    };
-    if module.split('.').any(device) {
-        return Err(Failure(format!("`{module}` is a device's name on Windows, which no file may have")));
-    }
+    crate::stubs::name(module).map_err(Failure)?;
     if lotml_check::is_c_library(module) {
         return Err(Failure(format!(
             "`{module}` names a C library, whose interface is written by hand: bindings/{module}.lotmli (adr:0013)"

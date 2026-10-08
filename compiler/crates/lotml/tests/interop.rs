@@ -191,6 +191,35 @@ fn main() -> None ! PyError:
     );
 }
 
+#[test]
+fn check_run_and_test_bind_a_standard_library_module_on_import_with_no_bind() {
+    let program = "from py.textwrap import dedent, wrap
+
+fn main() -> None ! PyError:
+    for line in wrap(dedent(\"    one two three four\")?, width=8)?:
+        print(line)
+
+test \"dedent\":
+    assert dedent(\"  x\") == Ok(\"x\")
+";
+    let dir = scratch("bind-on-import", &[(".git", ""), ("main.lotml", program)]);
+    let checked = lotml(&["check", "main.lotml"], &dir);
+    assert!(checked.status.success(), "{}", stdout(&checked));
+    let out = lotml(&["run", "main.lotml"], &dir);
+    assert_eq!(
+        stdout(&out),
+        "one two
+three
+four
+",
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let tested = lotml(&["test", "main.lotml"], &dir);
+    assert!(tested.status.success(), "{}", stdout(&tested));
+    assert!(!dir.join("bindings").exists(), "nothing is written to bind on import");
+}
+
 /// A Python module whose values no stub types: an object, a dataclass, and functions that change
 /// what they are given.
 const OBJS_PY: &str = "\

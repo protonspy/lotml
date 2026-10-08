@@ -66,19 +66,27 @@ pub fn is_source(path: &Path) -> bool {
     path.extension().is_some_and(|e| e == "lot" || e == "lotml")
 }
 
-/// The interface of a Python module a file may import (adr:0012).
+/// The interface of a Python module a file may import (adr:0012): the bindings file it was read
+/// from, or `None` for one the compiler generated from the module's stub.
 pub struct Binding {
     pub module: String,
-    pub path: PathBuf,
+    pub path: Option<PathBuf>,
     pub text: String,
 }
 
-/// The interfaces a file may import from: each `bindings/<name>.lotmli` in the file's
-/// directory or one above it, the nearest one for each name — up to the repository's root,
-/// the directory holding `.git`, so a `bindings/` outside the project never applies. The name is
-/// the file's stem with its origin, `py.textwrap` or `c.m`, which is what an import names; a
-/// file without an origin is still read, so the checker can say to rename it.
-pub fn interfaces_for(path: &Path) -> Vec<Binding> {
+/// The interfaces a file whose text is `text` may import from: its bindings files
+/// ([`bindings_for`]), then, for each `py.` module it imports that none covers, the interface the
+/// compiler generates from the module's stub (specs/bind-on-import/ R1.1).
+pub fn interfaces_for(path: &Path, text: &str) -> Vec<Binding> {
+    with_generated(bindings_for(path), path, text)
+}
+
+/// Each `bindings/<name>.lotmli` in the file's directory or one above it, the nearest one for each
+/// name — up to the repository's root, the directory holding `.git`, so a `bindings/` outside the
+/// project never applies. The name is the file's stem with its origin, `py.textwrap` or `c.m`,
+/// which is what an import names; a file without an origin is still read, so the checker can say
+/// to rename it.
+fn bindings_for(path: &Path) -> Vec<Binding> {
     let mut found: Vec<Binding> = Vec::new();
     let mut dir = std::path::absolute(path).ok().and_then(|p| p.parent().map(Path::to_path_buf));
     while let Some(here) = dir {
@@ -91,7 +99,7 @@ pub fn interfaces_for(path: &Path) -> Vec<Binding> {
                     continue;
                 }
                 if let Ok(text) = std::fs::read_to_string(&file) {
-                    found.push(Binding { module, path: file, text });
+                    found.push(Binding { module, path: Some(file), text });
                 }
             }
         }
@@ -103,18 +111,73 @@ pub fn interfaces_for(path: &Path) -> Vec<Binding> {
     found
 }
 
-/// [`interfaces_for`] as the incremental engine keeps them, each module's name with its text,
-/// read once per directory however many files it holds.
+/// `bindings`, and after them the generated interface of each `py.` module `text` imports that
+/// none of them covers and a stub binds.
+fn with_generated(mut bindings: Vec<Binding>, path: &Path, text: &str) -> Vec<Binding> {
+    let imports = python_imports(text);
+    if imports.iter().all(|m| bindings.iter().any(|b| &b.module == m)) {
+        return bindings;
+    }
+    let project = crate::exec::project_of(path);
+    for module in imports {
+        if bindings.iter().any(|b| b.module == module) {
+            continue;
+        }
+        if let Some(text) = generated(project.as_deref(), &module) {
+            bindings.push(Binding { module, path: None, text });
+        }
+    }
+    bindings
+}
+
+/// The `py.` modules `text` imports, named as their interfaces are (`py.textwrap`), each once.
+pub fn python_imports(text: &str) -> Vec<String> {
+    let mut found: Vec<String> = Vec::new();
+    for item in &lotml_syntax::parse(text).module.items {
+        if let lotml_syntax::ast::Item::Import(import) = item {
+            let name = import.module.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(".");
+            if name.strip_prefix("py.").is_some_and(|m| !m.is_empty()) && !found.contains(&name) {
+                found.push(name);
+            }
+        }
+    }
+    found
+}
+
+/// The interfaces generated in this process, by project and module.
+type Made = HashMap<(Option<PathBuf>, String), String>;
+
+/// The interface generated for `module` (`py.<name>`) in the project at `project`, remembered for
+/// as long as the process runs once one is made; `None` while no stub binds it, so a later call
+/// tries again.
+fn generated(project: Option<&Path>, module: &str) -> Option<String> {
+    static MADE: std::sync::OnceLock<std::sync::Mutex<Made>> = std::sync::OnceLock::new();
+    let key = (project.map(Path::to_path_buf), module.to_string());
+    let made = MADE.get_or_init(Default::default);
+    if let Some(text) = made.lock().ok()?.get(&key) {
+        return Some(text.clone());
+    }
+    let text = crate::stubs::interface(module.strip_prefix("py.")?, project).ok()?;
+    made.lock().ok()?.insert(key, text.clone());
+    Some(text)
+}
+
+/// [`interfaces_for`] as the incremental engine keeps them, each module's name with its text, the
+/// bindings files read once per directory however many files it holds.
 #[derive(Default)]
-pub struct InterfaceCache(std::collections::HashMap<PathBuf, Vec<(String, String)>>);
+pub struct InterfaceCache(HashMap<PathBuf, Vec<(String, String)>>);
 
 impl InterfaceCache {
-    pub fn get(&mut self, path: &Path) -> Vec<(String, String)> {
+    pub fn get(&mut self, path: &Path, text: &str) -> Vec<(String, String)> {
         let dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
-        self.0
+        let bindings = self
+            .0
             .entry(dir)
-            .or_insert_with(|| interfaces_for(path).into_iter().map(|b| (b.module, b.text)).collect())
-            .clone()
+            .or_insert_with(|| bindings_for(path).into_iter().map(|b| (b.module, b.text)).collect())
+            .iter()
+            .map(|(module, text)| Binding { module: module.clone(), path: None, text: text.clone() })
+            .collect();
+        with_generated(bindings, path, text).into_iter().map(|b| (b.module, b.text)).collect()
     }
 }
 
@@ -190,9 +253,21 @@ mod tests {
         std::fs::create_dir_all(base.join("bindings")).unwrap();
         std::fs::write(base.join("repo").join("bindings").join("inside.lotmli"), "").unwrap();
         std::fs::write(base.join("bindings").join("outside.lotmli"), "").unwrap();
-        let found: Vec<String> = interfaces_for(&project.join("a.lotml")).into_iter().map(|b| b.module).collect();
+        let found: Vec<String> = interfaces_for(&project.join("a.lotml"), "").into_iter().map(|b| b.module).collect();
         let _ = std::fs::remove_dir_all(&base);
         assert_eq!(found, vec!["inside"], "a bindings/ above the repository never applies");
+    }
+
+    #[test]
+    fn the_python_imports_are_the_py_modules_a_file_imports_each_once() {
+        let text = "import py.textwrap
+from py.os.path import join
+import py.textwrap
+import c.m
+import math
+from py import x
+";
+        assert_eq!(python_imports(text), vec!["py.textwrap", "py.os.path"]);
     }
 
     #[test]

@@ -22,6 +22,43 @@ pub struct Stub {
     pub said: String,
 }
 
+/// Whether `module`, without its `py.` origin, may name a module: identifiers and dots only, so as
+/// a file name it cannot leave the directory it is joined to, and no part a device's name on
+/// Windows, which no file may have.
+pub fn name(module: &str) -> Result<(), String> {
+    let valid = module.split('.').all(|part| {
+        part.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    });
+    if !valid {
+        return Err(format!("`{module}` is not a Python module name"));
+    }
+    let device = |part: &str| {
+        let lower = part.to_ascii_lowercase();
+        matches!(lower.as_str(), "con" | "prn" | "aux" | "nul")
+            || ((lower.starts_with("com") || lower.starts_with("lpt"))
+                && lower.len() == 4
+                && lower.as_bytes()[3].is_ascii_digit())
+    };
+    if module.split('.').any(device) {
+        return Err(format!("`{module}` is a device's name on Windows, which no file may have"));
+    }
+    Ok(())
+}
+
+/// The interface of the Python module `module`, without its `py.` origin, generated from its stub
+/// as `lotml bind` writes it, for the project at `project`; or why there is none.
+pub fn interface(module: &str, project: Option<&Path>) -> Result<String, String> {
+    name(module)?;
+    let stub = find(module, || environment(project))?;
+    let text = lotml_bind::binder::interface(module, &stub.text, &stub.said)
+        .map_err(|lotml_bind::binder::Refused(why)| format!("cannot bind `{module}`: {why}"))?;
+    if let Some(problem) = lotml_check::interface(&text).1.first() {
+        return Err(format!("the binding of `{module}` does not check: {} {}", problem.code, problem.message));
+    }
+    Ok(text)
+}
+
 /// The environment the project at `project` binds its packages from: the one made from its
 /// `uv.lock`, found without running Python; an error for a lock lotml does not install from.
 pub fn environment(project: Option<&Path>) -> Result<Environment, String> {
@@ -111,6 +148,28 @@ mod tests {
         }
         std::fs::create_dir_all(&site).unwrap();
         dir
+    }
+
+    #[test]
+    fn a_name_is_identifiers_and_dots_and_never_a_device() {
+        assert!(name("os.path").is_ok());
+        assert!(name("../etc").unwrap_err().contains("not a Python module name"));
+        assert!(name("a..b").is_err() && name("1a").is_err() && name("").is_err());
+        assert!(name("x.COM1").unwrap_err().contains("device"));
+    }
+
+    #[test]
+    fn an_interface_is_generated_from_typeshed_as_bind_writes_it() {
+        let text = interface("textwrap", None).unwrap();
+        assert!(
+            text.contains(
+                "fn dedent(text: str) -> str ! PyError
+"
+            ),
+            "{text}"
+        );
+        assert!(interface("con", None).unwrap_err().contains("device"));
+        assert!(interface("distutils", None).unwrap_err().contains("not in CPython"));
     }
 
     #[test]
