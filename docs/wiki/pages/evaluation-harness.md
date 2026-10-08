@@ -103,7 +103,8 @@ comparison, independent ones — repeated samples of the same task are not indep
 
 **The 168 assumes 20% discordant pairs.** Phase 1 measured 4.5% (Sonnet), 11% (Haiku), 41% (Qwen)
 and 51.5% (Llama) (`harness/results/phase1.md`). At 7–8B-like rates a 10-point difference needs
-320–400+ paired tasks — Connor's n is 320 at 41% and 402 at 51.5%, and the exact test needs more —
+320–400+ paired tasks — Connor's n is 320 at 41% and 402 at 51.5%; the exact test needs 336 at 41%
+and 408 already at 50% —
 and 168 pairs detect it with 48% and 40% power (`exact_power` in
 `research/experiments/sample_size/`). A comparison is sized from the discordance its models are
 expected to show, not from the 20% row.

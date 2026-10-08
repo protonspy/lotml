@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 2ad83bddc109befe812f664d3877e28868f2f932291052008ac50a418dce8a36
+checksum: 6f494c68314de2896fdb7b77ccb3302d558a6224c910cfce1000ab65cda44f3e
 ---
 
 # Harness guide
@@ -167,12 +167,20 @@ deepagents and in a second harness — on held-out tasks, and the wiki records w
       41% — never fewer than 168, compared by a paired test that holds with more than
       one run per task, and record it in that spec as a delta
   _Depends 3.2_
-  _Reason review of the literature on 2026-10-08: 168 pairs detect 10 points only at 20% discordant pairs; phase 1 measured 41% and 51.5% for the cheap models the guide is meant to help_
+  _Status removed_
+  _Reason review of the literature on 2026-10-08: its 'about 430 pairs at 41%' was an estimate; the exact test needs 336, so it is re-added as 3.6 with the computed sizes_
 - [ ] 3.5 (Unit) Run the guide arms on MBPP's held-out tasks once the spec 1.6 wrote is
       built, commit the report, and record in the wiki whether the guide helps cheap
       agents, frontier ones, both or neither
-  _Depends 1.5, 1.6, 3.1, 3.2, 3.4_
+  _Depends 1.5, 1.6, 3.1, 3.2, 3.6_
   _Reason review of the literature on 2026-10-08: 3.3 re-added unchanged, so it can also wait for the sizing task_
+- [ ] 3.6 (Unit) Size the guide arms 3.2 specifies by evaluation-rigor 1.2's minimum
+      detectable effect at the cheap model's measured discordance — the exact test needs
+      336 pairs at 41% and 408 at 50% for 10 points — never fewer than 168, compared by
+      a paired test that holds with more than one run per task, and record it in that
+      spec as a delta
+  _Depends 3.2_
+  _Reason review of the literature on 2026-10-08: 168 pairs detect 10 points only at 20% discordant pairs; phase 1 measured 41% and 51.5% for the cheap models the guide is meant to help (docs/wiki/pages/evaluation-harness.md)_
 
 ## Done when
 
