@@ -14,7 +14,7 @@ into it`. -->
 - 2026-10-07 — the conformance matrix and the Windows job built: [[target-parity]] says what each covers
 - 2026-10-07 — the differential fuzzer built: [[target-parity]] says what it compares and the two differences it found
 - 2026-10-07 — the parity floor built: [[target-parity]] says what CI holds the suite to and what a program needs to leave it
-- 2026-10-07 — the frontend fuzzed: [[target-parity]] says the frontend fuzzer is built (adr:0027) and what its first run found
+- 2026-10-07 — the frontend fuzzed: [[target-parity]] says the frontend fuzzer is built (adr:0028) and what its first run found
 - 2026-10-07 — the runtime's object cached per user: [[transpilation-strategy]] says it is compiled once per toolchain and flags (adr:0025), [[compiler-performance]] gives the build before and after
 - 2026-10-07 — languages for models, coding-agent harnesses and new-language adaptation surveyed: added [[language-design-evidence]] and [[agent-harness-design]]; [[languages-for-agents]] gains the languages since the first survey and corrects MoonBit, Anka, NanoLang and Zero; [[evaluation-harness]] adds clustered intervals, non-inferiority and the tasks' known flaws; [[training-prior]] adds examples over rules; [[small-coder-training]] marks the seed as untrainable until rebuilt and adds RL at small sizes; [[semantic-compiler]] corrects when Claude Code reports LSP diagnostics
 - 2026-10-07 — sixteen compilers and interpreters of Python and its derivatives read against lotml's compiler: added [[prior-art-compilers]], [[target-parity]] and [[compiler-performance]]; [[semantic-compiler]], [[transpilation-strategy]] and [[evaluation-harness]] link them
