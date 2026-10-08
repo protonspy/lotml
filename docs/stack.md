@@ -88,6 +88,11 @@ with its language and MCP servers — JSON-RPC written over `serde_json`, with n
   runs on it. Costs: it labels itself experimental, so its API may move under us.
 - **serde** and **serde_json** — the versioned JSON of diagnostics and test reports, and the
   syntax tree the Python backend hands its runtime; no other format is read or written.
+- **toml** 1.1 — reads a project's `uv.lock` and `pyproject.toml`, so a lock is checked to name
+  PyPI alone before uv installs from it
+  (adr:0033-lotml-run-installs-a-project-s-python-dependencies-from-its-uv-lock); the parser
+  Cargo reads its own manifests with, chosen over reading the lock line by line, which a reformatted
+  file would walk around.
 - **clap** 4 — the command line, derived from the `Command` enum so help text and arguments
   cannot drift apart; chosen over hand parsing for its error messages.
 - **cargo-llvm-cov** (development only) — line coverage of the Rust tests for the test gate,
