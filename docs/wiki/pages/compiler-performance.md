@@ -45,8 +45,15 @@ operation. adr:0021-compiler-in-rust-with-llvm-as-its-native-code-generator stan
 
 - the `checked` query checks a whole file, and its results carry absolute spans, so one keystroke
   re-checks every function;
-- `interfaces()` is a plain function rather than a tracked query, so every `.lotmli` is parsed
+- `interfaces()` was a plain function rather than a tracked query, so every `.lotmli` was parsed
   again on each check.
+
+The second is fixed (plans/build-and-check-speed.md): `interfaces()` is a tracked query, and a
+file's interfaces are an input of high durability, so an edit to the text reads them no more. In
+a generated file of 2254 lines importing from 800 Python signatures, a one-line body edit went
+from 6.58 ms to 5.39 ms to re-check, against 6.61 ms from an empty database
+(`harness/results/check-speed.md`). The first stands: the rest of the edit is the whole file
+parsed and checked again.
 
 ty runs on the same salsa 0.28 at a finer grain. It has a type query per scope and per definition,
 and a query whose result comes out unchanged does not re-run the queries that depend on it

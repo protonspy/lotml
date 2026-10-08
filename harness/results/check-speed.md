@@ -24,4 +24,20 @@ runs 5 times and its fastest run is kept. The steps:
 
 After the edit the check takes 97% of one from an empty database, within the 100 ms budget.
 
-Reading the interfaces alone is 22% of the check after the edit.
+Reading the interfaces alone takes 22% as long as the edit.
+
+## after
+
+2254 lines in 250 functions, importing from 4 modules declaring 800 functions, on Windows AMD64.
+
+| step | ms |
+| --- | ---: |
+| parse | 2.01 |
+| interfaces | 1.43 |
+| check | 4.40 |
+| cold | 6.61 |
+| edit | 5.39 |
+
+After the edit the check takes 82% of one from an empty database, within the 100 ms budget.
+
+Reading the interfaces alone takes 27% as long as the edit.

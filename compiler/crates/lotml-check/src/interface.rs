@@ -12,7 +12,7 @@ use crate::program::{FnSig, Program};
 use crate::ty::Ty;
 
 /// A Python module's functions, as its interface declares them.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Interface {
     pub(crate) functions: BTreeMap<String, FnSig>,
 }

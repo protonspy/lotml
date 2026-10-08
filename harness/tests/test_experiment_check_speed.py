@@ -42,7 +42,7 @@ def test_the_report_shows_every_label_in_the_order_measured_against_the_budget()
     assert "| interfaces | 1.40 |" in report
     before_section = report[: report.index("## after")]
     assert "takes 100% of one from an empty database, within the 100 ms budget" in before_section
-    assert "Reading the interfaces alone is 20% of the check after the edit." in before_section
+    assert "Reading the interfaces alone takes 20% as long as the edit." in before_section
     after_section = report[report.index("## after") :]
     assert "takes 75% of one from an empty database, over the 100 ms budget" in after_section
     assert "| parse |" not in after_section and "Reading the interfaces" not in after_section

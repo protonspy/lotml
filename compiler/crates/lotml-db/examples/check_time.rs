@@ -41,13 +41,13 @@ fn main() {
     let cold = (0..runs)
         .map(|_| {
             let db = Database::default();
-            let file = SourceFile::new(&db, "large.lot".into(), text.clone(), interfaces.clone());
+            let file = SourceFile::create(&db, "large.lot".into(), text.clone(), interfaces.clone());
             timed(|| clean(diagnostics(&db, file)))
         })
         .collect();
     step("cold", cold);
     let mut db = Database::default();
-    let file = SourceFile::new(&db, "large.lot".into(), text.clone(), interfaces.clone());
+    let file = SourceFile::create(&db, "large.lot".into(), text.clone(), interfaces.clone());
     clean(diagnostics(&db, file));
     let edit = (0..runs)
         .map(|k| {

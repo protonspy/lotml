@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: b480f2420071f86488c1b9bc556937246f449c5208638fe37de2ed271f1850d4
+checksum: f63fb6b5da86384c25c8427000e4bc8f7c31cfcbaaef5629c6d95916bb2e1476
 ---
 
 # Build and check speed
@@ -52,7 +52,7 @@ function, and both are measured before and after. See `docs/wiki/pages/compiler-
   _Depends 1.1_
 - [x] 1.3 (Unit) Probe `clang` once per process and turn a missing linker or Windows SDK into a diagnostic that names what is missing, rather than passing clang's raw output through
 - [x] 2.1 (Unit) Measure check latency after a one-line body edit in a large file through `lotml-db`, and record it as the baseline
-- [ ] 2.2 (Unit) Make each file's interfaces a tracked salsa input with high durability, so a check no longer re-parses them
+- [x] 2.2 (Unit) Make each file's interfaces a tracked salsa input with high durability, so a check no longer re-parses them
   _Depends 2.1_
 - [ ] 2.3 (Unit) Specify, as a new spec named incremental-check, per-function check queries over signatures, spans relative to their item, and the diagnostics a file reports assembled from them
   _Depends 2.1_

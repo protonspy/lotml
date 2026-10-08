@@ -159,10 +159,7 @@ def markdown(records: list[Record]) -> str:
             ]
         read = record.share("interfaces", "edit")
         if read is not None:
-            lines += [
-                f"Reading the interfaces alone is {read:.0%} of the check after the edit.",
-                "",
-            ]
+            lines += [f"Reading the interfaces alone takes {read:.0%} as long as the edit.", ""]
     return "\n".join(lines)
 
 
