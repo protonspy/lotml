@@ -44,3 +44,19 @@ fn an_early_return_inside_nested_loops_leaves_them_all() {
          return i * 100 + j\n    return -1\n\nfn main():\n    print(find(42), find(97))\n",
     );
 }
+
+#[test]
+fn the_longest_elif_chain_lotml_reads_runs_as_on_python() {
+    let mut source = String::from("fn pick(x: int) -> int:\n    if x == 0:\n        return 0\n");
+    for k in 1..256 {
+        source.push_str(&format!("    elif x == {k}:\n        return {k}\n"));
+    }
+    source.push_str("    else:\n        return -1\n\nfn main():\n    print(pick(0), pick(255), pick(256))\n");
+    // On the stack the `lotml` binary gives the compiler, as tests/depth.rs of lotml-syntax does.
+    std::thread::Builder::new()
+        .stack_size(256 * 1024 * 1024)
+        .spawn(move || parity("elif-chain", &source))
+        .expect("a worker thread")
+        .join()
+        .expect("the chain compiles and runs on both targets");
+}

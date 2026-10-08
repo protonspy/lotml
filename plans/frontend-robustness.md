@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: f91b762bd98c764c0972d45776f677d02ccec63386aa5a453ca3e7f9440856dd
+checksum: 1f839bfa26aebf50d403c8c0f01c1f4619c99e9cb9dc359caa221025d404b68c
 ---
 
 # Frontend robustness
@@ -46,9 +46,9 @@ without a panic. See `docs/wiki/pages/prior-art-compilers.md` and `research/prio
 
 ## Tasks
 
-- [ ] 1.1 (TDD) Reproduce, in a test, an unclosed `(` hiding every later `fn` from the outline, then recover at the next line that starts a definition at column 0 so the rest of the file parses
-- [ ] 1.2 (Unit) Guard every parser loop so it always consumes a token or stops, and test that each node's span is ordered and nested inside its parent's over the corpus
-- [ ] 1.3 (Unit) Lower an `elif` chain iteratively in the `if_chain` of `lower.rs`, or bound its length with a diagnostic, so a long chain cannot recurse through the compiler's stack
+- [x] 1.1 (TDD) Reproduce, in a test, an unclosed `(` hiding every later `fn` from the outline, then recover at the next line that starts a definition at column 0 so the rest of the file parses
+- [x] 1.2 (Unit) Guard every parser loop so it always consumes a token or stops, and test that each node's span is ordered and nested inside its parent's over the corpus
+- [x] 1.3 (Unit) Lower an `elif` chain iteratively in the `if_chain` of `lower.rs`, or bound its length with a diagnostic, so a long chain cannot recurse through the compiler's stack
 - [ ] 2.1 (Unit) Check whether any desugared node reuses a source span in the checker's type map; if one does, key expression types by node identity and add the case as a test
 - [ ] 2.2 (Unit) Reject an invalid f-string format spec at check time with a diagnostic code, following Python's format-spec mini-language as RustPython's `FormatSpec` parser reads it
 - [ ] 3.1 (Unit) Choose a fuzzing tool for the compiler, recording it in `docs/stack.md` and, as a new dependency, in an ADR, and fuzz text into parse, check and lowering until no input panics

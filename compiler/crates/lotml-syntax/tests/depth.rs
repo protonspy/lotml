@@ -66,3 +66,22 @@ fn an_ordinary_chain_is_fine() {
     let errors = parsed_errors(format!("fn f(x: int) -> int:\n    return x{}\n", " + x".repeat(200)));
     assert!(errors.is_empty(), "{errors:?}");
 }
+
+/// An `if` with `branches` branches and an `else`.
+fn chain(branches: usize) -> String {
+    let mut source = String::from("fn pick(x: int) -> int:\n    if x == 0:\n        return 0\n");
+    for k in 1..branches {
+        source.push_str(&format!("    elif x == {k}:\n        return {k}\n"));
+    }
+    source.push_str("    else:\n        return -1\n");
+    source
+}
+
+#[test]
+fn a_long_elif_chain_is_refused_rather_than_nested_past_what_the_targets_run() {
+    assert!(parsed_errors(chain(256)).is_empty(), "256 branches and an `else` nest as deep as lotml goes");
+    let errors = parsed_errors(chain(257));
+    assert!(errors.iter().any(|m| m.contains("more than 256 branches")), "{errors:?}");
+    let errors = parsed_errors(chain(20_000));
+    assert_eq!(errors.len(), 1, "reported once: {:?}", &errors[..errors.len().min(3)]);
+}
