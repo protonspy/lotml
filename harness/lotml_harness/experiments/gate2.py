@@ -57,15 +57,17 @@ print(json.dumps(results))
 
 
 def compiler(
-    args: list[str], directory: Path, timeout: float = TIMEOUT
+    args: list[str], directory: Path, timeout: float = TIMEOUT, env: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess:
+    """The compiler run on `args` in `directory`, with `env` or else the environment any child of
+    the harness gets."""
     return subprocess.run(  # noqa: S603 - the compiler, on programs this harness wrote
         [str(COMPILER), *args],
         cwd=directory,
         capture_output=True,
         text=True,
         encoding="utf-8",
-        env=child_environment(),
+        env=child_environment() if env is None else env,
         timeout=timeout,
         check=False,
     )

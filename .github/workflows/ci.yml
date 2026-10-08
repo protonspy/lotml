@@ -45,6 +45,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The parity floor is held to the one at the base, so the history has to be there.
+          fetch-depth: 0
+          persist-credentials: false
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           python-version: "3.13"
@@ -66,3 +70,21 @@ jobs:
           uv --directory harness run ruff check ../research ../compiler/crates/lotml-py/runtime
       - name: Test
         run: uv --directory harness run pytest -q
+      - name: Parity floor
+        # Every program of harness/results/parity/floor.json still reports the same on the Python
+        # and the LLVM target, and no fewer do; one that joins only asks for an update. A program
+        # the floor at the base held and this one does not needs a recorded reason.
+        # The base is the pull request's target, or the commit a push moved the branch from; a new
+        # branch, or a base a force-push left unreachable, has no floor to hold to.
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: |
+          clang --version
+          args=(floor check)
+          if [ -n "$BASE" ] && [ "$BASE" != "0000000000000000000000000000000000000000" ] \
+            && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            args+=(--since "$BASE")
+          else
+            echo "no base to hold the floor to: checking the run only"
+          fi
+          uv --directory harness run python -m lotml_harness.experiments.parity "${args[@]}"
