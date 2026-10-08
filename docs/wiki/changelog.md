@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-08 — a project's dependencies: [[transpilation-strategy]] says `lotml run` installs from the project's `uv.lock`, checked to name PyPI alone
 - 2026-10-08 — the binder in Rust: [[transpilation-strategy]] says `lotml bind` reads stubs with Ruff's parser and an embedded typeshed, running no Python
 - 2026-10-08 — bind reads package sources: [[transpilation-strategy]] says `lotml bind` falls back to the project's packages, in PEP 561's order
 - 2026-10-08 — the opaque Python value: [[transpilation-strategy]] says an untypable type binds as `PyObject`

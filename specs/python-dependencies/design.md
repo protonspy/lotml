@@ -52,5 +52,5 @@ is refused with the package's name and the rule (R2).
 
 ## Risks
 
-- The sync downloads wheels on the first run of a lock. That run needs the network, and it says so
-  through uv's own progress, which lotml leaves on.
+- The sync downloads wheels on the first run of a lock. That run needs the network; lotml says it
+  is installing before uv starts, and uv's own progress stays off, as adr:0026 runs it.

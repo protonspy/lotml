@@ -188,6 +188,14 @@ Phase 2 built both directions of R14 and R27 on one checked boundary
   `lotml_rt.LotmlError` carrying the error. `lotml build --target python` writes a `.pyi` beside
   each module, with records as classes and a sum type as the union of its variants. `lotml run`
   and `lotml test` still see the program unwrapped.
+- **A project's Python dependencies.** A project declares them in `pyproject.toml` and pins them in
+  `uv.lock`, as Python's tooling writes both; lotml adds no format (specs/python-dependencies,
+  adr:0033-lotml-run-installs-a-project-s-python-dependencies-from-its-uv-lock). `lotml run` and
+  `lotml test` check the lock names PyPI alone — every package from its registry, every file from
+  its host with a hash — and run the program in an environment made from the lock in lotml's cache,
+  keyed by the lock, the manifest and the interpreter, by one `uv sync --locked` of wheels only. A
+  made environment is used offline; offline, and for the MCP server, the grader and the harness,
+  nothing is installed. A manifest declaring dependencies with no lock is reported with `uv lock`.
 - **lotml calling Python.** `lotml bind <module> --stub <file.pyi>` reads a stub with the Python
   parser lotml carries, Ruff's, and runs no Python (specs/rust-binder,
   adr:0032-a-python-module-is-bound-at-check-time-from-stubs-read-in-rust). With no stub given, a

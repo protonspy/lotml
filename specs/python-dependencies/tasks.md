@@ -11,5 +11,5 @@
   _Depends 1.1_
 - [x] 2.2 (Unit) Run `lotml run` and `lotml test` in the lock's environment over a base interpreter that is never the project's `.venv`, using a complete environment as it is and making none where downloads are off — R1.1, R1.3, R3.1, R3.2
   _Depends 1.2, 2.1_
-- [ ] 2.3 (Unit) Describe a project's Python dependencies in the wiki page on transpilation — R1.1
+- [x] 2.3 (Unit) Describe a project's Python dependencies in the wiki page on transpilation — R1.1
   _Depends 2.2_
