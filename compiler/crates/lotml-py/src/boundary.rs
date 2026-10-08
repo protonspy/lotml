@@ -50,10 +50,33 @@ fn fields(fields: &[FieldSig]) -> Value {
 
 /// Whether Python sees the function of `sig`: not when it takes or returns a `PyObject`, which the
 /// wrapper around it has nothing to check against (specs/python-object R3.2).
-fn exported(sig: &FnSig) -> bool {
-    !(sig.params.iter().any(|p| p.ty.holds_py_object())
-        || sig.ret.holds_py_object()
-        || sig.error.as_ref().is_some_and(Ty::holds_py_object))
+fn exported(sig: &FnSig, checked: &Checked) -> bool {
+    let holds = |ty: &Ty| holds_object(ty, checked, &mut Vec::new());
+    !(sig.params.iter().any(|p| holds(&p.ty)) || holds(&sig.ret) || sig.error.as_ref().is_some_and(holds))
+}
+
+/// Whether `ty` is or holds a `PyObject`, the fields of the module's records and variants included.
+fn holds_object(ty: &Ty, checked: &Checked, seen: &mut Vec<String>) -> bool {
+    if ty.holds_py_object() {
+        return true;
+    }
+    match ty {
+        Ty::List(t) | Ty::Set(t) | Ty::Optional(t) | Ty::Heap(t) => holds_object(t, checked, seen),
+        Ty::Dict(a, b) | Ty::Result(a, b) => holds_object(a, checked, seen) || holds_object(b, checked, seen),
+        Ty::Tuple(items) => items.iter().any(|t| holds_object(t, checked, seen)),
+        Ty::Adt(name, _) if !seen.contains(name) => {
+            seen.push(name.clone());
+            let fields: Vec<&FieldSig> = match checked.declared.get(name) {
+                Some(TypeDef::Record { fields, .. }) => fields.iter().collect(),
+                Some(TypeDef::Sum { variants, .. }) => {
+                    variants.iter().flat_map(|v| v.fields.iter().flatten()).collect()
+                }
+                None => Vec::new(),
+            };
+            fields.iter().any(|f| holds_object(&f.ty, checked, seen))
+        }
+        _ => false,
+    }
 }
 
 /// A warning for each function of `checked` Python does not see, saying why.
@@ -61,7 +84,7 @@ pub fn left_out(checked: &Checked) -> Vec<Diagnostic> {
     checked
         .functions
         .iter()
-        .filter(|(_, sig)| !exported(sig))
+        .filter(|(_, sig)| !exported(sig, checked))
         .map(|(name, sig)| {
             Diagnostic::warning(
                 "E0403",
@@ -77,7 +100,7 @@ pub fn left_out(checked: &Checked) -> Vec<Diagnostic> {
 /// of each record and sum type, and the names of the types and variants it can build.
 pub fn exports(checked: &Checked) -> Value {
     let mut functions = Map::new();
-    for (name, sig) in checked.functions.iter().filter(|(_, sig)| exported(sig)) {
+    for (name, sig) in checked.functions.iter().filter(|(_, sig)| exported(sig, checked)) {
         functions.insert(
             name.clone(),
             json!({
@@ -182,7 +205,7 @@ pub fn stub(source: &str, module: &str, checked: &Checked) -> String {
             }
         }
     }
-    for (name, sig) in checked.functions.iter().filter(|(_, sig)| exported(sig)) {
+    for (name, sig) in checked.functions.iter().filter(|(_, sig)| exported(sig, checked)) {
         out.push('\n');
         if let Some(error) = &sig.error {
             let _ =

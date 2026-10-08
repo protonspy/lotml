@@ -39,9 +39,17 @@ and generate its interface; the module is never imported and no Python runs.
 - **The lock.** `lotml.lock` at the project root records, for each `py.` module bound, the source
   read (the embedded typeshed's commit, or the distribution and version), the hash of the stub, and
   the hash of the interface generated. A check that binds a module the lock names from a stub whose
-  hash differs reports it and binds from the stub found; `lotml bind --lock` rewrites the lock. The
-  generated interfaces are cached per user, keyed by the stub's hash and lotml's version, and
-  checked when read.
+  hash differs reports it and binds from the stub found, and `lotml check --locked`, for CI, fails on
+  it; `lotml bind --lock` rewrites the lock. The lock records what was bound, for reproducibility,
+  and is no root of trust: a project's author changes it with the stub, and a stub can lie only
+  about types, which the boundary of adr:0012 still checks. The generated interfaces are cached per
+  user, in a directory private to the user and never a shared temporary one, keyed by the stub's
+  hash and lotml's version, and an entry is checked against the interface hash the lock records.
+- **A stub is hostile input.** A module name is a dotted ASCII identifier before it reaches a path;
+  a file is read from its canonical path, which must lie under one of the roots; a stub past a size,
+  a nesting depth or a parse time lotml fixes is not bound and is reported; and every string taken
+  from a stub into an interface, a default's text among them, is escaped by one function, control
+  characters included, so a stub cannot add a line to the interface.
 - **`plans/bind-sources.md` 2.1** is this record; its 1.1, a package's own `.pyi` and annotated
   `.py`, is the order above. **`plans/python-via-uv.md` 2.1 no longer stands**: the embedded
   typeshed replaces the mypy wheel, and `bind` needs neither Python nor a download.
@@ -56,6 +64,8 @@ Rejected:
 
 ## Consequences
 
+- Amended on 2026-10-08, before it was merged, with the constraints its first security review
+  asked for.
 - `lotml check` binds Python with no Python installed, and the same lock gives the same interfaces
   on every machine.
 - The binary grows by the compressed `stdlib` stubs, about 2 MB.

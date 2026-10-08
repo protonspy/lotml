@@ -35,8 +35,12 @@ as `PyObject`, an opaque handle to a Python value, and the function is bound ins
   spelling is the spec's.
 - **Kept to the Python target.** A program holding a `PyObject` imports Python, which `lotml build`
   already refuses (adr:0025-two-targets-python-for-run-llvm-for-build). A function a compiled
-  module exports to Python may not take or return a `PyObject`: the wrapper adr:0012 puts around it
+  module exports to Python is left out of what Python imports when it takes or returns a
+  `PyObject`, a record holding one included, with a warning: the wrapper adr:0012 puts around it
   has nothing to check it against.
+- **Never opened by the runtime.** The runtime holds a `PyObject` in a handle it never copies,
+  prints, compares or hashes, so the object Python gave is the object Python gets back; a LotML
+  value holding one is refused wherever Python's own `repr`, `==`, `<` or `hash` would run on it.
 - **A typed name stays typed.** A later spec that types a class, an overload or a generic
   (`specs/python-classes/`, `python-overloads/`, `python-generics/`) replaces the `PyObject` it
   covered; the coverage report counts a name bound with a `PyObject` apart from one bound typed.
@@ -52,6 +56,8 @@ Rejected:
 
 ## Consequences
 
+- Amended on 2026-10-08, before it was merged, with the constraints its first security review
+  asked for.
 - A function with one untyped parameter is callable, its `PyObject` parameter taking what the
   program passes; most of the corpus becomes reachable before it becomes typed.
 - A program that needs a value out of a `PyObject` writes the conversion and handles its failure,

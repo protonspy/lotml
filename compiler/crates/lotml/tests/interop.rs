@@ -213,6 +213,10 @@ def peek(d): return d.n
 def numbers(): return [1, 2, 3]
 def word(): return 'x'
 def total(xs): return sum(xs)
+def pair():
+    import collections
+    return collections.namedtuple('P', 'a b')(1, 2)
+def kind(o): return type(o).__name__
 def send(xs):
     xs.append(99)
     return len(xs)
@@ -229,6 +233,8 @@ fn numbers() -> PyObject ! PyError
 fn word() -> PyObject ! PyError
 fn send(xs: PyObject) -> int ! PyError
 fn total(xs: [PyObject]) -> int ! PyError
+fn pair() -> PyObject ! PyError
+fn kind(o: PyObject) -> str ! PyError
 ";
 
 #[test]
@@ -252,6 +258,9 @@ fn main() -> None ! PyError:
     var mine = [1, 2]
     print(py.objs.send(mine)?, mine)
     print(py.objs.total([1, 2, 3])?)
+    owned = py.objs.numbers()?
+    print(py.objs.send(owned)?, py.objs.send(owned)?, py.objs.send([owned])?)
+    print(py.objs.kind(py.objs.pair()?)?)
     match as_int(py.objs.word()?):
         case Ok(n):
             print(n)
@@ -267,7 +276,7 @@ fn main() -> None ! PyError:
     let out = lotml(&["run", "main.lot"], &dir);
     assert_eq!(
         stdout(&out),
-        "2\n15\n[1, 2, 3]\n3 [1, 2]\n6\nTypeError\n",
+        "2\n15\n[1, 2, 3]\n3 [1, 2]\n6\n4 5 2\nP\nTypeError\n",
         "the object and the dataclass changed in Python, the LotML list copied: {}",
         String::from_utf8_lossy(&out.stderr)
     );
@@ -275,19 +284,20 @@ fn main() -> None ! PyError:
 
 #[test]
 fn a_function_taking_a_python_object_is_left_out_of_what_python_imports() {
-    let library =
-        "fn keep(o: PyObject) -> PyObject:\n    return o\n\nfn add(a: int, b: int) -> int:\n    return a + b\n";
+    let library = "type Holder(o: PyObject, n: int)\n\nfn keep(o: PyObject) -> PyObject:\n    return o\n\n\
+fn take(h: Holder) -> int:\n    return h.n\n\nfn add(a: int, b: int) -> int:\n    return a + b\n";
     let dir = scratch("python-object-exports", &[("lib.lot", library)]);
     let built = lotml(&["build", "--target", "python", "lib.lot", "-o", "out"], &dir);
     assert!(built.status.success(), "{}", stdout(&built));
     assert!(stdout(&built).contains("E0403") && stdout(&built).contains("`keep`"), "{}", stdout(&built));
+    assert!(stdout(&built).contains("`take`"), "a record holding one counts: {}", stdout(&built));
     let stub = std::fs::read_to_string(dir.join("out").join("lib_lotml.pyi")).unwrap();
     assert!(stub.contains("def add(") && !stub.contains("def keep("), "{stub}");
     let out = python(
         &dir,
-        "import sys\nsys.path.insert(0, 'out')\nimport lib_lotml as m\nprint(m.add(1, 2), hasattr(m, 'keep'))",
+        "import sys\nsys.path.insert(0, 'out')\nimport lib_lotml as m\nprint(m.add(1, 2), hasattr(m, 'keep'), hasattr(m, 'take'))",
     );
-    assert_eq!(stdout(&out), "3 False\n", "{}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(stdout(&out), "3 False False\n", "{}", String::from_utf8_lossy(&out.stderr));
 }
 
 #[test]

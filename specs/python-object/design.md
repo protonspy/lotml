@@ -31,12 +31,15 @@ or `Err(PyError)` with the `TypeError` or `OverflowError` it raised.
 
 Serves R1.4, R1.5.
 
-The runtime's `copy` already copies LotML's values part by part and leaves any other object as it
-is; `foreign` calls it on the arguments in place of `deepcopy`, so a `PyObject` an argument holds,
-alone or inside a list, reaches Python as the object it is. A LotML record is told from a Python
-dataclass by a marker `record()` sets on the class, so a Python dataclass held in a `PyObject` is
-never copied. A result declared `PyObject` has the descriptor `["any"]`, which `accept` passes
-through.
+A result declared `PyObject` has the descriptor `["object"]`, which `accept` wraps in a
+`PyHandle`: the runtime never opens, copies, prints or compares one, so a list, a dict or a
+namedtuple Python owns keeps its identity and its type for as long as the program holds it.
+`foreign` copies its arguments with the runtime's `copy`, which copies LotML's values part by part
+and leaves a `PyHandle` shared, then hands Python each handle's object (`to_python`). A LotML record
+is told from a Python dataclass by a marker `record()` sets on the class, so only LotML's are
+copied. A value that holds a `PyObject`, inside a record, a list or a tuple, is refused wherever
+Python's own `repr`, `str`, `==`, `<`, `hash` or `+` would run on it: printing, formatting,
+comparing, a set, a dict's key, `sorted`, `min`, `max`, `sum`.
 
 ## Where it stops
 

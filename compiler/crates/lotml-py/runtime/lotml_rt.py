@@ -453,7 +453,7 @@ def accept(value, descriptor, types: dict, classes: dict, where: str):
         return TypeError(f"{where}: expected {expected}, got {type(value).__name__}")
 
     if kind == "object":
-        return value
+        return value if isinstance(value, PyHandle) else PyHandle(value)
     if kind == "any":
         return _copy.deepcopy(value)
     if kind == "int":
@@ -603,7 +603,7 @@ def foreign(module: str, name: str, returns: str):
             function = getattr(importlib.import_module(module), name)
             # LotML's values are copied part by part; a `PyObject` among them reaches Python as
             # the object it is (specs/python-object R1.4).
-            value = function(*copy(args), **copy(kwargs))
+            value = function(*to_python(copy(args)), **to_python(copy(kwargs)))
         except Exception as error:  # noqa: BLE001 - the boundary turns every exception into a value
             return Err(PyError(type(error).__name__, str(error)))
         try:
@@ -615,10 +615,39 @@ def foreign(module: str, name: str, returns: str):
     return call
 
 
+class PyHandle:
+    """A Python object a LotML program holds as a `PyObject` (adr:0031): the runtime never opens,
+    copies, prints or compares it, so a list or a dict Python owns is the same object when the
+    program gives it back, whatever its type."""
+
+    __slots__ = ("value",)
+
+    def __init__(self, value):
+        self.value = value
+
+
+def to_python(value):
+    """`value`, a LotML value already copied, as Python receives it: each `PyObject` in it the
+    object it holds."""
+    if isinstance(value, PyHandle):
+        return value.value
+    if isinstance(value, list):
+        return [to_python(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(to_python(item) for item in value)
+    if isinstance(value, dict):
+        return {to_python(key): to_python(item) for key, item in value.items()}
+    if isinstance(value, set):
+        return {to_python(item) for item in value}
+    return value
+
+
 def convert(value, descriptor: str):
     """`o.value()`: the Python object `value` as the LotML type `descriptor` describes, checked and
     copied as a value Python returns is, or `Err(PyError)` when it is not one (specs/python-object
     R2.3)."""
+    if isinstance(value, PyHandle):
+        value = value.value
     try:
         return Ok(accept(value, json.loads(descriptor), {}, {}, "the PyObject"))
     except (TypeError, OverflowError) as error:

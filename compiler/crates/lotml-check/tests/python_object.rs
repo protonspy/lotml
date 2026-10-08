@@ -90,4 +90,35 @@ fn value_with_no_type_to_take_out_is_refused() {
     assert!(found[0].notes.iter().any(|n| n.contains("annotate")), "{:?}", found[0].notes);
     let found = diagnostics("    p: Point = r.value()?\n");
     assert_eq!(found[0].code, "E0204", "a record is not what the boundary carries: {:?}", found[0].message);
+    let found = diagnostics("    var xs = []\n    xs = r.value()?\n    print(len(xs))\n");
+    assert_eq!(found[0].code, "E0205", "a type not known in full would go unchecked: {:?}", found[0].message);
+}
+
+#[test]
+fn a_value_holding_a_python_object_is_not_printed_compared_or_hashed() {
+    let held = |body: &str| {
+        let (requests, _) = interface(REQUESTS);
+        let interfaces = Interfaces::from([("py.requests".to_string(), requests)]);
+        let source = format!(
+            "import py.requests\n\ntype H(o: PyObject)\n\nfn f() -> None ! PyError:\n    r = py.requests.get(\"u\")?\n    h = H(r)\n{body}"
+        );
+        let found = check_resolved_with(&parse(&source).module, &source, &interfaces).diagnostics;
+        assert_eq!(found.len(), 1, "{body}\n{:?}", found.iter().map(|d| (d.code, &d.message)).collect::<Vec<_>>());
+        assert!(found[0].notes.iter().any(|n| n.contains("o.value()")), "{body}: {:?}", found[0].notes);
+    };
+    held("    print(h)\n");
+    held("    print(f\"{h}\")\n");
+    held("    same = h == h\n");
+    held("    s = str([r])\n");
+    held("    print([r, r])\n");
+    held("    same = [r] == [r]\n");
+    held("    hs = {h}\n");
+    held("    d = {h: 1}\n");
+    held("    o = sorted([r])\n");
+    clean("    n = len([r, r])\n    kept = [r]\n    print(n, len(kept))\n");
+}
+
+#[test]
+fn an_empty_part_given_where_python_takes_python_objects_becomes_one() {
+    clean("    n = py.requests.many([], None)?\n    print(n)\n");
 }

@@ -179,10 +179,10 @@ impl<'p> Body<'p> {
             other => other,
         });
         match wanted {
-            Some(ty) if !matches!(ty, Ty::Var(_) | Ty::Error) && self.carried(&ty) => {
+            Some(ty) if self.known(&ty) && !matches!(ty, Ty::Error) && self.carried(&ty) => {
                 Ty::Result(Box::new(ty), Box::new(Ty::Adt("PyError".into(), vec![])))
             }
-            Some(ty) if !matches!(ty, Ty::Var(_) | Ty::Error) => {
+            Some(ty) if self.known(&ty) && !matches!(ty, Ty::Error) => {
                 self.report(
                     Diagnostic::error("E0204", span, format!("a `PyObject` cannot become a `{ty}`"))
                         .note("it can become what the boundary carries: numbers, `bool`, `str`, `bytes`, `None`, and lists, sets, dicts, tuples and optionals of them"),
@@ -213,6 +213,8 @@ impl<'p> Body<'p> {
     /// Python takes a `[PyObject]` (specs/python-object R1.3).
     fn fits_shape(&mut self, found: &Ty, expected: &Ty) -> bool {
         match (self.resolve(found), self.resolve(expected)) {
+            // The element of `[]`, what `None` holds: a `PyObject` from here on.
+            (f @ Ty::Var(_), Ty::PyObject) => self.infer.unify(&f, &Ty::PyObject),
             (f, Ty::PyObject) => self.carried(&f),
             (Ty::List(a), Ty::List(b)) | (Ty::Set(a), Ty::Set(b)) | (Ty::Optional(a), Ty::Optional(b)) => {
                 self.fits_shape(&a, &b)
@@ -234,6 +236,49 @@ impl<'p> Body<'p> {
             Ty::Dict(k, v) => self.carried(&k) && self.carried(&v),
             Ty::Tuple(items) => items.iter().all(|t| self.carried(t)),
             _ => false,
+        }
+    }
+
+    /// Whether `ty` is or holds a `PyObject`, a record's and a variant's fields included: what
+    /// printing, formatting, comparing, hashing or ordering would hand to Python's own methods.
+    fn holds_object(&self, ty: &Ty) -> bool {
+        fn walk(b: &Body<'_>, ty: &Ty, seen: &mut Vec<String>) -> bool {
+            match b.resolve(ty) {
+                Ty::PyObject => true,
+                Ty::List(t) | Ty::Set(t) | Ty::Optional(t) | Ty::Heap(t) => walk(b, &t, seen),
+                Ty::Dict(k, v) | Ty::Result(k, v) => walk(b, &k, seen) || walk(b, &v, seen),
+                Ty::Tuple(items) => items.iter().any(|t| walk(b, t, seen)),
+                Ty::Adt(name, args) => {
+                    if args.iter().any(|t| walk(b, t, seen)) {
+                        return true;
+                    }
+                    if seen.contains(&name) {
+                        return false;
+                    }
+                    seen.push(name.clone());
+                    let fields: Vec<Ty> = match b.program.types.get(&name) {
+                        Some(TypeDef::Record { fields, .. }) => fields.iter().map(|f| f.ty.clone()).collect(),
+                        Some(TypeDef::Sum { variants, .. }) => {
+                            variants.iter().flat_map(|v| v.fields.iter().flatten()).map(|f| f.ty.clone()).collect()
+                        }
+                        None => Vec::new(),
+                    };
+                    fields.iter().any(|t| walk(b, t, seen))
+                }
+                _ => false,
+            }
+        }
+        walk(self, ty, &mut Vec::new())
+    }
+
+    /// Whether `ty` is known in full, no part of it left to inference.
+    fn known(&self, ty: &Ty) -> bool {
+        match self.resolve(ty) {
+            Ty::Var(_) => false,
+            Ty::List(t) | Ty::Set(t) | Ty::Optional(t) | Ty::Heap(t) => self.known(&t),
+            Ty::Dict(a, b) | Ty::Result(a, b) => self.known(&a) && self.known(&b),
+            Ty::Tuple(items) | Ty::Adt(_, items) => items.iter().all(|t| self.known(t)),
+            _ => true,
         }
     }
 
@@ -1340,7 +1385,7 @@ impl<'p> Body<'p> {
                     for part in &literal.parts {
                         if let StrPart::Expr { expr, conversion, spec } = part {
                             let ty = self.expr(expr, None);
-                            if matches!(self.resolve(&ty), Ty::PyObject) {
+                            if self.holds_object(&ty) {
                                 self.opaque("E0204", expr.span, "a `PyObject` cannot be formatted".into());
                                 continue;
                             }
@@ -1384,6 +1429,9 @@ impl<'p> Body<'p> {
                 for e in items {
                     let found = self.expr(e, Some(&item));
                     self.element(&found, &item, e.span);
+                    if self.holds_object(&found) {
+                        self.opaque("E0204", e.span, "a set cannot hold a `PyObject`: it would hash it".into());
+                    }
                 }
                 Ty::Set(Box::new(item))
             }
@@ -1395,6 +1443,13 @@ impl<'p> Body<'p> {
                 for (key, value) in pairs {
                     let found = self.expr(key, Some(&k));
                     self.element(&found, &k, key.span);
+                    if self.holds_object(&found) {
+                        self.opaque(
+                            "E0204",
+                            key.span,
+                            "a dict's key cannot hold a `PyObject`: it would hash it".into(),
+                        );
+                    }
                     let found = self.expr(value, Some(&v));
                     self.element(&found, &v, value.span);
                 }
@@ -1920,8 +1975,8 @@ impl<'p> Body<'p> {
 
     fn compare(&mut self, op: CmpOp, l: &Ty, r: &Ty, span: Span) {
         let (l, r) = (self.resolve(l), self.resolve(r));
-        if matches!(l, Ty::PyObject) || matches!(r, Ty::PyObject) {
-            self.opaque("E0204", span, format!("`{}` cannot compare a `PyObject`", op.text()));
+        if self.holds_object(&l) || self.holds_object(&r) {
+            self.opaque("E0204", span, format!("`{}` cannot compare a `PyObject`, nor a value holding one", op.text()));
             return;
         }
         if l.is_poison() || r.is_poison() {
@@ -2370,8 +2425,12 @@ impl<'p> Body<'p> {
                 None => types[position] = t,
             }
         }
-        let opaque =
-            types.iter().chain(keywords.iter().map(|(_, t)| t)).any(|t| matches!(self.resolve(t), Ty::PyObject));
+        // These hand a value to Python's own `repr`, `str`, `==`, `<`, `hash` or `+`.
+        let into_python = matches!(name, "print" | "str" | "repr" | "sorted" | "min" | "max" | "sum" | "set");
+        let opaque = types
+            .iter()
+            .chain(keywords.iter().map(|(_, t)| t))
+            .any(|t| matches!(self.resolve(t), Ty::PyObject) || (into_python && self.holds_object(t)));
         if opaque && !matches!(name, "Ok" | "Err") {
             self.opaque("E0204", span, format!("`{name}` cannot take a `PyObject`"));
             return Ty::Error;

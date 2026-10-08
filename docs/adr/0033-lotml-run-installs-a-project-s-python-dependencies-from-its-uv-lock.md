@@ -33,8 +33,15 @@ own.
   the command that writes the lock, `uv lock`; lotml never resolves versions itself, which would
   make two runs install two sets.
 - **Still confined as adr:0026 has it.** `uv.toml`, `[tool.uv]` and `.python-version` stay ignored;
-  the index is the one the lock records; the offline switch forbids the install, and an environment
-  already in the cache is used offline.
+  the offline switch forbids the install, and an environment already in the cache is used offline.
+- **The lock is project input, not a source of indexes.** A package is installed only from a
+  registry source on an allowed index, PyPI unless the user's own lotml configuration names
+  another; a lock naming a direct URL, a git, path or directory source, or an editable one, is
+  refused, and uv runs with its sources ignored. A hash in the lock proves a wheel is the one the
+  lock names, not that its index is one to trust.
+- **`run` and `test` need a trusted project**, as they always have: they execute its code, and a
+  wheel's `.pth` file runs at the interpreter's start. Only `check` stays inert on an untrusted
+  project, and it never installs.
 - **`lotml check` never installs.** It binds from an environment already made for the lock, or,
   without one, reports each `py.` module it cannot bind and why, and binds the standard library
   from the embedded typeshed alone.
@@ -49,6 +56,8 @@ Rejected:
 
 ## Consequences
 
+- Amended on 2026-10-08, before it was merged, with the constraints its first security review
+  asked for.
 - A program's Python dependencies are reproducible from its repository: `pyproject.toml`, `uv.lock`
   and the lotml version.
 - The first `lotml run` of a project downloads its wheels into lotml's cache, as adr:0026's first

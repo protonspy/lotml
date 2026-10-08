@@ -44,3 +44,5 @@ written in the source.
 - Typing a class, an overload or a generic: `specs/python-classes/`, `python-overloads/`, `python-generics/`.
 - An overloaded function stays unbound: which signature a call takes is the overloads spec's.
 - Attribute or method access on a `PyObject` checked at run time, rejected by adr:0031.
+- A compiled module's methods and its `__program` namespace, which Python reaches unwrapped today
+  for any type: R3.2 covers the module's functions, the boundary adr:0012 wraps.
