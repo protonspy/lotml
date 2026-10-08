@@ -238,7 +238,9 @@ impl Program {
             self.diagnostics.push(
                 Diagnostic::error("E0216", span, format!("there is no interface of the Python module `{module}`"))
                     .alternatives(self.available.keys().filter(|k| k.starts_with("py.")).cloned())
-                    .note(format!("`lotml bind {module}` writes it: bindings/py.{module}.lotmli")),
+                    .note(format!(
+                        "no stub bound it on import; `lotml bind {module}` tells why, and writes bindings/py.{module}.lotmli when it can"
+                    )),
             );
             return;
         }

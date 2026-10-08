@@ -27,13 +27,13 @@ the environment (adr:0033). `run` and `test` make the environment before they co
 `bindings/py.<module>.lotmli`, it adds the generated interface (R1.1); for a bindings file that
 stands where one would be generated, it records the shadowing for the warning (R1.6). The checker
 (`lotml-check`, which depends on nothing outside the compiler) is given what it needs as data: the
-interfaces, the shadowed names, the reasons a module was not bound (R1.4), and which bare imports
-the embedded typeshed covers (R1.5). It reports them; it never resolves a stub itself.
+interfaces, the shadowed names, and which bare imports the embedded typeshed covers (R1.5). It reports them; it never resolves a stub itself.
 `InterfaceCache` keys its entries by directory and by the imports read, so an edit adding an
 import binds that module once.
 
-**The checker's reports.** `E0216` for `py.<module>` keeps its code; its note becomes the reason the
-module was not bound, ending with "`lotml bind <module>` tells why" (R1.4). A bare `import <name>`
+**The checker's reports.** `E0216` for `py.<module>` keeps its code; its note says no stub bound it
+on import and that `lotml bind <module>` tells why, which `bind` does by printing the reason
+`stubs::find` gives (R1.4). A stub that binds no function counts as none. A bare `import <name>`
 that is no LotML module and that typeshed covers gets the machine-applicable fix to `py.<name>`
 (R1.5). A shadowing bindings file is a warning at the import (R1.6).
 

@@ -50,11 +50,22 @@ pub fn name(module: &str) -> Result<(), String> {
 /// as `lotml bind` writes it, for the project at `project`; or why there is none.
 pub fn interface(module: &str, project: Option<&Path>) -> Result<String, String> {
     name(module)?;
-    let stub = find(module, || environment(project))?;
+    bound(module, &find(module, || environment(project))?)
+}
+
+/// The interface `stub` gives `module`, or why it gives none: it does not check, or it binds no
+/// function, which counts as no stub (specs/bind-on-import/ R1.4).
+fn bound(module: &str, stub: &Stub) -> Result<String, String> {
     let text = lotml_bind::binder::interface(module, &stub.text, &stub.said)
         .map_err(|lotml_bind::binder::Refused(why)| format!("cannot bind `{module}`: {why}"))?;
-    if let Some(problem) = lotml_check::interface(&text).1.first() {
+    let (interface, problems) = lotml_check::interface(&text);
+    if let Some(problem) = problems.first() {
         return Err(format!("the binding of `{module}` does not check: {} {}", problem.code, problem.message));
+    }
+    if interface.names().next().is_none() {
+        return Err(format!(
+            "the stub of `{module}` binds no function lotml can type; the interface's comments say why"
+        ));
     }
     Ok(text)
 }
@@ -170,6 +181,25 @@ mod tests {
         );
         assert!(interface("con", None).unwrap_err().contains("device"));
         assert!(interface("distutils", None).unwrap_err().contains("not in CPython"));
+    }
+
+    #[test]
+    fn a_stub_that_binds_no_function_counts_as_none() {
+        let classes = Stub {
+            text: "class Box:
+    def size(self) -> int: ...
+"
+            .into(),
+            said: "box.pyi".into(),
+        };
+        assert!(bound("box", &classes).unwrap_err().contains("binds no function"));
+        let one = Stub {
+            text: "def size() -> int: ...
+"
+            .into(),
+            said: "box.pyi".into(),
+        };
+        assert!(bound("box", &one).unwrap().contains("fn size() -> int ! PyError"));
     }
 
     #[test]

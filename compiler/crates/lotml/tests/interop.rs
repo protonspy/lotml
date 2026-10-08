@@ -220,6 +220,24 @@ four
     assert!(!dir.join("bindings").exists(), "nothing is written to bind on import");
 }
 
+#[test]
+fn an_import_no_stub_binds_is_reported_and_bind_tells_why() {
+    let program = "import py.nowhere
+
+fn main():
+    print(1)
+";
+    let dir = scratch("unbound-import", &[(".git", ""), ("main.lotml", program)]);
+    let checked = lotml(&["check", "main.lotml"], &dir);
+    assert_eq!(checked.status.code(), Some(1));
+    let said = stdout(&checked);
+    assert!(said.contains("E0216") && said.contains("`lotml bind nowhere` tells why"), "{said}");
+    let why = lotml(&["bind", "nowhere"], &dir);
+    assert_eq!(why.status.code(), Some(2));
+    let why = String::from_utf8_lossy(&why.stderr);
+    assert!(why.contains("no stub for `nowhere`") && why.contains("no uv.lock"), "{why}");
+}
+
 /// A Python module whose values no stub types: an object, a dataclass, and functions that change
 /// what they are given.
 const OBJS_PY: &str = "\
