@@ -4,13 +4,333 @@
 //! in a comment with the reason, never bound half-way; a type no LotML type describes is `PyObject`
 //! (adr:0031).
 
+use std::collections::{HashMap, HashSet};
+
+use ruff_python_ast::{self as ast, Expr, Number, Operator, PySourceType, Stmt};
+
 /// Why a stub was not bound.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Refused(pub String);
 
+/// The type of a value no LotML type describes: opaque, taken out only through a conversion the
+/// boundary checks (adr:0031).
+const OBJECT: &str = "PyObject";
+
 /// The interface of `module` from the text of its stub, the first line naming `said`, the source.
-pub fn interface(_module: &str, _stub: &str, _said: &str) -> Result<String, Refused> {
-    Err(Refused("not bound".into()))
+pub fn interface(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
+    let parsed = ruff_python_parser::parse_unchecked_source(stub, PySourceType::Stub);
+    if let Some(error) = parsed.errors().first() {
+        let at = usize::from(error.location.start()).min(stub.len());
+        let line = stub.as_bytes()[..at].iter().filter(|&&b| b == b'\n').count() + 1;
+        return Err(Refused(format!("the stub does not parse, at line {line}: {}", error.error)));
+    }
+    let body = &parsed.syntax().body;
+    let mut bound = Vec::new();
+    let mut skipped = Vec::new();
+    let mut seen = HashSet::new();
+    for (name, function) in functions(body) {
+        if name.starts_with('_') || !seen.insert(name.clone()) {
+            continue;
+        }
+        match function {
+            Ok(function) => bound.push(function),
+            Err(why) => skipped.push(format!("#   {name}: {why}")),
+        }
+    }
+    let source: String = said.chars().map(|c| if printable(c) { c } else { '?' }).collect();
+    let mut lines = vec![
+        format!("# The Python module `{module}`, bound by `lotml bind` from {source}."),
+        "# Do not edit: run `lotml bind` again.".to_string(),
+        "# Every function returns `T ! PyError`: a stub does not say what a call raises.".to_string(),
+        "# A parameter written `= todo()` is optional: Python supplies its default.".to_string(),
+        "# A `PyObject` is a value no LotML type describes: convert it with `value()`.".to_string(),
+    ];
+    lines.extend(bound);
+    if !skipped.is_empty() {
+        lines.push(String::new());
+        lines.push("# Not bound:".to_string());
+        lines.extend(skipped);
+    }
+    Ok(lines.join("\n") + "\n")
+}
+
+/// Each module-level function by name, in the order written: its signature, or why it is not
+/// bound. The functions come first, then the names written as an instance's methods.
+fn functions(body: &[Stmt]) -> Vec<(String, Result<String, String>)> {
+    let declared = definitions(body);
+    let overloaded: HashSet<&str> = declared.iter().filter(|f| is_overload(f)).map(|f| f.name.as_str()).collect();
+    let mut found: Vec<(String, Result<String, String>)> = declared
+        .iter()
+        .map(|f| {
+            let bound = if overloaded.contains(f.name.as_str()) {
+                Err("it is overloaded".to_string())
+            } else {
+                written(f, f.name.as_str(), false)
+            };
+            (f.name.to_string(), bound)
+        })
+        .collect();
+    let classes: HashMap<&str, &ast::StmtClassDef> =
+        module_level(body).into_iter().filter_map(Stmt::as_class_def_stmt).map(|c| (c.name.as_str(), c)).collect();
+    for (name, class, method) in aliases(body) {
+        let methods: Vec<&ast::StmtFunctionDef> = classes
+            .get(class.as_str())
+            .map(|c| definitions(&c.body))
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|m| m.name.as_str() == method)
+            .collect();
+        let bound = match methods.first() {
+            None => Err(format!("`{class}` holds no `{method}` in this stub")),
+            Some(m) if is_overload(m) => Err("it is overloaded".to_string()),
+            Some(m) => written(m, &name, !is_static(m)),
+        };
+        found.push((name, bound));
+    }
+    found
+}
+
+/// The functions at `body`'s level, those under `if sys.version_info …` blocks included.
+fn definitions(body: &[Stmt]) -> Vec<&ast::StmtFunctionDef> {
+    module_level(body).into_iter().filter_map(Stmt::as_function_def_stmt).collect()
+}
+
+/// The statements at `body`'s level in the order written, each branch of an `if` where the `if`
+/// stands.
+fn module_level(body: &[Stmt]) -> Vec<&Stmt> {
+    let mut found = Vec::new();
+    for statement in body {
+        match statement {
+            Stmt::If(branch) => {
+                found.extend(module_level(&branch.body));
+                for clause in &branch.elif_else_clauses {
+                    found.extend(module_level(&clause.body));
+                }
+            }
+            other => found.push(other),
+        }
+    }
+    found
+}
+
+/// Each name typeshed writes as a method of an instance it declares, `randint = _inst.randint`
+/// after `_inst: Random`: the name, the instance's class and the method.
+fn aliases(body: &[Stmt]) -> Vec<(String, String, String)> {
+    let mut instances: HashMap<&str, String> = HashMap::new();
+    for statement in module_level(body) {
+        if let Stmt::AnnAssign(declared) = statement
+            && let Expr::Name(target) = &*declared.target
+            && let Some(class) = name_of(&declared.annotation)
+        {
+            instances.insert(target.id.as_str(), class.to_string());
+        }
+    }
+    let mut found = Vec::new();
+    for statement in module_level(body) {
+        if let Stmt::Assign(assigned) = statement
+            && let [Expr::Name(target)] = assigned.targets.as_slice()
+            && let Expr::Attribute(attribute) = &*assigned.value
+            && let Expr::Name(instance) = &*attribute.value
+            && let Some(class) = instances.get(instance.id.as_str())
+        {
+            found.push((target.id.to_string(), class.clone(), attribute.attr.to_string()));
+        }
+    }
+    found
+}
+
+fn is_overload(function: &ast::StmtFunctionDef) -> bool {
+    function.decorator_list.iter().any(|d| name_of(&d.expression) == Some("overload"))
+}
+
+fn is_static(function: &ast::StmtFunctionDef) -> bool {
+    function.decorator_list.iter().any(|d| name_of(&d.expression) == Some("staticmethod"))
+}
+
+/// A name, or an attribute's last part: `int`, or `Optional` of `typing.Optional`.
+fn name_of(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::Name(name) => Some(name.id.as_str()),
+        Expr::Attribute(attribute) => Some(attribute.attr.as_str()),
+        _ => None,
+    }
+}
+
+/// The signature of `function` under `name`, its first parameter dropped when it is a method
+/// bound to its instance or class; `*args` and `**kwargs` take nothing when not given, so the named
+/// parameters are bound and those are left to Python.
+fn written(function: &ast::StmtFunctionDef, name: &str, bound_method: bool) -> Result<String, String> {
+    if function.is_async {
+        return Err("it is a coroutine".to_string());
+    }
+    let parameters = &function.parameters;
+    let mut positional: Vec<&ast::ParameterWithDefault> =
+        parameters.posonlyargs.iter().chain(parameters.args.iter()).collect();
+    if bound_method && !positional.is_empty() {
+        positional.remove(0);
+    }
+    let params: Vec<String> = positional
+        .into_iter()
+        .chain(parameters.kwonlyargs.iter())
+        .map(|p| {
+            let annotated =
+                p.parameter.annotation.as_deref().map_or_else(|| OBJECT.to_string(), |a| lotml_type(a, true));
+            match &p.default {
+                Some(given) => format!("{}: {annotated} = {}", p.parameter.name.as_str(), default(given)),
+                None => format!("{}: {annotated}", p.parameter.name.as_str()),
+            }
+        })
+        .collect();
+    let returns = function.returns.as_deref().map_or_else(|| OBJECT.to_string(), |r| lotml_type(r, false));
+    Ok(format!("fn {name}({}) -> {returns} ! PyError", params.join(", ")))
+}
+
+/// The LotML type of an annotation. A parameter may take an abstract collection, which a LotML
+/// list, dict or set satisfies, while a result must be the concrete one LotML receives; a type
+/// LotML has none for is a `PyObject`.
+fn lotml_type(expr: &Expr, parameter: bool) -> String {
+    if let Expr::NoneLiteral(_) = expr {
+        return "None".to_string();
+    }
+    if let Expr::BinOp(union) = expr
+        && union.op == Operator::BitOr
+    {
+        let rest: Vec<&Expr> =
+            [&*union.left, &*union.right].into_iter().filter(|side| !matches!(side, Expr::NoneLiteral(_))).collect();
+        return match rest.as_slice() {
+            [one] => optional(lotml_type(one, parameter)),
+            _ => OBJECT.to_string(),
+        };
+    }
+    if let Some(name) = name_of(expr) {
+        return match name {
+            "int" => "int",
+            "float" => "f64",
+            "str" => "str",
+            "bool" => "bool",
+            "bytes" => "bytes",
+            "SupportsIndex" | "SupportsInt" if parameter => "int",
+            "SupportsFloat" if parameter => "f64",
+            "StrPath" | "StrOrBytesPath" if parameter => "str",
+            "ReadableBuffer" if parameter => "bytes",
+            _ => OBJECT,
+        }
+        .to_string();
+    }
+    let Expr::Subscript(subscript) = expr else { return OBJECT.to_string() };
+    let head = name_of(&subscript.value).unwrap_or_default();
+    let args: Vec<&Expr> = match &*subscript.slice {
+        Expr::Tuple(tuple) => tuple.elts.iter().collect(),
+        one => vec![one],
+    };
+    let of = |arg: &Expr| lotml_type(arg, parameter);
+    match (head, args.as_slice()) {
+        ("Optional", [inner]) => optional(of(inner)),
+        ("list" | "List", [item, ..]) => format!("[{}]", of(item)),
+        ("Sequence" | "MutableSequence" | "Iterable" | "Collection", [item, ..]) if parameter => {
+            format!("[{}]", of(item))
+        }
+        ("set" | "Set" | "frozenset" | "FrozenSet", [item, ..]) => format!("{{{}}}", of(item)),
+        ("AbstractSet" | "MutableSet", [item, ..]) if parameter => format!("{{{}}}", of(item)),
+        ("dict" | "Dict", [key, value]) => format!("{{{}: {}}}", of(key), of(value)),
+        ("Mapping" | "MutableMapping", [key, value]) if parameter => format!("{{{}: {}}}", of(key), of(value)),
+        ("tuple" | "Tuple", items) => {
+            if items.iter().any(|a| matches!(a, Expr::EllipsisLiteral(_))) {
+                OBJECT.to_string()
+            } else {
+                format!("({})", items.iter().map(|a| of(a)).collect::<Vec<_>>().join(", "))
+            }
+        }
+        _ => OBJECT.to_string(),
+    }
+}
+
+fn optional(inner: String) -> String {
+    if inner.ends_with('?') || inner == "None" { inner } else { format!("{inner}?") }
+}
+
+/// A default LotML can write, as Python's `repr` writes it; any other is Python's, and the
+/// parameter is only optional.
+fn default(expr: &Expr) -> String {
+    match expr {
+        Expr::NoneLiteral(_) => "None".to_string(),
+        Expr::BooleanLiteral(b) => if b.value { "True" } else { "False" }.to_string(),
+        Expr::NumberLiteral(number) => match &number.value {
+            Number::Int(int) => integer(&int.to_string()).unwrap_or_else(|| "todo()".to_string()),
+            Number::Float(float) => float_repr(*float),
+            Number::Complex { .. } => "todo()".to_string(),
+        },
+        Expr::StringLiteral(string) => format!("\"{}\"", escape(string.value.to_str())),
+        _ => "todo()".to_string(),
+    }
+}
+
+/// An integer literal's value in decimal: a small one ruff gives as digits, a large one as the
+/// token written, which is read here when it is decimal.
+fn integer(written: &str) -> Option<String> {
+    let digits: String = written.chars().filter(|&c| c != '_').collect();
+    digits.chars().all(|c| c.is_ascii_digit()).then(|| {
+        let trimmed = digits.trim_start_matches('0');
+        if trimmed.is_empty() { "0".to_string() } else { trimmed.to_string() }
+    })
+}
+
+/// Python's `repr` of a float: the shortest digits that read back, in positional notation from
+/// 1e-4 up to 1e16 and in exponent notation, signed and of two digits at least, outside it.
+fn float_repr(value: f64) -> String {
+    if value.is_infinite() {
+        return if value > 0.0 { "inf" } else { "-inf" }.to_string();
+    }
+    if value.is_nan() {
+        return "nan".to_string();
+    }
+    let scientific = format!("{value:e}");
+    let (mantissa, exponent) = scientific.split_once('e').unwrap_or((&scientific, "0"));
+    let exponent: i32 = exponent.parse().unwrap_or(0);
+    let negative = mantissa.starts_with('-');
+    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
+    let sign = if negative { "-" } else { "" };
+    if (-4..16).contains(&exponent) {
+        let point = exponent + 1;
+        let text = if point <= 0 {
+            format!("0.{}{digits}", "0".repeat(point.unsigned_abs() as usize))
+        } else {
+            let point = point as usize;
+            let whole = format!("{digits:0<point$}");
+            let (integer, fraction) = whole.split_at(point);
+            format!("{integer}.{}", if fraction.is_empty() { "0" } else { fraction })
+        };
+        return format!("{sign}{text}");
+    }
+    let (first, rest) = digits.split_at(1);
+    let mantissa = if rest.is_empty() { first.to_string() } else { format!("{first}.{rest}") };
+    let exponent_sign = if exponent < 0 { '-' } else { '+' };
+    format!("{sign}{mantissa}e{exponent_sign}{:02}", exponent.unsigned_abs())
+}
+
+/// A string from a stub as the inside of a LotML string literal: `\`, `"` and every character that
+/// could end a line or hide one escaped, so a stub cannot add a line to the interface (R1.3).
+pub fn escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            c if (c as u32) < 0x100 && (c.is_control()) => out.push_str(&format!("\\x{:02x}", c as u32)),
+            c if c.is_control() || matches!(c, '\u{2028}' | '\u{2029}') => {
+                out.push_str(&format!("\\u{:04x}", c as u32));
+            }
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Whether `c` may stand in the interface's first line as it is: no control character, no line or
+/// paragraph separator, and no space but the plain one.
+fn printable(c: char) -> bool {
+    !(c.is_control() || (c.is_whitespace() && c != ' ') || matches!(c, '\u{2028}' | '\u{2029}'))
 }
 
 #[cfg(test)]

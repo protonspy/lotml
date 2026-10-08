@@ -8,7 +8,7 @@
 
 ## 2 · The binder
 
-- [ ] 2.1 (TDD) Port the Python binder to `lotml-bind`, reading a stub with `ruff_python_parser`: the type map, the defaults with Python's `repr`, version blocks, aliases, overloads and coroutines, and one escape function for every string taken from the stub — R1.1, R1.3
+- [x] 2.1 (TDD) Port the Python binder to `lotml-bind`, reading a stub with `ruff_python_parser`: the type map, the defaults with Python's `repr`, version blocks, aliases, overloads and coroutines, and one escape function for every string taken from the stub — R1.1, R1.3
 - [ ] 2.2 (Unit) Refuse a stub past 8 MiB, past the nesting or tokens-per-line limit, or that does not parse, before walking it, on a thread with a stack those limits fit — R1.4
   _Depends 2.1_
 - [ ] 2.3 (TDD) Show the Rust binder writes the Python binder's interface for every module of the vendored `stdlib` and every PyPI stub of the coverage corpus, and keep goldens of the corpus's standard-library interfaces — R1.2
