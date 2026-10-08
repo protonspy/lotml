@@ -31,5 +31,5 @@
 
 - [x] 3.1 (Unit) Bind the binding coverage report's standard-library modules through `lotml bind <module>` without `--stub`, and record typeshed's commit in the report — R4.2
   _Depends 1.1_
-- [ ] 3.2 (Unit) Run each module of the binding coverage corpus imported as `py.<module>` under `lotml run` with no `bindings/`, the PyPI ones in a scratch project that locks them, and report each that fails — R4.1
+- [x] 3.2 (Unit) Run each module of the binding coverage corpus imported as `py.<module>` under `lotml run` with no `bindings/`, the PyPI ones in a scratch project that locks them, and report each that fails — R4.1
   _Depends 1.4, 3.1_
