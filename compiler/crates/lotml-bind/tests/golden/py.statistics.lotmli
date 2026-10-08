@@ -1,0 +1,25 @@
+# The Python module `statistics`, bound by `lotml bind` from typeshed.
+# Do not edit: run `lotml bind` again.
+# Every function returns `T ! PyError`: a stub does not say what a call raises.
+# A parameter written `= todo()` is optional: Python supplies its default.
+# A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn fmean(data: [f64], weights: [f64]? = None) -> f64 ! PyError
+fn geometric_mean(data: [f64]) -> f64 ! PyError
+fn mean(data: [PyObject]) -> PyObject ! PyError
+fn harmonic_mean(data: [PyObject], weights: [PyObject]? = None) -> PyObject ! PyError
+fn median(data: [PyObject]) -> PyObject ! PyError
+fn median_low(data: [PyObject]) -> PyObject ! PyError
+fn median_high(data: [PyObject]) -> PyObject ! PyError
+fn median_grouped(data: [f64], interval: f64 = 1.0) -> f64 ! PyError
+fn mode(data: [PyObject]) -> PyObject ! PyError
+fn multimode(data: [PyObject]) -> [PyObject] ! PyError
+fn pstdev(data: [PyObject], mu: PyObject? = None) -> PyObject ! PyError
+fn pvariance(data: [PyObject], mu: PyObject? = None) -> PyObject ! PyError
+fn quantiles(data: [PyObject], n: int = 4, method: PyObject = "exclusive") -> [PyObject] ! PyError
+fn stdev(data: [PyObject], xbar: PyObject? = None) -> PyObject ! PyError
+fn variance(data: [PyObject], xbar: PyObject? = None) -> PyObject ! PyError
+fn correlation(x: [PyObject], y: [PyObject], method: PyObject = "linear") -> f64 ! PyError
+fn covariance(x: [PyObject], y: [PyObject]) -> f64 ! PyError
+fn linear_regression(regressor: PyObject, dependent_variable: PyObject, proportional: bool = False) -> PyObject ! PyError
+fn kde(data: [f64], h: f64, kernel: PyObject = "normal", cumulative: bool = False) -> PyObject ! PyError
+fn kde_random(data: [f64], h: f64, kernel: PyObject = "normal", seed: PyObject? = None) -> PyObject ! PyError

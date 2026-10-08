@@ -1,0 +1,27 @@
+# The Python module `base64`, bound by `lotml bind` from typeshed.
+# Do not edit: run `lotml bind` again.
+# Every function returns `T ! PyError`: a stub does not say what a call raises.
+# A parameter written `= todo()` is optional: Python supplies its default.
+# A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn b64encode(s: bytes, altchars: bytes? = None, padded: bool = True, wrapcol: int = 0) -> bytes ! PyError
+fn b64decode(s: PyObject, altchars: PyObject? = None, validate: bool = todo(), padded: bool = True, ignorechars: bytes = todo(), canonical: bool = False) -> bytes ! PyError
+fn standard_b64encode(s: bytes) -> bytes ! PyError
+fn standard_b64decode(s: PyObject) -> bytes ! PyError
+fn urlsafe_b64encode(s: bytes, padded: bool = True) -> bytes ! PyError
+fn urlsafe_b64decode(s: PyObject, padded: bool = False) -> bytes ! PyError
+fn b32encode(s: bytes, padded: bool = True, wrapcol: int = 0) -> bytes ! PyError
+fn b32decode(s: PyObject, casefold: bool = False, map01: PyObject? = None, padded: bool = True, ignorechars: bytes = todo(), canonical: bool = False) -> bytes ! PyError
+fn b16encode(s: bytes, wrapcol: int = 0) -> bytes ! PyError
+fn b16decode(s: PyObject, casefold: bool = False, ignorechars: bytes = todo()) -> bytes ! PyError
+fn b32hexencode(s: bytes, padded: bool = True, wrapcol: int = 0) -> bytes ! PyError
+fn b32hexdecode(s: PyObject, casefold: bool = False, padded: bool = True, ignorechars: bytes = todo(), canonical: bool = False) -> bytes ! PyError
+fn a85encode(b: bytes, foldspaces: bool = False, wrapcol: int = 0, pad: bool = False, adobe: bool = False) -> bytes ! PyError
+fn a85decode(b: PyObject, foldspaces: bool = False, adobe: bool = False, ignorechars: PyObject = todo(), canonical: bool = False) -> bytes ! PyError
+fn b85encode(b: bytes, pad: bool = False, wrapcol: int = 0) -> bytes ! PyError
+fn b85decode(b: PyObject, ignorechars: bytes = todo(), canonical: bool = False) -> bytes ! PyError
+fn decode(input: PyObject, output: PyObject) -> None ! PyError
+fn encode(input: PyObject, output: PyObject) -> None ! PyError
+fn encodebytes(s: bytes) -> bytes ! PyError
+fn decodebytes(s: bytes) -> bytes ! PyError
+fn z85encode(s: bytes, pad: bool = False, wrapcol: int = 0) -> bytes ! PyError
+fn z85decode(s: PyObject, ignorechars: bytes = todo(), canonical: bool = False) -> bytes ! PyError

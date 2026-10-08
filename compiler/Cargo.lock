@@ -495,9 +495,11 @@ dependencies = [
 name = "lotml-bind"
 version = "0.1.0"
 dependencies = [
+ "lotml-py",
  "miniz_oxide",
  "ruff_python_ast",
  "ruff_python_parser",
+ "serde_json",
 ]
 
 [[package]]

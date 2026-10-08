@@ -1,0 +1,28 @@
+# The Python module `shutil`, bound by `lotml bind` from typeshed.
+# Do not edit: run `lotml bind` again.
+# Every function returns `T ! PyError`: a stub does not say what a call raises.
+# A parameter written `= todo()` is optional: Python supplies its default.
+# A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn copyfileobj(fsrc: PyObject, fdst: PyObject, length: int = 0) -> None ! PyError
+fn copyfile(src: str, dst: PyObject, follow_symlinks: bool = True) -> PyObject ! PyError
+fn copymode(src: str, dst: str, follow_symlinks: bool = True) -> None ! PyError
+fn copystat(src: str, dst: str, follow_symlinks: bool = True) -> None ! PyError
+fn ignore_patterns() -> PyObject ! PyError
+fn copytree(src: str, dst: PyObject, symlinks: bool = False, ignore: PyObject? = None, copy_function: PyObject = todo(), ignore_dangling_symlinks: bool = False, dirs_exist_ok: bool = False) -> PyObject ! PyError
+fn move(src: str, dst: PyObject, copy_function: PyObject = todo()) -> PyObject ! PyError
+fn disk_usage(path: PyObject) -> PyObject ! PyError
+fn make_archive(base_name: str, format: str, root_dir: str? = None, base_dir: str? = None, verbose: bool = todo(), dry_run: bool = todo(), owner: str? = None, group: str? = None, logger: PyObject? = None) -> str ! PyError
+fn get_archive_formats() -> [(str, str)] ! PyError
+fn unregister_archive_format(name: str) -> None ! PyError
+fn unpack_archive(filename: str, extract_dir: str? = None, format: str? = None, filter: PyObject? = None) -> None ! PyError
+fn unregister_unpack_format(name: str) -> None ! PyError
+fn get_unpack_formats() -> [(str, [str], str)] ! PyError
+fn get_terminal_size(fallback: (int, int) = todo()) -> PyObject ! PyError
+
+# Not bound:
+#   copy: it is overloaded
+#   copy2: it is overloaded
+#   chown: it is overloaded
+#   which: it is overloaded
+#   register_archive_format: it is overloaded
+#   register_unpack_format: it is overloaded

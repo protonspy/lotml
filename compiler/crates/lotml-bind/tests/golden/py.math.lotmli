@@ -1,0 +1,69 @@
+# The Python module `math`, bound by `lotml bind` from typeshed.
+# Do not edit: run `lotml bind` again.
+# Every function returns `T ! PyError`: a stub does not say what a call raises.
+# A parameter written `= todo()` is optional: Python supplies its default.
+# A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn acos(x: PyObject) -> f64 ! PyError
+fn acosh(x: PyObject) -> f64 ! PyError
+fn asin(x: PyObject) -> f64 ! PyError
+fn asinh(x: PyObject) -> f64 ! PyError
+fn atan(x: PyObject) -> f64 ! PyError
+fn atan2(y: PyObject, x: PyObject) -> f64 ! PyError
+fn atanh(x: PyObject) -> f64 ! PyError
+fn cbrt(x: PyObject) -> f64 ! PyError
+fn comb(n: int, k: int) -> int ! PyError
+fn copysign(x: PyObject, y: PyObject) -> f64 ! PyError
+fn cos(x: PyObject) -> f64 ! PyError
+fn cosh(x: PyObject) -> f64 ! PyError
+fn degrees(x: PyObject) -> f64 ! PyError
+fn dist(p: [PyObject], q: [PyObject]) -> f64 ! PyError
+fn erf(x: PyObject) -> f64 ! PyError
+fn erfc(x: PyObject) -> f64 ! PyError
+fn exp(x: PyObject) -> f64 ! PyError
+fn exp2(x: PyObject) -> f64 ! PyError
+fn expm1(x: PyObject) -> f64 ! PyError
+fn fabs(x: PyObject) -> f64 ! PyError
+fn factorial(x: int) -> int ! PyError
+fn fmod(x: PyObject, y: PyObject) -> f64 ! PyError
+fn fmax(x: PyObject, y: PyObject) -> f64 ! PyError
+fn fmin(x: PyObject, y: PyObject) -> f64 ! PyError
+fn frexp(x: PyObject) -> (f64, int) ! PyError
+fn fsum(seq: [PyObject]) -> f64 ! PyError
+fn gamma(x: PyObject) -> f64 ! PyError
+fn gcd() -> int ! PyError
+fn hypot() -> f64 ! PyError
+fn isclose(a: PyObject, b: PyObject, rel_tol: PyObject = 1e-09, abs_tol: PyObject = 0.0) -> bool ! PyError
+fn isinf(x: PyObject) -> bool ! PyError
+fn isfinite(x: PyObject) -> bool ! PyError
+fn isnan(x: PyObject) -> bool ! PyError
+fn isnormal(x: PyObject) -> bool ! PyError
+fn issubnormal(x: PyObject) -> bool ! PyError
+fn isqrt(n: int) -> int ! PyError
+fn lcm() -> int ! PyError
+fn ldexp(x: PyObject, i: int) -> f64 ! PyError
+fn lgamma(x: PyObject) -> f64 ! PyError
+fn log(x: PyObject, base: PyObject = todo()) -> f64 ! PyError
+fn log10(x: PyObject) -> f64 ! PyError
+fn log1p(x: PyObject) -> f64 ! PyError
+fn log2(x: PyObject) -> f64 ! PyError
+fn modf(x: PyObject) -> (f64, f64) ! PyError
+fn nextafter(x: PyObject, y: PyObject, steps: int? = None) -> f64 ! PyError
+fn perm(n: int, k: int? = None) -> int ! PyError
+fn pow(x: PyObject, y: PyObject) -> f64 ! PyError
+fn radians(x: PyObject) -> f64 ! PyError
+fn remainder(x: PyObject, y: PyObject) -> f64 ! PyError
+fn sin(x: PyObject) -> f64 ! PyError
+fn signbit(x: PyObject) -> bool ! PyError
+fn sinh(x: PyObject) -> f64 ! PyError
+fn sumprod(p: [f64], q: [f64]) -> f64 ! PyError
+fn sqrt(x: PyObject) -> f64 ! PyError
+fn tan(x: PyObject) -> f64 ! PyError
+fn tanh(x: PyObject) -> f64 ! PyError
+fn trunc(x: PyObject) -> PyObject ! PyError
+fn ulp(x: PyObject) -> f64 ! PyError
+fn fma(x: PyObject, y: PyObject, z: PyObject) -> f64 ! PyError
+
+# Not bound:
+#   ceil: it is overloaded
+#   floor: it is overloaded
+#   prod: it is overloaded

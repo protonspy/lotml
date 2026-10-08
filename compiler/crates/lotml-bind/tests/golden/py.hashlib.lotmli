@@ -1,0 +1,7 @@
+# The Python module `hashlib`, bound by `lotml bind` from typeshed.
+# Do not edit: run `lotml bind` again.
+# Every function returns `T ! PyError`: a stub does not say what a call raises.
+# A parameter written `= todo()` is optional: Python supplies its default.
+# A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn new(name: str, data: bytes = todo(), usedforsecurity: bool = True) -> PyObject ! PyError
+fn file_digest(fileobj: PyObject, digest: PyObject, _bufsize: int = 262144) -> PyObject ! PyError

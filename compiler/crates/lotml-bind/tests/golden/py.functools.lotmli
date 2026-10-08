@@ -1,0 +1,15 @@
+# The Python module `functools`, bound by `lotml bind` from typeshed.
+# Do not edit: run `lotml bind` again.
+# Every function returns `T ! PyError`: a stub does not say what a call raises.
+# A parameter written `= todo()` is optional: Python supplies its default.
+# A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn update_wrapper(wrapper: PyObject, wrapped: PyObject, assigned: [str] = todo(), updated: [str] = todo()) -> PyObject ! PyError
+fn wraps(wrapped: PyObject, assigned: [str] = todo(), updated: [str] = todo()) -> PyObject ! PyError
+fn total_ordering(cls: PyObject) -> PyObject ! PyError
+fn cmp_to_key(mycmp: PyObject) -> PyObject ! PyError
+fn singledispatch(func: PyObject) -> PyObject ! PyError
+fn cache(user_function: PyObject) -> PyObject ! PyError
+
+# Not bound:
+#   reduce: it is overloaded
+#   lru_cache: it is overloaded

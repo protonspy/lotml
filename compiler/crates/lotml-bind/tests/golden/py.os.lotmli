@@ -1,0 +1,221 @@
+# The Python module `os`, bound by `lotml bind` from typeshed.
+# Do not edit: run `lotml bind` again.
+# Every function returns `T ! PyError`: a stub does not say what a call raises.
+# A parameter written `= todo()` is optional: Python supplies its default.
+# A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn reload_environ() -> None ! PyError
+fn fsencode(filename: str) -> bytes ! PyError
+fn fsdecode(filename: str) -> str ! PyError
+fn get_exec_path(env: {str: str}? = None) -> [str] ! PyError
+fn getlogin() -> str ! PyError
+fn getpid() -> int ! PyError
+fn getppid() -> int ! PyError
+fn strerror(code: int) -> str ! PyError
+fn umask(mask: int) -> int ! PyError
+fn ctermid() -> str ! PyError
+fn getegid() -> int ! PyError
+fn geteuid() -> int ! PyError
+fn getgid() -> int ! PyError
+fn getgrouplist(user: str, group: int) -> [int] ! PyError
+fn getgroups() -> [int] ! PyError
+fn initgroups(username: str, gid: int) -> None ! PyError
+fn getpgid(pid: int) -> int ! PyError
+fn getpgrp() -> int ! PyError
+fn getpriority(which: int, who: int) -> int ! PyError
+fn setpriority(which: int, who: int, priority: int) -> None ! PyError
+fn getresuid() -> (int, int, int) ! PyError
+fn getresgid() -> (int, int, int) ! PyError
+fn getuid() -> int ! PyError
+fn setegid(egid: int) -> None ! PyError
+fn seteuid(euid: int) -> None ! PyError
+fn setgid(gid: int) -> None ! PyError
+fn setgroups(groups: [int]) -> None ! PyError
+fn setpgrp() -> None ! PyError
+fn setpgid(pid: int, pgrp: int) -> None ! PyError
+fn setregid(rgid: int, egid: int) -> None ! PyError
+fn setresgid(rgid: int, egid: int, sgid: int) -> None ! PyError
+fn setresuid(ruid: int, euid: int, suid: int) -> None ! PyError
+fn setreuid(ruid: int, euid: int) -> None ! PyError
+fn getsid(pid: int) -> int ! PyError
+fn setsid() -> None ! PyError
+fn setuid(uid: int) -> None ! PyError
+fn uname() -> PyObject ! PyError
+fn putenv(name: str, value: str) -> None ! PyError
+fn unsetenv(name: str) -> None ! PyError
+fn close(fd: int) -> None ! PyError
+fn closerange(fd_low: int, fd_high: int) -> None ! PyError
+fn device_encoding(fd: int) -> str? ! PyError
+fn dup(fd: int) -> int ! PyError
+fn dup2(fd: int, fd2: int, inheritable: bool = True) -> int ! PyError
+fn fstat(fd: int) -> PyObject ! PyError
+fn ftruncate(fd: int, length: int) -> None ! PyError
+fn fsync(fd: PyObject) -> None ! PyError
+fn isatty(fd: int) -> bool ! PyError
+fn login_tty(fd: int) -> None ! PyError
+fn lseek(fd: int, position: int, whence: int) -> int ! PyError
+fn open(path: str, flags: int, mode: int = 511, dir_fd: int? = None) -> int ! PyError
+fn pipe() -> (int, int) ! PyError
+fn read(fd: int, length: int) -> bytes ! PyError
+fn get_blocking(fd: int) -> bool ! PyError
+fn set_blocking(fd: int, blocking: bool) -> None ! PyError
+fn fchown(fd: int, uid: int, gid: int) -> None ! PyError
+fn fpathconf(fd: int, name: PyObject) -> int ! PyError
+fn fstatvfs(fd: int) -> PyObject ! PyError
+fn lockf(fd: int, command: int, length: int) -> None ! PyError
+fn openpty() -> (int, int) ! PyError
+fn fdatasync(fd: PyObject) -> None ! PyError
+fn pipe2(flags: int) -> (int, int) ! PyError
+fn posix_fallocate(fd: int, offset: int, length: int) -> None ! PyError
+fn posix_fadvise(fd: int, offset: int, length: int, advice: int) -> None ! PyError
+fn pread(fd: int, length: int, offset: int) -> bytes ! PyError
+fn pwrite(fd: int, buffer: bytes, offset: int) -> int ! PyError
+fn preadv(fd: int, buffers: PyObject, offset: int, flags: int = 0) -> int ! PyError
+fn pwritev(fd: int, buffers: PyObject, offset: int, flags: int = 0) -> int ! PyError
+fn sendfile(out_fd: PyObject, in_fd: PyObject, offset: int?, count: int) -> int ! PyError
+fn readv(fd: int, buffers: PyObject) -> int ! PyError
+fn writev(fd: int, buffers: PyObject) -> int ! PyError
+fn readinto(fd: int, buffer: bytes) -> int ! PyError
+fn get_terminal_size(fd: int = todo()) -> PyObject ! PyError
+fn get_inheritable(fd: int) -> bool ! PyError
+fn set_inheritable(fd: int, inheritable: bool) -> None ! PyError
+fn get_handle_inheritable(handle: int) -> bool ! PyError
+fn set_handle_inheritable(handle: int, inheritable: bool) -> None ! PyError
+fn tcgetpgrp(fd: int) -> int ! PyError
+fn tcsetpgrp(fd: int, pgid: int) -> None ! PyError
+fn ttyname(fd: int) -> str ! PyError
+fn write(fd: int, data: bytes) -> int ! PyError
+fn access(path: PyObject, mode: int, dir_fd: int? = None, effective_ids: bool = False, follow_symlinks: bool = True) -> bool ! PyError
+fn chdir(path: PyObject) -> None ! PyError
+fn fchdir(fd: PyObject) -> None ! PyError
+fn getcwd() -> str ! PyError
+fn getcwdb() -> bytes ! PyError
+fn chmod(path: PyObject, mode: int, dir_fd: int? = None, follow_symlinks: bool = True) -> None ! PyError
+fn chflags(path: str, flags: int, follow_symlinks: bool = True) -> None ! PyError
+fn lchflags(path: str, flags: int) -> None ! PyError
+fn chroot(path: str) -> None ! PyError
+fn chown(path: PyObject, uid: int, gid: int, dir_fd: int? = None, follow_symlinks: bool = True) -> None ! PyError
+fn lchown(path: str, uid: int, gid: int) -> None ! PyError
+fn link(src: str, dst: str, src_dir_fd: int? = None, dst_dir_fd: int? = None, follow_symlinks: bool = True) -> None ! PyError
+fn lstat(path: str, dir_fd: int? = None) -> PyObject ! PyError
+fn mkdir(path: str, mode: int = 511, dir_fd: int? = None) -> None ! PyError
+fn mkfifo(path: str, mode: int = 438, dir_fd: int? = None) -> None ! PyError
+fn makedirs(name: str, mode: int = 511, exist_ok: bool = False, parent_mode: int? = None) -> None ! PyError
+fn mknod(path: str, mode: int = 384, device: int = 0, dir_fd: int? = None) -> None ! PyError
+fn major(device: int) -> int ! PyError
+fn minor(device: int) -> int ! PyError
+fn makedev(major: int, minor: int) -> int ! PyError
+fn pathconf(path: PyObject, name: PyObject) -> int ! PyError
+fn readlink(path: PyObject, dir_fd: int? = None) -> PyObject ! PyError
+fn remove(path: str, dir_fd: int? = None) -> None ! PyError
+fn removedirs(name: str) -> None ! PyError
+fn rename(src: str, dst: str, src_dir_fd: int? = None, dst_dir_fd: int? = None) -> None ! PyError
+fn renames(old: str, new: str) -> None ! PyError
+fn replace(src: str, dst: str, src_dir_fd: int? = None, dst_dir_fd: int? = None) -> None ! PyError
+fn rmdir(path: str, dir_fd: int? = None) -> None ! PyError
+fn stat(path: PyObject, dir_fd: int? = None, follow_symlinks: bool = True) -> PyObject ! PyError
+fn statvfs(path: PyObject) -> PyObject ! PyError
+fn statx(path: PyObject, mask: int, flags: int = 0, dir_fd: int? = None, follow_symlinks: bool = True) -> PyObject ! PyError
+fn symlink(src: str, dst: str, target_is_directory: bool = False, dir_fd: int? = None) -> None ! PyError
+fn sync() -> None ! PyError
+fn truncate(path: PyObject, length: int) -> None ! PyError
+fn unlink(path: str, dir_fd: int? = None) -> None ! PyError
+fn utime(path: PyObject, times: PyObject? = None, ns: (int, int) = todo(), dir_fd: int? = None, follow_symlinks: bool = True) -> None ! PyError
+fn walk(top: PyObject, topdown: bool = True, onerror: PyObject? = None, followlinks: bool = False) -> PyObject ! PyError
+fn getxattr(path: PyObject, attribute: str, follow_symlinks: bool = True) -> bytes ! PyError
+fn listxattr(path: PyObject? = None, follow_symlinks: bool = True) -> [str] ! PyError
+fn removexattr(path: PyObject, attribute: str, follow_symlinks: bool = True) -> None ! PyError
+fn setxattr(path: PyObject, attribute: str, value: bytes, flags: int = 0, follow_symlinks: bool = True) -> None ! PyError
+fn abort() -> PyObject ! PyError
+fn execl(file: str) -> PyObject ! PyError
+fn execlp(file: str) -> PyObject ! PyError
+fn execle(file: str) -> PyObject ! PyError
+fn execlpe(file: str) -> PyObject ! PyError
+fn execv(path: str, argv: PyObject) -> PyObject ! PyError
+fn execve(path: PyObject, argv: PyObject, env: PyObject) -> PyObject ! PyError
+fn execvp(file: str, args: PyObject) -> PyObject ! PyError
+fn execvpe(file: str, args: PyObject, env: PyObject) -> PyObject ! PyError
+fn kill(pid: int, signal: int) -> None ! PyError
+fn fork() -> int ! PyError
+fn forkpty() -> (int, int) ! PyError
+fn killpg(pgid: int, signal: int) -> None ! PyError
+fn nice(increment: int) -> int ! PyError
+fn plock(op: int) -> None ! PyError
+fn popen(cmd: str, mode: str = "r", buffering: int = todo()) -> PyObject ! PyError
+fn spawnl(mode: int, file: str, arg0: str) -> int ! PyError
+fn spawnle(mode: int, file: str, arg0: str) -> int ! PyError
+fn spawnv(mode: int, file: str, args: PyObject) -> int ! PyError
+fn spawnve(mode: int, file: str, args: PyObject, env: PyObject) -> int ! PyError
+fn system(command: str) -> int ! PyError
+fn times() -> PyObject ! PyError
+fn waitpid(pid: int, options: int) -> (int, int) ! PyError
+fn startfile(filepath: str, operation: str = todo(), arguments: str = "", cwd: str? = None, show_cmd: int = 1) -> None ! PyError
+fn spawnlp(mode: int, file: str, arg0: str) -> int ! PyError
+fn spawnlpe(mode: int, file: str, arg0: str) -> int ! PyError
+fn spawnvp(mode: int, file: str, args: PyObject) -> int ! PyError
+fn spawnvpe(mode: int, file: str, args: PyObject, env: PyObject) -> int ! PyError
+fn wait() -> (int, int) ! PyError
+fn waitid(idtype: int, ident: int, options: int) -> PyObject? ! PyError
+fn wait3(options: int) -> (int, int, PyObject) ! PyError
+fn wait4(pid: int, options: int) -> (int, int, PyObject) ! PyError
+fn WCOREDUMP(status: int) -> bool ! PyError
+fn WIFCONTINUED(status: int) -> bool ! PyError
+fn WIFSTOPPED(status: int) -> bool ! PyError
+fn WIFSIGNALED(status: int) -> bool ! PyError
+fn WIFEXITED(status: int) -> bool ! PyError
+fn WEXITSTATUS(status: int) -> int ! PyError
+fn WSTOPSIG(status: int) -> int ! PyError
+fn WTERMSIG(status: int) -> int ! PyError
+fn posix_spawn(path: str, argv: PyObject, env: PyObject?, file_actions: [PyObject]? = todo(), setpgroup: int? = None, resetids: bool = False, setsid: bool = False, setsigmask: [int] = todo(), setsigdef: [int] = todo(), scheduler: (PyObject, PyObject)? = None) -> int ! PyError
+fn posix_spawnp(path: str, argv: PyObject, env: PyObject?, file_actions: [PyObject]? = todo(), setpgroup: int? = None, resetids: bool = False, setsid: bool = False, setsigmask: [int] = todo(), setsigdef: [int] = todo(), scheduler: (PyObject, PyObject)? = None) -> int ! PyError
+fn sched_get_priority_min(policy: int) -> int ! PyError
+fn sched_get_priority_max(policy: int) -> int ! PyError
+fn sched_yield() -> None ! PyError
+fn sched_setscheduler(pid: int, policy: int, param: PyObject) -> None ! PyError
+fn sched_getscheduler(pid: int) -> int ! PyError
+fn sched_rr_get_interval(pid: int) -> f64 ! PyError
+fn sched_setparam(pid: int, param: PyObject) -> None ! PyError
+fn sched_getparam(pid: int) -> PyObject ! PyError
+fn sched_setaffinity(pid: int, mask: [int]) -> None ! PyError
+fn sched_getaffinity(pid: int) -> {int} ! PyError
+fn cpu_count() -> int? ! PyError
+fn process_cpu_count() -> int ! PyError
+fn confstr(name: PyObject) -> str? ! PyError
+fn getloadavg() -> (f64, f64, f64) ! PyError
+fn sysconf(name: PyObject) -> int ! PyError
+fn getrandom(size: int, flags: int = 0) -> bytes ! PyError
+fn urandom(size: int) -> bytes ! PyError
+fn register_at_fork(before: PyObject? = todo(), after_in_parent: PyObject? = todo(), after_in_child: PyObject? = todo()) -> None ! PyError
+fn add_dll_directory(path: str) -> PyObject ! PyError
+fn memfd_create(name: str, flags: int = todo()) -> int ! PyError
+fn copy_file_range(src: int, dst: int, count: int, offset_src: int? = None, offset_dst: int? = None) -> int ! PyError
+fn waitstatus_to_exitcode(status: int) -> int ! PyError
+fn pidfd_open(pid: int, flags: int = 0) -> int ! PyError
+fn listdrives() -> [str] ! PyError
+fn listmounts(volume: str) -> [str] ! PyError
+fn listvolumes() -> [str] ! PyError
+fn eventfd(initval: int, flags: int = 524288) -> PyObject ! PyError
+fn eventfd_read(fd: PyObject) -> int ! PyError
+fn eventfd_write(fd: PyObject, value: int) -> None ! PyError
+fn splice(src: PyObject, dst: PyObject, count: int, offset_src: int? = None, offset_dst: int? = None, flags: int = 0) -> int ! PyError
+fn unshare(flags: int) -> None ! PyError
+fn setns(fd: PyObject, nstype: int = 0) -> None ! PyError
+fn posix_openpt(oflag: int) -> int ! PyError
+fn grantpt(fd: PyObject) -> None ! PyError
+fn unlockpt(fd: PyObject) -> None ! PyError
+fn ptsname(fd: PyObject) -> str ! PyError
+fn timerfd_create(clockid: int, flags: int = 0) -> int ! PyError
+fn timerfd_settime(fd: PyObject, flags: int = 0, initial: f64 = 0.0, interval: f64 = 0.0) -> (f64, f64) ! PyError
+fn timerfd_settime_ns(fd: PyObject, flags: int = 0, initial: int = 0, interval: int = 0) -> (int, int) ! PyError
+fn timerfd_gettime(fd: PyObject) -> (f64, f64) ! PyError
+fn timerfd_gettime_ns(fd: PyObject) -> (int, int) ! PyError
+fn fchmod(fd: int, mode: int) -> None ! PyError
+fn lchmod(path: str, mode: int) -> None ! PyError
+
+# Not bound:
+#   listdir: it is overloaded
+#   fspath: it is overloaded
+#   getenv: it is overloaded
+#   getenvb: it is overloaded
+#   fdopen: it is overloaded
+#   scandir: it is overloaded
+#   fwalk: it is overloaded

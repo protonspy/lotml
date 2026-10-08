@@ -1,0 +1,6 @@
+# The Python module `collections`, bound by `lotml bind` from typeshed.
+# Do not edit: run `lotml bind` again.
+# Every function returns `T ! PyError`: a stub does not say what a call raises.
+# A parameter written `= todo()` is optional: Python supplies its default.
+# A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn namedtuple(typename: str, field_names: PyObject, rename: bool = False, module: str? = None, defaults: [PyObject]? = None) -> PyObject ! PyError

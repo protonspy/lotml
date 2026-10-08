@@ -1,0 +1,31 @@
+# The Python module `time`, bound by `lotml bind` from typeshed.
+# Do not edit: run `lotml bind` again.
+# Every function returns `T ! PyError`: a stub does not say what a call raises.
+# A parameter written `= todo()` is optional: Python supplies its default.
+# A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn asctime(time_tuple: PyObject = todo()) -> str ! PyError
+fn ctime(seconds: PyObject? = None) -> str ! PyError
+fn gmtime(seconds: PyObject? = None) -> PyObject ! PyError
+fn localtime(seconds: PyObject? = None) -> PyObject ! PyError
+fn mktime(time_tuple: PyObject) -> f64 ! PyError
+fn sleep(seconds: PyObject) -> None ! PyError
+fn strftime(format: str, time_tuple: PyObject = todo()) -> str ! PyError
+fn strptime(data_string: str, format: str = "%a %b %d %H:%M:%S %Y") -> PyObject ! PyError
+fn time() -> f64 ! PyError
+fn tzset() -> None ! PyError
+fn get_clock_info(name: PyObject) -> PyObject ! PyError
+fn monotonic() -> f64 ! PyError
+fn perf_counter() -> f64 ! PyError
+fn process_time() -> f64 ! PyError
+fn clock_getres(clk_id: int) -> f64 ! PyError
+fn clock_gettime(clk_id: int) -> f64 ! PyError
+fn clock_settime(clk_id: int, time: f64) -> None ! PyError
+fn clock_gettime_ns(clk_id: int) -> int ! PyError
+fn clock_settime_ns(clock_id: int, time: int) -> int ! PyError
+fn pthread_getcpuclockid(thread_id: int) -> int ! PyError
+fn monotonic_ns() -> int ! PyError
+fn perf_counter_ns() -> int ! PyError
+fn process_time_ns() -> int ! PyError
+fn time_ns() -> int ! PyError
+fn thread_time() -> f64 ! PyError
+fn thread_time_ns() -> int ! PyError
