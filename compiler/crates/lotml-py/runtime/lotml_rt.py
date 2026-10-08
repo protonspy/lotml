@@ -19,6 +19,7 @@ import json
 import linecache
 import math as _math
 import string
+import threading
 import types
 from typing import Any
 
@@ -143,6 +144,45 @@ class Todo(Panic):
 
 class NonExhaustiveMatch(Panic):
     """No arm matched."""
+
+
+class RecursionLimit(Panic):
+    """A call that would put more than `DEPTH_LIMIT` of lotml's own calls in progress on its
+    thread: named `RecursionError`, as the native target names it, and raised by the program
+    rather than by CPython, whose limit counts frames lotml does not control."""
+
+
+RecursionLimit.__name__ = RecursionLimit.__qualname__ = "RecursionError"
+
+DEPTH_LIMIT = 1000
+"""The most calls of lotml functions that can recurse a thread may have in progress
+(specs/recursion-depth R1.2)."""
+
+_calls = threading.local()
+
+
+def depth() -> int:
+    """The calls in progress on this thread that count toward `DEPTH_LIMIT`."""
+    return getattr(_calls, "depth", 0)
+
+
+def set_depth(count: int):
+    """Give this thread `count` calls in progress: what a test or a task began with."""
+    _calls.depth = count
+
+
+def enter():
+    """A call of a lotml function that can recurse begins: counted, unless it would pass the
+    limit, which stops the program first (R1.2)."""
+    count = getattr(_calls, "depth", 0)
+    if count >= DEPTH_LIMIT:
+        raise RecursionLimit("maximum recursion depth exceeded")
+    _calls.depth = count + 1
+
+
+def leave():
+    """The call `enter` counted ends, with a value or an error (R1.3)."""
+    _calls.depth -= 1
 
 
 def overflow(value):
@@ -368,14 +408,21 @@ def parallel(tasks):
     if not tasks:
         return []
     workers = min(len(tasks), TASK_THREADS)
+    count = depth()
     with concurrent.futures.ThreadPoolExecutor(workers, thread_name_prefix="lotml-task") as pool:
-        futures = [pool.submit(task) for task in tasks]
+        futures = [pool.submit(_task, task, count) for task in tasks]
         concurrent.futures.wait(futures)
     for future in futures:
         error = future.exception()
         if error is not None:
             raise error
     return [future.result() for future in futures]
+
+
+def _task(task, count: int):
+    """`task`, run on a worker from the count of the thread that started it (R1.6)."""
+    set_depth(count)
+    return task()
 
 
 class LotmlError(Exception):
@@ -1039,8 +1086,10 @@ def run_tests(namespace: dict, path: str) -> list[dict]:
     """Run every `test` block: pass, fail with the values compared, an error passed on by `?`,
     or a panic with where it happened."""
     results = []
+    count = depth()
     for name, test in namespace["__tests"]:
         result = {"name": name}
+        set_depth(count)
         try:
             test()
             result["outcome"] = "pass"

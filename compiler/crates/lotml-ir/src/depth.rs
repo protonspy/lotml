@@ -70,7 +70,8 @@ pub fn count(lowered: &mut Lowered) {
         let falls_off = crate::verify::reaches_end(f);
         let span = f.span;
         leave_at_returns(&mut f.body);
-        f.body.insert(0, Stmt { span, at: span, kind: StmtKind::Enter });
+        let start = Span { start: span.start, end: span.start };
+        f.body.insert(0, Stmt { span: start, at: start, kind: StmtKind::Enter });
         if falls_off {
             let end = Span { start: span.end, end: span.end };
             f.body.push(Stmt { span: end, at: end, kind: StmtKind::Leave });
