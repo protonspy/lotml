@@ -607,17 +607,19 @@ pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failu
     Ok(true)
 }
 
-/// A stub's text, refused unread when it is past what the binder reads.
+/// A stub's text, read no further than one byte past what the binder reads, so a file that is
+/// larger, grows, or never ends is refused without being held whole.
 fn read_stub(path: &Path) -> Result<String, Failure> {
-    let size = std::fs::metadata(path).map_err(|e| Failure(format!("cannot read {}: {e}", path.display())))?.len();
-    if size > lotml_bind::binder::LARGEST as u64 {
-        return Err(Failure(format!(
-            "cannot bind {}: it is {size} bytes, past the {} lotml reads",
-            path.display(),
-            lotml_bind::binder::LARGEST
-        )));
+    use std::io::Read;
+    let largest = lotml_bind::binder::LARGEST;
+    let cannot = |e: std::io::Error| Failure(format!("cannot read {}: {e}", path.display()));
+    let file = std::fs::File::open(path).map_err(cannot)?;
+    let mut text = String::new();
+    file.take(largest as u64 + 1).read_to_string(&mut text).map_err(cannot)?;
+    if text.len() > largest {
+        return Err(Failure(format!("cannot bind {}: it is past the {largest} bytes lotml reads", path.display())));
     }
-    std::fs::read_to_string(path).map_err(|e| Failure(format!("cannot read {}: {e}", path.display())))
+    Ok(text)
 }
 
 fn text(rows: &[Value]) -> String {

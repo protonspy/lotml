@@ -132,7 +132,8 @@ enum Command {
     Bind {
         /// The Python module: `textwrap`, `os.path`, with its `py.` or without.
         module: String,
-        /// The stub to read; typeshed's, from an installed mypy or jedi, when absent.
+        /// The stub to read; when absent, typeshed's for the standard library, which lotml carries,
+        /// else the project's packages'.
         #[arg(long)]
         stub: Option<PathBuf>,
         /// Where to write `py.<module>.lotmli`.

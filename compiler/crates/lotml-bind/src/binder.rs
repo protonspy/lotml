@@ -59,6 +59,7 @@ fn within_limits(stub: &str) -> Result<(), Refused> {
             TokenKind::Indent => blocks += 1,
             TokenKind::Dedent => blocks = blocks.saturating_sub(1),
             TokenKind::Newline => tokens = 0,
+            TokenKind::NonLogicalNewline if brackets == 0 => tokens = 0,
             _ => {}
         }
         tokens += 1;
@@ -113,7 +114,9 @@ fn bind(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
 }
 
 /// Each module-level function by name, in the order written: its signature, or why it is not
-/// bound. The functions come first, then the names written as an instance's methods.
+/// bound. The functions come first, then the names written as an instance's methods, each found
+/// in an index of its class's methods built once, the first written of a name winning, so a stub
+/// of many aliases binds in time linear in its size.
 fn functions(body: &[Stmt]) -> Vec<(String, Result<String, String>)> {
     let declared = definitions(body);
     let overloaded: HashSet<&str> = declared.iter().filter(|f| is_overload(f)).map(|f| f.name.as_str()).collect();
@@ -128,17 +131,17 @@ fn functions(body: &[Stmt]) -> Vec<(String, Result<String, String>)> {
             (f.name.to_string(), bound)
         })
         .collect();
-    let classes: HashMap<&str, &ast::StmtClassDef> =
-        module_level(body).into_iter().filter_map(Stmt::as_class_def_stmt).map(|c| (c.name.as_str(), c)).collect();
+    let mut methods: HashMap<&str, HashMap<&str, &ast::StmtFunctionDef>> = HashMap::new();
+    for class in module_level(body).into_iter().filter_map(Stmt::as_class_def_stmt) {
+        let mut index = HashMap::new();
+        for method in definitions(&class.body) {
+            index.entry(method.name.as_str()).or_insert(method);
+        }
+        methods.insert(class.name.as_str(), index);
+    }
     for (name, class, method) in aliases(body) {
-        let methods: Vec<&ast::StmtFunctionDef> = classes
-            .get(class.as_str())
-            .map(|c| definitions(&c.body))
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|m| m.name.as_str() == method)
-            .collect();
-        let bound = match methods.first() {
+        let first = methods.get(class.as_str()).and_then(|index| index.get(method.as_str()));
+        let bound = match first {
             None => Err(format!("`{class}` holds no `{method}` in this stub")),
             Some(m) if is_overload(m) => Err("it is overloaded".to_string()),
             Some(m) => written(m, &name, !is_static(m)),
@@ -376,8 +379,12 @@ pub fn escape(text: &str) -> String {
             '"' => out.push_str("\\\""),
             '\n' => out.push_str("\\n"),
             c if (c as u32) < 0x100 && (c.is_control()) => out.push_str(&format!("\\x{:02x}", c as u32)),
-            c if c.is_control() || matches!(c, '\u{2028}' | '\u{2029}') => {
-                out.push_str(&format!("\\u{:04x}", c as u32));
+            c if c.is_control() || matches!(c, '\u{2028}' | '\u{2029}') || is_format(c) => {
+                if (c as u32) > 0xffff {
+                    out.push_str(&format!("\\U{:08x}", c as u32));
+                } else {
+                    out.push_str(&format!("\\u{:04x}", c as u32));
+                }
             }
             c => out.push(c),
         }
@@ -388,7 +395,36 @@ pub fn escape(text: &str) -> String {
 /// Whether `c` may stand in the interface's first line as it is: no control character, no line or
 /// paragraph separator, and no space but the plain one.
 fn printable(c: char) -> bool {
-    !(c.is_control() || (c.is_whitespace() && c != ' ') || matches!(c, '\u{2028}' | '\u{2029}'))
+    !(c.is_control() || (c.is_whitespace() && c != ' ') || matches!(c, '\u{2028}' | '\u{2029}') || is_format(c))
+}
+
+/// Whether `c` is a Unicode format character (category Cf), the bidirectional controls among them:
+/// invisible, and able to show a reader text in another order than it is read.
+fn is_format(c: char) -> bool {
+    matches!(
+        c,
+        '\u{ad}'
+            | '\u{600}'..='\u{605}'
+            | '\u{61c}'
+            | '\u{6dd}'
+            | '\u{70f}'
+            | '\u{890}'..='\u{891}'
+            | '\u{8e2}'
+            | '\u{180e}'
+            | '\u{200b}'..='\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206f}'
+            | '\u{feff}'
+            | '\u{fff9}'..='\u{fffb}'
+            | '\u{110bd}'
+            | '\u{110cd}'
+            | '\u{13430}'..='\u{1343f}'
+            | '\u{1bca0}'..='\u{1bca3}'
+            | '\u{1d173}'..='\u{1d17a}'
+            | '\u{e0001}'
+            | '\u{e0020}'..='\u{e007f}'
+    )
 }
 
 #[cfg(test)]
@@ -646,6 +682,38 @@ mod tests {
         assert!(refused(&long).contains("more than"), "a line that long builds a tree that deep");
         let within = format!("def f(a: int = {}1) -> None: ...\n", "1 + ".repeat(LONGEST_LINE / 2 - 20));
         assert_eq!(one(&within), "fn f(a: int = todo()) -> None ! PyError", "a deep tree is walked and dropped");
+    }
+
+    #[test]
+    fn a_class_of_many_methods_aliased_many_times_binds_in_linear_time() {
+        let count = 20_000;
+        let mut stub = String::from("class C:\n");
+        for k in 0..count {
+            stub.push_str(&format!("    def m{k}(self) -> int: ...\n"));
+        }
+        stub.push_str("_i: C\n");
+        for k in 0..count {
+            stub.push_str(&format!("a{k} = _i.m{k}\n"));
+        }
+        let started = std::time::Instant::now();
+        assert_eq!(functions(&stub).len(), count);
+        assert!(started.elapsed().as_secs() < 10, "{:?}", started.elapsed());
+    }
+
+    #[test]
+    fn blank_and_comment_lines_count_as_lines_of_their_own() {
+        let stub = format!("{}def f() -> None: ...\n", "# c\n\n".repeat(LONGEST_LINE));
+        assert_eq!(functions(&stub), ["fn f() -> None ! PyError"]);
+    }
+
+    #[test]
+    fn an_invisible_or_reordering_character_is_escaped_and_kept_off_the_first_line() {
+        assert_eq!(
+            one("def f(a: str = '\u{202e}x\u{200b}\u{e0041}') -> None: ...\n"),
+            "fn f(a: str = \"\\u202ex\\u200b\\U000e0041\") -> None ! PyError"
+        );
+        let text = interface("m", "def f() -> None: ...\n", "a\u{2066}b").unwrap();
+        assert!(text.lines().next().unwrap().ends_with("from a?b."), "{text}");
     }
 
     #[test]
