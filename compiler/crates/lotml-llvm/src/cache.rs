@@ -73,6 +73,17 @@ impl Drop for Workspace {
     }
 }
 
+/// The root of this user's cache of lotml, which other parts of lotml keep their own directories
+/// under: uv runs from one (adr:0026). `None` when there is none.
+pub fn user_root() -> Option<PathBuf> {
+    root(|name| std::env::var_os(name), cfg!(windows))
+}
+
+/// `dir` created if need be, a directory of this user's own and nobody else's, as the cache's.
+pub fn private_directory(dir: &Path) -> std::io::Result<()> {
+    owned_directory(dir)
+}
+
 impl Cache {
     /// This user's cache: under `LOTML_CACHE_DIR` when it is set, or else under the system's
     /// per-user cache directory. `None` when there is none, or it cannot be shown to be this
