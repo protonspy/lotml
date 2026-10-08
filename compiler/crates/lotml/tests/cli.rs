@@ -534,3 +534,25 @@ fn an_empty_lotml_offline_leaves_downloads_on() {
     let said = without_python(&["run", "p.lot"], Some(""));
     assert!(said.contains("cannot run uv"), "the download step was reached: {said}");
 }
+
+#[test]
+fn run_and_test_record_the_cpython_they_ran_on() {
+    let dir = scratch(
+        "records-python",
+        &[("pyproject.toml", ""), ("p.lot", "fn main():\n    print(1)\n\ntest \"t\":\n    assert 1 == 1\n")],
+    );
+    for args in [&["run", "--json", "p.lot"][..], &["test", "--json", "p.lot"]] {
+        let output = lotml(args, &dir);
+        assert!(output.status.success(), "{args:?}: {}", String::from_utf8_lossy(&output.stderr));
+        let said = stdout(&output);
+        let last: serde_json::Value =
+            serde_json::from_str(said.lines().last().unwrap_or("")).expect("a JSON line last");
+        let python = &last["python"];
+        let path = python["path"].as_str().expect("the interpreter's path");
+        assert!(Path::new(path).is_absolute(), "{args:?}: {python}");
+        assert!(python["version"].as_str().is_some_and(|v| v.starts_with("3.")), "{args:?}: {python}");
+        assert!(python.get("uv").is_some(), "uv's version, or null without one: {python}");
+    }
+    let quiet = stdout(&lotml(&["run", "p.lot"], &dir));
+    assert_eq!(quiet.trim(), "1", "without --json the program's output is all");
+}

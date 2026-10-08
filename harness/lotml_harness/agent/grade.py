@@ -25,6 +25,9 @@ class Grade:
     """Fixed text — file, hidden test, outcome — safe in the committed rows."""
     details: list[str] = field(default_factory=list)
     """The compiler's output when tests did not run: the agent's text, kept to the trace."""
+    python: dict | None = None
+    """The CPython the hidden tests ran on, as `lotml test --json` records it (adr:0026): its
+    path and exact version, and uv's version."""
 
     @property
     def failure(self) -> str | None:
@@ -54,7 +57,7 @@ def grade(task: AgentTask, workspace: Path, lotml: Lotml | None = None) -> Grade
             link.unlink()
         checked = lotml.compiler(["check", "."], scratch)
         checks = checked is not None and checked.returncode == 0
-        passed, total, failures, details = 0, 0, [], []
+        passed, total, failures, details, python = 0, 0, [], [], None
         for file in task.graded:
             hidden = task.hidden(file)
             total += len(HIDDEN.findall(hidden))
@@ -71,6 +74,7 @@ def grade(task: AgentTask, workspace: Path, lotml: Lotml | None = None) -> Grade
                 failures.append(f"{file}: the tests did not run")
                 details.append((ran.stdout + ran.stderr)[-2000:] if ran else "timed out")
                 continue
+            python = report.get("python", python)
             for test in report["tests"]:
                 if not test["name"].startswith("hidden:"):
                     continue
@@ -78,7 +82,7 @@ def grade(task: AgentTask, workspace: Path, lotml: Lotml | None = None) -> Grade
                     passed += 1
                 else:
                     failures.append(f"{file}: {test['name']}: {test['outcome']}")
-        return Grade(checks, passed, total, failures, details)
+        return Grade(checks, passed, total, failures, details, python)
 
 
 def _report(stdout: str) -> dict | None:

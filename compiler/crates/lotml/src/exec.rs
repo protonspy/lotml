@@ -241,20 +241,42 @@ pub fn build(paths: &[PathBuf], out: &Path, target: Target, shared: bool) -> Res
     Ok(0)
 }
 
-/// `lotml run`: the program's `fn main()`, with Python's exit status: 1 when it returned an
-/// error, 101 when it panicked; the LLVM target's program exits as Python's does.
 /// Whether a command is offline: by its flag, or by `LOTML_OFFLINE` set to anything but empty, which
 /// can only turn offline on (adr:0026).
 pub fn offline(flag: bool) -> bool {
     flag || std::env::var_os("LOTML_OFFLINE").is_some_and(|v| !v.is_empty())
 }
 
-pub fn run(path: &Path, target: Target, offline: bool) -> Result<u8, Failure> {
+/// The CPython a command ran on, as its JSON records it (adr:0026): the executable and exact version
+/// the interpreter itself reports, and the version of the uv lotml finds, null where there is none.
+fn interpreter_record(python: &[String]) -> Value {
+    let said = interpreter(python, "import platform, sys\nprint(sys.executable)\nprint(platform.python_version())")
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| String::from_utf8_lossy(&out.stdout).lines().map(str::to_string).collect::<Vec<_>>())
+        .unwrap_or_default();
+    let uv = lotml_py::uv::find(&lotml_py::uv::Places::here())
+        .ok()
+        .flatten()
+        .and_then(|uv| lotml_py::uv::version(&uv))
+        .and_then(|said| said.split_whitespace().nth(1).map(str::to_string));
+    json!({"path": said.first(), "version": said.get(1), "uv": uv})
+}
+
+/// `lotml run`: the program's `fn main()`, with Python's exit status: 1 when it returned an
+/// error, 101 when it panicked; the LLVM target's program exits as Python's does. With `json`, a
+/// program that ran is followed by one line: its status and the CPython it ran on.
+pub fn run(path: &Path, target: Target, offline: bool, as_json: bool) -> Result<u8, Failure> {
     let scratch = Scratch::new()?;
     if target == Target::Llvm {
         let Some(exe) = llvm_executable(path, &scratch.0, false, Level::Debug)? else { return Ok(1) };
         let status = Command::new(&exe).status().map_err(|e| Failure(format!("cannot run {}: {e}", exe.display())))?;
-        return Ok(exit_status(status));
+        let status = exit_status(status);
+        if as_json {
+            println!("{}", json!({"version": 1, "status": status, "python": null}));
+        }
+        return Ok(status);
     }
     let Some(modules) = compile_or_report(&[path.to_path_buf()], &scratch.0)? else { return Ok(1) };
     let name = &modules[0].name;
@@ -268,7 +290,11 @@ pub fn run(path: &Path, target: Target, offline: bool) -> Result<u8, Failure> {
         .env_remove("PYTHONIOENCODING")
         .status()
         .map_err(|e| Failure(format!("cannot run Python: {e}")))?;
-    Ok(status.code().map_or(101, |c| u8::try_from(c).unwrap_or(1)))
+    let status = status.code().map_or(101, |c| u8::try_from(c).unwrap_or(1));
+    if as_json {
+        println!("{}", json!({"version": 1, "status": status, "python": interpreter_record(&python)}));
+    }
+    Ok(status)
 }
 
 /// A native program's exit status as `lotml run` returns it. A program the system stopped — a
@@ -288,7 +314,7 @@ fn exit_status(status: std::process::ExitStatus) -> u8 {
 /// `lotml test`: every `test` block, with the values a failed comparison saw.
 pub fn test(paths: &[PathBuf], as_json: bool, target: Target, offline: bool) -> Result<u8, Failure> {
     let (status, report) = match target {
-        Target::Python => test_report(paths, as_json, None, !offline)?,
+        Target::Python => test_report(paths, as_json, None, !offline, as_json)?,
         Target::Llvm => native_test_report(paths, as_json)?,
     };
     print!("{report}");
@@ -410,16 +436,18 @@ fn native_test_report(paths: &[PathBuf], as_json: bool) -> Result<(u8, String), 
             rows.push(row);
         }
     }
-    Ok(report_rows(rows, as_json))
+    Ok(report_rows(rows, as_json, None))
 }
 
 /// What `lotml test` prints, and its exit status; within `limits` when given.
-/// `downloads` says whether a missing CPython may be fetched: never for the MCP server or the grader.
+/// `downloads` says whether a missing CPython may be fetched: never for the MCP server or the grader;
+/// `record`, whether the JSON names the CPython the tests ran on.
 pub fn test_report(
     paths: &[PathBuf],
     as_json: bool,
     limits: Option<&Limits>,
     downloads: bool,
+    record: bool,
 ) -> Result<(u8, String), Failure> {
     let scratch = Scratch::new()?;
     let modules = match compile(paths, &scratch.0)? {
@@ -465,16 +493,20 @@ pub fn test_report(
             rows.push(row);
         }
     }
-    Ok(report_rows(rows, as_json))
+    Ok(report_rows(rows, as_json, record.then(|| interpreter_record(&python))))
 }
 
 /// The report of the tests' `rows` and its exit status: 1 when any did not pass.
-fn report_rows(rows: Vec<Value>, as_json: bool) -> (u8, String) {
+fn report_rows(rows: Vec<Value>, as_json: bool, python: Option<Value>) -> (u8, String) {
     let count = |outcome: &str| rows.iter().filter(|r| r["outcome"] == outcome).count();
     let summary =
         json!({"passed": count("pass"), "failed": count("fail"), "errors": count("error"), "panics": count("panic")});
     let report = if as_json {
-        format!("{}\n", json!({"version": 1, "tests": rows, "summary": summary}))
+        let mut report = json!({"version": 1, "tests": rows, "summary": summary});
+        if let Some(python) = python {
+            report["python"] = python;
+        }
+        format!("{report}\n")
     } else {
         format!(
             "{}{} passed, {} failed, {} errors, {} panics\n",
@@ -600,7 +632,7 @@ mod tests {
         std::fs::write(&source, "test \"forever\":\n    var n = 0\n    while True:\n        n = 1\n").unwrap();
         let limits = Limits { seconds: 2, output: 1024 };
         let started = std::time::Instant::now();
-        let Err(Failure(why)) = test_report(&[source], true, Some(&limits), false) else {
+        let Err(Failure(why)) = test_report(&[source], true, Some(&limits), false, false) else {
             panic!("it should not finish")
         };
         assert!(why.contains("did not finish within 2 s"), "{why}");

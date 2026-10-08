@@ -108,6 +108,9 @@ enum Command {
         /// on as well, and nothing turns it off (adr:0026).
         #[arg(long)]
         offline: bool,
+        /// After the program's output, one JSON line: its exit status and the CPython it ran on.
+        #[arg(long)]
+        json: bool,
     },
     /// Run the `test` blocks, reporting the values a failed comparison saw.
     Test {
@@ -264,7 +267,9 @@ fn run() -> ExitCode {
             true
         }),
         Command::Build { paths, out, target, shared } => return status(exec::build(&paths, &out, target, shared)),
-        Command::Run { path, target, offline } => return status(exec::run(&path, target, exec::offline(offline))),
+        Command::Run { path, target, offline, json } => {
+            return status(exec::run(&path, target, exec::offline(offline), json));
+        }
         Command::Test { paths, json, target, offline } => {
             return status(exec::test(&paths, json, target, exec::offline(offline)));
         }

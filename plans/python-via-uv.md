@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: af045c4973f8da8276aa9e35ad81f8bb97a3694c4a78029715e744a318a0bfd1
+checksum: ca40cbc69a92bbb7813efe251d6d7c3e40fc20864aff74cae9fd10c03ac48c2f
 ---
 
 # Python via uv
@@ -74,7 +74,7 @@ directory's uv configuration must change nothing, and the docs must describe the
   _Depends 1.1, 1.4_
 - [x] 1.6 (Unit) Add the offline switch to `run`, `test` and `bind` (a flag and `LOTML_OFFLINE`, which can only turn offline on). Make the MCP server, the grader and the harness offline in code, so their resolver cannot reach the download step, with a test that they make no network request
   _Depends 1.5_
-- [ ] 1.7 (Unit) Record in the JSON of `lotml run` and `lotml test`, and in every harness row that runs the Python target, the interpreter's path and exact version and uv's version
+- [x] 1.7 (Unit) Record in the JSON of `lotml run` and `lotml test`, and in every harness row that runs the Python target, the interpreter's path and exact version and uv's version
   _Depends 1.5_
 - [ ] 2.1 (Unit) When `lotml bind` gets no `--stub`, take typeshed's stub from a mypy
       wheel locked with hashes, binary only, from a fixed index, by reading the stub
