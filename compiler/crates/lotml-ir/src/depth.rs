@@ -16,10 +16,11 @@ use crate::symbol;
 /// The most calls of counted functions a thread may have in progress (specs/recursion-depth R1.2).
 pub const LIMIT: i32 = 1000;
 
-/// The functions of `lowered`, by name, that a call can nest through without bound: each one in a
-/// cycle of the call graph, each one used as a value, and each method of a type made a `dyn`
-/// value. A call through a value or through `dyn` has no edge in the graph, so every cycle that
-/// passes through one meets a function counted for being reachable that way.
+/// The functions of `lowered`, by name, that a call can nest through without bound: each one used
+/// as a value, each method of a type made a `dyn` value, and each one in a cycle of the call graph.
+/// A function that calls through a value or through `dyn`, or hands a function to the runtime to
+/// call, has an edge to every function a value may be, so a recursion through a lambda counts the
+/// function as well as the lambda.
 pub fn recursive(lowered: &Lowered) -> BTreeSet<String> {
     let names: Vec<&str> = lowered.functions.iter().map(|f| f.name.as_str()).collect();
     let index: HashMap<&str, usize> = names.iter().enumerate().map(|(i, n)| (*n, i)).collect();
@@ -29,8 +30,9 @@ pub fn recursive(lowered: &Lowered) -> BTreeSet<String> {
             by_method.entry(method).or_default().push(i);
         }
     }
-    let mut counted = BTreeSet::new();
+    let mut values = BTreeSet::new();
     let mut edges: Vec<Vec<usize>> = vec![Vec::new(); names.len()];
+    let mut indirect = Vec::new();
     let bodies = lowered.functions.iter().map(|f| &f.body).chain(lowered.defaults.iter().map(|d| &d.function.body));
     for (from, body) in bodies.enumerate() {
         let mut found = Found::default();
@@ -38,7 +40,7 @@ pub fn recursive(lowered: &Lowered) -> BTreeSet<String> {
         let methods_named = |method: &str| by_method.get(method).into_iter().flatten().copied();
         let mut called: Vec<usize> = found.calls.iter().filter_map(|n| index.get(n.as_str()).copied()).collect();
         called.extend(found.any_method.iter().flat_map(|m| methods_named(m)));
-        let mut values: Vec<usize> = found.values.iter().filter_map(|n| index.get(n.as_str()).copied()).collect();
+        values.extend(found.values.iter().filter_map(|n| index.get(n.as_str()).copied()));
         for (owner, trait_name) in &found.dyns {
             let slots = lowered.dyn_methods.get(trait_name).into_iter().flatten().flatten();
             for method in slots {
@@ -52,11 +54,17 @@ pub fn recursive(lowered: &Lowered) -> BTreeSet<String> {
             let slots = lowered.vtables.get(*vtable).into_iter().flat_map(|t| t.slots.iter().flatten());
             values.extend(slots.filter_map(|s| index.get(s.function.as_str()).copied()));
         }
-        counted.extend(values.into_iter().map(|i| names[i].to_string()));
         if let Some(edges) = edges.get_mut(from) {
             *edges = called;
+            if found.indirect || !found.values.is_empty() || !found.dyns.is_empty() || !found.vtables.is_empty() {
+                indirect.push(from);
+            }
         }
     }
+    for from in indirect {
+        edges[from].extend(values.iter().copied());
+    }
+    let mut counted: BTreeSet<String> = values.iter().map(|&i| names[i].to_string()).collect();
     for component in cycles(&edges) {
         counted.extend(component.into_iter().map(|i| names[i].to_string()));
     }
@@ -117,6 +125,8 @@ struct Found {
     /// trait.
     dyns: Vec<(Option<String>, String)>,
     vtables: Vec<usize>,
+    /// Whether it calls through a closure, through `dyn`, or through `parallel`.
+    indirect: bool,
 }
 
 fn each_reference(body: &Block, found: &mut Found) {
@@ -135,6 +145,7 @@ fn each_reference(body: &Block, found: &mut Found) {
             found.dyns.push((owner, trait_name.clone()));
         }
         Expr::ToDyn { vtable, .. } => found.vtables.push(*vtable),
+        Expr::CallClosure { .. } | Expr::CallDyn { .. } | Expr::Parallel { .. } => found.indirect = true,
         _ => {}
     });
 }

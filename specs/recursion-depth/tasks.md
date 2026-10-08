@@ -16,7 +16,7 @@
   _Depends 1.4_
 - [x] 2.2 (Unit) Run `main` and the tests on the Python target on a thread with a 64 MiB stack and CPython's limit at 20,000, set by `lotml run` and `lotml test` only, never on a host's import — R2.2
   _Depends 1.3_
-- [ ] 2.3 (TDD) Add parity programs that recurse to 1,000 and past it directly, mutually, through a lambda and through `dyn`, through `parallel`, a `test` block that panics deep followed by one that recurses, a function with many locals, and an exported function recursing from its host, on both targets, at both levels and on CPython 3.11 and 3.14 — R1.1, R1.2, R1.3, R1.4, R1.5, R1.6, R2.1, R2.2, R2.3
+- [x] 2.3 (TDD) Add parity programs that recurse to 1,000 and past it directly, mutually, through a lambda and through `dyn`, through `parallel`, a `test` block that panics deep followed by one that recurses, a function with many locals, and an exported function recursing from its host, on both targets, at both levels and on CPython 3.11 and 3.14 — R1.1, R1.2, R1.3, R1.4, R1.5, R1.6, R2.1, R2.2, R2.3
   _Depends 2.1, 2.2_
 - [ ] 2.4 (Unit) Measure the benchmarks with and without the count, fastest of seven runs, in `harness/results/benchmarks-llvm.md`, and record a ceiling note if one passes 5% — R3.1
   _Depends 1.4_

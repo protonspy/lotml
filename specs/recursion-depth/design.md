@@ -18,11 +18,14 @@ A call can only nest without bound through a cycle. The lowering marks, once, ov
 lowered (adr:0020-one-ir-between-the-checker-and-every-backend): the Python target reads it there,
 and `mono` copies each marked function into its instances, so both targets count the same calls. A
 method called on a type parameter has no single callee before `mono`, so it has an edge to every
-method of that name. Marked:
+method of that name. A function that calls through a closure, through `dyn` or through
+`parallel`, or hands a function to the runtime to call, has an edge to every function a value may
+be: without it, a function recursing through a lambda would count the lambda's calls and not its
+own, and run twice as deep as one recursing directly. Marked:
 
 - the functions of every strongly connected component of the call graph with a cycle in it;
 - every function whose value is taken, since a call through a value can reach anything;
-- every method of a trait used through `dyn`, since a dynamic call has no edge in the graph.
+- every method of a type made a `dyn` value, since a dynamic call reaches it by no name.
 
 The others, most of a typical program, pay nothing. A call into Python or C is not lotml's and is
 not counted; a native library's exported function, called by its host, counts on the host's

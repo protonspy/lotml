@@ -85,9 +85,11 @@ fn a_recursion_through_dyn_counts_the_method_called_through_it() {
     let source = "trait Step:\n    fn step(self, n: int) -> int\n\ntype Down(by: int)\n\n\
 impl Step for Down:\n    fn step(self, n: int) -> int:\n        if n == 0:\n            return 0\n        return via(self, n - 1) + self.by\n\n\
 fn via(s: dyn Step, n: int) -> int:\n    return s.step(n)\n\n\
-fn main():\n    print(via(Down(1), 999))\n    print(via(Down(1), 1000))\n";
+fn main():\n    print(via(Down(1), 499))\n    print(via(Down(1), 500))\n";
+    // `via` and `step` recurse through each other, `step` called through `dyn`: each level is a
+    // call of both, so 500 levels are 1,000 calls.
     if let Some((stdout, panic)) = same("dyn", source) {
-        assert_eq!((stdout.as_str(), panic.as_str()), ("999\n", PAST));
+        assert_eq!((stdout.as_str(), panic.as_str()), ("499\n", PAST));
     }
 }
 
