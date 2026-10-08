@@ -65,6 +65,18 @@ fn every_call_into_python_can_fail() {
 }
 
 #[test]
+fn an_interface_bound_from_a_stub_the_lock_does_not_record_is_warned_at_the_import() {
+    let source = "import py.textwrap\n\nfn f(s: str) -> str ! PyError:\n    return py.textwrap.dedent(s)?\n";
+    let (marked, problems) = interface(&lotml_check::unlocked(TEXTWRAP));
+    assert!(problems.is_empty(), "the mark is a comment");
+    let unlocked = Interfaces::from([("py.textwrap".to_string(), marked)]);
+    let found = check_resolved_with(&parse(source).module, source, &unlocked).diagnostics;
+    assert_eq!(found.iter().map(|d| d.code).collect::<Vec<_>>(), vec!["E0225"]);
+    assert_eq!(found[0].severity, lotml_diag::Severity::Warning);
+    assert!(found[0].message.contains("differs from the one lotml.lock records"), "{}", found[0].message);
+}
+
+#[test]
 fn a_bindings_file_shadowing_a_generated_interface_is_warned_at_the_import() {
     let source = "from py.textwrap import dedent\n\nfn f(s: str) -> str ! PyError:\n    return dedent(s)?\n";
     let (marked, problems) = interface(&lotml_check::shadowing(TEXTWRAP));

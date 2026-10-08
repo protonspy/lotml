@@ -56,25 +56,37 @@ pub fn interface(module: &str, project: Option<&Path>) -> Result<String, String>
 }
 
 /// [`interface`], kept in `cache` when given: a directory of the user's own, one file per stub
-/// and lotml version, written whole (specs/bind-on-import/ R3.1).
+/// and lotml version, written whole (specs/bind-on-import/ R3.1). Where the project's
+/// `lotml.lock` names the module, a stub that differs from the lock's is bound all the same and
+/// the interface marked so ([`lotml_check::unlocked`], R2.2).
 fn interface_in(module: &str, project: Option<&Path>, cache: Option<&Path>) -> Result<String, String> {
-    generate(module, project, cache).map(|(_, text)| text)
+    let locked = project.and_then(|root| crate::lockfile::entry(root, &format!("py.{module}")));
+    let (stub, text) = generate(module, project, cache, locked.as_ref())?;
+    let differs = locked.is_some_and(|entry| entry.stub != crate::lockfile::hash(&stub.text));
+    Ok(if differs { lotml_check::unlocked(&text) } else { text })
 }
 
 /// The stub of `module` and the interface generated from it, kept in the user's cache: what
-/// `lotml.lock` records (specs/bind-on-import/ R2.1).
+/// `lotml.lock` records (specs/bind-on-import/ R2.1), whatever a lock already says.
 pub fn bound_with_stub(module: &str, project: Option<&Path>) -> Result<(Stub, String), String> {
     let cache = lotml_llvm::cache::user_root().map(|root| root.join("interfaces"));
-    generate(module, project, cache.as_deref())
+    generate(module, project, cache.as_deref(), None)
 }
 
-/// [`interface_in`], with the stub it was generated from.
-fn generate(module: &str, project: Option<&Path>, cache: Option<&Path>) -> Result<(Stub, String), String> {
+/// The stub of `module` and its interface, read from `cache` when an entry is kept there for the
+/// stub — and, where `locked` names the module, only when the entry's hash is the lock's.
+fn generate(
+    module: &str,
+    project: Option<&Path>,
+    cache: Option<&Path>,
+    locked: Option<&crate::lockfile::Entry>,
+) -> Result<(Stub, String), String> {
     name(module)?;
     let stub = find(module, || environment(project))?;
     let cache = cache.filter(|dir| lotml_llvm::cache::private_directory(dir).is_ok());
     let entry = cache.map(|dir| dir.join(format!("{}.lotmli", key(&stub))));
-    if let Some(text) = entry.as_deref().and_then(|e| std::fs::read_to_string(e).ok()) {
+    let trusted = |text: &String| locked.is_none_or(|lock| lock.interface == crate::lockfile::hash(text));
+    if let Some(text) = entry.as_deref().and_then(|e| std::fs::read_to_string(e).ok()).filter(trusted) {
         return Ok((stub, text));
     }
     let text = bound(module, &stub)?;
@@ -259,6 +271,46 @@ mod tests {
         assert!(text.contains("fn dedent(text: str) -> str ! PyError\n"), "{text}");
         assert!(interface("con", None).unwrap_err().contains("device"));
         assert!(interface("distutils", None).unwrap_err().contains("not in CPython"));
+    }
+
+    /// A project whose `lotml.lock` names `py.textwrap` with `stub` and `interface` hashes.
+    fn locked_project(name: &str, stub: &str, interface: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("lotml-stubs-locked-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let entry = crate::lockfile::Entry {
+            name: "py.textwrap".into(),
+            source: "typeshed".into(),
+            stub: stub.into(),
+            interface: interface.into(),
+        };
+        std::fs::write(dir.join(crate::lockfile::NAME), crate::lockfile::text(&[entry])).unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_stub_that_differs_from_the_lock_is_bound_and_marked_so() {
+        let stub = find("textwrap", || panic!("not asked")).unwrap();
+        let fresh = bound("textwrap", &stub).unwrap();
+        let same = locked_project("same", &crate::lockfile::hash(&stub.text), &crate::lockfile::hash(&fresh));
+        assert_eq!(interface_in("textwrap", Some(&same), None).unwrap(), fresh, "the lock's stub: no mark");
+        let other = locked_project("other", "sha256:00", &crate::lockfile::hash(&fresh));
+        let marked = interface_in("textwrap", Some(&other), None).unwrap();
+        assert_eq!(marked, lotml_check::unlocked(&fresh), "bound from the stub found, and marked");
+    }
+
+    #[test]
+    fn a_kept_interface_the_lock_does_not_record_is_bound_again() {
+        let cache = std::env::temp_dir().join(format!("lotml-stubs-locked-cache-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&cache);
+        std::fs::create_dir_all(&cache).unwrap();
+        let stub = find("textwrap", || panic!("not asked")).unwrap();
+        let fresh = bound("textwrap", &stub).unwrap();
+        std::fs::write(cache.join(format!("{}.lotmli", key(&stub))), "# tampered\n").unwrap();
+        let project = locked_project("cache", &crate::lockfile::hash(&stub.text), &crate::lockfile::hash(&fresh));
+        assert_eq!(interface_in("textwrap", Some(&project), Some(&cache)).unwrap(), fresh);
+        assert_eq!(interface_in("textwrap", None, Some(&cache)).unwrap(), fresh, "and kept again whole");
+        let _ = std::fs::remove_dir_all(&cache);
     }
 
     #[test]

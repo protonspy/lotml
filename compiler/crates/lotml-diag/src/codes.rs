@@ -263,6 +263,14 @@ pub const ALL: &[Code] = &[
         the module by hand.",
     },
     Code {
+        code: "E0225",
+        title: "a stub that differs from the lock",
+        explanation: "`lotml.lock` records the SHA-256 of the stub each `py.` module was bound from. When the stub \
+        found on import differs, the compiler binds from it, so the program checks against what it will run with, \
+        and warns: the project's environment changed since the lock was written. `lotml bind --lock` records the \
+        stubs found; `lotml check --locked` fails on the difference, for CI.",
+    },
+    Code {
         code: "E0301",
         title: "an immutable reassigned",
         explanation: "A local declared with `x = …` cannot be assigned again. Declare it `var x = …` if it changes:\n\n\

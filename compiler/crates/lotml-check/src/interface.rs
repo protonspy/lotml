@@ -2,7 +2,7 @@
 //! file of function signatures with no body, over the types every program has, each returning
 //! `T ! PyError` — a stub says nothing about what a Python call raises, so every one can fail.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 use lotml_diag::Diagnostic;
 use lotml_syntax::ast::Item;
@@ -15,9 +15,19 @@ use crate::ty::Ty;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Interface {
     pub(crate) functions: BTreeMap<String, FnSig>,
-    /// Whether a bindings file gives it where the compiler would generate one from the module's
-    /// stub ([`shadowing`]).
-    pub(crate) shadows: bool,
+    /// What the compiler said of it on its first line, for the checker to warn at the import.
+    pub(crate) mark: Mark,
+}
+
+/// What the compiler says of an interface on its first line (specs/bind-on-import/ R1.6, R2.2).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Mark {
+    #[default]
+    None,
+    /// A bindings file, given where the module's stub would generate an interface ([`shadowing`]).
+    Shadows,
+    /// Generated from a stub that differs from the one `lotml.lock` records ([`unlocked`]).
+    Unlocked,
 }
 
 impl Interface {
@@ -33,6 +43,24 @@ const SHADOWS: &str = "# This file shadows the interface lotml generates from th
 /// `text`, a bindings file's, marked as shadowing the interface the compiler would generate.
 pub fn shadowing(text: &str) -> String {
     format!("{SHADOWS}\n{text}")
+}
+
+/// The first line the compiler puts before an interface generated from a stub that differs from
+/// the one `lotml.lock` records.
+const UNLOCKED: &str = "# The module's stub differs from the one lotml.lock records.";
+
+/// `text`, a generated interface's, marked as bound from a stub the lock does not record.
+pub fn unlocked(text: &str) -> String {
+    format!("{UNLOCKED}\n{text}")
+}
+
+/// The mark on `text`'s first line.
+fn mark_of(text: &str) -> Mark {
+    match text.lines().next() {
+        Some(SHADOWS) => Mark::Shadows,
+        Some(UNLOCKED) => Mark::Unlocked,
+        _ => Mark::None,
+    }
 }
 
 /// The interfaces a file may import from, by module name.
@@ -127,7 +155,7 @@ pub fn c_interface(text: &str) -> (Interface, Vec<Diagnostic>) {
     }
     diagnostics.append(&mut program.diagnostics);
     diagnostics.sort_by_key(|d| d.span.start);
-    (Interface { functions, shadows: false }, diagnostics)
+    (Interface { functions, mark: Mark::None }, diagnostics)
 }
 
 /// Read an interface: the functions it declares, and what is wrong with it. A function that
@@ -188,13 +216,12 @@ pub fn interface(text: &str) -> (Interface, Vec<Diagnostic>) {
     }
     diagnostics.append(&mut program.diagnostics);
     diagnostics.sort_by_key(|d| d.span.start);
-    let shadows = text.lines().next() == Some(SHADOWS);
-    (Interface { functions, shadows }, diagnostics)
+    (Interface { functions, mark: mark_of(text) }, diagnostics)
 }
 
-/// The modules whose interface is a bindings file shadowing the one the compiler would generate.
-pub(crate) fn shadowed(interfaces: &Interfaces) -> HashSet<String> {
-    interfaces.iter().filter(|(_, i)| i.shadows).map(|(module, _)| module.clone()).collect()
+/// The modules whose interface carries a mark, with it.
+pub(crate) fn marks(interfaces: &Interfaces) -> HashMap<String, Mark> {
+    interfaces.iter().filter(|(_, i)| i.mark != Mark::None).map(|(module, i)| (module.clone(), i.mark)).collect()
 }
 
 /// The functions of each interface, as the checker keeps them.

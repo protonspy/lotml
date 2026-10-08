@@ -294,6 +294,31 @@ fn bind_lock_records_each_module_bound_on_import_with_its_source_and_hashes() {
     assert!(!dir.join("lotml.lock").exists(), "nothing written");
 }
 
+#[test]
+fn check_warns_at_an_import_whose_stub_differs_from_the_lock_and_binds_it_all_the_same() {
+    let program = "from py.textwrap import dedent\n\nfn f() -> str ! PyError:\n    return dedent(\"  x\")?\n";
+    let dir = scratch("lock-differs", &[(".git", ""), ("main.lotml", program)]);
+    assert!(lotml(&["bind", "--lock"], &dir).status.success());
+    let checked = lotml(&["check", "main.lotml"], &dir);
+    assert!(checked.status.success() && !stdout(&checked).contains("E0225"), "{}", stdout(&checked));
+    let lock = std::fs::read_to_string(dir.join("lotml.lock")).unwrap();
+    let other: String = lock
+        .lines()
+        .map(|line| {
+            if line.starts_with("stub = ") {
+                format!("stub = \"sha256:{}\"\n", "0".repeat(64))
+            } else {
+                format!("{line}\n")
+            }
+        })
+        .collect();
+    assert_ne!(other, lock);
+    std::fs::write(dir.join("lotml.lock"), other).unwrap();
+    let checked = lotml(&["check", "main.lotml"], &dir);
+    assert!(checked.status.success(), "a warning stops nothing: {}", stdout(&checked));
+    assert!(stdout(&checked).contains("E0225"), "{}", stdout(&checked));
+}
+
 /// A Python module whose values no stub types: an object, a dataclass, and functions that change
 /// what they are given.
 const OBJS_PY: &str = "\

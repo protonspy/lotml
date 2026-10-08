@@ -88,8 +88,8 @@ pub struct Program {
     pub available: HashMap<String, BTreeMap<String, FnSig>>,
     /// The Python modules imported, with their functions.
     pub foreign: BTreeMap<String, BTreeMap<String, FnSig>>,
-    /// The modules whose bindings file shadows the interface the compiler would generate.
-    pub shadowed: HashSet<String>,
+    /// The Python modules whose interface the compiler marked, with the mark.
+    pub marks: HashMap<String, crate::interface::Mark>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -100,11 +100,11 @@ impl Program {
     pub fn collect(
         module: &ast::Module,
         interfaces: &HashMap<String, BTreeMap<String, FnSig>>,
-        shadowed: &HashSet<String>,
+        marks: &HashMap<String, crate::interface::Mark>,
     ) -> Program {
         let mut program = Program::with_prelude();
         program.available = interfaces.clone();
-        program.shadowed = shadowed.clone();
+        program.marks = marks.clone();
         let mut seen: HashMap<String, Span> = HashMap::new();
         let mut declare = |program: &mut Program, name: &ast::Ident| {
             if name.name.is_empty() {
@@ -238,17 +238,26 @@ impl Program {
         let python = path.strip_prefix("py.").filter(|m| !m.is_empty());
         let foreign = python.is_some() || crate::interface::is_c_library(&path);
         if foreign && let Some(functions) = self.available.get(&path).cloned() {
-            if let Some(module) = python.filter(|_| self.shadowed.contains(&path)) {
-                self.diagnostics.push(
-                    Diagnostic::warning(
-                        "E0224",
-                        span,
-                        format!(
-                            "bindings/py.{module}.lotmli shadows the interface lotml generates from the module's stub"
-                        ),
-                    )
-                    .note("delete the file to use the generated interface, or keep it to type the module by hand"),
-                );
+            if let Some(module) = python {
+                match self.marks.get(&path) {
+                    Some(crate::interface::Mark::Shadows) => self.diagnostics.push(
+                        Diagnostic::warning(
+                            "E0224",
+                            span,
+                            format!("bindings/py.{module}.lotmli shadows the interface lotml generates from the module's stub"),
+                        )
+                        .note("delete the file to use the generated interface, or keep it to type the module by hand"),
+                    ),
+                    Some(crate::interface::Mark::Unlocked) => self.diagnostics.push(
+                        Diagnostic::warning(
+                            "E0225",
+                            span,
+                            format!("the stub of `{module}` differs from the one lotml.lock records"),
+                        )
+                        .note("the interface is bound from the stub found; `lotml bind --lock` records it"),
+                    ),
+                    _ => {}
+                }
             }
             self.import_python(import, &path, functions);
             return;

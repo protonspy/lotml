@@ -11,7 +11,7 @@ mod prefix;
 mod program;
 pub mod ty;
 
-pub use interface::{Interface, Interfaces, c_interface, interface, interface_of, is_c_library, shadowing};
+pub use interface::{Interface, Interfaces, c_interface, interface, interface_of, is_c_library, shadowing, unlocked};
 pub use parts::{Assembly, Declarations, Part, PartChecked, PartKind, check_part, declarations, parts};
 pub use prefix::{PrefixCheck, Verdict, check_prefix, check_prefix_with};
 pub use program::{FieldSig, FnSig, MODULES, Method, ParamSig, TypeDef, VariantSig};

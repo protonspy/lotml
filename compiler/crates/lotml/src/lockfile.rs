@@ -25,6 +25,47 @@ pub fn hash(text: &str) -> String {
     format!("sha256:{}", lotml_llvm::sha256::hex_of(text.as_bytes()))
 }
 
+/// Past this, a lock is not read.
+const LARGEST: u64 = 16 << 20;
+
+/// The lock at `root`, read as data: `None` when there is none, an error for one lotml cannot read
+/// or that names a module by anything but a dotted identifier after `py.`.
+pub fn read(root: &Path) -> Result<Option<Vec<Entry>>, String> {
+    use std::io::Read;
+    let path = root.join(NAME);
+    let Ok(file) = std::fs::File::open(&path) else { return Ok(None) };
+    let mut text = String::new();
+    file.take(LARGEST + 1).read_to_string(&mut text).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    if text.len() as u64 > LARGEST {
+        return Err(format!("{} is past the {LARGEST} bytes lotml reads", path.display()));
+    }
+    let table: toml::Table =
+        text.parse().map_err(|e: toml::de::Error| format!("{} is not TOML: {}", path.display(), e.message()))?;
+    if table.get("version").and_then(toml::Value::as_integer) != Some(1) {
+        return Err(format!("{} is not a lock of version 1", path.display()));
+    }
+    let mut entries = Vec::new();
+    for module in table.get("module").and_then(toml::Value::as_array).map(Vec::as_slice).unwrap_or_default() {
+        let field = |key: &str| module.get(key).and_then(toml::Value::as_str).map(str::to_string);
+        let (Some(name), Some(source), Some(stub), Some(interface)) =
+            (field("name"), field("source"), field("stub"), field("interface"))
+        else {
+            return Err(format!("{} has a module without its name, source, stub and interface", path.display()));
+        };
+        let module = name
+            .strip_prefix("py.")
+            .ok_or_else(|| format!("{} names `{}`, not a `py.` module", path.display(), name.escape_debug()))?;
+        crate::stubs::name(module).map_err(|why| format!("{}: {why}", path.display()))?;
+        entries.push(Entry { name, source, stub, interface });
+    }
+    Ok(Some(entries))
+}
+
+/// The entry the lock at `root` has for `name` (`py.<module>`), if it can be read and has one.
+pub fn entry(root: &Path, name: &str) -> Option<Entry> {
+    read(root).ok().flatten()?.into_iter().find(|e| e.name == name)
+}
+
 /// The `py.` modules the programs under `root` import that no bindings file covers, each bound
 /// now; an error naming every one no stub binds.
 pub fn entries(root: &Path) -> Result<Vec<Entry>, String> {
@@ -109,5 +150,39 @@ mod tests {
         }]);
         let read: toml::Table = odd.parse().unwrap();
         assert_eq!(read["module"][0]["source"].as_str(), Some("a \"b\"\nc"), "a source cannot add a line");
+    }
+
+    fn root(name: &str, lock: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("lotml-lockfile-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(NAME), lock).unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_lock_written_is_read_back_and_a_bad_one_is_refused() {
+        let entries = vec![Entry {
+            name: "py.os.path".into(),
+            source: "typeshed 0d9b1926fc75".into(),
+            stub: hash("a"),
+            interface: hash("b"),
+        }];
+        let dir = root("read", &text(&entries));
+        assert_eq!(read(&dir).unwrap(), Some(entries));
+        assert_eq!(entry(&dir, "py.os.path").unwrap().stub, hash("a"));
+        assert!(entry(&dir, "py.os").is_none());
+        assert_eq!(read(&dir.join("none")).unwrap(), None);
+        let field = "[[module]]\nsource = \"s\"\nstub = \"s\"\ninterface = \"i\"\n";
+        for (bad, says) in [
+            ("version = 2\n", "version 1"),
+            ("version = 1\n[[module]\n", "not TOML"),
+            (&*format!("version = 1\n{field}name = \"py.../x\"\n"), "not a Python module name"),
+            (&*format!("version = 1\n{field}name = \"textwrap\"\n"), "not a `py.` module"),
+            ("version = 1\n[[module]]\nname = \"py.x\"\n", "without its name"),
+        ] {
+            let why = read(&root("bad", bad)).unwrap_err();
+            assert!(why.contains(says), "{bad}: {why}");
+        }
     }
 }
