@@ -188,9 +188,19 @@ impl Cache {
     }
 }
 
-/// How an entry is opened to mark it used.
+/// How an entry is opened to mark it used. On Windows only its attributes are opened for
+/// writing: a handle open for writing its data keeps another build's `link.exe`, which shares a
+/// file it reads for reading alone, from opening the entry at all (LNK1104).
 fn touching() -> std::fs::OpenOptions {
     let mut options = std::fs::File::options();
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        /// `FILE_WRITE_ATTRIBUTES`: what setting a file's times needs, and nothing more.
+        const WRITE_ATTRIBUTES: u32 = 0x100;
+        options.access_mode(WRITE_ATTRIBUTES);
+    }
+    #[cfg(not(windows))]
     options.write(true);
     options
 }
