@@ -41,6 +41,14 @@ is red, says nothing about regressions, and so cannot be a gate. A floor can be 
 first day. With all 509 programs passing, lotml's floor today would be the whole corpus. What
 the floor adds is a CI gate, and a way to admit new programs — fuzzer finds, new language rules
 — before the native target handles them.
+
+lotml's floor is built (plans/target-parity-assurance.md): `harness/results/parity/floor.json`
+holds the 509 programs, and CI runs `parity floor check --since <base>`. A run fails when a program
+of the floor stops reporting the same or the count drops; a program the base's floor held and this
+one does not must carry a reason, which `floor update --reason` records. The update refuses a run
+filtered by `--only`. Refused and uncompiled programs are grouped by message in
+`results/parity/unsupported.json`, and the native builds run with only what finds `clang` and the
+runtime's cache in their environment.
 **LPython shows the opposite failure:** after one change, 188 of its 400 integration tests were
 commented out of a CMake file, and since nothing counted them, nothing noticed. A gap that is not
 machine-readable grows silently.

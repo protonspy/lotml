@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 384f50dfdf6b89c1124472366bf623fba59003f41e119f72cb211937886f0acf
+checksum: e04bd01c60d16d53e7f144c68c2d9b2cd8960ddb902f16d46b3a99b51d527b59
 ---
 
 # Target parity assurance
@@ -50,11 +50,11 @@ targets. See `docs/wiki/pages/target-parity.md`.
 
 ## Tasks
 
-- [ ] 1.1 (Unit) Commit a parity floor for the corpus suite — the programs reporting `same` and their count — with check, update and diff commands, and refuse to update it from a filtered run
-- [ ] 1.2 (Unit) Run the parity floor check in CI and fail only when a program leaves the floor or the count drops
+- [x] 1.1 (Unit) Commit a parity floor for the corpus suite — the programs reporting `same` and their count — with check, update and diff commands, and refuse to update it from a filtered run
+- [x] 1.2 (Unit) Run the parity floor check in CI and fail only when a program leaves the floor or the count drops
   _Depends 1.1_
-- [ ] 1.3 (Unit) Group the suite's `refused` and `not compiled` programs by message into a committed JSON beside the report
-- [ ] 1.4 (Unit) Run the parity suite's built executables with a minimal environment, so no variable reaches a program by accident, while the build keeps what finds `clang` (`PATH`, `LOTML_CLANG`, `SystemRoot` on Windows)
+- [x] 1.3 (Unit) Group the suite's `refused` and `not compiled` programs by message into a committed JSON beside the report
+- [x] 1.4 (Unit) Run the parity suite's built executables with a minimal environment, so no variable reaches a program by accident, while the build keeps what finds `clang` (`PATH`, `LOTML_CLANG`, `SystemRoot` on Windows)
 - [ ] 2.1 (Unit) Build a two-target differential fuzzer in the harness: typed programs from templates and from `lotml dev mutate`, many cases batched into one `main`, the Python target as oracle, verdicts compared by error kind rather than by bytes; each case gets a wall-clock timeout and a throw-away working directory, and the templates generate no imports and no file access
 - [ ] 2.2 (Unit) Minimize a failing fuzzer case by deleting chunks greedily while it still differs, and write it out as a parity program
   _Depends 2.1_
