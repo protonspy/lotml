@@ -14,8 +14,11 @@ is a number in this spec rather than a setting.
 
 ## Which calls count
 
-A call can only nest without bound through a cycle. The lowering marks, once, over the IR every
-backend reads after `mono` (adr:0020-one-ir-between-the-checker-and-every-backend):
+A call can only nest without bound through a cycle. The lowering marks, once, over the IR as
+lowered (adr:0020-one-ir-between-the-checker-and-every-backend): the Python target reads it there,
+and `mono` copies each marked function into its instances, so both targets count the same calls. A
+method called on a type parameter has no single callee before `mono`, so it has an edge to every
+method of that name. Marked:
 
 - the functions of every strongly connected component of the call graph with a cycle in it;
 - every function whose value is taken, since a call through a value can reach anything;

@@ -53,7 +53,7 @@ fn a_program_without_recursion_counts_nothing() {
 #[test]
 fn a_function_used_as_a_value_and_every_lambda_count() {
     let source = "fn shout(w: str) -> str:\n    return w.upper()\n\nfn quiet(w: str) -> str:\n    return w.lower()\n\n\
-fn main():\n    words = [\"a\", \"b\"]\n    print(list(map(shout, words)), quiet(\"X\"))\n    add = lambda x: x + 1\n    print(add(1))\n";
+fn main():\n    loud = shout\n    print(loud(\"a\"), list(map(quiet, [\"X\"])))\n    add = lambda x: x + 1\n    print(add(1))\n";
     let mut expected = functions(&["shout"]);
     expected.insert(symbol::lambda(0));
     assert_eq!(counted(source), expected);
