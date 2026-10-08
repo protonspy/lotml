@@ -329,7 +329,17 @@ MEMORY = 2 * 2**30
 """Bytes a child may use."""
 OUTPUT_TAIL = 1_000_000
 """Bytes of a child's output the parent reads: the end, where the result line is."""
-ENVIRONMENT = ("PATH", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG", "LOTML_PYTHON")
+ENVIRONMENT = (
+    "PATH",
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    "WINDIR",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "LANG",
+    "LOTML_PYTHON",
+)
 """What a child keeps of the environment; `LOTML_PYTHON` chooses the CPython the Python target runs
 on, so a whole run can be held to one version (plans/python-via-uv.md 1.1)."""
 
