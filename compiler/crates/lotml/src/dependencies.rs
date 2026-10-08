@@ -2,7 +2,108 @@
 //! adr:0033-lotml-run-installs-a-project-s-python-dependencies-from-its-uv-lock): its `uv.lock`,
 //! checked to name PyPI alone, and the environment `lotml run` and `lotml test` make from it.
 
+use std::path::{Path, PathBuf};
+
 use toml::{Table, Value};
+
+/// Past this, a `uv.lock` or `pyproject.toml` is not read.
+const LARGEST: u64 = 64 << 20;
+
+/// The file whose presence says an environment was made whole.
+const COMPLETE: &str = "lotml-complete";
+
+/// A project's `uv.lock` and `pyproject.toml`, the lock checked to name PyPI alone.
+pub struct Locked {
+    pub lock: String,
+    pub pyproject: String,
+}
+
+/// The lock of the project at `root`, checked: `None` when it has no `uv.lock` and declares no
+/// dependency; an error for a lock lotml does not install from, and for dependencies declared
+/// with no lock to install them from.
+pub fn locked(root: &Path) -> Result<Option<Locked>, String> {
+    let read = |name: &str| -> Result<Option<String>, String> {
+        let path = root.join(name);
+        match std::fs::metadata(&path) {
+            Err(_) => Ok(None),
+            Ok(meta) if meta.len() > LARGEST => {
+                Err(format!("{} is past the {LARGEST} bytes lotml reads", path.display()))
+            }
+            Ok(_) => {
+                std::fs::read_to_string(&path).map(Some).map_err(|e| format!("cannot read {}: {e}", path.display()))
+            }
+        }
+    };
+    let pyproject = read("pyproject.toml")?;
+    let Some(lock) = read("uv.lock")? else {
+        if pyproject.as_deref().is_some_and(declares_dependencies) {
+            return Err(format!(
+                "{} declares dependencies and holds no uv.lock to install them from; write it with `uv lock`",
+                root.join("pyproject.toml").display()
+            ));
+        }
+        return Ok(None);
+    };
+    let Some(pyproject) = pyproject else {
+        return Err(format!("{} holds a uv.lock and no pyproject.toml", root.display()));
+    };
+    check_lock(&lock)?;
+    Ok(Some(Locked { lock, pyproject }))
+}
+
+/// The environment's name: the SHA-256 of the lock, the manifest and the interpreter it is made
+/// over, each closed by a zero byte.
+pub fn key(locked: &Locked, base: &str) -> String {
+    let mut bytes = Vec::new();
+    for part in [locked.lock.as_str(), locked.pyproject.as_str(), base] {
+        bytes.extend_from_slice(part.as_bytes());
+        bytes.push(0);
+    }
+    lotml_llvm::sha256::hex_of(&bytes)[..32].to_string()
+}
+
+/// How the environment is made: `uv sync` of the project copied to the first directory into the
+/// second.
+pub type Make<'a> = &'a dyn Fn(&Path, &Path) -> Result<(), String>;
+
+/// The interpreter of the environment of `locked` over `base`, under `root`: the one already made
+/// whole there, else one `make` makes from copies of the two files; without `make` — offline, or
+/// for the MCP server, the grader and the harness — a missing environment is an error saying how
+/// to make it. A directory `make` left unfinished is removed and made again.
+pub fn environment(root: &Path, locked: &Locked, base: &str, make: Option<Make<'_>>) -> Result<PathBuf, String> {
+    let dir = root.join(key(locked, base));
+    let environment = dir.join("environment");
+    let python = interpreter(&environment);
+    if dir.join(COMPLETE).is_file() && python.is_file() {
+        return Ok(python);
+    }
+    let Some(make) = make else {
+        return Err(
+            "the project's uv.lock has no environment made yet, and lotml installs nothing here; run `lotml run` or `lotml test` once without --offline"
+                .into(),
+        );
+    };
+    let failed = |e: std::io::Error| format!("cannot make {}: {e}", dir.display());
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).map_err(failed)?;
+    }
+    lotml_llvm::cache::private_directory(&dir).map_err(failed)?;
+    let project = dir.join("project");
+    std::fs::create_dir(&project).map_err(failed)?;
+    std::fs::write(project.join("pyproject.toml"), &locked.pyproject).map_err(failed)?;
+    std::fs::write(project.join("uv.lock"), &locked.lock).map_err(failed)?;
+    make(&project, &environment)?;
+    if !python.is_file() {
+        return Err(format!("uv made no interpreter in {}", environment.display()));
+    }
+    std::fs::write(dir.join(COMPLETE), "").map_err(failed)?;
+    Ok(python)
+}
+
+/// The interpreter a virtual environment holds.
+fn interpreter(environment: &Path) -> PathBuf {
+    if cfg!(windows) { environment.join("Scripts").join("python.exe") } else { environment.join("bin").join("python") }
+}
 
 /// The one index a lock may install from.
 pub const REGISTRY: &str = "https://pypi.org/simple";
@@ -117,6 +218,91 @@ mod tests {
         let lock = "version = 1\n[[package]]\nname = \"six\\u001b[2J\"\nsource = { git = \"x\" }\n";
         let why = check_lock(lock).unwrap_err();
         assert!(!why.contains('\u{1b}'), "{why:?}");
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join("lotml-dependencies").join(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn lock_of_six() -> String {
+        package(&format!("{{ registry = \"{REGISTRY}\" }}"), WHEEL)
+    }
+
+    #[test]
+    fn a_project_without_a_lock_has_none_unless_it_declares_dependencies() {
+        let root = scratch("no-lock");
+        assert!(locked(&root).unwrap().is_none());
+        std::fs::write(root.join("pyproject.toml"), "[project]\nname = \"app\"\ndependencies = [\"six\"]\n").unwrap();
+        assert!(locked(&root).err().unwrap().contains("`uv lock`"));
+        std::fs::write(root.join("uv.lock"), lock_of_six()).unwrap();
+        assert!(locked(&root).unwrap().is_some());
+        std::fs::write(root.join("uv.lock"), package("{ git = \"x\" }", WHEEL)).unwrap();
+        assert!(locked(&root).err().unwrap().contains("\"six\" comes from the git"), "the lock is checked first");
+    }
+
+    #[test]
+    fn the_key_changes_with_the_lock_the_manifest_and_the_interpreter() {
+        let one = Locked { lock: "a".into(), pyproject: "b".into() };
+        let base = key(&one, "/py");
+        assert_eq!(base.len(), 32);
+        assert_ne!(base, key(&Locked { lock: "a2".into(), pyproject: "b".into() }, "/py"));
+        assert_ne!(base, key(&Locked { lock: "a".into(), pyproject: "b2".into() }, "/py"));
+        assert_ne!(base, key(&one, "/other"));
+        assert_ne!(
+            key(&Locked { lock: "ab".into(), pyproject: "".into() }, ""),
+            key(&Locked { lock: "a".into(), pyproject: "b".into() }, "")
+        );
+    }
+
+    /// A `make` that writes the interpreter where uv would, counting its calls.
+    fn fake_make(calls: &std::cell::Cell<u32>) -> impl Fn(&Path, &Path) -> Result<(), String> + '_ {
+        move |project: &Path, environment: &Path| {
+            calls.set(calls.get() + 1);
+            assert!(project.join("uv.lock").is_file() && project.join("pyproject.toml").is_file());
+            let python = interpreter(environment);
+            std::fs::create_dir_all(python.parent().unwrap()).unwrap();
+            std::fs::write(python, "").unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn an_environment_is_made_once_and_then_used_as_it_is_offline_too() {
+        let root = scratch("made");
+        let locked = Locked { lock: lock_of_six(), pyproject: "[project]\nname = \"app\"\n".into() };
+        let calls = std::cell::Cell::new(0);
+        let make = fake_make(&calls);
+        let python = environment(&root, &locked, "/py", Some(&make)).unwrap();
+        assert!(python.is_file());
+        assert_eq!(environment(&root, &locked, "/py", Some(&make)).unwrap(), python);
+        assert_eq!(calls.get(), 1, "a complete environment is not made again");
+        assert_eq!(environment(&root, &locked, "/py", None).unwrap(), python, "offline uses it");
+    }
+
+    #[test]
+    fn without_make_a_missing_environment_says_how_to_make_it() {
+        let root = scratch("offline");
+        let locked = Locked { lock: lock_of_six(), pyproject: String::new() };
+        let why = environment(&root, &locked, "/py", None).unwrap_err();
+        assert!(why.contains("installs nothing here") && why.contains("without --offline"), "{why}");
+    }
+
+    #[test]
+    fn an_environment_left_unfinished_is_made_again_and_a_failed_make_is_not_marked() {
+        let root = scratch("unfinished");
+        let locked = Locked { lock: lock_of_six(), pyproject: String::new() };
+        let failing = |_: &Path, environment: &Path| -> Result<(), String> {
+            std::fs::create_dir_all(environment).unwrap();
+            Err("uv could not install".into())
+        };
+        assert!(environment(&root, &locked, "/py", Some(&failing)).is_err());
+        assert!(environment(&root, &locked, "/py", None).is_err(), "a failed make is not complete");
+        let calls = std::cell::Cell::new(0);
+        assert!(environment(&root, &locked, "/py", Some(&fake_make(&calls))).is_ok());
+        assert_eq!(calls.get(), 1);
     }
 
     #[test]
