@@ -14,6 +14,7 @@ mod init;
 mod lsp;
 mod mcp;
 mod rpc;
+mod stubs;
 
 use std::path::PathBuf;
 use std::process::ExitCode;

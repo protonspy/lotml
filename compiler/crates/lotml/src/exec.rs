@@ -112,10 +112,12 @@ fn python(uses: Use, project: Option<&Path>, downloads: bool) -> Result<Vec<Stri
         resolve(&options, &var, managed.as_ref().map(|m| m as &dyn Managed), &lotml_py::python).map_err(Failure)?;
     let Some(locked) = locked else { return Ok(base) };
     let (executable, version) = executable_of(&base)?;
-    let root = lotml_llvm::cache::user_root()
-        .map(|root| root.join("python-environments"))
-        .filter(|root| lotml_llvm::cache::private_directory(root).is_ok())
-        .ok_or_else(|| Failure("the project's uv.lock needs an environment, and lotml has no cache directory of its own to make one in".into()))?;
+    let root = crate::dependencies::environments().ok_or_else(|| {
+        Failure(
+            "the project's uv.lock needs an environment, and lotml has no cache directory of its own to make one in"
+                .into(),
+        )
+    })?;
     let make = |work: &Path, environment: &Path| -> Result<(), String> {
         let uv = confined.as_ref().ok_or(
             "installing the project's dependencies from its uv.lock needs uv: put the uv lotml ships beside it, or set LOTML_UV",
@@ -599,41 +601,15 @@ pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failu
     let (source, said) = match stub {
         Some(given) => {
             let name = given.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            (read_stub(given)?, format!("{name}, the stub given"))
+            (crate::stubs::read(given).map_err(Failure)?, format!("{name}, the stub given"))
         }
-        None => match lotml_bind::typeshed::find(module) {
-            lotml_bind::typeshed::Found::Stub { path, text } => {
-                let commit = lotml_bind::typeshed::COMMIT.trim();
-                (text.to_string(), format!("typeshed's stdlib/{path}, at commit {}", &commit[..commit.len().min(12)]))
-            }
-            lotml_bind::typeshed::Found::Absent { range } => {
-                let (major, minor) = lotml_bind::typeshed::PYTHON;
-                return Err(Failure(format!(
-                    "`{module}` is not in CPython {major}.{minor}'s standard library: typeshed gives it {range}"
-                )));
-            }
-            lotml_bind::typeshed::Found::Missing if lotml_bind::typeshed::is_standard_library(module) => {
-                return Err(Failure(format!(
-                    "typeshed has no stub for the standard library's `{module}`, and a package of the project never stands in for one; give one with --stub <file.pyi>"
-                )));
-            }
-            lotml_bind::typeshed::Found::Missing => {
-                let var = |name: &str| std::env::var_os(name);
-                let here = std::env::current_dir().ok();
-                let venv = lotml_py::resolve::environment(&var, here.as_deref().and_then(project_of).as_deref());
-                let roots = venv.as_deref().map(lotml_py::sources::site_packages).unwrap_or_default();
-                let Some(found) = lotml_py::sources::find(module, &roots).map_err(Failure)? else {
-                    let looked = match &venv {
-                        Some(venv) => format!("nor does any package in {}", venv.display()),
-                        None => "and no virtual environment of the project was found to look in".into(),
-                    };
-                    return Err(Failure(format!(
-                        "no stub for `{module}`: typeshed has none, {looked}; give one with --stub <file.pyi>"
-                    )));
-                };
-                (read_stub(&found.path)?, found.said)
-            }
-        },
+        None => {
+            let here = std::env::current_dir().ok();
+            let project = here.as_deref().and_then(project_of);
+            let found =
+                crate::stubs::find(module, || crate::stubs::environment(project.as_deref())).map_err(Failure)?;
+            (found.text, found.said)
+        }
     };
     let text = lotml_bind::binder::interface(module, &source, &said)
         .map_err(|lotml_bind::binder::Refused(why)| Failure(format!("cannot bind `{module}`: {why}")))?;
@@ -653,21 +629,6 @@ pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failu
         if skipped == 0 { String::new() } else { format!(", {skipped} not (the file's comments say why)") }
     );
     Ok(true)
-}
-
-/// A stub's text, read no further than one byte past what the binder reads, so a file that is
-/// larger, grows, or never ends is refused without being held whole.
-fn read_stub(path: &Path) -> Result<String, Failure> {
-    use std::io::Read;
-    let largest = lotml_bind::binder::LARGEST;
-    let cannot = |e: std::io::Error| Failure(format!("cannot read {}: {e}", path.display()));
-    let file = std::fs::File::open(path).map_err(cannot)?;
-    let mut text = String::new();
-    file.take(largest as u64 + 1).read_to_string(&mut text).map_err(cannot)?;
-    if text.len() > largest {
-        return Err(Failure(format!("cannot bind {}: it is past the {largest} bytes lotml reads", path.display())));
-    }
-    Ok(text)
 }
 
 fn text(rows: &[Value]) -> String {

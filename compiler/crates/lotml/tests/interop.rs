@@ -419,25 +419,55 @@ fn bind_refuses_a_device_s_name() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("not a Python module name"));
 }
 
-/// A project whose `.venv` holds `packages`, each path under its `site-packages`.
-fn project_with_packages(name: &str, packages: &[(&str, &str)]) -> PathBuf {
-    let (site, python) = if cfg!(windows) {
-        (".venv/Lib/site-packages", ".venv/Scripts/python.exe")
+/// The manifest and lock of a project whose dependencies are none but itself.
+const MANIFEST: &str = "[project]
+name = \"app\"
+version = \"0.1.0\"
+";
+const LOCK: &str = "version = 1
+revision = 3
+
+[[package]]
+name = \"app\"
+version = \"0.1.0\"
+source = { virtual = \".\" }
+";
+
+/// Where a virtual environment keeps `site-packages` and its interpreter, under `prefix`.
+fn layout(prefix: &str) -> (String, String) {
+    if cfg!(windows) {
+        (format!("{prefix}/Lib/site-packages"), format!("{prefix}/Scripts/python.exe"))
     } else {
-        (".venv/lib/python3.14/site-packages", ".venv/bin/python")
-    };
-    let mut files =
-        vec![("pyproject.toml".to_string(), ""), (".venv/pyvenv.cfg".into(), "home = x\n"), (python.into(), "")];
+        (format!("{prefix}/lib/python3.14/site-packages"), format!("{prefix}/bin/python"))
+    }
+}
+
+/// A project holding a `uv.lock`, and beside it a cache in which `lotml run` has made that lock's
+/// environment, holding `packages`, each path under its `site-packages`, as `lotml run` leaves it.
+fn project_with_packages(name: &str, packages: &[(&str, &str)]) -> PathBuf {
+    let made = "cache/python-environments/0123456789abcdef0123456789abcdef";
+    let (site, python) = layout(&format!("{made}/environment"));
+    let mut files = vec![
+        ("project/.git".to_string(), ""),
+        ("project/pyproject.toml".into(), MANIFEST),
+        ("project/uv.lock".into(), LOCK),
+        (format!("{made}/project/pyproject.toml"), MANIFEST),
+        (format!("{made}/project/uv.lock"), LOCK),
+        (format!("{made}/lotml-complete"), ""),
+        (python, ""),
+    ];
     files.extend(packages.iter().map(|(path, text)| (format!("{site}/{path}"), *text)));
     let files: Vec<(&str, &str)> = files.iter().map(|(path, text)| (path.as_str(), *text)).collect();
     scratch(name, &files)
 }
 
-/// `lotml bind <module>` in `dir`, blind to the virtual environment of the shell running the suite.
-fn bind_in(dir: &Path, module: &str) -> Output {
+/// `lotml bind <module>` in `base`'s project, with `base`'s cache, blind to the virtual
+/// environment of the shell running the suite.
+fn bind_in(base: &Path, module: &str) -> Output {
     Command::new(env!("CARGO_BIN_EXE_lotml"))
         .args(["bind", module])
-        .current_dir(dir)
+        .current_dir(base.join("project"))
+        .env("LOTML_CACHE_DIR", base.join("cache"))
         .env_remove("VIRTUAL_ENV")
         .output()
         .expect("the binary runs")
@@ -456,13 +486,13 @@ fn bind_reads_a_package_s_stub_then_its_annotated_source_never_importing_it() {
     );
     let out = bind_in(&dir, "greet");
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    let greet = std::fs::read_to_string(dir.join("bindings").join("py.greet.lotmli")).unwrap();
+    let greet = std::fs::read_to_string(dir.join("project").join("bindings").join("py.greet.lotmli")).unwrap();
     assert!(greet.contains("fn hello(name: str) -> str ! PyError\n"), "{greet}");
     assert!(greet.contains("from greet-stubs/__init__.pyi, the stub-only package `greet-stubs`"), "{greet}");
 
     let out = bind_in(&dir, "py.calc");
     assert!(out.status.success(), "the module is read, never run: {}", String::from_utf8_lossy(&out.stderr));
-    let calc = std::fs::read_to_string(dir.join("bindings").join("py.calc.lotmli")).unwrap();
+    let calc = std::fs::read_to_string(dir.join("project").join("bindings").join("py.calc.lotmli")).unwrap();
     assert!(calc.contains("fn add(a: int, b: int = 2) -> int ! PyError\n"), "{calc}");
     assert!(calc.contains("calc/__init__.py, the package `calc`'s own annotated source (it ships py.typed)"), "{calc}");
 }
@@ -473,8 +503,55 @@ fn bind_says_where_it_looked_when_no_source_has_the_module() {
     let out = bind_in(&dir, "loose");
     assert_eq!(out.status.code(), Some(2));
     let said = String::from_utf8_lossy(&out.stderr);
-    assert!(said.contains("typeshed has none") && said.contains(".venv") && said.contains("--stub"), "{said}");
-    assert!(!dir.join("bindings").exists());
+    assert!(said.contains("typeshed has none") && said.contains("uv.lock") && said.contains("--stub"), "{said}");
+    assert!(!dir.join("project").join("bindings").exists());
+}
+
+#[test]
+fn bind_never_reads_the_project_s_virtual_environment() {
+    let (site, python) = layout(".venv");
+    let stub = format!("{site}/greet-stubs/__init__.pyi");
+    let dir = scratch(
+        "bind-venv",
+        &[
+            ("project/.git", ""),
+            (
+                "project/.venv/pyvenv.cfg",
+                "home = x
+",
+            ),
+            (&format!("project/{python}"), ""),
+            (
+                &format!("project/{stub}"),
+                "def hello(name: str) -> str: ...
+",
+            ),
+        ],
+    );
+    let venv = dir.join("project").join(".venv");
+    let out = Command::new(env!("CARGO_BIN_EXE_lotml"))
+        .args(["bind", "greet"])
+        .current_dir(dir.join("project"))
+        .env("LOTML_CACHE_DIR", dir.join("cache"))
+        .env("VIRTUAL_ENV", &venv)
+        .output()
+        .expect("the binary runs");
+    assert_eq!(out.status.code(), Some(2), "neither VIRTUAL_ENV nor .venv is a root");
+    let said = String::from_utf8_lossy(&out.stderr);
+    assert!(said.contains("no uv.lock"), "{said}");
+    assert!(!dir.join("project").join("bindings").exists());
+}
+
+#[test]
+fn bind_with_a_lock_whose_environment_is_not_made_says_how_to_make_it() {
+    let dir = scratch(
+        "bind-unmade",
+        &[("project/.git", ""), ("project/pyproject.toml", MANIFEST), ("project/uv.lock", LOCK)],
+    );
+    let out = bind_in(&dir, "greet");
+    assert_eq!(out.status.code(), Some(2));
+    let said = String::from_utf8_lossy(&out.stderr);
+    assert!(said.contains("no environment made yet") && said.contains("lotml run"), "{said}");
 }
 
 /// `lotml bind <args>` in `dir` with no Python to be found: none named, none on the path.

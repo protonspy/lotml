@@ -148,6 +148,33 @@ pub fn environment(root: &Path, locked: &Locked, base: &str, make: Option<Make<'
     Ok(python)
 }
 
+/// The directory of the user's own that environments are made under, if lotml has one.
+pub fn environments() -> Option<PathBuf> {
+    lotml_llvm::cache::user_root()
+        .map(|root| root.join("python-environments"))
+        .filter(|root| lotml_llvm::cache::private_directory(root).is_ok())
+}
+
+/// The environment already made from `locked` under `root`, over whichever interpreter, found
+/// without running Python (specs/bind-on-import/ R1.2): a whole one, named by a key, whose copies
+/// of the lock and the manifest are the project's, the newest first.
+pub fn made(root: &Path, locked: &Locked) -> Option<PathBuf> {
+    let same = |path: PathBuf, text: &str| std::fs::read_to_string(path).is_ok_and(|read| read == text);
+    std::fs::read_dir(root)
+        .ok()?
+        .flatten()
+        .filter(|entry| {
+            entry.file_name().to_str().is_some_and(|n| n.len() == 32 && n.bytes().all(|b| b.is_ascii_hexdigit()))
+        })
+        .map(|entry| entry.path())
+        .filter(|dir| interpreter(&dir.join("environment")).is_file())
+        .filter(|dir| same(dir.join("project").join("uv.lock"), &locked.lock))
+        .filter(|dir| same(dir.join("project").join("pyproject.toml"), &locked.pyproject))
+        .filter_map(|dir| Some((std::fs::metadata(dir.join(COMPLETE)).ok()?.modified().ok()?, dir.join("environment"))))
+        .max_by_key(|(when, _)| *when)
+        .map(|(_, environment)| environment)
+}
+
 /// An environment made whole in `dir`: the two files copied, `make` run, the mark written last.
 fn build(dir: &Path, locked: &Locked, make: Make<'_>) -> Result<(), String> {
     let failed = |e: std::io::Error| format!("cannot make {}: {e}", dir.display());
@@ -353,6 +380,25 @@ mod tests {
             key(&Locked { lock: "ab".into(), pyproject: "".into() }, ""),
             key(&Locked { lock: "a".into(), pyproject: "b".into() }, "")
         );
+    }
+
+    #[test]
+    fn a_made_environment_is_found_by_its_lock_and_manifest_without_running_python() {
+        let root = scratch("found-made");
+        let one = Locked { lock: "lock one".into(), pyproject: "manifest".into() };
+        let other = Locked { lock: "lock two".into(), pyproject: "manifest".into() };
+        assert!(made(&root, &one).is_none(), "nothing made yet");
+        let calls = std::cell::Cell::new(0);
+        environment(&root, &one, "/py/3.13", Some(&fake_make(&calls))).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        environment(&root, &one, "/py/3.14", Some(&fake_make(&calls))).unwrap();
+        environment(&root, &other, "/py/3.14", Some(&fake_make(&calls))).unwrap();
+        let found = made(&root, &one).unwrap();
+        assert_eq!(found, root.join(key(&one, "/py/3.14")).join("environment"), "the newest of the lock's");
+        assert!(made(&root, &Locked { lock: "lock one".into(), pyproject: "changed".into() }).is_none());
+        std::fs::remove_file(root.join(key(&one, "/py/3.14")).join(COMPLETE)).unwrap();
+        let fallback = made(&root, &one).unwrap();
+        assert_eq!(fallback, root.join(key(&one, "/py/3.13")).join("environment"), "a half-made one is passed over");
     }
 
     /// A `make` that writes the interpreter where uv would, counting its calls.
