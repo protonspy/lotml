@@ -63,7 +63,7 @@ Serves R2.1, R2.2, R2.3.
   whole-file check counts them in.
 
 A file's memos hold up to the limit for each item rather than for the file; the editor holds the
-files it has open, as before. A file that reaches this ceiling is a note when it is built.
+files it has open, as before. Task 1.4 records this ceiling with `scc notes add --tag ceiling`.
 
 ## Proving it
 

@@ -11,7 +11,7 @@ An edit to one body costs what the body costs to check, not what the file costs.
 checks a whole file in one query whose results carry offsets from the start of the file, so a
 one-line edit checks every function again, and a function whose text did not change still gets
 new results because its position moved (n-0096). A file's interfaces are already read once
-(plans/build-and-check-speed.md 2.2); in a generated file of 2254 lines the check after a body
+(plans/build-and-check-speed.md 2.2, n-0104); in a generated file of 2254 lines the check after a body
 edit still takes 82% of a check from an empty database (`harness/results/check-speed.md`).
 Signatures are fully annotated, so a body can be checked against the file's signatures without
 any other body (docs/wiki/pages/compiler-performance.md).
@@ -35,7 +35,7 @@ any other body (docs/wiki/pages/compiler-performance.md).
 ### 3 · What it costs
 
 - **R3.1** When one line of one body of the file that `check_time` generates is edited, the database shall report the file's diagnostics in no more than half the time a check from an empty database takes, as `check_speed` measures both.
-- **R3.2** When a file is checked from an empty database, the database shall take no more than 25% longer than the whole-file check took on the same machine, as `check_speed` records it.
+- **R3.2** When a file is checked from an empty database, the database shall take no more than 25% longer than the `cold` step of the `after` label in `harness/results/check-speed.md`, measured on the same machine.
 
 ## Out of scope
 

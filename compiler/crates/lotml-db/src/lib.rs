@@ -7,7 +7,8 @@ use lotml_syntax::Parsed;
 use salsa::Durability;
 
 /// One source file: its path, for reports, its text, and the interfaces of the Python modules
-/// it may import — each module's name with the text of its `.lotmli` (adr:0012).
+/// it may import — each module's name with the text of its `.lotmli` (adr:0012). Made with
+/// [`SourceFile::create`], which keeps the interfaces durable.
 #[salsa::input]
 pub struct SourceFile {
     #[returns(ref)]
