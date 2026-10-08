@@ -71,7 +71,7 @@ pub struct Method {
     pub owner_params: Vec<String>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Program {
     pub types: BTreeMap<String, TypeDef>,
     pub variant_of: HashMap<String, String>,

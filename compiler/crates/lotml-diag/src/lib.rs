@@ -8,6 +8,7 @@
 
 use std::collections::HashMap;
 
+use lotml_syntax::shift::Shift;
 use lotml_syntax::span::{Span, line_column};
 use serde::Serialize;
 
@@ -108,6 +109,19 @@ impl Diagnostic {
         let edits = edits.into_iter().map(|(span, replacement)| Edit { span, replacement }).collect();
         self.fixes.push(Fix { message: message.into(), applicability, edits });
         self
+    }
+}
+
+impl Shift for Diagnostic {
+    /// Move where it points, its labels and the edits of its fixes.
+    fn shift(&mut self, from: u32, to: u32) {
+        self.span.shift(from, to);
+        for label in &mut self.labels {
+            label.span.shift(from, to);
+        }
+        for edit in self.fixes.iter_mut().flat_map(|f| &mut f.edits) {
+            edit.span.shift(from, to);
+        }
     }
 }
 

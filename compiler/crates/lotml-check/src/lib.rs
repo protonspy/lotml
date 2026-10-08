@@ -6,11 +6,13 @@ mod body;
 mod builtins;
 mod format;
 mod interface;
+mod parts;
 mod prefix;
 mod program;
 pub mod ty;
 
 pub use interface::{Interface, Interfaces, c_interface, interface, interface_of, is_c_library};
+pub use parts::{Assembly, Declarations, Part, PartChecked, PartKind, check_part, declarations, parts};
 pub use prefix::{PrefixCheck, Verdict, check_prefix, check_prefix_with};
 pub use program::{FieldSig, FnSig, Method, ParamSig, TypeDef, VariantSig};
 
@@ -20,12 +22,10 @@ pub const PRELUDE: &[&str] = builtins::PRELUDE;
 use std::collections::{BTreeMap, HashMap};
 
 use lotml_diag::{Applicability, Diagnostic};
-use lotml_syntax::ast::{FnDef, Item, Module, TypeKind};
+use lotml_syntax::ast::Module;
 use lotml_syntax::span::Span;
 use lotml_syntax::{SyntaxError, parse};
 
-use crate::body::Body;
-use crate::program::Program;
 use crate::ty::Ty;
 
 /// Parse and check one file, returning every diagnostic in source order.
@@ -101,32 +101,6 @@ pub struct Checked {
 /// server holds them for every file it has open.
 const MODULE_TYPES: usize = 1 << 21;
 
-impl Checked {
-    fn absorb(&mut self, mut body: Body) {
-        for (span, ty) in body.types() {
-            let before = self.stored;
-            self.stored = self.stored.saturating_add(ty.size());
-            if self.stored <= MODULE_TYPES {
-                self.types.insert(span, ty);
-                continue;
-            }
-            if before <= MODULE_TYPES {
-                self.diagnostics.push(
-                    Diagnostic::error(
-                        "E0222",
-                        span,
-                        format!("the types of this module have more than {MODULE_TYPES} parts in all"),
-                    )
-                    .note("name the shape with a record type, or keep the values in a list"),
-                );
-            }
-            self.types.insert(span, Ty::Error);
-        }
-        self.locals.extend_from_slice(body.locals());
-        self.diagnostics.extend(body.diagnostics);
-    }
-}
-
 /// Type-check a parsed module, keeping the type of every expression and what each local's name
 /// refers to, for a backend or an editor.
 pub fn check_resolved(module: &Module, text: &str) -> Checked {
@@ -135,101 +109,12 @@ pub fn check_resolved(module: &Module, text: &str) -> Checked {
 
 /// [`check_resolved`] for a module that may import the Python modules in `interfaces`.
 pub fn check_resolved_with(module: &Module, text: &str, interfaces: &Interfaces) -> Checked {
-    let mut program = Program::collect(module, &interface::functions(interfaces));
-    let mut checked = Checked { diagnostics: std::mem::take(&mut program.diagnostics), ..Checked::default() };
-    for item in &module.items {
-        match item {
-            Item::Fn(f) => {
-                let sig = quiet_signature(&program, f, &[], None);
-                function(&program, text, f, &sig, &[], &mut checked);
-            }
-            Item::Impl(imp) => {
-                let TypeKind::Named { name, .. } = &imp.target.kind else { continue };
-                let Some(def) = program.types.get(&name.name) else { continue };
-                let params = def.params().to_vec();
-                let self_ty = Ty::Adt(name.name.clone(), params.iter().map(|p| Ty::Param(p.clone())).collect());
-                let outer: Vec<(String, Option<String>)> = params.iter().map(|p| (p.clone(), None)).collect();
-                for method in &imp.methods {
-                    let sig = quiet_signature(&program, method, &params, Some(&self_ty));
-                    function(&program, text, method, &sig, &outer, &mut checked);
-                }
-            }
-            Item::Trait(t) => {
-                let outer = vec![("Self".to_string(), Some(t.name.name.clone()))];
-                for method in &t.methods {
-                    let sig = quiet_signature(&program, method, &[], Some(&Ty::Param("Self".into())));
-                    function(&program, text, method, &sig, &outer, &mut checked);
-                }
-            }
-            Item::Record(r) => {
-                let mut body = Body::new(&program, text, None, &[], false);
-                if let Some(program::TypeDef::Record { fields, .. }) = program.types.get(&r.name.name) {
-                    for (field, sig) in r.fields.iter().zip(fields) {
-                        if let Some(default) = &field.default {
-                            let found = body.expr(default, Some(&sig.ty));
-                            body.coerce(&found, &sig.ty, default.span);
-                        }
-                    }
-                }
-                checked.absorb(body);
-            }
-            Item::Test(t) => {
-                let mut body = Body::new(&program, text, None, &[], true);
-                body.block(&t.body);
-                checked.absorb(body);
-            }
-            Item::Sum(_) | Item::Import(_) | Item::Error(_) => {}
-        }
+    let declarations = parts::declarations(module, interfaces);
+    let mut assembly = Assembly::new(&declarations, true);
+    for part in parts::parts(module) {
+        assembly.absorb(&check_part(&declarations, part, text), 0);
     }
-    let declared_here = |name: &String| {
-        module.items.iter().any(|item| match item {
-            Item::Fn(f) => f.name.name == *name,
-            Item::Record(r) => r.name.name == *name,
-            Item::Sum(s) => s.name.name == *name,
-            _ => false,
-        })
-    };
-    checked.functions =
-        program.functions.iter().filter(|(n, _)| declared_here(n)).map(|(n, s)| (n.clone(), s.clone())).collect();
-    checked.declared =
-        program.types.iter().filter(|(n, _)| declared_here(n)).map(|(n, t)| (n.clone(), t.clone())).collect();
-    checked.methods = program
-        .methods
-        .iter()
-        .filter(|(n, _)| checked.declared.contains_key(*n))
-        .map(|(n, m)| (n.clone(), m.clone()))
-        .collect();
-    checked.traits = program.traits;
-    checked.foreign = program.foreign;
-    checked
-}
-
-/// A signature already reported on when the program was collected, lowered again without
-/// reporting: a duplicate declaration keeps its own signature.
-fn quiet_signature(program: &Program, f: &FnDef, outer: &[String], self_ty: Option<&Ty>) -> FnSig {
-    let mut scratch = Program { types: program.types.clone(), traits: program.traits.clone(), ..Program::default() };
-    scratch.signature(f, outer, self_ty)
-}
-
-fn function(
-    program: &Program,
-    text: &str,
-    f: &FnDef,
-    sig: &FnSig,
-    outer: &[(String, Option<String>)],
-    checked: &mut Checked,
-) {
-    let mut body = Body::new(program, text, Some(sig), outer, false);
-    for (param, param_sig) in f.params.iter().zip(&sig.params) {
-        if let Some(default) = &param.default {
-            let found = body.expr(default, Some(&param_sig.ty));
-            body.coerce(&found, &param_sig.ty, default.span);
-        }
-    }
-    if let Some(block) = &f.body {
-        body.function_body(block, sig);
-    }
-    checked.absorb(body);
+    assembly.finish(module, &declarations)
 }
 
 /// Whether a name belongs to the compiler: everything the backend generates starts with `__`,
