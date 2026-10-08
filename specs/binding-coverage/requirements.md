@@ -2,7 +2,8 @@
 autonomy: auto
 ci: wait
 branch: feat/python-compat-group-1
-delivery: in-progress
+delivery: in-review
+pr: 51
 ---
 
 # Binding coverage — requirements
