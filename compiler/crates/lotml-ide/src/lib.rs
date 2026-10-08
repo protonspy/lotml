@@ -87,7 +87,7 @@ impl Workspace {
                 true
             }
             None => {
-                let file = SourceFile::new(&self.db, path.display().to_string(), text, Vec::new());
+                let file = SourceFile::create(&self.db, path.display().to_string(), text, Vec::new());
                 self.files.insert(path.to_path_buf(), file);
                 true
             }
@@ -108,9 +108,10 @@ impl Workspace {
 
     /// What `text` would check to as the file at `path`, with the file's interfaces.
     fn check_as(&self, path: &Path, text: &str) -> (lotml_syntax::Parsed, lotml_check::Checked) {
-        let interfaces = self.files.get(path).map(|&f| lotml_db::interfaces(&self.db, f)).unwrap_or_default();
+        let none = lotml_check::Interfaces::default();
+        let interfaces = self.files.get(path).map_or(&none, |&f| lotml_db::interfaces(&self.db, f));
         let parsed = lotml_syntax::parse(text);
-        let checked = lotml_check::check_resolved_with(&parsed.module, text, &interfaces);
+        let checked = lotml_check::check_resolved_with(&parsed.module, text, interfaces);
         (parsed, checked)
     }
 

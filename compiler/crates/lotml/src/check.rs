@@ -35,7 +35,7 @@ pub fn run(options: &Options) -> Result<bool, Failure> {
             interfaces.entry(b.path.display().to_string()).or_insert_with(|| (b.module.clone(), b.text.clone()));
         }
         let bindings = bindings.into_iter().map(|b| (b.module, b.text)).collect();
-        sources.push(SourceFile::new(&db, path.display().to_string(), text, bindings));
+        sources.push(SourceFile::create(&db, path.display().to_string(), text, bindings));
     }
     if options.prefix {
         return prefix(&db, &sources, options.format);
@@ -108,7 +108,7 @@ fn prefix(db: &Database, sources: &[SourceFile], format: Format) -> Result<bool,
     let mut rows = Vec::new();
     let mut text = String::new();
     for &file in sources {
-        let found = lotml_check::check_prefix_with(file.text(db), &lotml_db::interfaces(db, file));
+        let found = lotml_check::check_prefix_with(file.text(db), lotml_db::interfaces(db, file));
         complete &= found.verdict != lotml_check::Verdict::Error;
         let report = Report { file: file.path(db), text: file.text(db), diagnostics: found.errors };
         match format {

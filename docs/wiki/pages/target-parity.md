@@ -82,7 +82,7 @@ piped Windows console is in the ANSI code page (n-0100), so the fuzzer runs it i
 The same fuzzer pointed only at the frontend — arbitrary text into the parser, the checker and
 the lowering — looks for panics. Those matter because the language and MCP servers feed the
 compiler whatever an editor or agent sends. That one is built: `compiler/fuzz/`, cargo-fuzz over
-libFuzzer on nightly (adr:0027-fuzz-the-frontend-with-cargo-fuzz-on-nightly), seeded with the
+libFuzzer on nightly (adr:0028-fuzz-the-frontend-with-cargo-fuzz-on-nightly), seeded with the
 corpus. Its first ten-minute run, 69,091 inputs, found no panic; the token soup and line-cut tests
 of `lotml-syntax` had already found and fixed a string escape whose span ran past the text.
 

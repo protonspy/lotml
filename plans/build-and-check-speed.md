@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: f0e273fd8bb68531c2bd79942b1c636670bc1025548eeed69cbc1be460573dbf
+checksum: 0677bb2f10637c8d9257297828cee8a8025614ef3e002af733d882d4eb1f574e
 ---
 
 # Build and check speed
@@ -51,10 +51,10 @@ function, and both are measured before and after. See `docs/wiki/pages/compiler-
 - [x] 1.2 (Unit) Cache the runtime's object keyed by a hash of the runtime sources, `clang`'s path and version, the optimization, sanitizer and shared-library flags, and the target; rebuild on a miss only. The cache lives in a per-user directory with owner-only permissions, never a shared fixed path; an entry is written to a temporary file and renamed into place, and its hash is checked before it is linked. Record in `docs/wiki/pages/transpilation-strategy.md` that the runtime is compiled once per toolchain and flags, citing adr:0025
   _Depends 1.1_
 - [x] 1.3 (Unit) Probe `clang` once per process and turn a missing linker or Windows SDK into a diagnostic that names what is missing, rather than passing clang's raw output through
-- [ ] 2.1 (Unit) Measure check latency after a one-line body edit in a large file through `lotml-db`, and record it as the baseline
-- [ ] 2.2 (Unit) Make each file's interfaces a tracked salsa input with high durability, so a check no longer re-parses them
+- [x] 2.1 (Unit) Measure check latency after a one-line body edit in a large file through `lotml-db`, and record it as the baseline
+- [x] 2.2 (Unit) Make each file's interfaces a tracked salsa input with high durability, so a check no longer re-parses them
   _Depends 2.1_
-- [ ] 2.3 (Unit) Specify, as a new spec named incremental-check, per-function check queries over signatures, spans relative to their item, and the diagnostics a file reports assembled from them
+- [x] 2.3 (Unit) Specify, as a new spec named incremental-check, per-function check queries over signatures, spans relative to their item, and the diagnostics a file reports assembled from them
   _Depends 2.1_
 
 ## Done when

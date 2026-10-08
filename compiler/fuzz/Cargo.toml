@@ -1,4 +1,4 @@
-# The frontend's fuzzer (plans/frontend-robustness.md 3.1, adr:0027): cargo-fuzz over libFuzzer,
+# The frontend's fuzzer (plans/frontend-robustness.md 3.1, adr:0028): cargo-fuzz over libFuzzer,
 # on nightly, kept out of the workspace so the compiler still builds on the pinned stable toolchain.
 # How to run it is in README.md.
 
