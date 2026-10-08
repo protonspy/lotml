@@ -3,6 +3,7 @@
 pub mod ast;
 pub mod lexer;
 pub mod parser;
+pub mod shift;
 pub mod span;
 pub mod strings;
 

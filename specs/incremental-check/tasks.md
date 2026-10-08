@@ -2,7 +2,7 @@
 
 ## 1 · Items, signatures and one check per item
 
-- [ ] 1.1 (Unit) Move every span of an item by an offset in `lotml-syntax`, so that an item parsed at one position and moved equals the same item parsed at another — R1.2
+- [x] 1.1 (Unit) Move every span of an item by an offset in `lotml-syntax`, so that an item parsed at one position and moved equals the same item parsed at another — R1.2
 - [ ] 1.2 (Unit) Split a parsed file into items in `lotml-db`: tracked structs identified by kind and name, holding the moved syntax, the item's text and its start — R1.1, R1.2
   _Depends 1.1_
 - [ ] 1.3 (Unit) Keep the file's declarations with their spans in the file, and its signatures with spans relative to the declaring item, equal across an edit inside a body — R1.3, R1.5
