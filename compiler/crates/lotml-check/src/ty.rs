@@ -48,6 +48,9 @@ pub enum Ty {
     Module(String),
     /// A type used as a value: `Counter` in `Counter.new()`.
     TypeName(String),
+    /// A Python value no stub types: opaque, left only through `value()`
+    /// (adr:0031-a-python-name-no-stub-types-crosses-as-an-opaque-python-value).
+    PyObject,
     /// What `todo()`, `fail` and `return` produce: no value, so it fits anywhere.
     Never,
     /// A type already reported wrong: fits anywhere, so one mistake is reported once.
@@ -84,6 +87,19 @@ impl Ty {
         }
     }
 
+    /// Whether this is or holds a `PyObject`: what a native program and a function Python calls
+    /// cannot have (specs/python-object R3).
+    pub fn holds_py_object(&self) -> bool {
+        match self {
+            Ty::PyObject => true,
+            Ty::List(t) | Ty::Set(t) | Ty::Optional(t) | Ty::Heap(t) => t.holds_py_object(),
+            Ty::Dict(a, b) | Ty::Result(a, b) => a.holds_py_object() || b.holds_py_object(),
+            Ty::Tuple(items) | Ty::Adt(_, items) => items.iter().any(Ty::holds_py_object),
+            Ty::Func(params, ret) => params.iter().any(Ty::holds_py_object) || ret.holds_py_object(),
+            _ => false,
+        }
+    }
+
     pub fn is_poison(&self) -> bool {
         matches!(self, Ty::Error | Ty::Never)
     }
@@ -103,6 +119,7 @@ impl Ty {
             "bool" => Ty::Bool,
             "str" => Ty::Str,
             "bytes" => Ty::Bytes,
+            "PyObject" => Ty::PyObject,
             _ => return None,
         })
     }
@@ -168,6 +185,7 @@ impl Ty {
             Ty::Bool => f.write_str("bool"),
             Ty::Str => f.write_str("str"),
             Ty::Bytes => f.write_str("bytes"),
+            Ty::PyObject => f.write_str("PyObject"),
             Ty::Unit => f.write_str("None"),
             Ty::List(t) => {
                 f.write_str("[")?;

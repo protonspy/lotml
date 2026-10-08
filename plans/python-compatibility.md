@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: e8ed796b8a64678d2fb05886d0cba2ebcc1cbadfce3b3786946bca59f1b69578
+checksum: 95682a2f0279aba90352aac35e8e3a0e602ed4087aed29aad1466eb906d354b1
 ---
 
 # Python compatibility
@@ -73,19 +73,19 @@ the typed share each spec added.
   py.<module> import`, a bare import of a Python module an error suggesting `py.<name>`, and the
   tests, guide and reference moved to it
   (adr:0029-foreign-modules-are-imported-by-origin-and-their-interfaces-generated)
-- [ ] 2.1 (Unit) Write a proposed ADR on a dynamic Python value for the names a stub cannot type,
+- [x] 2.1 (Unit) Write a proposed ADR on a dynamic Python value for the names a stub cannot type,
   amending adr:0012: opaque, left only through a conversion that runs the boundary checks, kept
   out of `lotml build` and of Python calling LotML; the owner accepts it before 2.2
-- [ ] 2.2 (Unit) Write and build the spec python-object
+- [x] 2.2 (Unit) Write and build the spec python-object
   _Depends 2.1_
-- [ ] 2.3 (Unit) Write a proposed ADR on binding a module at check time, extending the ADR of
+- [x] 2.3 (Unit) Write a proposed ADR on binding a module at check time, extending the ADR of
   bind-sources 2.1 and saying whether python-via-uv 2.1 stands: a stub read in Rust as data, never
   the module imported or run, a typeshed embedded at a pinned version, the interface written as a
   lock recording its source; the owner accepts it before 2.4
 - [ ] 2.4 (Unit) Write and build the spec bind-on-import, every module of the binding-coverage
   corpus imported as `py.<module>` under `lotml run` with no `lotml bind`, after bind-sources 1.1
   _Depends 1.2, 1.3, 2.2, 2.3, 2.5_
-- [ ] 2.5 (Unit) Write a proposed ADR on `lotml run` installing a project's dependencies through uv
+- [x] 2.5 (Unit) Write a proposed ADR on `lotml run` installing a project's dependencies through uv
   from its `pyproject.toml` and `uv.lock`, amending adr:0026: the lock's versions are the ones
   bound, and `uv.toml` and `.python-version` stay ignored; the owner accepts it before 2.4
 - [ ] 3.1 (Unit) Write and build the spec python-classes, the coverage report run before and after

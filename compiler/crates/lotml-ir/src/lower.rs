@@ -3261,6 +3261,14 @@ impl<'c, 'a> Builder<'c, 'a> {
         let ty = self.ty(object);
         let owner = match &ty {
             Ty::Adt(owner, _) | Ty::TypeName(owner) => Some(owner.clone()),
+            Ty::PyObject => {
+                // `o.value()`, the one method a `PyObject` has (specs/python-object R2.1).
+                let Ty::Result(target, _) = self.ty(whole) else {
+                    return Value::Done(self.unsupported(whole.span, "this conversion"));
+                };
+                let value = self.materialize(object);
+                return Value::Expr(Expr::PyValue { value, ty: *target });
+            }
             Ty::Dyn(trait_name) => return self.dyn_method(whole, object, trait_name, name, args),
             Ty::Module(module) => {
                 if let Some(sig) = self.cx.checked.foreign.get(module).and_then(|fs| fs.get(name)).cloned() {

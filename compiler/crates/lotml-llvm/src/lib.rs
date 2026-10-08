@@ -15,6 +15,7 @@ mod layout;
 
 use std::path::Path;
 
+use lotml_check::ty::Ty;
 use lotml_check::{Checked, Interfaces, check_resolved_with};
 use lotml_diag::{Diagnostic, Severity};
 use lotml_ir::lower::{self, Lowered};
@@ -77,6 +78,20 @@ fn lowered<T>(
     };
     if !refused.is_empty() {
         return Err(refused);
+    }
+    // A `PyObject` is a Python value, which a native program has no interpreter to hold
+    // (specs/python-object R3.1); a program importing Python is refused above, at the import.
+    let holding: Vec<Diagnostic> = lowered
+        .functions
+        .iter()
+        .filter(|f| f.locals.iter().map(|l| &l.ty).chain([&f.ret]).any(Ty::holds_py_object))
+        .map(|f| {
+            Diagnostic::error("E0402", f.span, format!("`{}` holds a `PyObject`, a Python value", f.source_name))
+                .note("a program holding a Python value runs on the Python target: `lotml run`")
+        })
+        .collect();
+    if !holding.is_empty() {
+        return Err(holding);
     }
     let inspected = inspected?;
     let mut lowered = lotml_ir::mono::mono(lowered)?;

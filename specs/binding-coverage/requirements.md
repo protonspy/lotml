@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/python-compat-group-1
-delivery: in-review
+delivery: merged
 pr: 51
 ---
 

@@ -24,6 +24,8 @@ pub use boundary::{descriptor, stub};
 pub struct Compiled {
     pub module: String,
     pub checked: Checked,
+    /// The functions left out of what Python sees, each with why.
+    pub warnings: Vec<Diagnostic>,
 }
 
 /// The runtime every generated module imports, shipped next to it as `lotml_rt.py`.
@@ -79,5 +81,6 @@ pub fn compile_with(source: &str, path: &Path, interfaces: &Interfaces) -> Resul
         file = serde_json::Value::String(file),
         payload = serde_json::Value::String(payload),
     );
-    Ok(Compiled { module, checked })
+    let warnings = boundary::left_out(&checked);
+    Ok(Compiled { module, checked, warnings })
 }

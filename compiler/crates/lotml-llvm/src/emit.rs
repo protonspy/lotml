@@ -1583,6 +1583,7 @@ impl Writer<'_, '_> {
                 self.call_through(&f, &c, args, params, ret)
             }
             Expr::CallPython { .. } => self.refuse("a call into a Python module"),
+            Expr::PyValue { .. } => self.refuse("a `PyObject`, a Python value"),
             Expr::Method { method, .. } => self.refuse(format!("the method `{method}` here")),
             Expr::CallGeneric { .. } | Expr::FnRefGeneric { .. } | Expr::ToDynOf { .. } => {
                 self.refuse("a generic call `mono` did not resolve")

@@ -478,7 +478,8 @@ impl<'l> ModuleWriter<'l> {
     fn changeable(&self, ty: &Ty) -> bool {
         match ty {
             Ty::Int(_) | Ty::Float(_) | Ty::Bool | Ty::Str | Ty::Bytes | Ty::Unit | Ty::Func(..) => false,
-            Ty::Never | Ty::Error | Ty::Module(_) | Ty::TypeName(_) => false,
+            // A Python object is never copied: LotML cannot change it, and Python owns it.
+            Ty::Never | Ty::Error | Ty::Module(_) | Ty::TypeName(_) | Ty::PyObject => false,
             Ty::Optional(inner) => self.changeable(inner),
             Ty::Tuple(items) => items.iter().any(|t| self.changeable(t)),
             Ty::Adt(name, _) => !self.enums.contains(name),
@@ -1262,6 +1263,10 @@ impl<'m, 'l> Writer<'m, 'l> {
             Expr::Parallel { tasks, .. } => {
                 let tasks = self.operand(tasks);
                 call(rt("parallel"), vec![tasks])
+            }
+            Expr::PyValue { value, ty } => {
+                let value = self.operand(value);
+                call(rt("convert"), vec![value, text(&crate::boundary::descriptor(ty).to_string())])
             }
             Expr::ToDyn { value, .. } | Expr::ToDynOf { value, .. } => self.operand(value),
             Expr::CallDyn { receiver, ty, slot, args, .. } => {

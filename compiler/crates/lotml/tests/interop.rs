@@ -61,14 +61,17 @@ fn bind_writes_an_interface_from_a_stub() {
     let dir = scratch("bind", &[("stubs/textwrap.pyi", TEXTWRAP_PYI)]);
     let out = lotml(&["bind", "textwrap", "--stub", "stubs/textwrap.pyi"], &dir);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    assert!(stdout(&out).contains("4 functions bound, 2 not"), "{}", stdout(&out));
+    assert!(stdout(&out).contains("5 functions bound, 1 not"), "{}", stdout(&out));
     let interface = std::fs::read_to_string(dir.join("bindings").join("py.textwrap.lotmli")).unwrap();
     assert!(interface.contains(
         "fn wrap(text: str, width: int = 70, max_lines: int? = None, placeholder: str = \" [...]\") -> [str] ! PyError\n"
     ));
     assert!(interface.contains("fn fill(text: str, width: int = 70) -> str ! PyError\n"), "**kwargs is left to Python");
     assert!(interface.contains("fn shorten(text: str, width: int, placeholder: str = todo()) -> str ! PyError\n"));
-    assert!(interface.contains("#   indent: `Callable[[str], bool]` has no lotml type\n"), "{interface}");
+    assert!(
+        interface.contains("fn indent(text: str, prefix: str, predicate: PyObject? = None) -> str ! PyError"),
+        "a callable is a `PyObject`: {interface}"
+    );
     assert!(interface.contains("#   pick: it is overloaded"));
     assert!(!interface.contains("_private") && !interface.contains("TextWrapper"));
 }
@@ -186,6 +189,115 @@ fn main() -> None ! PyError:
         "a value of the wrong type is an error, not a wrong value: {}",
         String::from_utf8_lossy(&out.stderr)
     );
+}
+
+/// A Python module whose values no stub types: an object, a dataclass, and functions that change
+/// what they are given.
+const OBJS_PY: &str = "\
+import dataclasses
+
+class Box:
+    def __init__(self):
+        self.n = 1
+
+@dataclasses.dataclass
+class Data:
+    n: int
+
+def make(): return Box()
+def size(o): return o.n
+def bump(o): o.n += 1
+def data(): return Data(10)
+def touch(d): d.n += 5
+def peek(d): return d.n
+def numbers(): return [1, 2, 3]
+def word(): return 'x'
+def total(xs): return sum(xs)
+def pair():
+    import collections
+    return collections.namedtuple('P', 'a b')(1, 2)
+def kind(o): return type(o).__name__
+def send(xs):
+    xs.append(99)
+    return len(xs)
+";
+
+const OBJS_LOTMLI: &str = "\
+fn make() -> PyObject ! PyError
+fn size(o: PyObject) -> int ! PyError
+fn bump(o: PyObject) -> None ! PyError
+fn data() -> PyObject ! PyError
+fn touch(d: PyObject) -> None ! PyError
+fn peek(d: PyObject) -> int ! PyError
+fn numbers() -> PyObject ! PyError
+fn word() -> PyObject ! PyError
+fn send(xs: PyObject) -> int ! PyError
+fn total(xs: [PyObject]) -> int ! PyError
+fn pair() -> PyObject ! PyError
+fn kind(o: PyObject) -> str ! PyError
+";
+
+#[test]
+fn a_python_object_crosses_as_the_object_it_is_and_leaves_through_a_checked_conversion() {
+    let program = "\
+import py.objs
+
+fn as_int(o: PyObject) -> int ! PyError:
+    n: int = o.value()?
+    return n
+
+fn main() -> None ! PyError:
+    b = py.objs.make()?
+    py.objs.bump(b)?
+    print(py.objs.size(b)?)
+    d = py.objs.data()?
+    py.objs.touch(d)?
+    print(py.objs.peek(d)?)
+    xs: [int] = py.objs.numbers()?.value()?
+    print(xs)
+    var mine = [1, 2]
+    print(py.objs.send(mine)?, mine)
+    print(py.objs.total([1, 2, 3])?)
+    owned = py.objs.numbers()?
+    print(py.objs.send(owned)?, py.objs.send(owned)?, py.objs.send([owned])?)
+    print(py.objs.kind(py.objs.pair()?)?)
+    match as_int(py.objs.word()?):
+        case Ok(n):
+            print(n)
+        case Err(e):
+            print(e.kind)
+";
+    let dir = scratch(
+        "python-object",
+        &[("objs.py", OBJS_PY), ("bindings/py.objs.lotmli", OBJS_LOTMLI), ("main.lot", program)],
+    );
+    let checked = lotml(&["check", "main.lot"], &dir);
+    assert!(checked.status.success(), "{}", stdout(&checked));
+    let out = lotml(&["run", "main.lot"], &dir);
+    assert_eq!(
+        stdout(&out),
+        "2\n15\n[1, 2, 3]\n3 [1, 2]\n6\n4 5 2\nP\nTypeError\n",
+        "the object and the dataclass changed in Python, the LotML list copied: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn a_function_taking_a_python_object_is_left_out_of_what_python_imports() {
+    let library = "type Holder(o: PyObject, n: int)\n\nfn keep(o: PyObject) -> PyObject:\n    return o\n\n\
+fn take(h: Holder) -> int:\n    return h.n\n\nfn add(a: int, b: int) -> int:\n    return a + b\n";
+    let dir = scratch("python-object-exports", &[("lib.lot", library)]);
+    let built = lotml(&["build", "--target", "python", "lib.lot", "-o", "out"], &dir);
+    assert!(built.status.success(), "{}", stdout(&built));
+    assert!(stdout(&built).contains("E0403") && stdout(&built).contains("`keep`"), "{}", stdout(&built));
+    assert!(stdout(&built).contains("`take`"), "a record holding one counts: {}", stdout(&built));
+    let stub = std::fs::read_to_string(dir.join("out").join("lib_lotml.pyi")).unwrap();
+    assert!(stub.contains("def add(") && !stub.contains("def keep("), "{stub}");
+    let out = python(
+        &dir,
+        "import sys\nsys.path.insert(0, 'out')\nimport lib_lotml as m\nprint(m.add(1, 2), hasattr(m, 'keep'), hasattr(m, 'take'))",
+    );
+    assert_eq!(stdout(&out), "3 False False\n", "{}", String::from_utf8_lossy(&out.stderr));
 }
 
 #[test]
