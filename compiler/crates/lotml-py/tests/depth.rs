@@ -16,8 +16,8 @@ fn scratch(name: &str) -> PathBuf {
     dir
 }
 
-/// Compile `source` into `prog.py` beside the runtime, and run `script` there. CPython's own limit
-/// is moved out of the way first, as `lotml run` and `lotml test` do (R2.2).
+/// Compile `source` into `prog.py` beside the runtime, and run `script` there, with CPython's
+/// limit and stack as an interpreter starts with them.
 fn run_script(name: &str, source: &str, script: &str) -> Output {
     let dir = scratch(name);
     let path = dir.join("prog.lot");
@@ -29,7 +29,7 @@ fn run_script(name: &str, source: &str, script: &str) -> Output {
     Command::new(&python[0])
         .args(&python[1..])
         .arg("-c")
-        .arg(format!("import sys, threading\nsys.setrecursionlimit(20000)\nthreading.stack_size(64 << 20)\n{script}"))
+        .arg(format!("import sys\n{script}"))
         .current_dir(&dir)
         .env("PYTHONDONTWRITEBYTECODE", "1")
         .env("PYTHONIOENCODING", "utf-8")
@@ -37,13 +37,9 @@ fn run_script(name: &str, source: &str, script: &str) -> Output {
         .expect("Python runs")
 }
 
-/// Run `source`'s `main` as `lotml run` does, on a thread with room for the limit.
+/// Run `source`'s `main` as `lotml run` does: the runtime makes room for the limit itself (R2.2).
 fn run(name: &str, source: &str) -> Output {
-    run_script(
-        name,
-        source,
-        "import lotml_rt\nout = []\nt = threading.Thread(target=lambda: out.append(lotml_rt.main('prog')))\nt.start()\nt.join()\nsys.exit(out[0])",
-    )
+    run_script(name, source, "import lotml_rt\nsys.exit(lotml_rt.main('prog'))")
 }
 
 fn text(bytes: &[u8]) -> String {
@@ -103,7 +99,7 @@ fn a_test_that_panics_deep_gives_the_next_test_its_whole_limit() {
     let out = run_script(
         "tests",
         &source,
-        "import json, lotml_rt, prog\nprint(json.dumps([(r['name'], r['outcome'], r.get('kind')) for r in lotml_rt.run_tests(vars(prog), prog.__lotml__)]))",
+        "import json, lotml_rt\nout = lotml_rt.test_modules([['prog', 'prog.lot']])\nprint(json.dumps([(r['name'], r['outcome'], r.get('kind')) for r in out[0]['tests']]))",
     );
     assert_eq!(
         text(&out.stdout).trim(),
@@ -123,4 +119,14 @@ fn main():\n    print(spawn(400, 500))\n    print(spawn(600, 500))\n"
     let stderr = text(&out.stderr);
     assert_eq!(text(&out.stdout), "900\n", "{stderr}");
     assert!(stderr.starts_with("panic: RecursionError: maximum recursion depth exceeded\n"), "{stderr}");
+}
+
+#[test]
+fn a_python_host_that_imports_a_compiled_module_keeps_its_own_limit() {
+    let out = run_script(
+        "host",
+        &format!("{DOWN}fn main():\n    print(down(3))\n"),
+        "import threading, lotml_rt, prog\nprint(sys.getrecursionlimit(), threading.stack_size())",
+    );
+    assert_eq!(text(&out.stdout), "1000 0\n", "{}", text(&out.stderr));
 }

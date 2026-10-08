@@ -1122,8 +1122,53 @@ def run_tests(namespace: dict, path: str) -> list[dict]:
     return results
 
 
+STACK = 64 << 20
+"""The stack of the thread `lotml run` and `lotml test` run a program on (specs/recursion-depth
+R2.2): room for `DEPTH_LIMIT` calls, and for CPython's own C-level recursion under them."""
+
+PYTHON_LIMIT = 20_000
+"""CPython's recursion limit while a program runs: past `DEPTH_LIMIT` lotml calls' frames and the
+runtime's between them, so the program's own `RecursionError` always comes first."""
+
+
+def on_program_thread(work):
+    """`work()`, run on a thread with `STACK` of stack and CPython's limit at `PYTHON_LIMIT`: what
+    `lotml run` and `lotml test` do, and never importing a module, so a Python host keeps its own
+    limit. The threads `parallel` starts later get the same stack."""
+    import sys
+
+    sys.setrecursionlimit(PYTHON_LIMIT)
+    threading.stack_size(STACK)
+    done = []
+    thread = threading.Thread(target=lambda: done.append(work()), name="lotml-main")
+    thread.start()
+    thread.join()
+    return done[0] if done else 101
+
+
 def main(module_name: str) -> int:
-    """`lotml run`: call the program's `main`, and say what stopped it, in lotml's terms."""
+    """`lotml run`: call the program's `main` on a thread with room for the recursion limit, and
+    say what stopped it, in lotml's terms."""
+    return on_program_thread(lambda: _main(module_name))
+
+
+def test_modules(listed: list) -> list:
+    """`lotml test`: the `test` blocks of each module of `listed`, a list of its name and its
+    path, run on a thread with room for the recursion limit."""
+    return on_program_thread(lambda: [_test_module(name, path) for name, path in listed])
+
+
+def _test_module(name: str, path: str) -> dict:
+    import importlib
+
+    try:
+        module = importlib.import_module(name)
+        return {"file": path, "tests": run_tests(vars(module), path)}
+    except Exception as error:  # noqa: BLE001 - a module that does not load is reported
+        return {"file": path, "load": type(error).__name__ + ": " + str(error)}
+
+
+def _main(module_name: str) -> int:
     import importlib
     import sys
     import traceback

@@ -240,6 +240,31 @@ fn run_calls_main_and_build_writes_the_modules() {
     assert!(dir.join("out").join("runs_lotml.py").is_file() && dir.join("out").join("lotml_rt.py").is_file());
 }
 
+const RECURSES: &str = "fn down(n: int) -> int:\n    if n == 0:\n        return 0\n    return down(n - 1) + 1\n\n\
+fn main():\n    print(down(999))\n    print(down(5000))\n\n\
+test \"too deep\":\n    assert down(5000) == 5000\n\ntest \"deep enough\":\n    assert down(999) == 999\n";
+
+#[test]
+fn run_and_test_stop_a_recursion_past_the_limit_on_either_target() {
+    let dir = scratch("recursion", &[("r.lot", RECURSES)]);
+    for target in ["python", "llvm"] {
+        let out = lotml(&["run", "--target", target, "r.lot"], &dir);
+        let stderr = String::from_utf8_lossy(&out.stderr).replace("\r\n", "\n");
+        let printed = stdout(&out).replace("\r\n", "\n");
+        assert_eq!((printed.as_str(), out.status.code()), ("999\n", Some(101)), "{target}: {stderr}");
+        assert!(stderr.starts_with("panic: RecursionError: maximum recursion depth exceeded\n"), "{target}: {stderr}");
+        let out = lotml(&["test", "--json", "--target", target, "r.lot"], &dir);
+        let json: serde_json::Value = serde_json::from_str(&stdout(&out)).expect("JSON");
+        let outcomes: Vec<(&str, Option<&str>)> = json["tests"]
+            .as_array()
+            .expect("tests")
+            .iter()
+            .map(|t| (t["outcome"].as_str().unwrap_or(""), t["kind"].as_str()))
+            .collect();
+        assert_eq!(outcomes, vec![("panic", Some("RecursionError")), ("pass", None)], "{target}");
+    }
+}
+
 #[test]
 fn a_panic_names_the_lotml_line() {
     let dir = scratch("panic", &[("p.lotml", "fn main():\n    xs = [1]\n    print(xs[5])\n")]);
