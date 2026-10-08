@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 1031431e6383251c223c409f7dd229c44584eef9ce6f2bf0c9ebd3d31369fbb4
+checksum: 036c326256e1b17e3f88651f5bba005bff4d090d0b5e59e86751210ff385da2f
 ---
 
 # Python compatibility
@@ -66,7 +66,7 @@ the typed share each spec added.
 - [x] 1.1 (Unit) Bind the module-level aliases typeshed writes as `name = _inst.method`, from
   that method of the class the stub declares `_inst` with, and list one whose method the stub
   does not hold among the names not bound
-- [ ] 1.2 (Unit) Write and build the spec binding-coverage: a fixed corpus of the standard library
+- [x] 1.2 (Unit) Write and build the spec binding-coverage: a fixed corpus of the standard library
   and the most downloaded PyPI packages, the share of public names bound typed per module, and
   the report the harness writes
 - [ ] 1.3 (Unit) Write and build the spec origin-imports: `import py.<module>` and `from

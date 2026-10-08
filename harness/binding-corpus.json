@@ -1,0 +1,24 @@
+{
+  "about": "The modules the binding coverage report measures (specs/binding-coverage R1.1), each with the distribution of the harness group `stubs` its stub comes from (adr:0030). PyPI's most downloaded packages, less those whose stubs no pinned distribution carries: boto3, botocore, s3transfer, setuptools and typing_extensions.",
+  "stdlib": {
+    "distribution": "mypy",
+    "modules": [
+      "math", "random", "string", "textwrap", "json", "re", "os", "os.path", "shutil",
+      "datetime", "time", "collections", "itertools", "functools", "statistics", "fractions",
+      "decimal", "heapq", "bisect", "base64", "hashlib", "difflib", "csv", "urllib.parse", "uuid"
+    ]
+  },
+  "pypi": [
+    {"module": "requests", "distribution": "types-requests"},
+    {"module": "urllib3", "distribution": "urllib3"},
+    {"module": "certifi", "distribution": "certifi"},
+    {"module": "idna", "distribution": "idna"},
+    {"module": "charset_normalizer", "distribution": "charset-normalizer"},
+    {"module": "dateutil.parser", "distribution": "types-python-dateutil"},
+    {"module": "packaging.version", "distribution": "packaging"},
+    {"module": "six", "distribution": "types-six"},
+    {"module": "yaml", "distribution": "types-PyYAML"},
+    {"module": "numpy", "distribution": "numpy"},
+    {"module": "pandas", "distribution": "pandas-stubs"}
+  ]
+}
