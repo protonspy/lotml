@@ -103,6 +103,9 @@ class Err:
     error: Any
 
 
+Ok.__lotml_record__ = Err.__lotml_record__ = True
+
+
 class Fail(Exception):
     """Carries an error from `fail` or `?` to the fallible function that returns it."""
 
@@ -276,7 +279,7 @@ def copy(obj):
         heap = Heap.__new__(Heap)
         heap.items = [copy(item) for item in obj.items]
         return heap
-    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+    if getattr(type(obj), "__lotml_record__", False):
         fields = {f.name: copy(getattr(obj, f.name)) for f in dataclasses.fields(obj)}
         return dataclasses.replace(obj, **fields)
     return obj
@@ -346,6 +349,8 @@ def record(name: str, fields: tuple[str, ...], defaults: dict):
     ]
     cls = dataclasses.make_dataclass(name, spec, eq=True, order=True)
     cls.__hash__ = lambda self: hash(tuple(_hashable(getattr(self, f)) for f in fields))
+    # What tells a LotML record from a Python dataclass a `PyObject` holds, which is never copied.
+    cls.__lotml_record__ = True
     return cls
 
 
@@ -379,6 +384,9 @@ class PyError:
 
     kind: str
     message: str
+
+
+PyError.__lotml_record__ = True
 
 
 def python(function, *args, **kwargs):
@@ -438,12 +446,14 @@ def accept(value, descriptor, types: dict, classes: dict, where: str):
     A descriptor is a list: `["int", low, high, name]`, `["float"]`, `["bool"]`, `["str"]`,
     `["bytes"]`, `["none"]`, `["list", d]`, `["set", d]`, `["dict", k, v]`, `["tuple", d…]`,
     `["optional", d]`, `["adt", name]` — a record or sum type described in `types` and built
-    from `classes` — or `["any"]`."""
+    from `classes` — `["object"]`, a `PyObject`, kept as the object it is, or `["any"]`."""
     kind = descriptor[0]
 
     def wrong(expected: str):
         return TypeError(f"{where}: expected {expected}, got {type(value).__name__}")
 
+    if kind == "object":
+        return value
     if kind == "any":
         return _copy.deepcopy(value)
     if kind == "int":
@@ -591,7 +601,9 @@ def foreign(module: str, name: str, returns: str):
             import importlib
 
             function = getattr(importlib.import_module(module), name)
-            value = function(*_copy.deepcopy(args), **_copy.deepcopy(kwargs))
+            # LotML's values are copied part by part; a `PyObject` among them reaches Python as
+            # the object it is (specs/python-object R1.4).
+            value = function(*copy(args), **copy(kwargs))
         except Exception as error:  # noqa: BLE001 - the boundary turns every exception into a value
             return Err(PyError(type(error).__name__, str(error)))
         try:
@@ -601,6 +613,16 @@ def foreign(module: str, name: str, returns: str):
 
     call.__name__ = call.__qualname__ = name
     return call
+
+
+def convert(value, descriptor: str):
+    """`o.value()`: the Python object `value` as the LotML type `descriptor` describes, checked and
+    copied as a value Python returns is, or `Err(PyError)` when it is not one (specs/python-object
+    R2.3)."""
+    try:
+        return Ok(accept(value, json.loads(descriptor), {}, {}, "the PyObject"))
+    except (TypeError, OverflowError) as error:
+        return Err(PyError(type(error).__name__, str(error)))
 
 
 _C_LIBRARIES: dict = {}

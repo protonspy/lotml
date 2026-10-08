@@ -48,6 +48,9 @@ pub enum Ty {
     Module(String),
     /// A type used as a value: `Counter` in `Counter.new()`.
     TypeName(String),
+    /// A Python value no stub types: opaque, left only through `value()`
+    /// (adr:0031-a-python-name-no-stub-types-crosses-as-an-opaque-python-value).
+    PyObject,
     /// What `todo()`, `fail` and `return` produce: no value, so it fits anywhere.
     Never,
     /// A type already reported wrong: fits anywhere, so one mistake is reported once.
@@ -103,6 +106,7 @@ impl Ty {
             "bool" => Ty::Bool,
             "str" => Ty::Str,
             "bytes" => Ty::Bytes,
+            "PyObject" => Ty::PyObject,
             _ => return None,
         })
     }
@@ -168,6 +172,7 @@ impl Ty {
             Ty::Bool => f.write_str("bool"),
             Ty::Str => f.write_str("str"),
             Ty::Bytes => f.write_str("bytes"),
+            Ty::PyObject => f.write_str("PyObject"),
             Ty::Unit => f.write_str("None"),
             Ty::List(t) => {
                 f.write_str("[")?;

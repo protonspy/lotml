@@ -705,6 +705,12 @@ pub enum Expr {
         cond: Operand,
         value: Operand,
     },
+    /// `o.value()` on a `PyObject`: the Python value `value` checked against `ty` by the boundary
+    /// and copied, a result `ty ! PyError` (specs/python-object R2.3). The Python target's only.
+    PyValue {
+        value: Operand,
+        ty: Ty,
+    },
     /// The value of an `Ok`, read.
     ResultValue(Operand),
     /// The error of an `Err`, read.
@@ -749,7 +755,8 @@ impl Expr {
             | Expr::ResultNew { value: tuple, .. }
             | Expr::ResultIsOk(tuple)
             | Expr::ResultValue(tuple)
-            | Expr::ResultError(tuple) => f(tuple),
+            | Expr::ResultError(tuple)
+            | Expr::PyValue { value: tuple, .. } => f(tuple),
             Expr::OptNew { value, .. } => value.iter().for_each(f),
             Expr::Closure { captures, .. } => captures.iter().for_each(f),
             Expr::FnRef(_) => {}
@@ -1089,6 +1096,7 @@ fn expr_types_mut(e: &mut Expr, f: &mut impl FnMut(&mut Ty)) {
         | Expr::ToDyn { ty, .. }
         | Expr::Method { ty, .. }
         | Expr::CallClosure { ty, .. }
+        | Expr::PyValue { ty, .. }
         | Expr::OptIf { ty, .. } => f(ty),
         Expr::Convert(_, from, to) => {
             f(from);

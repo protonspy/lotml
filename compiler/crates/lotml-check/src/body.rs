@@ -16,6 +16,9 @@ use crate::ty::{F64, INT, Infer, IntKind, TYPE_LIMIT, Ty};
 /// many mentions of a type under [`TYPE_LIMIT`] add up.
 const BODY_TYPES: usize = 1 << 19;
 
+/// The note every operation refused on a `PyObject` carries (specs/python-object R1.2).
+const OPAQUE: &str = "a `PyObject` is opaque: take a LotML value out of it with `o.value()`, its type annotated";
+
 #[derive(Clone, Debug)]
 pub struct Local {
     pub ty: Ty,
@@ -157,6 +160,66 @@ impl<'p> Body<'p> {
     fn is_package(&self, path: &str) -> bool {
         let prefix = format!("{path}.");
         self.program.modules.iter().any(|m| m.starts_with(&prefix))
+    }
+
+    /// `o.value()` on a `PyObject`: the LotML value of the type its context expects, which the
+    /// boundary checks, so `T ! PyError` (specs/python-object R2.1, R2.2). Any other method is one
+    /// a `PyObject` does not have.
+    fn py_value(&mut self, name: &Ident, args: &[Arg], span: Span, expected: Option<&Ty>) -> Ty {
+        self.arg_types(args, &[]);
+        if name.name != "value" {
+            self.opaque("E0205", name.span, format!("a `PyObject` has no method `{}`", name.name));
+            return Ty::Error;
+        }
+        if !args.is_empty() {
+            self.report(Diagnostic::error("E0203", span, "`value()` takes no arguments"));
+        }
+        let wanted = expected.map(|e| self.resolve(e)).map(|e| match e {
+            Ty::Result(value, _) => *value,
+            other => other,
+        });
+        match wanted {
+            Some(ty) if !matches!(ty, Ty::Var(_) | Ty::Error) && self.carried(&ty) => {
+                Ty::Result(Box::new(ty), Box::new(Ty::Adt("PyError".into(), vec![])))
+            }
+            Some(ty) if !matches!(ty, Ty::Var(_) | Ty::Error) => {
+                self.report(
+                    Diagnostic::error("E0204", span, format!("a `PyObject` cannot become a `{ty}`"))
+                        .note("it can become what the boundary carries: numbers, `bool`, `str`, `bytes`, `None`, and lists, sets, dicts, tuples and optionals of them"),
+                );
+                Ty::Error
+            }
+            _ => {
+                self.report(
+                    Diagnostic::error("E0205", span, "`value()` needs to know the type to take out of the `PyObject`")
+                        .note("annotate the binding: `n: int = o.value()?`"),
+                );
+                Ty::Error
+            }
+        }
+    }
+
+    /// Report `message` at `span` as an operation a `PyObject` does not have.
+    fn opaque(&mut self, code: &'static str, span: Span, message: String) {
+        self.report(Diagnostic::error(code, span, message).note(OPAQUE));
+    }
+
+    /// `d`, with the note on converting a `PyObject` when `ty` is one.
+    fn noting(&self, d: Diagnostic, ty: &Ty) -> Diagnostic {
+        if matches!(self.resolve(ty), Ty::PyObject) { d.note(OPAQUE) } else { d }
+    }
+
+    /// Whether the boundary of adr:0012 carries a value of `ty` into Python as a `PyObject`.
+    fn carried(&self, ty: &Ty) -> bool {
+        match self.resolve(ty) {
+            Ty::Int(_) | Ty::Float(_) | Ty::Bool | Ty::Str | Ty::Bytes | Ty::Unit | Ty::PyObject => true,
+            // Inside a value, a part not yet known, the element of `[]` or what `None` holds.
+            Ty::Var(_) => true,
+            Ty::List(t) | Ty::Set(t) | Ty::Optional(t) => self.carried(&t),
+            Ty::Dict(k, v) => self.carried(&k) && self.carried(&v),
+            Ty::Tuple(items) => items.iter().all(|t| self.carried(t)),
+            _ => false,
+        }
     }
 
     /// Whether this body already has an error, so a program it belongs to cannot compile.
@@ -432,7 +495,9 @@ impl<'p> Body<'p> {
                     Some(t) => t,
                     None => {
                         let ty = self.resolve(&iterable);
-                        self.report(Diagnostic::error("E0204", iter.span, format!("`{ty}` cannot be iterated")));
+                        let d = Diagnostic::error("E0204", iter.span, format!("`{ty}` cannot be iterated"));
+                        let d = self.noting(d, &ty);
+                        self.report(d);
                         Ty::Error
                     }
                 };
@@ -1198,6 +1263,7 @@ impl<'p> Body<'p> {
             (Ty::Adt(name, _), Ty::Dyn(trait_name)) => {
                 self.program.implements.contains(&(trait_name.clone(), name.clone()))
             }
+            (_, Ty::PyObject) if !matches!(f, Ty::Var(_)) => self.carried(&f),
             (Ty::List(a), Ty::List(b)) if matches!(self.resolve(b), Ty::Dyn(_)) => {
                 let item = self.resolve(a);
                 self.fits(&item, b)
@@ -1258,6 +1324,10 @@ impl<'p> Body<'p> {
                     for part in &literal.parts {
                         if let StrPart::Expr { expr, conversion, spec } = part {
                             let ty = self.expr(expr, None);
+                            if matches!(self.resolve(&ty), Ty::PyObject) {
+                                self.opaque("E0204", expr.span, "a `PyObject` cannot be formatted".into());
+                                continue;
+                            }
                             self.format_spec(expr, &ty, *conversion, spec);
                         }
                     }
@@ -1496,7 +1566,10 @@ impl<'p> Body<'p> {
             }
             ExprKind::Attr { object, name } => self.attribute(object, name, expr.span),
             ExprKind::Try(inner) => {
-                let ty = self.expr(inner, None);
+                // `o.value()?` takes its type from where the value goes (specs/python-object R2.1).
+                let value_call = matches!(&inner.kind, ExprKind::Call { func, .. }
+                    if matches!(&func.kind, ExprKind::Attr { name, .. } if name.name == "value"));
+                let ty = self.expr(inner, if value_call { expected } else { None });
                 match ty {
                     Ty::Result(value, error) => {
                         if !self.in_test {
@@ -1596,7 +1669,9 @@ impl<'p> Body<'p> {
             for l in loops {
                 let iterable = b.expr(&l.iter, None);
                 let item = builtins::element(&iterable, &mut b.infer).unwrap_or_else(|| {
-                    b.report(Diagnostic::error("E0204", l.iter.span, format!("`{iterable}` cannot be iterated")));
+                    let d = Diagnostic::error("E0204", l.iter.span, format!("`{iterable}` cannot be iterated"));
+                    let d = b.noting(d, &iterable);
+                    b.report(d);
                     Ty::Error
                 });
                 b.bind_target(&l.target, &item);
@@ -1749,6 +1824,10 @@ impl<'p> Body<'p> {
 
     fn binary(&mut self, op: BinOp, l: &Ty, r: &Ty, span: Span) -> Ty {
         let (l, r) = (self.resolve(l), self.resolve(r));
+        if matches!(l, Ty::PyObject) || matches!(r, Ty::PyObject) {
+            self.opaque("E0204", span, format!("`{}` has no operands of type `PyObject`", op.text()));
+            return Ty::Error;
+        }
         if matches!(l, Ty::Error) || matches!(r, Ty::Error) {
             return Ty::Error;
         }
@@ -1825,6 +1904,10 @@ impl<'p> Body<'p> {
 
     fn compare(&mut self, op: CmpOp, l: &Ty, r: &Ty, span: Span) {
         let (l, r) = (self.resolve(l), self.resolve(r));
+        if matches!(l, Ty::PyObject) || matches!(r, Ty::PyObject) {
+            self.opaque("E0204", span, format!("`{}` cannot compare a `PyObject`", op.text()));
+            return;
+        }
         if l.is_poison() || r.is_poison() {
             return;
         }
@@ -1951,6 +2034,10 @@ impl<'p> Body<'p> {
         let ty = self.expr(object, None);
         let ty = self.result_value(ty, object.span);
         let ty = self.present(ty, object.span);
+        if matches!(ty, Ty::PyObject) {
+            self.opaque("E0205", name.span, format!("a `PyObject` has no attribute `{}`", name.name));
+            return Ty::Error;
+        }
         match &ty {
             Ty::Adt(type_name, args) => match self.program.types.get(type_name) {
                 Some(TypeDef::Record { params, fields }) => {
@@ -2069,7 +2156,7 @@ impl<'p> Body<'p> {
                 let ty = self.name(name, func.span);
                 self.call_value(&ty, args, span, None)
             }
-            ExprKind::Attr { object, name } => self.method_call(object, name, args, span),
+            ExprKind::Attr { object, name } => self.method_call(object, name, args, span, expected),
             ExprKind::Index { object, index } => {
                 let generic = match &object.kind {
                     ExprKind::Name(n) if self.lookup(n).is_none() => Some(n.clone()),
@@ -2266,6 +2353,12 @@ impl<'p> Body<'p> {
                 Some(k) => keywords.push((k, t)),
                 None => types[position] = t,
             }
+        }
+        let opaque =
+            types.iter().chain(keywords.iter().map(|(_, t)| t)).any(|t| matches!(self.resolve(t), Ty::PyObject));
+        if opaque && !matches!(name, "Ok" | "Err") {
+            self.opaque("E0204", span, format!("`{name}` cannot take a `PyObject`"));
+            return Ty::Error;
         }
         match builtins::call(name, &types, &keywords, &mut self.infer) {
             Ok(ty) => {
@@ -2583,10 +2676,13 @@ impl<'p> Body<'p> {
         }
     }
 
-    fn method_call(&mut self, object: &Expr, name: &Ident, args: &[Arg], span: Span) -> Ty {
+    fn method_call(&mut self, object: &Expr, name: &Ident, args: &[Arg], span: Span, expected: Option<&Ty>) -> Ty {
         let receiver = self.expr(object, None);
         let receiver = self.result_value(receiver, object.span);
         let receiver = self.present(receiver, object.span);
+        if matches!(receiver, Ty::PyObject) {
+            return self.py_value(name, args, span, expected);
+        }
         match receiver.clone() {
             Ty::TypeName(type_name) => {
                 let method = self.program.methods.get(&type_name).and_then(|m| m.get(&name.name)).cloned();

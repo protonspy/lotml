@@ -188,6 +188,85 @@ fn main() -> None ! PyError:
     );
 }
 
+/// A Python module whose values no stub types: an object, a dataclass, and functions that change
+/// what they are given.
+const OBJS_PY: &str = "\
+import dataclasses
+
+class Box:
+    def __init__(self):
+        self.n = 1
+
+@dataclasses.dataclass
+class Data:
+    n: int
+
+def make(): return Box()
+def size(o): return o.n
+def bump(o): o.n += 1
+def data(): return Data(10)
+def touch(d): d.n += 5
+def peek(d): return d.n
+def numbers(): return [1, 2, 3]
+def word(): return 'x'
+def send(xs):
+    xs.append(99)
+    return len(xs)
+";
+
+const OBJS_LOTMLI: &str = "\
+fn make() -> PyObject ! PyError
+fn size(o: PyObject) -> int ! PyError
+fn bump(o: PyObject) -> None ! PyError
+fn data() -> PyObject ! PyError
+fn touch(d: PyObject) -> None ! PyError
+fn peek(d: PyObject) -> int ! PyError
+fn numbers() -> PyObject ! PyError
+fn word() -> PyObject ! PyError
+fn send(xs: PyObject) -> int ! PyError
+";
+
+#[test]
+fn a_python_object_crosses_as_the_object_it_is_and_leaves_through_a_checked_conversion() {
+    let program = "\
+import py.objs
+
+fn as_int(o: PyObject) -> int ! PyError:
+    n: int = o.value()?
+    return n
+
+fn main() -> None ! PyError:
+    b = py.objs.make()?
+    py.objs.bump(b)?
+    print(py.objs.size(b)?)
+    d = py.objs.data()?
+    py.objs.touch(d)?
+    print(py.objs.peek(d)?)
+    xs: [int] = py.objs.numbers()?.value()?
+    print(xs)
+    var mine = [1, 2]
+    print(py.objs.send(mine)?, mine)
+    match as_int(py.objs.word()?):
+        case Ok(n):
+            print(n)
+        case Err(e):
+            print(e.kind)
+";
+    let dir = scratch(
+        "python-object",
+        &[("objs.py", OBJS_PY), ("bindings/py.objs.lotmli", OBJS_LOTMLI), ("main.lot", program)],
+    );
+    let checked = lotml(&["check", "main.lot"], &dir);
+    assert!(checked.status.success(), "{}", stdout(&checked));
+    let out = lotml(&["run", "main.lot"], &dir);
+    assert_eq!(
+        stdout(&out),
+        "2\n15\n[1, 2, 3]\n3 [1, 2]\nTypeError\n",
+        "the object and the dataclass changed in Python, the LotML list copied: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 #[test]
 fn a_broken_interface_is_reported_by_check() {
     let dir = scratch(

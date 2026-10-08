@@ -28,6 +28,7 @@ pub fn descriptor(ty: &Ty) -> Value {
         Ty::Tuple(items) => Value::Array(std::iter::once(json!("tuple")).chain(items.iter().map(descriptor)).collect()),
         Ty::Optional(t) => json!(["optional", descriptor(t)]),
         Ty::Adt(name, _) => json!(["adt", name]),
+        Ty::PyObject => json!(["object"]),
         _ => json!(["any"]),
     }
 }
