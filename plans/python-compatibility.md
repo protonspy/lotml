@@ -4,13 +4,13 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: e384f790e0bc68ff23e7fe24171abd3bfb15ebba347db78ec4a7ca3ee1fb7d3a
+checksum: ff3a2588193ba063e48911eee545b46f4f6918ab156a5c81c3f02aa453632a2b
 ---
 
 # Python compatibility
 
-Let a LotML program import any Python module under `lotml run`, without running `lotml bind`
-first, and type more of each module's API with every spec. A name the stub cannot type crosses
+Let a LotML program import any Python module as `py.<module>` under `lotml run`, without running
+`lotml bind` first, and type more of each module's API with every spec. A name the stub cannot type crosses
 as a dynamic Python value, used only through an explicit conversion, until a later spec types it.
 
 ## Why
@@ -39,6 +39,7 @@ the typed share each spec added.
 ## References
 
 - `specs/binding-coverage/` — a fixed corpus of modules and the share of their public API bound typed
+- `specs/origin-imports/` — `import py.<module>`, and the bare import of a Python module refused
 - `specs/python-object/` — the dynamic Python value, and the explicit conversion out of it
 - `specs/bind-on-import/` — an import with no interface bound at check time, the result kept as a lock
 - `specs/python-classes/` — Python classes as types, their methods and attributes typed
@@ -68,6 +69,10 @@ the typed share each spec added.
 - [ ] 1.2 (Unit) Write and build the spec binding-coverage: a fixed corpus of the standard library
   and the most downloaded PyPI packages, the share of public names bound typed per module, and
   the report the harness writes
+- [ ] 1.3 (Unit) Write and build the spec origin-imports: `import py.<module>` and `from
+  py.<module> import`, a bare import of a Python module an error suggesting `py.<name>`, and the
+  tests, guide and reference moved to it
+  (adr:0029-foreign-modules-are-imported-by-origin-and-their-interfaces-generated)
 - [ ] 2.1 (Unit) Write a proposed ADR on a dynamic Python value for the names a stub cannot type,
   amending adr:0012: opaque, left only through a conversion that runs the boundary checks, kept
   out of `lotml build` and of Python calling LotML; the owner accepts it before 2.2
@@ -78,8 +83,8 @@ the typed share each spec added.
   the module imported or run, a typeshed embedded at a pinned version, the interface written as a
   lock recording its source; the owner accepts it before 2.4
 - [ ] 2.4 (Unit) Write and build the spec bind-on-import, every module of the binding-coverage
-  corpus importing under `lotml run` with no `lotml bind`, after bind-sources 1.1
-  _Depends 1.2, 2.2, 2.3, 2.5_
+  corpus imported as `py.<module>` under `lotml run` with no `lotml bind`, after bind-sources 1.1
+  _Depends 1.2, 1.3, 2.2, 2.3, 2.5_
 - [ ] 2.5 (Unit) Write a proposed ADR on `lotml run` installing a project's dependencies through uv
   from its `pyproject.toml` and `uv.lock`, amending adr:0026: the lock's versions are the ones
   bound, and `uv.toml` and `.python-version` stay ignored; the owner accepts it before 2.4
@@ -89,13 +94,12 @@ the typed share each spec added.
   _Depends 2.4_
 - [ ] 3.3 (Unit) Write and build the spec python-generics, the coverage report run before and after
   _Depends 3.1_
-- [ ] 4.1 (Unit) Bring the agent guide to the import that needs no `lotml bind`, and write the
-  wiki page on calling Python from LotML
+- [ ] 4.1 (Unit) Write the wiki page on calling Python from LotML through `py.<module>`
   _Depends 2.4_
 
 ## Done when
 
-- `lotml run` runs a program importing each module of the binding-coverage corpus, with no
+- `lotml run` runs a program importing each module of the binding-coverage corpus as `py.<module>`, with no
   `bindings/` directory written by hand or by `lotml bind`.
 - The binding coverage report shows the typed share before and after each of 3.1, 3.2 and 3.3.
 - The ADRs from 2.1, 2.3 and 2.5 are `accepted`, and `scc validate` exits 0.
