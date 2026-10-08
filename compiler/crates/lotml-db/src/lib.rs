@@ -350,6 +350,55 @@ test \"the origin\":
         assert_eq!(found[1].start(&db), text.find("\nfn f() -> int:\n    return 2").expect("the second") as u32 + 1);
     }
 
+    /// The signatures of `text` before and after it becomes `edited`, with the interfaces given.
+    fn signatures_around(text: &str, edited: &str, interfaces: Vec<(String, String)>) -> (Declarations, Declarations) {
+        let mut db = Database::default();
+        let file = SourceFile::create(&db, "f.lot".into(), text.into(), interfaces);
+        let before = signatures(&db, file).clone();
+        file.set_text(&mut db).to(edited.into());
+        (before, signatures(&db, file).clone())
+    }
+
+    #[test]
+    fn the_declarations_keep_their_diagnostics_where_they_are_in_the_file() {
+        let db = Database::default();
+        let text = "fn f() -> int:\n    return 1\n\nfn f() -> int:\n    return 2\n";
+        let file = SourceFile::create(&db, "f.lot".into(), text.into(), vec![]);
+        let found = declarations(&db, file).diagnostics();
+        assert_eq!(
+            found.iter().map(|d| (d.code, d.span.start)).collect::<Vec<_>>(),
+            vec![("E0210", text.rfind("f()").expect("the second f") as u32)]
+        );
+        assert_eq!(&text[found[0].span.range()], "f");
+        assert!(signatures(&db, file).diagnostics().is_empty(), "the signatures are what a body reads, not a report");
+    }
+
+    #[test]
+    fn the_signatures_stay_equal_across_an_edit_inside_a_body() {
+        let edited = PARTS.replace("        return \"named\"\n", "        var n = \"named\"\n        return n\n");
+        let (before, after) = signatures_around(PARTS, &edited, vec![]);
+        assert_eq!(before, after, "every function after the edit moved, and its signature did not change");
+        let (before, after) = signatures_around(PARTS, &PARTS.replace("    return 0\n", "    return 1 + 2\n"), vec![]);
+        assert_eq!(before, after, "the last function's body grew");
+    }
+
+    #[test]
+    fn the_signatures_change_with_a_declaration_an_import_or_an_interface() {
+        let declared = PARTS.replace("fn norm(self) -> f64", "fn norm(self, scale: f64) -> f64");
+        let (before, after) = signatures_around(PARTS, &declared, vec![]);
+        assert_ne!(before, after, "a method's parameters changed");
+        let (before, after) = signatures_around(PARTS, &PARTS.replace("type Point(", "type Point(z: int, "), vec![]);
+        assert_ne!(before, after, "a record's fields changed");
+        let (before, after) = signatures_around(PARTS, &PARTS.replace("from math import sqrt\n", ""), vec![]);
+        assert_ne!(before, after, "an import was removed");
+        let mut db = Database::default();
+        let text = "from textwrap import dedent\n\nfn f(s: str) -> str ! PyError:\n    return dedent(s)?\n";
+        let file = SourceFile::create(&db, "f.lot".into(), text.into(), vec![]);
+        let before = signatures(&db, file).clone();
+        file.set_interfaces(&mut db).to(vec![("textwrap".into(), "fn dedent(text: str) -> str ! PyError\n".into())]);
+        assert_ne!(&before, signatures(&db, file), "the interfaces changed");
+    }
+
     #[test]
     fn an_unchanged_file_is_parsed_once() {
         let db = Database::default();

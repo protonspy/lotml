@@ -34,7 +34,9 @@ Two queries over the whole tree:
 - `declarations(db, file)` runs `Program::collect` as `check_resolved_with` does today, with the
   file's interfaces, and keeps its diagnostics with spans in the file. It runs again on every edit.
 - `signatures(db, file)` reads the `Program` from `declarations` and moves each signature's spans
-  to start at the item that declares it. An edit inside a body leaves it equal, so salsa backdates
+  to start at the item that declares it. A signature's own span takes in its body, so it is kept
+  as that start alone: a body reads another function's parameters, never where its text ends. An
+  edit inside a body leaves it equal, so salsa backdates
   it and no item check that read it runs again (R1.4); a changed declaration, import or interface
   changes it, and every item is checked again (R1.5).
 

@@ -1,6 +1,8 @@
 ---
 autonomy: auto
 ci: wait
+branch: feat/check-interfaces-input
+delivery: in-progress
 ---
 
 # Incremental check — requirements
