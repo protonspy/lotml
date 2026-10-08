@@ -53,7 +53,9 @@ file's interfaces are an input of high durability, so an edit to the text reads 
 a generated file of 2254 lines importing from 800 Python signatures, a one-line body edit went
 from 6.58 ms to 5.39 ms to re-check, against 6.61 ms from an empty database
 (`harness/results/check-speed.md`). The first stands: the rest of the edit is the whole file
-parsed and checked again.
+parsed and checked again. `specs/incremental-check/` specifies the split: one check per item
+against signatures whose spans are relative to their item, assembled into the file's report and
+held equal to the whole-file check.
 
 ty runs on the same salsa 0.28 at a finer grain. It has a type query per scope and per definition,
 and a query whose result comes out unchanged does not re-run the queries that depend on it

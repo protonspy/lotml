@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: f63fb6b5da86384c25c8427000e4bc8f7c31cfcbaaef5629c6d95916bb2e1476
+checksum: 0677bb2f10637c8d9257297828cee8a8025614ef3e002af733d882d4eb1f574e
 ---
 
 # Build and check speed
@@ -54,7 +54,7 @@ function, and both are measured before and after. See `docs/wiki/pages/compiler-
 - [x] 2.1 (Unit) Measure check latency after a one-line body edit in a large file through `lotml-db`, and record it as the baseline
 - [x] 2.2 (Unit) Make each file's interfaces a tracked salsa input with high durability, so a check no longer re-parses them
   _Depends 2.1_
-- [ ] 2.3 (Unit) Specify, as a new spec named incremental-check, per-function check queries over signatures, spans relative to their item, and the diagnostics a file reports assembled from them
+- [x] 2.3 (Unit) Specify, as a new spec named incremental-check, per-function check queries over signatures, spans relative to their item, and the diagnostics a file reports assembled from them
   _Depends 2.1_
 
 ## Done when
