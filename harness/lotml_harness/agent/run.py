@@ -371,6 +371,7 @@ def run(
         "failure": None if error else graded.failure,
         "error": error,
         "compiler": compiler,
+        "python": graded.python,
     }
     trace = traces / model_name.replace("/", "__") / arm / f"{task.id}-{attempt}.json"
     trace.parent.mkdir(parents=True, exist_ok=True)
@@ -416,4 +417,5 @@ def error_row(task: AgentTask, arm: str, attempt: int, model_name: str, error: s
         "lines_changed": 0,
         "failures": [],
         "error": error[:500],
+        "python": None,
     }

@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: docs/python-compat-group-2
-delivery: in-review
+delivery: merged
 pr: 52
 ---
 

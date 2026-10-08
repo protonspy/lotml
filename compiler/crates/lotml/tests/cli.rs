@@ -493,3 +493,66 @@ fn f() -> int:
         ])
     );
 }
+
+/// `lotml <args>` in a project of its own, resolving CPython through a `uv` that cannot run, so a
+/// download it reached would fail naming uv rather than reach the network.
+fn without_python(args: &[&str], offline_var: Option<&str>) -> String {
+    let dir = scratch(
+        &format!("offline-{}-{}", args[0], offline_var.unwrap_or("unset")),
+        &[
+            ("pyproject.toml", ""),
+            ("p.lot", "fn main():\n    print(1)\n\ntest \"t\":\n    assert 1 == 1\n"),
+            ("uv.exe", "not a program"),
+        ],
+    );
+    let mut command = isolated(env!("CARGO_BIN_EXE_lotml"), &dir);
+    command.args(args).env("LOTML_UV", dir.join("uv.exe")).env_remove("LOTML_PYTHON").env_remove("VIRTUAL_ENV");
+    for name in lotml_py::uv::REFUSED {
+        command.env_remove(name);
+    }
+    match offline_var {
+        Some(value) => command.env("LOTML_OFFLINE", value),
+        None => command.env_remove("LOTML_OFFLINE"),
+    };
+    let output = command.output().expect("the binary runs");
+    assert!(!output.status.success(), "no Python, no run: {}", stdout(&output));
+    String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
+#[test]
+fn offline_a_missing_python_is_an_error_naming_it_and_nothing_is_downloaded() {
+    for args in [&["run", "--offline", "p.lot"][..], &["test", "--offline", "p.lot"], &["bind", "--offline", "json"]] {
+        let said = without_python(args, None);
+        assert!(said.contains("downloads nothing") && !said.contains("downloading"), "{args:?}: {said}");
+    }
+    let said = without_python(&["run", "p.lot"], Some("1"));
+    assert!(said.contains("downloads nothing"), "LOTML_OFFLINE turns it on: {said}");
+}
+
+#[test]
+fn an_empty_lotml_offline_leaves_downloads_on() {
+    let said = without_python(&["run", "p.lot"], Some(""));
+    assert!(said.contains("cannot run uv"), "the download step was reached: {said}");
+}
+
+#[test]
+fn run_and_test_record_the_cpython_they_ran_on() {
+    let dir = scratch(
+        "records-python",
+        &[("pyproject.toml", ""), ("p.lot", "fn main():\n    print(1)\n\ntest \"t\":\n    assert 1 == 1\n")],
+    );
+    for args in [&["run", "--json", "p.lot"][..], &["test", "--json", "p.lot"]] {
+        let output = lotml(args, &dir);
+        assert!(output.status.success(), "{args:?}: {}", String::from_utf8_lossy(&output.stderr));
+        let said = stdout(&output);
+        let last: serde_json::Value =
+            serde_json::from_str(said.lines().last().unwrap_or("")).expect("a JSON line last");
+        let python = &last["python"];
+        let path = python["path"].as_str().expect("the interpreter's path");
+        assert!(Path::new(path).is_absolute(), "{args:?}: {python}");
+        assert!(python["version"].as_str().is_some_and(|v| v.starts_with("3.")), "{args:?}: {python}");
+        assert!(python.get("uv").is_some(), "uv's version, or null without one: {python}");
+    }
+    let quiet = stdout(&lotml(&["run", "p.lot"], &dir));
+    assert_eq!(quiet.trim(), "1", "without --json the program's output is all");
+}

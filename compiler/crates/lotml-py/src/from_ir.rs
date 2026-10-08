@@ -1231,11 +1231,10 @@ impl<'m, 'l> Writer<'m, 'l> {
                 }
                 node("Dict", vec![("keys", Value::Array(keys)), ("values", Value::Array(values))])
             }
-            Expr::SetNew { items, folded, .. } => {
+            Expr::SetNew { items, .. } => {
+                // `set([...])` adds the items in order on every CPython; a display of constants,
+                // `{...}`, is folded into a frozenset whose order 3.13 and 3.14 iterate apart.
                 let items: Vec<Value> = items.iter().map(|o| self.operand(o)).collect();
-                if *folded {
-                    return node("Set", vec![("elts", Value::Array(items))]);
-                }
                 let list = node("List", vec![("elts", Value::Array(items)), ("ctx", load())]);
                 call(builtin("set"), vec![list])
             }

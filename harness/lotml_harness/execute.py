@@ -329,13 +329,29 @@ MEMORY = 2 * 2**30
 """Bytes a child may use."""
 OUTPUT_TAIL = 1_000_000
 """Bytes of a child's output the parent reads: the end, where the result line is."""
-ENVIRONMENT = ("PATH", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG")
+ENVIRONMENT = (
+    "PATH",
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    "WINDIR",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "LANG",
+    "LOTML_PYTHON",
+)
+"""What a child keeps of the environment; `LOTML_PYTHON` chooses the CPython the Python target runs
+on, so a whole run can be held to one version (plans/python-via-uv.md 1.1)."""
 
 
 def child_environment() -> dict[str, str]:
-    """What a child needs to start Python and nothing else: no tokens, no keys."""
+    """What a child needs to start Python and nothing else: no tokens, no keys. The compiler a
+    child runs gets an interpreter already resolved, the harness's own unless `LOTML_PYTHON` names
+    one, and runs offline, so it never reaches the download step (adr:0026)."""
     kept = {k: v for k, v in os.environ.items() if k.upper() in ENVIRONMENT}
+    kept.setdefault("LOTML_PYTHON", sys.executable)
     return kept | {
+        "LOTML_OFFLINE": "1",
         "PYTHONPATH": str(ROOT / "harness"),
         "PYTHONIOENCODING": "utf-8",
         "PYTHONDONTWRITEBYTECODE": "1",

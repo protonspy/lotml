@@ -98,7 +98,10 @@ fn test_on_the_llvm_target_reports_what_the_python_target_reports() {
     };
     let llvm = report("llvm");
     assert!(llvm.contains("\"outcome\":\"fail\"") || llvm.contains("\"outcome\": \"fail\""), "{llvm}");
-    assert_eq!(llvm, report("python"));
+    let mut python: serde_json::Value = serde_json::from_str(&report("python")).expect("a JSON report");
+    assert!(python["python"]["version"].is_string(), "the Python target records its CPython: {python}");
+    python.as_object_mut().expect("an object").remove("python");
+    assert_eq!(serde_json::from_str::<serde_json::Value>(&llvm).expect("a JSON report"), python);
 }
 
 #[test]

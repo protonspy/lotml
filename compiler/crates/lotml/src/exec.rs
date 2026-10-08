@@ -12,6 +12,8 @@ use serde_json::{Value, json};
 
 use crate::{Failure, Target, files};
 use lotml_llvm::driver::Level;
+use lotml_py::resolve::{Managed, Options, ThroughUv, Use, resolve};
+use lotml_py::uv::Uv;
 
 /// A compiled module: the name it is imported by, its source's absolute path, which tracebacks
 /// name, and the path as the user wrote it.
@@ -83,9 +85,29 @@ fn write(path: &Path, text: &str) -> Result<(), Failure> {
     std::fs::write(path, text).map_err(|e| Failure(format!("cannot write {}: {e}", path.display())))
 }
 
-fn python() -> Result<Vec<String>, Failure> {
-    lotml_py::python()
-        .ok_or_else(|| Failure("no Python found: install Python 3.11 or later, or set LOTML_PYTHON".into()))
+/// The CPython to run, resolved in adr:0026's order (lotml_py::resolve): `uses` says whether the
+/// project's virtual environment may run it, `project` where that is, and `downloads` whether a
+/// missing CPython may be fetched through uv.
+fn python(uses: Use, project: Option<&Path>, downloads: bool) -> Result<Vec<String>, Failure> {
+    let var = |name: &str| std::env::var_os(name);
+    let uv = lotml_py::uv::find(&lotml_py::uv::Places::here()).map_err(Failure)?;
+    let home = lotml_llvm::cache::user_root()
+        .map(|root| root.join("uv"))
+        .filter(|home| lotml_llvm::cache::private_directory(home).is_ok());
+    let managed = match (uv, home) {
+        (Some(path), Some(home)) => Some(ThroughUv { uv: Uv { path, home }, var: &var }),
+        _ => None,
+    };
+    let options = Options { uses, project, downloads };
+    resolve(&options, &var, managed.as_ref().map(|m| m as &dyn Managed), &lotml_py::python).map_err(Failure)
+}
+
+/// The project a file or directory belongs to: the nearest directory holding `.git` or a
+/// `pyproject.toml`, from a directory itself or from a file's own; none without one.
+fn project_of(path: &Path) -> Option<PathBuf> {
+    let path = std::path::absolute(path).ok()?;
+    let dir = if path.is_dir() { path } else { path.parent()?.to_path_buf() };
+    dir.ancestors().find(|d| d.join(".git").exists() || d.join("pyproject.toml").is_file()).map(Path::to_path_buf)
 }
 
 /// Python, started for one of the compiler's scripts. `-P` keeps the working directory out
@@ -217,18 +239,46 @@ pub fn build(paths: &[PathBuf], out: &Path, target: Target, shared: bool) -> Res
     Ok(0)
 }
 
+/// Whether a command is offline: by its flag, or by `LOTML_OFFLINE` set to anything but empty, which
+/// can only turn offline on (adr:0026).
+pub fn offline(flag: bool) -> bool {
+    flag || std::env::var_os("LOTML_OFFLINE").is_some_and(|v| !v.is_empty())
+}
+
+/// The CPython a command ran on, as its JSON records it (adr:0026): the executable and exact version
+/// the interpreter itself reports, and the version of the uv lotml finds, null where there is none.
+fn interpreter_record(python: &[String]) -> Value {
+    let said = interpreter(python, "import platform, sys\nprint(sys.executable)\nprint(platform.python_version())")
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| String::from_utf8_lossy(&out.stdout).lines().map(str::to_string).collect::<Vec<_>>())
+        .unwrap_or_default();
+    let uv = lotml_py::uv::find(&lotml_py::uv::Places::here())
+        .ok()
+        .flatten()
+        .and_then(|uv| lotml_py::uv::version(&uv))
+        .and_then(|said| said.split_whitespace().nth(1).map(str::to_string));
+    json!({"path": said.first(), "version": said.get(1), "uv": uv})
+}
+
 /// `lotml run`: the program's `fn main()`, with Python's exit status: 1 when it returned an
-/// error, 101 when it panicked; the LLVM target's program exits as Python's does.
-pub fn run(path: &Path, target: Target) -> Result<u8, Failure> {
+/// error, 101 when it panicked; the LLVM target's program exits as Python's does. With `json`, a
+/// program that ran is followed by one line: its status and the CPython it ran on.
+pub fn run(path: &Path, target: Target, offline: bool, as_json: bool) -> Result<u8, Failure> {
     let scratch = Scratch::new()?;
     if target == Target::Llvm {
         let Some(exe) = llvm_executable(path, &scratch.0, false, Level::Debug)? else { return Ok(1) };
         let status = Command::new(&exe).status().map_err(|e| Failure(format!("cannot run {}: {e}", exe.display())))?;
-        return Ok(exit_status(status));
+        let status = exit_status(status);
+        if as_json {
+            println!("{}", json!({"version": 1, "status": status, "python": null}));
+        }
+        return Ok(status);
     }
     let Some(modules) = compile_or_report(&[path.to_path_buf()], &scratch.0)? else { return Ok(1) };
     let name = &modules[0].name;
-    let python = python()?;
+    let python = python(Use::Run, project_of(path).as_deref(), !offline)?;
     let script = format!(
         "{}import lotml_rt\nsys.exit(lotml_rt.main({name}))",
         search_path(&scratch.0),
@@ -238,7 +288,11 @@ pub fn run(path: &Path, target: Target) -> Result<u8, Failure> {
         .env_remove("PYTHONIOENCODING")
         .status()
         .map_err(|e| Failure(format!("cannot run Python: {e}")))?;
-    Ok(status.code().map_or(101, |c| u8::try_from(c).unwrap_or(1)))
+    let status = status.code().map_or(101, |c| u8::try_from(c).unwrap_or(1));
+    if as_json {
+        println!("{}", json!({"version": 1, "status": status, "python": interpreter_record(&python)}));
+    }
+    Ok(status)
 }
 
 /// A native program's exit status as `lotml run` returns it. A program the system stopped — a
@@ -256,9 +310,9 @@ fn exit_status(status: std::process::ExitStatus) -> u8 {
 }
 
 /// `lotml test`: every `test` block, with the values a failed comparison saw.
-pub fn test(paths: &[PathBuf], as_json: bool, target: Target) -> Result<u8, Failure> {
+pub fn test(paths: &[PathBuf], as_json: bool, target: Target, offline: bool) -> Result<u8, Failure> {
     let (status, report) = match target {
-        Target::Python => test_report(paths, as_json, None)?,
+        Target::Python => test_report(paths, as_json, None, !offline, as_json)?,
         Target::Llvm => native_test_report(paths, as_json)?,
     };
     print!("{report}");
@@ -380,17 +434,26 @@ fn native_test_report(paths: &[PathBuf], as_json: bool) -> Result<(u8, String), 
             rows.push(row);
         }
     }
-    Ok(report_rows(rows, as_json))
+    Ok(report_rows(rows, as_json, None))
 }
 
 /// What `lotml test` prints, and its exit status; within `limits` when given.
-pub fn test_report(paths: &[PathBuf], as_json: bool, limits: Option<&Limits>) -> Result<(u8, String), Failure> {
+/// `downloads` says whether a missing CPython may be fetched: never for the MCP server or the grader;
+/// `record`, whether the JSON names the CPython the tests ran on.
+pub fn test_report(
+    paths: &[PathBuf],
+    as_json: bool,
+    limits: Option<&Limits>,
+    downloads: bool,
+    record: bool,
+) -> Result<(u8, String), Failure> {
     let scratch = Scratch::new()?;
     let modules = match compile(paths, &scratch.0)? {
         Ok(modules) => modules,
         Err(report) => return Ok((1, report)),
     };
-    let python = python()?;
+    let project = paths.first().and_then(|p| project_of(p));
+    let python = python(Use::Run, project.as_deref(), downloads)?;
     let listed: Vec<Value> = modules.iter().map(|m| json!([m.name, m.source.display().to_string()])).collect();
     // The modules go in on standard input: a command line holding hundreds of paths passes
     // Windows' limit of 32,767 characters.
@@ -428,16 +491,20 @@ pub fn test_report(paths: &[PathBuf], as_json: bool, limits: Option<&Limits>) ->
             rows.push(row);
         }
     }
-    Ok(report_rows(rows, as_json))
+    Ok(report_rows(rows, as_json, record.then(|| interpreter_record(&python))))
 }
 
 /// The report of the tests' `rows` and its exit status: 1 when any did not pass.
-fn report_rows(rows: Vec<Value>, as_json: bool) -> (u8, String) {
+fn report_rows(rows: Vec<Value>, as_json: bool, python: Option<Value>) -> (u8, String) {
     let count = |outcome: &str| rows.iter().filter(|r| r["outcome"] == outcome).count();
     let summary =
         json!({"passed": count("pass"), "failed": count("fail"), "errors": count("error"), "panics": count("panic")});
     let report = if as_json {
-        format!("{}\n", json!({"version": 1, "tests": rows, "summary": summary}))
+        let mut report = json!({"version": 1, "tests": rows, "summary": summary});
+        if let Some(python) = python {
+            report["python"] = python;
+        }
+        format!("{report}\n")
     } else {
         format!(
             "{}{} passed, {} failed, {} errors, {} panics\n",
@@ -454,7 +521,7 @@ fn report_rows(rows: Vec<Value>, as_json: bool) -> (u8, String) {
 /// `lotml bind`: the interface of a Python module, read from its stub by Python's own parser
 /// and written to `out/py.<module>.lotmli`, the name a program imports it by (adr:0012,
 /// adr:0029); the module may be given with its `py.` or without.
-pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failure> {
+pub fn bind(module: &str, stub: Option<&Path>, out: &Path, offline: bool) -> Result<bool, Failure> {
     let module = module.strip_prefix("py.").unwrap_or(module);
     // The name becomes a file name: identifiers and dots only, so it cannot leave `out`.
     let valid = module.split('.').all(|part| {
@@ -479,7 +546,7 @@ pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failu
             "`{module}` names a C library, whose interface is written by hand: bindings/{module}.lotmli (adr:0013)"
         )));
     }
-    let python = python()?;
+    let python = python(Use::Bind, None, !offline)?;
     let output = interpreter(&python, lotml_py::BIND)
         .arg(module)
         .arg(stub.map(|s| s.as_os_str().to_owned()).unwrap_or_default())
@@ -547,6 +614,21 @@ mod tests {
     }
 
     #[test]
+    fn a_project_is_found_from_a_directory_itself_and_never_made_up() {
+        let place = scratch();
+        let project = place.0.join("project");
+        std::fs::create_dir_all(project.join("src")).unwrap();
+        std::fs::write(project.join("pyproject.toml"), "").unwrap();
+        std::fs::write(project.join("src").join("p.lot"), "").unwrap();
+        assert_eq!(project_of(&project), Some(project.clone()), "a directory given is searched first");
+        assert_eq!(project_of(&project.join("src").join("p.lot")), Some(project.clone()));
+        let loose = place.0.join("loose.lot");
+        std::fs::write(&loose, "").unwrap();
+        let found = project_of(&loose);
+        assert!(found.as_deref() != Some(place.0.as_path()), "a file's own directory is no project by itself");
+    }
+
+    #[test]
     fn a_scratch_directory_is_new_each_time_and_removed_after() {
         let (first, second) = (scratch(), scratch());
         assert_ne!(first.0, second.0);
@@ -563,7 +645,9 @@ mod tests {
         std::fs::write(&source, "test \"forever\":\n    var n = 0\n    while True:\n        n = 1\n").unwrap();
         let limits = Limits { seconds: 2, output: 1024 };
         let started = std::time::Instant::now();
-        let Err(Failure(why)) = test_report(&[source], true, Some(&limits)) else { panic!("it should not finish") };
+        let Err(Failure(why)) = test_report(&[source], true, Some(&limits), false, false) else {
+            panic!("it should not finish")
+        };
         assert!(why.contains("did not finish within 2 s"), "{why}");
         assert!(started.elapsed() < std::time::Duration::from_secs(30));
     }

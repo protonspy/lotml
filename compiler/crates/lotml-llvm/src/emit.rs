@@ -1929,18 +1929,13 @@ impl Writer<'_, '_> {
                     self.runtime("lt_dict_set", &[target.clone(), k, v]);
                 }
             }
-            Expr::SetNew { elem, items, folded } => {
+            Expr::SetNew { elem, items } => {
                 let desc = self.types.desc(elem);
                 let s = self.runtime("lt_set_new", &[desc]);
                 self.store(l, s)?;
                 for item in items {
                     let a = self.address(item, elem)?;
                     self.runtime("lt_set_add", &[target.clone(), a]);
-                }
-                if *folded {
-                    let built = self.value(format!("load ptr, ptr {target}"));
-                    let s = self.runtime("lt_set_folded", &[built]);
-                    self.store(l, s)?;
                 }
             }
             Expr::ListNew { elem, items } => {

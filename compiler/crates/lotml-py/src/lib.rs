@@ -10,6 +10,8 @@
 
 mod boundary;
 mod from_ir;
+pub mod resolve;
+pub mod uv;
 
 use std::path::Path;
 
