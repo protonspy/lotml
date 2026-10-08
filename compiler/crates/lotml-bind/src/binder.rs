@@ -16,8 +16,66 @@ pub struct Refused(pub String);
 /// boundary checks (adr:0031).
 const OBJECT: &str = "PyObject";
 
+/// Past this, a file is no stub lotml reads.
+pub const LARGEST: usize = 8 << 20;
+/// The deepest a stub may nest brackets, or indent blocks.
+pub const DEEPEST: usize = 100;
+/// The most tokens one logical line of a stub may hold.
+pub const LONGEST_LINE: usize = 20_000;
+/// The stack the parse and the walk run on, which a tree within the limits above cannot overflow.
+const STACK: usize = 64 << 20;
+
 /// The interface of `module` from the text of its stub, the first line naming `said`, the source.
+/// A stub is hostile input (adr:0032): one past [`LARGEST`], [`DEEPEST`] or [`LONGEST_LINE`] is
+/// refused before it is parsed, which bounds the depth of the tree built and walked.
 pub fn interface(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
+    within_limits(stub)?;
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .stack_size(STACK)
+            .spawn_scoped(scope, || bind(module, stub, said))
+            .map_err(|e| Refused(format!("cannot start the binder: {e}")))?
+            .join()
+            .map_err(|_| Refused("the binder stopped on this stub".into()))?
+    })
+}
+
+/// Whether `stub` stays within the sizes lotml reads, by one pass of the lexer.
+fn within_limits(stub: &str) -> Result<(), Refused> {
+    use ruff_python_ast::token::TokenKind;
+    if stub.len() > LARGEST {
+        return Err(Refused(format!("the stub is {} bytes, past the {LARGEST} lotml reads", stub.len())));
+    }
+    let line = |at: usize| stub.as_bytes()[..at.min(stub.len())].iter().filter(|&&b| b == b'\n').count() + 1;
+    let mut lexer = ruff_python_parser::lexer::lex(stub, ruff_python_parser::Mode::Module);
+    let (mut brackets, mut blocks, mut tokens) = (0usize, 0usize, 0usize);
+    loop {
+        let kind = lexer.next_token();
+        let at = usize::from(lexer.current_range().start());
+        match kind {
+            TokenKind::EndOfFile => return Ok(()),
+            TokenKind::Lpar | TokenKind::Lsqb | TokenKind::Lbrace => brackets += 1,
+            TokenKind::Rpar | TokenKind::Rsqb | TokenKind::Rbrace => brackets = brackets.saturating_sub(1),
+            TokenKind::Indent => blocks += 1,
+            TokenKind::Dedent => blocks = blocks.saturating_sub(1),
+            TokenKind::Newline => tokens = 0,
+            _ => {}
+        }
+        tokens += 1;
+        if brackets > DEEPEST || blocks > DEEPEST {
+            return Err(Refused(format!("the stub nests deeper than {DEEPEST} levels, at line {}", line(at))));
+        }
+        if tokens > LONGEST_LINE {
+            return Err(Refused(format!(
+                "a line of the stub holds more than {LONGEST_LINE} tokens, at line {}",
+                line(at)
+            )));
+        }
+    }
+}
+
+/// [`interface`], once the stub is known to be within the limits.
+fn bind(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
     let parsed = ruff_python_parser::parse_unchecked_source(stub, PySourceType::Stub);
     if let Some(error) = parsed.errors().first() {
         let at = usize::from(error.location.start()).min(stub.len());
@@ -547,6 +605,47 @@ mod tests {
             Some("# The Python module `m`, bound by `lotml bind` from x?fn evil() -> int ! PyError??y.")
         );
         assert_eq!(text.lines().filter(|l| l.starts_with("fn ")).count(), 1);
+    }
+
+    fn refused(stub: &str) -> String {
+        match interface("m", stub, "m.pyi") {
+            Err(Refused(why)) => why,
+            Ok(text) => panic!("bound:\n{text}"),
+        }
+    }
+
+    #[test]
+    fn a_stub_past_the_size_lotml_reads_is_refused() {
+        let stub = format!("def f() -> None: ...\n{}", "#".repeat(LARGEST));
+        assert!(refused(&stub).contains("bytes, past the"));
+    }
+
+    #[test]
+    fn a_stub_nesting_past_the_limit_is_refused_saying_where() {
+        let deep = format!("def f() -> None: ...\nx: {}int{}\n", "list[".repeat(DEEPEST + 1), "]".repeat(DEEPEST + 1));
+        let why = refused(&deep);
+        assert!(why.contains("nests deeper") && why.contains("line 2"), "{why}");
+        let at_limit =
+            format!("def f(a: {}int{}) -> None: ...\n", "list[".repeat(DEEPEST - 1), "]".repeat(DEEPEST - 1));
+        assert_eq!(functions(&at_limit).len(), 1, "the parameters' parenthesis and the lists, at the limit, bind");
+    }
+
+    #[test]
+    fn blocks_nested_past_the_limit_are_refused() {
+        let mut stub = String::new();
+        for depth in 0..=DEEPEST {
+            stub.push_str(&format!("{}if sys.version_info >= (3, {depth}):\n", "  ".repeat(depth)));
+        }
+        stub.push_str(&format!("{}def f() -> None: ...\n", "  ".repeat(DEEPEST + 1)));
+        assert!(refused(&stub).contains("nests deeper"));
+    }
+
+    #[test]
+    fn a_line_past_the_token_limit_is_refused_and_one_within_it_binds() {
+        let long = format!("def f(a: int = {}1) -> None: ...\n", "1 + ".repeat(LONGEST_LINE));
+        assert!(refused(&long).contains("more than"), "a line that long builds a tree that deep");
+        let within = format!("def f(a: int = {}1) -> None: ...\n", "1 + ".repeat(LONGEST_LINE / 2 - 20));
+        assert_eq!(one(&within), "fn f(a: int = todo()) -> None ! PyError", "a deep tree is walked and dropped");
     }
 
     #[test]
