@@ -2,7 +2,7 @@
 status: accepted
 ---
 
-# 0027 · Fuzz the frontend with cargo-fuzz, on nightly, outside the workspace
+# 0028 · Fuzz the frontend with cargo-fuzz, on nightly, outside the workspace
 
 ## Context
 

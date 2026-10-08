@@ -1,7 +1,7 @@
 # The frontend's fuzzer
 
 cargo-fuzz over libFuzzer, on nightly, outside the workspace
-(adr:0027-fuzz-the-frontend-with-cargo-fuzz-on-nightly). The `frontend` target takes any UTF-8 text
+(adr:0028-fuzz-the-frontend-with-cargo-fuzz-on-nightly). The `frontend` target takes any UTF-8 text
 through the checker, the prefix checker and the compile of both targets; an input that panics is a
 bug.
 
