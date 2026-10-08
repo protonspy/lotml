@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 5d23a7dc85e28cfb4630c42abab0d4c56cd046cbd758eced2e9cfa07a8192b2a
+checksum: b5c1f569494e026e3d2f9631312636ea89282c795488928384213606afbfd3f0
 ---
 
 # Python via uv
@@ -63,7 +63,7 @@ directory's uv configuration must change nothing, and the docs must describe the
 - [x] 1.3 (Unit) Find uv by absolute path: `LOTML_UV` (an existing file, absolute), then the uv beside the running executable, then an explicit search of the path that skips relative and empty entries and the current directory, logging the uv chosen and its version
 - [x] 1.4 (Unit) Run every uv call from lotml's cache directory, with uv's configuration files ignored. Forbid Python downloads outside the install step, ask only for managed interpreters, install no shims, and refuse to download while a variable that disables verification or replaces download metadata is set. Each rule gets a test using a project with a hostile `uv.toml` and `.python-version`
   _Depends 1.3_
-- [ ] 1.5 (Unit) Resolve the Python for `run`, `test`, `bind` and the MCP `test` tool in the order adr:0026 sets:
+- [x] 1.5 (Unit) Resolve the Python for `run`, `test`, `bind` and the MCP `test` tool in the order adr:0026 sets:
   - `LOTML_PYTHON`;
   - the project's venv for `run` and `test` only;
   - a managed 3.14 uv already has;

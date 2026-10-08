@@ -327,7 +327,7 @@ impl Server {
             return None;
         }
         let limits = exec::Limits { seconds, output: TEST_OUTPUT };
-        let (_, report) = exec::test_report(&laid, true, Some(&limits)).ok()?;
+        let (_, report) = exec::test_report(&laid, true, Some(&limits), false).ok()?;
         let report: Value = serde_json::from_str(report.trim()).ok()?;
         let row =
             report["tests"].as_array()?.iter().find(|r| r["file"] == edited.as_str() && r["name"] == block.as_str())?;
@@ -369,7 +369,8 @@ impl Server {
             return Err(ToolError("the deadline passed".to_string()));
         }
         let limits = exec::Limits { seconds, output: TEST_OUTPUT };
-        let (_, report) = exec::test_report(&paths, true, Some(&limits)).map_err(|Failure(why)| ToolError(why))?;
+        let (_, report) =
+            exec::test_report(&paths, true, Some(&limits), false).map_err(|Failure(why)| ToolError(why))?;
         let report: Value =
             serde_json::from_str(report.trim()).map_err(|_| ToolError("the tests did not report".to_string()))?;
         let Some(row) = report["tests"].as_array().into_iter().flatten().find(|r| r["outcome"] != "pass") else {
@@ -553,7 +554,8 @@ impl Server {
     fn test(&self, args: &Value) -> Result<String, ToolError> {
         let paths = self.selected(args)?;
         let limits = exec::Limits { seconds: TEST_SECONDS, output: TEST_OUTPUT };
-        let (_, report) = exec::test_report(&paths, true, Some(&limits)).map_err(|Failure(why)| ToolError(why))?;
+        let (_, report) =
+            exec::test_report(&paths, true, Some(&limits), false).map_err(|Failure(why)| ToolError(why))?;
         Ok(report)
     }
 
