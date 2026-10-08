@@ -2,7 +2,8 @@
 autonomy: auto
 ci: wait
 branch: feat/rust-binder
-delivery: in-progress
+delivery: in-review
+pr: 55
 ---
 
 # Rust binder — requirements
