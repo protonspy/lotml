@@ -32,8 +32,13 @@ ABSTRACT_SETS = {"AbstractSet", "MutableSet"}
 TUPLES = {"tuple", "Tuple"}
 
 
+OBJECT = "PyObject"
+"""The type of a value no LotML type describes: opaque, taken out only through a conversion the
+boundary checks (adr:0031, specs/python-object)."""
+
+
 class Unsupported(Exception):
-    """A type lotml has no counterpart for."""
+    """A function lotml does not bind: one overloaded, or a coroutine."""
 
 
 def name_of(node) -> str | None:
@@ -46,7 +51,8 @@ def name_of(node) -> str | None:
 
 def lotml_type(node, parameter: bool) -> str:
     """The lotml type for an annotation; a parameter may take an abstract collection, which a
-    lotml list, dict or set satisfies, while a result must be the concrete one lotml receives."""
+    lotml list, dict or set satisfies, while a result must be the concrete one lotml receives. A
+    type lotml has none for is a `PyObject`."""
     if isinstance(node, ast.Constant) and node.value is None:
         return "None"
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
@@ -54,14 +60,14 @@ def lotml_type(node, parameter: bool) -> str:
         rest = [s for s in sides if not (isinstance(s, ast.Constant) and s.value is None)]
         if len(rest) == 1:
             return optional(lotml_type(rest[0], parameter))
-        raise Unsupported(f"`{ast.unparse(node)}` is a union, which lotml has no type for")
+        return OBJECT
     name = name_of(node)
     if name is not None:
         if name in SIMPLE:
             return SIMPLE[name]
         if parameter and name in ACCEPTS:
             return ACCEPTS[name]
-        raise Unsupported(f"`{ast.unparse(node)}` has no lotml type")
+        return OBJECT
     if isinstance(node, ast.Subscript):
         head = name_of(node.value)
         args = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
@@ -75,9 +81,9 @@ def lotml_type(node, parameter: bool) -> str:
             return f"{{{lotml_type(args[0], parameter)}: {lotml_type(args[1], parameter)}}}"
         if head in TUPLES:
             if any(isinstance(a, ast.Constant) and a.value is Ellipsis for a in args):
-                raise Unsupported(f"`{ast.unparse(node)}` is a tuple of any length")
+                return OBJECT
             return "(" + ", ".join(lotml_type(a, parameter) for a in args) + ")"
-    raise Unsupported(f"`{ast.unparse(node)}` has no lotml type")
+    return OBJECT
 
 
 def optional(inner: str) -> str:
@@ -110,15 +116,12 @@ def signature(function: ast.FunctionDef) -> str:
         *zip(positional, defaults, strict=True),
         *zip(arguments.kwonlyargs, arguments.kw_defaults, strict=True),
     ]:
-        if arg.annotation is None:
-            raise Unsupported(f"`{arg.arg}` has no type")
-        text = f"{arg.arg}: {lotml_type(arg.annotation, parameter=True)}"
+        annotated = OBJECT if arg.annotation is None else lotml_type(arg.annotation, parameter=True)
+        text = f"{arg.arg}: {annotated}"
         if given is not None:
             text += f" = {default(given)}"
         params.append(text)
-    if function.returns is None:
-        raise Unsupported("its result has no type")
-    returns = lotml_type(function.returns, parameter=False)
+    returns = OBJECT if function.returns is None else lotml_type(function.returns, parameter=False)
     return f"fn {function.name}({', '.join(params)}) -> {returns} ! PyError"
 
 
@@ -214,10 +217,11 @@ def interface(module: str, stub: Path) -> str:
         "# Do not edit: run `lotml bind` again.",
         "# Every function returns `T ! PyError`: a stub does not say what a call raises.",
         "# A parameter written `= todo()` is optional: Python supplies its default.",
+        "# A `PyObject` is a value no LotML type describes: convert it with `value()`.",
         *bound,
     ]
     if skipped:
-        lines += ["", "# Not bound, as lotml has no type for them:", *skipped]
+        lines += ["", "# Not bound:", *skipped]
     return "\n".join(lines) + "\n"
 
 

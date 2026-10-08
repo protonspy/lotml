@@ -209,6 +209,21 @@ impl<'p> Body<'p> {
         if matches!(self.resolve(ty), Ty::PyObject) { d.note(OPAQUE) } else { d }
     }
 
+    /// Whether `found` fits `expected`, a type holding a `PyObject`, part by part: `[int]` where
+    /// Python takes a `[PyObject]` (specs/python-object R1.3).
+    fn fits_shape(&mut self, found: &Ty, expected: &Ty) -> bool {
+        match (self.resolve(found), self.resolve(expected)) {
+            (f, Ty::PyObject) => self.carried(&f),
+            (Ty::List(a), Ty::List(b)) | (Ty::Set(a), Ty::Set(b)) | (Ty::Optional(a), Ty::Optional(b)) => {
+                self.fits_shape(&a, &b)
+            }
+            (f, Ty::Optional(b)) => self.fits_shape(&f, &b),
+            (Ty::Dict(k, v), Ty::Dict(ek, ev)) => self.fits_shape(&k, &ek) && self.fits_shape(&v, &ev),
+            (Ty::Tuple(a), Ty::Tuple(b)) if a.len() == b.len() => a.iter().zip(&b).all(|(x, y)| self.fits_shape(x, y)),
+            (f, e) => self.infer.unify(&f, &e),
+        }
+    }
+
     /// Whether the boundary of adr:0012 carries a value of `ty` into Python as a `PyObject`.
     fn carried(&self, ty: &Ty) -> bool {
         match self.resolve(ty) {
@@ -1264,6 +1279,7 @@ impl<'p> Body<'p> {
                 self.program.implements.contains(&(trait_name.clone(), name.clone()))
             }
             (_, Ty::PyObject) if !matches!(f, Ty::Var(_)) => self.carried(&f),
+            (_, e) if e.holds_py_object() && !matches!(f, Ty::Var(_)) => self.fits_shape(&f, e),
             (Ty::List(a), Ty::List(b)) if matches!(self.resolve(b), Ty::Dyn(_)) => {
                 let item = self.resolve(a);
                 self.fits(&item, b)

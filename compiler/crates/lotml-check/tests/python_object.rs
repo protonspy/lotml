@@ -10,6 +10,7 @@ const REQUESTS: &str = "\
 fn get(url: str) -> PyObject ! PyError
 fn status(response: PyObject) -> int ! PyError
 fn send(payload: PyObject) -> None ! PyError
+fn many(items: [PyObject], table: {str: PyObject}?) -> int ! PyError
 ";
 
 fn diagnostics(body: &str) -> Vec<Diagnostic> {
@@ -48,6 +49,9 @@ fn where_python_expects_one_any_value_the_boundary_carries_is_taken() {
     clean("    py.requests.send({\"a\": [1.5]})?\n    py.requests.send((1, \"x\"))?\n    py.requests.send(None)?\n");
     let found = diagnostics("    py.requests.send(Point(1))?\n");
     assert_eq!(found.len(), 1, "a record is not what the boundary carries into Python");
+    clean("    n = py.requests.many([1, 2], {\"a\": [1.5]})?\n    m = py.requests.many([r, r], None)?\n");
+    let found = diagnostics("    n = py.requests.many([Point(1)], None)?\n");
+    assert_eq!(found.len(), 1, "part by part, a record is still not carried");
 }
 
 #[test]

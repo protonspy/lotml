@@ -12,5 +12,5 @@
 
 - [x] 2.1 (Unit) Refuse a `PyObject` on the native target, and leave a function that takes or returns one out of a compiled module's exports with a warning — R3.1, R3.2
   _Depends 1.1_
-- [ ] 2.2 (Unit) Have `lotml bind` write `PyObject` for a type it has none for, and count those names apart in the binding coverage report, measured under a new label — R4.1, R4.2
+- [x] 2.2 (Unit) Have `lotml bind` write `PyObject` for a type it has none for, and count those names apart in the binding coverage report, measured under a new label — R4.1, R4.2
   _Depends 1.3_

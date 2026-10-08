@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-08 — the opaque Python value: [[transpilation-strategy]] says an untypable type binds as `PyObject`
 - 2026-10-08 — Python imported by origin: [[transpilation-strategy]] says `import py.<module>` and `bindings/py.<module>.lotmli`
 - 2026-10-08 — the per-item check built and measured: [[compiler-performance]] says a body edit takes 38% of a check from an empty database
 - 2026-10-08 — the per-item check specified: [[compiler-performance]] points at `specs/incremental-check/`

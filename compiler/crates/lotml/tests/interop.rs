@@ -61,14 +61,17 @@ fn bind_writes_an_interface_from_a_stub() {
     let dir = scratch("bind", &[("stubs/textwrap.pyi", TEXTWRAP_PYI)]);
     let out = lotml(&["bind", "textwrap", "--stub", "stubs/textwrap.pyi"], &dir);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    assert!(stdout(&out).contains("4 functions bound, 2 not"), "{}", stdout(&out));
+    assert!(stdout(&out).contains("5 functions bound, 1 not"), "{}", stdout(&out));
     let interface = std::fs::read_to_string(dir.join("bindings").join("py.textwrap.lotmli")).unwrap();
     assert!(interface.contains(
         "fn wrap(text: str, width: int = 70, max_lines: int? = None, placeholder: str = \" [...]\") -> [str] ! PyError\n"
     ));
     assert!(interface.contains("fn fill(text: str, width: int = 70) -> str ! PyError\n"), "**kwargs is left to Python");
     assert!(interface.contains("fn shorten(text: str, width: int, placeholder: str = todo()) -> str ! PyError\n"));
-    assert!(interface.contains("#   indent: `Callable[[str], bool]` has no lotml type\n"), "{interface}");
+    assert!(
+        interface.contains("fn indent(text: str, prefix: str, predicate: PyObject? = None) -> str ! PyError"),
+        "a callable is a `PyObject`: {interface}"
+    );
     assert!(interface.contains("#   pick: it is overloaded"));
     assert!(!interface.contains("_private") && !interface.contains("TextWrapper"));
 }
@@ -209,6 +212,7 @@ def touch(d): d.n += 5
 def peek(d): return d.n
 def numbers(): return [1, 2, 3]
 def word(): return 'x'
+def total(xs): return sum(xs)
 def send(xs):
     xs.append(99)
     return len(xs)
@@ -224,6 +228,7 @@ fn peek(d: PyObject) -> int ! PyError
 fn numbers() -> PyObject ! PyError
 fn word() -> PyObject ! PyError
 fn send(xs: PyObject) -> int ! PyError
+fn total(xs: [PyObject]) -> int ! PyError
 ";
 
 #[test]
@@ -246,6 +251,7 @@ fn main() -> None ! PyError:
     print(xs)
     var mine = [1, 2]
     print(py.objs.send(mine)?, mine)
+    print(py.objs.total([1, 2, 3])?)
     match as_int(py.objs.word()?):
         case Ok(n):
             print(n)
@@ -261,7 +267,7 @@ fn main() -> None ! PyError:
     let out = lotml(&["run", "main.lot"], &dir);
     assert_eq!(
         stdout(&out),
-        "2\n15\n[1, 2, 3]\n3 [1, 2]\nTypeError\n",
+        "2\n15\n[1, 2, 3]\n3 [1, 2]\n6\nTypeError\n",
         "the object and the dataclass changed in Python, the LotML list copied: {}",
         String::from_utf8_lossy(&out.stderr)
     );

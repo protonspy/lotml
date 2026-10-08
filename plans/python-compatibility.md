@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 8a6dbff2a6e1f8c4e2617d863d6cae0509bba64638b55585b849c7f4d2bff4cd
+checksum: 95682a2f0279aba90352aac35e8e3a0e602ed4087aed29aad1466eb906d354b1
 ---
 
 # Python compatibility
@@ -76,7 +76,7 @@ the typed share each spec added.
 - [x] 2.1 (Unit) Write a proposed ADR on a dynamic Python value for the names a stub cannot type,
   amending adr:0012: opaque, left only through a conversion that runs the boundary checks, kept
   out of `lotml build` and of Python calling LotML; the owner accepts it before 2.2
-- [ ] 2.2 (Unit) Write and build the spec python-object
+- [x] 2.2 (Unit) Write and build the spec python-object
   _Depends 2.1_
 - [x] 2.3 (Unit) Write a proposed ADR on binding a module at check time, extending the ADR of
   bind-sources 2.1 and saying whether python-via-uv 2.1 stands: a stub read in Rust as data, never
