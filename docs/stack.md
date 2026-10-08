@@ -83,7 +83,7 @@ and MCP servers — JSON-RPC written over `serde_json`, with no protocol library
   cannot drift apart; chosen over hand parsing for its error messages.
 - **cargo-llvm-cov** (development only) — line coverage of the Rust tests for the test gate,
   next to the harness's pytest-cov; it needs the `llvm-tools-preview` component.
-- **cargo-fuzz** and **libfuzzer-sys** 0.4 (development only, on nightly) — coverage-guided
+- **cargo-fuzz** 0.13.2 and **libfuzzer-sys** 0.4 (development only, on nightly) — coverage-guided
   fuzzing of the parser, the checker and both targets' lowering, as ruff fuzzes its parser, in
   `compiler/fuzz/` outside the workspace so the compiler stays on stable
   (adr:0027-fuzz-the-frontend-with-cargo-fuzz-on-nightly); libFuzzer does not link with MSVC, so on

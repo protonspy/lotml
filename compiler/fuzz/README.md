@@ -9,8 +9,8 @@ On Linux or macOS, or under WSL on Windows (libFuzzer does not link with MSVC), 
 
 ```sh
 rustup toolchain install nightly --profile minimal
-cargo install cargo-fuzz --locked
-cargo +nightly run --manifest-path fuzz/Cargo.toml --bin seed   # the corpus's programs, as first inputs
+cargo install cargo-fuzz --locked --version 0.13.2
+cargo +nightly run --locked --manifest-path fuzz/Cargo.toml --bin seed   # the corpus's programs, as first inputs
 cargo +nightly fuzz run frontend -- -max_total_time=600         # ten minutes
 ```
 
