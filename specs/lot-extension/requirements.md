@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/lot-extension
-delivery: in-review
+delivery: merged
 pr: 25
 ---
 

@@ -2,6 +2,7 @@
 //! lowered once into typed, structured functions over named locals, and the passes from IR to IR
 //! that make it ready for a native backend.
 
+pub mod depth;
 pub mod ir;
 pub mod lower;
 pub mod mono;

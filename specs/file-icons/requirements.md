@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/file-icons
-delivery: in-review
+delivery: merged
 pr: 26
 ---
 

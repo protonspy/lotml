@@ -19,6 +19,7 @@ import json
 import linecache
 import math as _math
 import string
+import threading
 import types
 from typing import Any
 
@@ -143,6 +144,42 @@ class Todo(Panic):
 
 class NonExhaustiveMatch(Panic):
     """No arm matched."""
+
+
+class RecursionLimit(Panic):
+    """A call that would put more than `DEPTH_LIMIT` of lotml's own calls in progress on its
+    thread: named `RecursionError`, as the native target names it, and raised by the program
+    rather than by CPython, whose limit counts frames lotml does not control."""
+
+
+RecursionLimit.__name__ = RecursionLimit.__qualname__ = "RecursionError"
+
+DEPTH_LIMIT = 1000
+"""The most calls of lotml functions that can recurse a thread may have in progress
+(specs/recursion-depth R1.2)."""
+
+_calls = threading.local()
+
+
+def depth() -> int:
+    """The calls in progress on this thread that count toward `DEPTH_LIMIT`."""
+    return getattr(_calls, "depth", 0)
+
+
+def set_depth(count: int):
+    """Give this thread `count` calls in progress: what a test or a task began with."""
+    _calls.depth = count
+
+
+def enter() -> int:
+    """A call of a lotml function that can recurse begins: counted, unless it would pass the
+    limit, which stops the program first (R1.2). The count before it is returned, for the
+    function to put back with `set_depth` however it ends (R1.3)."""
+    count = getattr(_calls, "depth", 0)
+    if count >= DEPTH_LIMIT:
+        raise RecursionLimit("maximum recursion depth exceeded")
+    _calls.depth = count + 1
+    return count
 
 
 def overflow(value):
@@ -368,14 +405,21 @@ def parallel(tasks):
     if not tasks:
         return []
     workers = min(len(tasks), TASK_THREADS)
+    count = depth()
     with concurrent.futures.ThreadPoolExecutor(workers, thread_name_prefix="lotml-task") as pool:
-        futures = [pool.submit(task) for task in tasks]
+        futures = [pool.submit(_task, task, count) for task in tasks]
         concurrent.futures.wait(futures)
     for future in futures:
         error = future.exception()
         if error is not None:
             raise error
     return [future.result() for future in futures]
+
+
+def _task(task, count: int):
+    """`task`, run on a worker from the count of the thread that started it (R1.6)."""
+    set_depth(count)
+    return task()
 
 
 class LotmlError(Exception):
@@ -1039,8 +1083,10 @@ def run_tests(namespace: dict, path: str) -> list[dict]:
     """Run every `test` block: pass, fail with the values compared, an error passed on by `?`,
     or a panic with where it happened."""
     results = []
+    count = depth()
     for name, test in namespace["__tests"]:
         result = {"name": name}
+        set_depth(count)
         try:
             test()
             result["outcome"] = "pass"
@@ -1073,8 +1119,58 @@ def run_tests(namespace: dict, path: str) -> list[dict]:
     return results
 
 
+STACK = 64 << 20
+"""The stack of the thread `lotml run` and `lotml test` run a program on (specs/recursion-depth
+R2.2): room for `DEPTH_LIMIT` calls, and for CPython's own C-level recursion under them."""
+
+PYTHON_LIMIT = 20_000
+"""CPython's recursion limit while a program runs: past `DEPTH_LIMIT` lotml calls' frames and the
+runtime's between them, so the program's own `RecursionError` always comes first."""
+
+
+def on_program_thread(work):
+    """`work()`, run on a thread with `STACK` of stack and CPython's limit at `PYTHON_LIMIT`: what
+    `lotml run` and `lotml test` do, and never importing a module, so a Python host keeps its own
+    limit. The threads `parallel` starts get the interpreter's own stack: on Windows CPython
+    commits a thread's whole stack rather than reserving it, and 256 workers of 64 MiB would
+    commit 16 GiB, while a call between lotml functions takes no C stack on CPython 3.11 on."""
+    import sys
+
+    sys.setrecursionlimit(PYTHON_LIMIT)
+    before = threading.stack_size(STACK)
+    done = []
+    thread = threading.Thread(target=lambda: done.append(work()), name="lotml-main")
+    try:
+        thread.start()
+    finally:
+        threading.stack_size(before)
+    thread.join()
+    return done[0] if done else 101
+
+
 def main(module_name: str) -> int:
-    """`lotml run`: call the program's `main`, and say what stopped it, in lotml's terms."""
+    """`lotml run`: call the program's `main` on a thread with room for the recursion limit, and
+    say what stopped it, in lotml's terms."""
+    return on_program_thread(lambda: _main(module_name))
+
+
+def test_modules(listed: list) -> list:
+    """`lotml test`: the `test` blocks of each module of `listed`, a list of its name and its
+    path, run on a thread with room for the recursion limit."""
+    return on_program_thread(lambda: [_test_module(name, path) for name, path in listed])
+
+
+def _test_module(name: str, path: str) -> dict:
+    import importlib
+
+    try:
+        module = importlib.import_module(name)
+        return {"file": path, "tests": run_tests(vars(module), path)}
+    except Exception as error:  # noqa: BLE001 - a module that does not load is reported
+        return {"file": path, "load": type(error).__name__ + ": " + str(error)}
+
+
+def _main(module_name: str) -> int:
     import importlib
     import sys
     import traceback

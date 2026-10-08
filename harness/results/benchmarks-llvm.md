@@ -10,25 +10,45 @@ the C ones do not.
 
 | program | C (s) | LotML (s) | LotML / C | same output |
 | --- | ---: | ---: | ---: | --- |
-| collatz | 0.136 | 0.405 | 2.97x | yes |
-| fib | 0.073 | 0.127 | 1.74x | yes |
-| mandelbrot | 0.249 | 0.171 | 0.69x | yes |
-| matmul | 0.052 | 0.263 | 5.03x | yes |
-| sieve | 0.106 | 0.240 | 2.26x | yes |
+| collatz | 0.135 | 0.399 | 2.95x | yes |
+| fib | 0.072 | 0.248 | 3.46x | yes |
+| mandelbrot | 0.267 | 0.177 | 0.66x | yes |
+| matmul | 0.053 | 0.262 | 4.94x | yes |
+| sieve | 0.107 | 0.224 | 2.10x | yes |
 
 ## Allocation-heavy
 
 | program | C (s) | LotML (s) | LotML / C | same output |
 | --- | ---: | ---: | ---: | --- |
-| binarytrees | 0.430 | 0.565 | 1.32x | yes |
-| strings | 0.101 | 0.256 | 2.55x | yes |
-| wordcount | 0.094 | 0.302 | 3.22x | yes |
+| binarytrees | 0.416 | 0.590 | 1.42x | yes |
+| strings | 0.099 | 0.240 | 2.44x | yes |
+| wordcount | 0.096 | 0.306 | 3.20x | yes |
 
 ## Sharing-heavy
 
 | program | C (s) | LotML (s) | LotML / C | same output |
 | --- | ---: | ---: | ---: | --- |
-| cow | 0.101 | 0.094 | 0.93x | yes |
-| shared | 0.021 | 0.067 | 3.22x | yes |
+| cow | 0.099 | 0.101 | 1.02x | yes |
+| shared | 0.019 | 0.069 | 3.57x | yes |
 
-The numeric programs are not within 2x C: `collatz` takes 2.97x; `matmul` takes 5.03x; `sieve` takes 2.26x.
+The numeric programs are not within 2x C: `collatz` takes 2.95x; `fib` takes 3.46x; `matmul` takes 4.94x; `sieve` takes 2.10x.
+
+## Against main, without the count
+
+Each LotML program built by the compiler of main, without the count as well, at `-O2`, its fastest of
+7 runs.
+
+| program | before (s) | now (s) | change |
+| --- | ---: | ---: | ---: |
+| binarytrees | 0.551 | 0.590 | +7.0% |
+| collatz | 0.397 | 0.399 | +0.5% |
+| cow | 0.102 | 0.101 | -0.7% |
+| fib | 0.124 | 0.248 | +99.8% |
+| mandelbrot | 0.168 | 0.177 | +5.7% |
+| matmul | 0.262 | 0.262 | +0.1% |
+| shared | 0.066 | 0.069 | +4.4% |
+| sieve | 0.244 | 0.224 | -8.1% |
+| strings | 0.243 | 0.240 | -0.9% |
+| wordcount | 0.308 | 0.306 | -0.6% |
+
+Past 5% longer than before: `binarytrees` takes 7.0% longer; `fib` takes 99.8% longer; `mandelbrot` takes 5.7% longer.

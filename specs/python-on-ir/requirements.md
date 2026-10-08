@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/c-abi-export
-delivery: in-review
+delivery: merged
 pr: 32
 ---
 

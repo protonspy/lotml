@@ -12,6 +12,7 @@
 @lt_text.0 = private unnamed_addr constant [8 x i8] c"add.lot\00"
 
 declare i32 @lt_exit(i32)
+declare i32 @lt_run_main(ptr)
 declare void @lt_buf_f64(ptr, double)
 declare void @lt_buf_free(ptr)
 declare void @lt_buf_put(ptr, ptr, i64)
@@ -77,6 +78,12 @@ entry:
 define i32 @main() {
 entry:
   call void @lt_init()
+  %status = call i32 @lt_run_main(ptr @lt_program)
+  ret i32 %status
+}
+
+define internal i32 @lt_program() {
+entry:
   call void @lf_main()
   %status = call i32 @lt_exit(i32 0)
   ret i32 %status

@@ -33,6 +33,13 @@ jobs:
           clang --version
           major=$(clang --version | sed -n 's/.*clang version \([0-9]*\).*/\1/p' | head -1)
           command -v "llvm-dwarfdump-$major" || command -v llvm-dwarfdump || ls "/usr/lib/llvm-$major/bin/llvm-dwarfdump"
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - name: Pythons
+        # The recursion parity tests hold the Python target to CPython 3.11, whose C-level
+        # recursion shares the limit, and to 3.14 (specs/recursion-depth 2.3).
+        run: |
+          uv python install 3.11 3.14
+          echo "LOTML_PYTHONS=$(uv python find 3.11):$(uv python find 3.14)" >> "$GITHUB_ENV"
       - name: Test
         # The LLVM target's programs built under AddressSanitizer and UndefinedBehaviorSanitizer;
         # leaks are the counting builds' to report.

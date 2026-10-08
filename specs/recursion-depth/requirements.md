@@ -1,9 +1,9 @@
 ---
 autonomy: auto
 ci: wait
-branch: docs/recursion-depth-spec
+branch: feat/recursion-depth
 delivery: in-review
-pr: 46
+pr: 50
 ---
 
 # Recursion depth — requirements

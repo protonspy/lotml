@@ -21,6 +21,9 @@ use crate::export::Export;
 use crate::module::Module;
 use crate::types::{self, Types, int_bits};
 
+/// The runtime's count of calls in progress on the thread, `lt_depth` of `lotml.h`.
+const DEPTH: &str = "@lt_depth = external thread_local global i32";
+
 /// Where the emitter reads the runtime's cells by offset (specs/llvm-parity R3.1, checked against
 /// `offsetof` by `layout`): an `lt_str`'s size in bytes, its length in characters and its bytes,
 /// the length of an `lt_list` and of an `lt_dict`, and the used slots of an `lt_set`.
@@ -84,6 +87,7 @@ pub fn program(lowered: &Lowered, file: &str, entry: Entry, lines: bool) -> Resu
             span: f.span,
             results: &mut results,
             scope,
+            depth: None,
         };
         match writer.function() {
             Ok(text) => bodies.push_str(&text),
@@ -116,11 +120,16 @@ pub fn program(lowered: &Lowered, file: &str, entry: Entry, lines: bool) -> Resu
     Ok(out)
 }
 
-/// The program's `main`: the runtime started, the program's `main` or its tests run, its status.
+/// The program's `main`: the runtime started, then the program's `main` or its tests run on a
+/// thread with room for the recursion limit (specs/recursion-depth R2.1), and their status.
 fn main(module: &mut Module, lowered: &Lowered, types: &Types, tests: bool) -> String {
     module.runtime("lt_init");
     module.runtime("lt_exit");
-    let mut out = String::from("define i32 @main() {\nentry:\n  call void @lt_init()\n");
+    module.runtime("lt_run_main");
+    let mut out = String::from(
+        "define i32 @main() {\nentry:\n  call void @lt_init()\n  %status = call i32 @lt_run_main(ptr @lt_program)\n  \
+         ret i32 %status\n}\n\ndefine internal i32 @lt_program() {\nentry:\n",
+    );
     if tests {
         module.runtime("lt_run_test");
         module.runtime("lt_test_report");
@@ -436,6 +445,8 @@ struct Writer<'a, 't> {
     results: &'t mut Vec<Ty>,
     /// The function's `DISubprogram`, when the module carries line tables.
     scope: Option<usize>,
+    /// The count of calls in progress `Enter` read, which every `Leave` puts back.
+    depth: Option<String>,
 }
 
 impl Writer<'_, '_> {
@@ -1836,6 +1847,33 @@ impl Writer<'_, '_> {
     // Statements --------------------------------------------------------------------------------
 
     /// A panic: the runtime function that stops the program, given the place.
+    /// A call of a function that can recurse begins: past the limit the runtime stops the program,
+    /// before the count grows (specs/recursion-depth R1.2); else the count grows by one. Inline, so
+    /// a counted call pays a load, a compare and a store (R3.1).
+    fn enter(&mut self) {
+        self.module.declare(DEPTH);
+        let depth = self.value("load i32, ptr @lt_depth");
+        let full = self.value(format!("icmp sge i32 {depth}, {}", lotml_ir::depth::LIMIT));
+        let (deep, within) = (self.name("deep"), self.name("within"));
+        self.terminate(format!("br i1 {full}, label %{deep}, label %{within}"));
+        self.label(&deep);
+        let site = self.site();
+        self.runtime("lt_recursion_error", &[site]);
+        self.terminate("unreachable");
+        self.label(&within);
+        let more = self.value(format!("add i32 {depth}, 1"));
+        self.emit(format!("store i32 {more}, ptr @lt_depth"));
+        self.depth = Some(depth);
+    }
+
+    /// The call `enter` counted ends (R1.3): the count it read is put back, every call made since
+    /// having put back its own. `Enter` begins the body, so what it read is in reach of every exit.
+    fn leave(&mut self) {
+        self.module.declare(DEPTH);
+        let depth = self.depth.clone().expect("a counted function begins with Enter");
+        self.emit(format!("store i32 {depth}, ptr @lt_depth"));
+    }
+
     fn panic(&mut self, panic: &Panic) {
         let site = self.site();
         match panic {
@@ -2054,6 +2092,8 @@ impl Writer<'_, '_> {
                 }
                 StmtKind::ForStr { var, over, body, exit } => self.for_str(*var, over, body, exit)?,
                 StmtKind::Panic(p) => self.panic(p),
+                StmtKind::Enter => self.enter(),
+                StmtKind::Leave => self.leave(),
             }
         }
         Ok(())

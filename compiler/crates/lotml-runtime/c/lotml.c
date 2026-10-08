@@ -374,7 +374,9 @@ void lt_run_test(const char *name, lt_test_fn test) {
     lt_failure *outer_failure = lt_task_failure;
     lt_task_jump = &here;
     lt_task_failure = &result->failure;
+    int32_t depth = lt_depth;
     if (setjmp(here) == 0) test();
+    lt_depth = depth;
     lt_task_jump = outer;
     lt_task_failure = outer_failure;
 }
@@ -499,6 +501,12 @@ void lt_value_error(const lt_at *at, const char *message) {
 
 void lt_todo(const lt_at *at) {
     lt_panic(at, "Todo", "not written yet");
+}
+
+LT_THREAD int32_t lt_depth = 0;
+
+void lt_recursion_error(const lt_at *at) {
+    lt_panic(at, "RecursionError", "maximum recursion depth exceeded");
 }
 
 void lt_assert_failed(const lt_at *at, const char *expression) {
@@ -739,6 +747,68 @@ double lt_pow_f64(double a, double b, const lt_at *at) {
     return r;
 }
 
+/* The program's threads --------------------------------------------------------------------- */
+
+/* The stack each thread the runtime starts reserves: 64 KiB for each of the 1,000 calls the
+ * recursion limit lets be in progress, with the uncounted ones between them. Reserved, not
+ * committed: on Windows only `STACK_SIZE_PARAM_IS_A_RESERVATION` makes it so, and 256 workers
+ * would otherwise commit 16 GiB. */
+#define LT_STACK ((size_t)64 << 20)
+
+typedef struct lt_main_job {
+    lt_program_fn program;
+    int status;
+} lt_main_job;
+
+#ifdef _WIN32
+static unsigned __stdcall lt_main_thread(void *job) {
+    lt_main_job *main = (lt_main_job *)job;
+    main->status = main->program();
+    return 0;
+}
+
+/* A thread running `body(arg)` with LT_STACK reserved; 0 when it cannot be made. */
+static HANDLE lt_thread(unsigned(__stdcall *body)(void *), void *arg) {
+    return (HANDLE)_beginthreadex(NULL, (unsigned)LT_STACK, body, arg, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+}
+#else
+static void *lt_main_thread(void *job) {
+    lt_main_job *main = (lt_main_job *)job;
+    main->status = main->program();
+    return NULL;
+}
+
+/* A thread running `body(arg)` with LT_STACK reserved, in `thread`; false when it cannot be made. */
+static bool lt_thread(pthread_t *thread, void *(*body)(void *), void *arg) {
+    pthread_attr_t attr;
+    if (pthread_attr_init(&attr) != 0) return false;
+    bool made = pthread_attr_setstacksize(&attr, LT_STACK) == 0 && pthread_create(thread, &attr, body, arg) == 0;
+    pthread_attr_destroy(&attr);
+    return made;
+}
+#endif
+
+int lt_run_main(lt_program_fn program) {
+    lt_main_job job = {program, 0};
+#ifdef _WIN32
+    HANDLE thread = lt_thread(lt_main_thread, &job);
+    bool made = thread != 0;
+#else
+    pthread_t thread;
+    bool made = lt_thread(&thread, lt_main_thread, &job);
+#endif
+    if (!made) {
+        lt_panic(&(lt_at){NULL, 0, NULL}, "RuntimeError", "cannot start the thread the program runs on, with 64 MiB of stack");
+    }
+#ifdef _WIN32
+    WaitForSingleObject(thread, INFINITE);
+    CloseHandle(thread);
+#else
+    pthread_join(thread, NULL);
+#endif
+    return job.status;
+}
+
 /* parallel --------------------------------------------------------------------------------- */
 
 #define LT_TASK_THREADS 256
@@ -750,6 +820,8 @@ typedef struct lt_job {
     size_t size;
     int64_t next;
     lt_failure *failures;
+    /* The count of calls in progress of the thread that started the tasks: each task's (R1.6). */
+    int32_t depth;
 } lt_job;
 
 static int64_t lt_next_task(lt_job *job) {
@@ -776,6 +848,7 @@ static void lt_work(lt_job *job) {
         jmp_buf here;
         lt_task_jump = &here;
         lt_task_failure = &job->failures[i];
+        lt_depth = job->depth;
         if (setjmp(here) == 0) {
             lt_closure *task = *(lt_closure **)(job->tasks->data + (size_t)i * job->tasks->type->size);
             lt_inc(task);
@@ -806,7 +879,7 @@ lt_list *lt_parallel(const lt_list *tasks, const lt_type *result, lt_task_fn run
     lt_failure *failures = calloc((size_t)n, sizeof(lt_failure));
     if (failures == NULL) lt_panic(at, "MemoryError", "out of memory");
     memset(results->data, 0, (size_t)n * result->size);
-    lt_job job = {tasks, run, results->data, result->size, 0, failures};
+    lt_job job = {tasks, run, results->data, result->size, 0, failures, lt_depth};
     int64_t workers = n < LT_TASK_THREADS ? n : LT_TASK_THREADS;
     /* jmp_buf and the failure the caller is itself a task of, if it is one */
     jmp_buf *outer_jump = lt_task_jump;
@@ -816,7 +889,7 @@ lt_list *lt_parallel(const lt_list *tasks, const lt_type *result, lt_task_fn run
     HANDLE threads[LT_TASK_THREADS];
     int64_t started = 0;
     for (; started < workers; started++) {
-        threads[started] = (HANDLE)_beginthreadex(NULL, 0, lt_worker, &job, 0, NULL);
+        threads[started] = lt_thread(lt_worker, &job);
         if (threads[started] == 0) break;
     }
     if (started == 0) lt_work(&job);
@@ -828,12 +901,13 @@ lt_list *lt_parallel(const lt_list *tasks, const lt_type *result, lt_task_fn run
     pthread_t threads[LT_TASK_THREADS];
     int64_t started = 0;
     for (; started < workers; started++) {
-        if (pthread_create(&threads[started], NULL, lt_worker, &job) != 0) break;
+        if (!lt_thread(&threads[started], lt_worker, &job)) break;
     }
     if (started == 0) lt_work(&job);
     for (int64_t i = 0; i < started; i++) pthread_join(threads[i], NULL);
 #endif
     lt_add_running(-1);
+    lt_depth = job.depth;
     lt_task_jump = outer_jump;
     lt_task_failure = outer_failure;
     results->len = n;

@@ -76,6 +76,15 @@ LT_NORETURN void lt_value_error(const lt_at *at, const char *message);
 LT_NORETURN void lt_todo(const lt_at *at);
 LT_NORETURN void lt_assert_failed(const lt_at *at, const char *expression);
 
+/* The calls in progress on this thread of the program's functions that can recurse, raised and
+ * lowered by the code the compiler writes around each such function, which checks the limit of
+ * 1,000 (specs/recursion-depth R1.1). A test and a `parallel` task get back the count they began
+ * with when they end in a panic, which does not run the code that lowers it (R1.5). */
+extern LT_THREAD int32_t lt_depth;
+
+/* A call that would put more than the limit of calls in progress: `RecursionError` (R1.2). */
+LT_NORETURN void lt_recursion_error(const lt_at *at);
+
 /* The header of every heap cell. */
 typedef struct lt_cell {
     int32_t count;
@@ -142,6 +151,13 @@ void lt_write(const char *bytes, size_t length);
 void lt_flush(void);
 void lt_init(void);
 int lt_exit(int status);
+
+/* The program as the process runs it: its `main` or its tests, returning its exit status. */
+typedef int (*lt_program_fn)(void);
+/* Run `program` on a thread reserving 64 MiB of stack, so the recursion limit and not the stack
+ * stops a recursion (specs/recursion-depth R2.1), and give its status; a panic naming it when the
+ * thread cannot be made, rather than a run on the system's smaller stack (R2.4). */
+int lt_run_main(lt_program_fn program);
 /* A program without `fn main()`: it says so and stops with status 2. */
 int lt_no_main(void);
 /* A library's exported function (specs/c-abi-export R2.1), called from any thread of its host:

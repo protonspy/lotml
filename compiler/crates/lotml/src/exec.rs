@@ -388,7 +388,7 @@ pub fn test_report(paths: &[PathBuf], as_json: bool, limits: Option<&Limits>) ->
     // The modules go in on standard input: a command line holding hundreds of paths passes
     // Windows' limit of 32,767 characters.
     let script = format!(
-        "{}import importlib, json, lotml_rt\nout = []\nfor name, path in json.loads(sys.stdin.readline()):\n    try:\n        module = importlib.import_module(name)\n        out.append({{'file': path, 'tests': lotml_rt.run_tests(vars(module), path)}})\n    except Exception as error:\n        out.append({{'file': path, 'load': type(error).__name__ + ': ' + str(error)}})\nsys.stdout.write('\\n' + json.dumps(out))",
+        "{}import json, lotml_rt\nout = lotml_rt.test_modules(json.loads(sys.stdin.readline()))\nsys.stdout.write('\\n' + json.dumps(out))",
         search_path(&scratch.0),
     );
     let mut child = interpreter(&python, &script)

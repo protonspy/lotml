@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/shared-ir
-delivery: in-review
+delivery: merged
 pr: 30
 ---
 

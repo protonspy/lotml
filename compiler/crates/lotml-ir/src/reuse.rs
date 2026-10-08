@@ -58,7 +58,9 @@ fn constructor_after(rest: &[crate::ir::Stmt]) -> Option<usize> {
             | StmtKind::Mutate { .. }
             | StmtKind::Inc(_)
             | StmtKind::Dec(_)
-            | StmtKind::DropReuse { .. } => {}
+            | StmtKind::DropReuse { .. }
+            | StmtKind::Enter
+            | StmtKind::Leave => {}
             _ => return None,
         }
     }

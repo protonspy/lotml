@@ -50,6 +50,10 @@ fn attr(value: Value, attr: &str) -> Value {
     node("Attribute", vec![("value", value), ("attr", attr.into()), ("ctx", load())])
 }
 
+/// The local a counted function keeps the count it began with in: a name starting with `__`,
+/// which no lotml name can.
+const DEPTH: &str = "__depth";
+
 fn rt(function: &str) -> Value {
     attr(name("__rt"), function)
 }
@@ -782,11 +786,31 @@ impl<'m, 'l> Writer<'m, 'l> {
             }
         }
         let mut body = prologue;
-        body.extend(self.block(&f.body));
+        match f.body.split_first() {
+            // A counted function (specs/recursion-depth R1.3): the count `Enter` read is put back
+            // however the body ends, so a panic a Python host or a callback catches leaves no
+            // count behind on its thread.
+            Some((first, rest)) if matches!(first.kind, StmtKind::Enter) => {
+                body.extend(self.stmt(first));
+                let counted = self.block(rest);
+                let restore = stmt_expr(call(rt("set_depth"), vec![name(DEPTH)]));
+                let guarded = node(
+                    "Try",
+                    vec![
+                        ("body", Value::Array(nonempty(counted))),
+                        ("handlers", Value::Array(Vec::new())),
+                        ("orelse", Value::Array(Vec::new())),
+                        ("finalbody", Value::Array(vec![self.m.at(restore, f.span)])),
+                    ],
+                );
+                body.push(self.m.at(guarded, f.span));
+            }
+            _ => body.extend(self.block(&f.body)),
+        }
         self.m.at(function_def(&py, arguments(args, defaults), body), f.span)
     }
 
-    fn block(&mut self, block: &Block) -> Vec<Value> {
+    fn block(&mut self, block: &[Stmt]) -> Vec<Value> {
         let mut out = Vec::new();
         for stmt in block {
             out.extend(self.stmt(stmt));
@@ -905,6 +929,10 @@ impl<'m, 'l> Writer<'m, 'l> {
                 vec![self.at(self.at_expr(raised))]
             }
             StmtKind::Inc(_) | StmtKind::Dec(_) | StmtKind::DropReuse { .. } => Vec::new(),
+            StmtKind::Enter => vec![self.at(self.at_expr(assign(vec![target(DEPTH)], call(rt("enter"), vec![]))))],
+            // The `finally` `function` wraps a counted body in puts the count back on every way
+            // out, a panic included.
+            StmtKind::Leave => Vec::new(),
         }
     }
 
