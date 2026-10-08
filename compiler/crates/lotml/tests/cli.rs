@@ -556,3 +556,71 @@ fn run_and_test_record_the_cpython_they_ran_on() {
     let quiet = stdout(&lotml(&["run", "p.lot"], &dir));
     assert_eq!(quiet.trim(), "1", "without --json the program's output is all");
 }
+
+const APP_PYPROJECT: &str =
+    "[project]\nname = \"app\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\ndependencies = []\n";
+const APP_LOCK: &str = "version = 1\nrevision = 3\nrequires-python = \">=3.11\"\n\n[[package]]\nname = \"app\"\nversion = \"0.1.0\"\nsource = { virtual = \".\" }\n";
+const HELLO: &str = "fn main():\n    print(1)\n";
+
+/// `lotml <args>` in `dir`, blind to the shell's virtual environment and offline switch.
+fn in_project(args: &[&str], dir: &Path) -> Output {
+    isolated(env!("CARGO_BIN_EXE_lotml"), dir)
+        .args(args)
+        .env_remove("VIRTUAL_ENV")
+        .env_remove("LOTML_OFFLINE")
+        .output()
+        .expect("the binary runs")
+}
+
+#[test]
+fn a_project_with_a_uv_lock_runs_in_the_environment_lotml_makes_from_it() {
+    let Ok(Some(_)) = lotml_py::uv::find(&lotml_py::uv::Places::here()) else { return };
+    let dir = scratch(
+        "locked-project",
+        &[(".git", ""), ("pyproject.toml", APP_PYPROJECT), ("uv.lock", APP_LOCK), ("p.lot", HELLO)],
+    );
+    let ran = in_project(&["run", "--json", "p.lot"], &dir);
+    assert!(ran.status.success(), "{}", String::from_utf8_lossy(&ran.stderr));
+    let said = stdout(&ran);
+    let record: serde_json::Value = serde_json::from_str(said.lines().last().unwrap()).unwrap();
+    let path = record["python"]["path"].as_str().unwrap().replace('\\', "/");
+    assert!(path.contains("/python-environments/"), "the lock's environment runs it: {path}");
+    let again = in_project(&["run", "--offline", "p.lot"], &dir);
+    assert!(again.status.success(), "a made environment is used offline: {}", String::from_utf8_lossy(&again.stderr));
+}
+
+#[test]
+fn offline_a_lock_with_no_environment_made_installs_nothing_and_says_so() {
+    let pyproject = APP_PYPROJECT.replace("version = \"0.1.0\"", "version = \"0.1.1\"");
+    let lock = APP_LOCK.replace("version = \"0.1.0\"", "version = \"0.1.1\"");
+    let dir = scratch(
+        "locked-offline",
+        &[(".git", ""), ("pyproject.toml", &pyproject), ("uv.lock", &lock), ("p.lot", HELLO)],
+    );
+    let ran = in_project(&["run", "--offline", "p.lot"], &dir);
+    assert!(!ran.status.success());
+    let said = String::from_utf8_lossy(&ran.stderr);
+    assert!(said.contains("installs nothing here") && said.contains("without --offline"), "{said}");
+}
+
+#[test]
+fn a_lock_naming_anything_but_pypi_is_refused_before_anything_runs() {
+    let lock = format!(
+        "{APP_LOCK}\n[[package]]\nname = \"six\"\nversion = \"1.0\"\nsource = {{ git = \"https://example.invalid/six\" }}\n"
+    );
+    let dir =
+        scratch("locked-git", &[(".git", ""), ("pyproject.toml", APP_PYPROJECT), ("uv.lock", &lock), ("p.lot", HELLO)]);
+    let ran = in_project(&["run", "p.lot"], &dir);
+    assert!(!ran.status.success());
+    let said = String::from_utf8_lossy(&ran.stderr);
+    assert!(said.contains("\"six\" comes from the git"), "{said}");
+}
+
+#[test]
+fn dependencies_declared_without_a_lock_name_uv_lock() {
+    let pyproject = APP_PYPROJECT.replace("dependencies = []", "dependencies = [\"six\"]");
+    let dir = scratch("unlocked", &[(".git", ""), ("pyproject.toml", &pyproject), ("p.lot", HELLO)]);
+    let ran = in_project(&["run", "p.lot"], &dir);
+    assert!(!ran.status.success());
+    assert!(String::from_utf8_lossy(&ran.stderr).contains("`uv lock`"));
+}

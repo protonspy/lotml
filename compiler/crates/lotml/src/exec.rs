@@ -87,19 +87,62 @@ fn write(path: &Path, text: &str) -> Result<(), Failure> {
 
 /// The CPython to run, resolved in adr:0026's order (lotml_py::resolve): `uses` says whether the
 /// project's virtual environment may run it, `project` where that is, and `downloads` whether a
-/// missing CPython may be fetched through uv.
+/// missing CPython may be fetched, or a project's dependencies installed, through uv. A project
+/// holding a `uv.lock` runs in the environment made from it, over an interpreter resolved without
+/// the project's own (specs/python-dependencies, adr:0033).
 fn python(uses: Use, project: Option<&Path>, downloads: bool) -> Result<Vec<String>, Failure> {
     let var = |name: &str| std::env::var_os(name);
     let uv = lotml_py::uv::find(&lotml_py::uv::Places::here()).map_err(Failure)?;
     let home = lotml_llvm::cache::user_root()
         .map(|root| root.join("uv"))
         .filter(|home| lotml_llvm::cache::private_directory(home).is_ok());
-    let managed = match (uv, home) {
-        (Some(path), Some(home)) => Some(ThroughUv { uv: Uv { path, home }, var: &var }),
+    let confined = match (&uv, &home) {
+        (Some(path), Some(home)) => Some(Uv { path: path.clone(), home: home.clone() }),
         _ => None,
     };
+    let managed =
+        confined.as_ref().map(|uv| ThroughUv { uv: Uv { path: uv.path.clone(), home: uv.home.clone() }, var: &var });
+    let locked = match (uses, project) {
+        (Use::Run, Some(project)) => crate::dependencies::locked(project).map_err(Failure)?,
+        _ => None,
+    };
+    let uses = if locked.is_some() { Use::Base } else { uses };
     let options = Options { uses, project, downloads };
-    resolve(&options, &var, managed.as_ref().map(|m| m as &dyn Managed), &lotml_py::python).map_err(Failure)
+    let base =
+        resolve(&options, &var, managed.as_ref().map(|m| m as &dyn Managed), &lotml_py::python).map_err(Failure)?;
+    let Some(locked) = locked else { return Ok(base) };
+    let executable = executable_of(&base)?;
+    let root = lotml_llvm::cache::user_root()
+        .map(|root| root.join("python-environments"))
+        .filter(|root| lotml_llvm::cache::private_directory(root).is_ok())
+        .ok_or_else(|| Failure("the project's uv.lock needs an environment, and lotml has no cache directory of its own to make one in".into()))?;
+    let make = |work: &Path, environment: &Path| -> Result<(), String> {
+        let uv = confined.as_ref().ok_or(
+            "installing the project's dependencies from its uv.lock needs uv: put the uv lotml ships beside it, or set LOTML_UV",
+        )?;
+        let mut command = uv.sync(work, environment, &executable, &var)?;
+        eprintln!(
+            "lotml: installing the project's Python dependencies from its uv.lock, through uv; kept for every later run"
+        );
+        let status = command.status().map_err(|e| format!("cannot run uv: {e}"))?;
+        if status.success() { Ok(()) } else { Err("uv could not install the project's uv.lock".into()) }
+    };
+    let make: Option<crate::dependencies::Make<'_>> = if downloads { Some(&make) } else { None };
+    let python = crate::dependencies::environment(&root, &locked, &executable, make).map_err(Failure)?;
+    Ok(vec![python.display().to_string()])
+}
+
+/// The path of the executable `python` runs, as the interpreter itself reports it: a command such
+/// as `py -3` names one only once it runs.
+fn executable_of(python: &[String]) -> Result<String, Failure> {
+    let output = interpreter(python, "import sys\nprint(sys.executable)")
+        .output()
+        .map_err(|e| Failure(format!("cannot run Python: {e}")))?;
+    let executable = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if !output.status.success() || executable.is_empty() {
+        return Err(Failure(format!("{} did not say where its executable is", python.join(" "))));
+    }
+    Ok(executable)
 }
 
 /// The project a file or directory belongs to: the nearest directory holding `.git` or a
