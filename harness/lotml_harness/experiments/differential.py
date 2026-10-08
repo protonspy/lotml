@@ -168,7 +168,9 @@ def checked(cases: list[str]) -> list[str]:
     """The cases the checker takes, as one program: a template can write what lotml refuses, a
     shift by a negative count say, and a program refused is a batch wasted on both targets."""
     while cases:
-        with tempfile.TemporaryDirectory(prefix="lotml-differential-") as directory:
+        with tempfile.TemporaryDirectory(
+            prefix="lotml-differential-", ignore_cleanup_errors=True
+        ) as directory:
             root = Path(directory)
             (root / "case.lot").write_text(program(cases), encoding="utf-8")
             said = compiler(["check", "case.lot"], root, TIMEOUT)
@@ -207,7 +209,9 @@ def python_environment() -> dict[str, str]:
 
 def run(text: str, target: str) -> Run:
     """`text` run with `lotml run` on `target`, in a directory of its own thrown away after."""
-    with tempfile.TemporaryDirectory(prefix="lotml-differential-") as directory:
+    with tempfile.TemporaryDirectory(
+        prefix="lotml-differential-", ignore_cleanup_errors=True
+    ) as directory:
         root = Path(directory)
         (root / "case.lot").write_text(text, encoding="utf-8")
         env = native_environment() if target == "llvm" else python_environment()
@@ -281,11 +285,16 @@ def sanitizer_path() -> str | None:
     installer = (
         Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "LLVM" / "bin" / "clang.exe"
     )
-    clang = named or shutil.which("clang") or (str(installer) if installer.is_file() else None)
+    # As the driver looks: never in the working directory, only on absolute entries of PATH.
+    absolute = os.pathsep.join(
+        d for d in os.environ.get("PATH", "").split(os.pathsep) if Path(d).is_absolute()
+    )
+    on_path = shutil.which("clang.exe", path=absolute) if absolute else None
+    clang = named or on_path or (str(installer) if installer.is_file() else None)
     if clang is None:
         return None
     found = subprocess.run(  # noqa: S603 - the clang the native build uses
-        [clang, "-print-resource-dir"], capture_output=True, text=True, check=False
+        [clang, "-print-resource-dir"], capture_output=True, text=True, check=False, timeout=30
     )
     directory = Path(found.stdout.strip()) / "lib" / "windows"
     return str(directory) if found.returncode == 0 and directory.is_dir() else None
@@ -299,7 +308,9 @@ def mutants(rng: random.Random, count: int) -> list[str]:
     for row in rng.sample(rows, len(rows)):
         if len(found) >= count:
             break
-        with tempfile.TemporaryDirectory(prefix="lotml-mutate-") as directory:
+        with tempfile.TemporaryDirectory(
+            prefix="lotml-mutate-", ignore_cleanup_errors=True
+        ) as directory:
             root = Path(directory)
             (root / "p.lot").write_text(row["lotml"], encoding="utf-8")
             listed = compiler(["dev", "mutate", "--json", "p.lot"], root, TIMEOUT)
@@ -314,7 +325,9 @@ def mutants(rng: random.Random, count: int) -> list[str]:
 def tested(text: str) -> parity.Outcome:
     """A program with `test` blocks run with `lotml test --json` on both targets, compared as the
     parity suite compares them."""
-    with tempfile.TemporaryDirectory(prefix="lotml-differential-") as directory:
+    with tempfile.TemporaryDirectory(
+        prefix="lotml-differential-", ignore_cleanup_errors=True
+    ) as directory:
         root = Path(directory)
         (root / "case.lot").write_text(text, encoding="utf-8")
         try:

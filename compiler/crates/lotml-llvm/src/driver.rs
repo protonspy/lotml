@@ -615,7 +615,12 @@ mod tests {
             clang.runtime_key(sources, Build { counting: true, ..debug }, none),
             clang.runtime_key(sources, debug, headers),
         ];
+        // With `LOTML_COUNT_CELLS` set around the tests, every build counts and the two agree.
+        let ambient = std::env::var_os("LOTML_COUNT_CELLS").is_some();
         for (k, key) in differing.iter().enumerate() {
+            if k == 4 && ambient {
+                continue;
+            }
             assert_ne!(*key, base, "input {k} changes the key");
         }
     }
