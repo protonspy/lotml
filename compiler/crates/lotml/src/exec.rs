@@ -584,6 +584,17 @@ fn report_rows(rows: Vec<Value>, as_json: bool, python: Option<Value>) -> (u8, S
     (u8::from(rows.iter().any(|r| r["outcome"] != "pass")), report)
 }
 
+/// `lotml bind --lock`: `lotml.lock` written at the root of the project the working directory is in.
+pub fn lock() -> Result<bool, Failure> {
+    let here = std::env::current_dir().map_err(|e| Failure(format!("cannot read the working directory: {e}")))?;
+    let root = project_of(&here).ok_or_else(|| {
+        Failure("no project here to lock: no directory up from this one holds .git or pyproject.toml".into())
+    })?;
+    let (path, count) = crate::lockfile::write(&root).map_err(Failure)?;
+    println!("{}: {count} module{} locked", path.display(), if count == 1 { "" } else { "s" });
+    Ok(true)
+}
+
 /// `lotml bind`: the interface of a Python module, read from its stub by the binder lotml carries,
 /// which runs no Python (specs/rust-binder), and written to `out/py.<module>.lotmli`, the name a
 /// program imports it by (adr:0012, adr:0029); the module may be given with its `py.` or without.

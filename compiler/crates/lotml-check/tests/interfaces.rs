@@ -66,11 +66,7 @@ fn every_call_into_python_can_fail() {
 
 #[test]
 fn a_bindings_file_shadowing_a_generated_interface_is_warned_at_the_import() {
-    let source = "from py.textwrap import dedent
-
-fn f(s: str) -> str ! PyError:
-    return dedent(s)?
-";
+    let source = "from py.textwrap import dedent\n\nfn f(s: str) -> str ! PyError:\n    return dedent(s)?\n";
     let (marked, problems) = interface(&lotml_check::shadowing(TEXTWRAP));
     assert!(problems.is_empty(), "the mark is a comment");
     let shadowing = Interfaces::from([("py.textwrap".to_string(), marked)]);

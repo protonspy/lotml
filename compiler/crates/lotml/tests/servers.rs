@@ -247,11 +247,7 @@ fn the_language_server_refuses_requests_before_initialize() {
 fn the_language_server_binds_a_python_module_on_import_and_on_an_edit_that_imports_one() {
     let dir = scratch("lsp-bind-on-import", &[(".git", "")]);
     let file = uri(&dir.join("main.lotml"));
-    let text = "from py.textwrap import dedent
-
-fn f() -> str ! PyError:
-    return dedent(\"  x\")?
-";
+    let text = "from py.textwrap import dedent\n\nfn f() -> str ! PyError:\n    return dedent(\"  x\")?\n";
     let mut lsp = Client::start(&["lsp"], true);
     lsp.request(1, "initialize", json!({"rootUri": uri(&dir), "capabilities": {}}));
     lsp.notify("initialized", json!({}));
@@ -259,18 +255,9 @@ fn f() -> str ! PyError:
         "textDocument/didOpen",
         json!({"textDocument": {"uri": file, "languageId": "lotml", "version": 1, "text": text}}),
     );
-    let edited = format!(
-        "{text}
-fn g() -> str ! PyError:
-    return py.shlex.quote(\"a b\")?
-"
-    )
-    .replacen(
-        "from py.textwrap import dedent
-",
-        "from py.textwrap import dedent
-import py.shlex
-",
+    let edited = format!("{text}\nfn g() -> str ! PyError:\n    return py.shlex.quote(\"a b\")?\n").replacen(
+        "from py.textwrap import dedent\n",
+        "from py.textwrap import dedent\nimport py.shlex\n",
         1,
     );
     lsp.notify(
@@ -288,11 +275,7 @@ import py.shlex
 
 #[test]
 fn the_mcp_server_binds_a_python_module_on_import() {
-    let text = "from py.textwrap import dedent
-
-fn f() -> str ! PyError:
-    return dedent(\"  x\")?
-";
+    let text = "from py.textwrap import dedent\n\nfn f() -> str ! PyError:\n    return dedent(\"  x\")?\n";
     let dir = scratch("mcp-bind-on-import", &[(".git", ""), ("main.lotml", text)]);
     let mut mcp = Client::start(&["mcp", "--root", dir.to_str().unwrap()], false);
     mcp.request(

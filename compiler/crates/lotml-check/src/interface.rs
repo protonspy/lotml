@@ -32,10 +32,7 @@ const SHADOWS: &str = "# This file shadows the interface lotml generates from th
 
 /// `text`, a bindings file's, marked as shadowing the interface the compiler would generate.
 pub fn shadowing(text: &str) -> String {
-    format!(
-        "{SHADOWS}
-{text}"
-    )
+    format!("{SHADOWS}\n{text}")
 }
 
 /// The interfaces a file may import from, by module name.

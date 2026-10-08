@@ -193,7 +193,8 @@ fn main() -> None ! PyError:
 
 #[test]
 fn check_run_and_test_bind_a_standard_library_module_on_import_with_no_bind() {
-    let program = "from py.textwrap import dedent, wrap
+    let program = "\
+from py.textwrap import dedent, wrap
 
 fn main() -> None ! PyError:
     for line in wrap(dedent(\"    one two three four\")?, width=8)?:
@@ -206,15 +207,7 @@ test \"dedent\":
     let checked = lotml(&["check", "main.lotml"], &dir);
     assert!(checked.status.success(), "{}", stdout(&checked));
     let out = lotml(&["run", "main.lotml"], &dir);
-    assert_eq!(
-        stdout(&out),
-        "one two
-three
-four
-",
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    assert_eq!(stdout(&out), "one two\nthree\nfour\n", "{}", String::from_utf8_lossy(&out.stderr));
     let tested = lotml(&["test", "main.lotml"], &dir);
     assert!(tested.status.success(), "{}", stdout(&tested));
     assert!(!dir.join("bindings").exists(), "nothing is written to bind on import");
@@ -222,11 +215,7 @@ four
 
 #[test]
 fn an_import_no_stub_binds_is_reported_and_bind_tells_why() {
-    let program = "import py.nowhere
-
-fn main():
-    print(1)
-";
+    let program = "import py.nowhere\n\nfn main():\n    print(1)\n";
     let dir = scratch("unbound-import", &[(".git", ""), ("main.lotml", program)]);
     let checked = lotml(&["check", "main.lotml"], &dir);
     assert_eq!(checked.status.code(), Some(1));
@@ -240,25 +229,14 @@ fn main():
 
 #[test]
 fn a_bare_import_of_a_module_typeshed_covers_is_fixed_to_its_origin() {
-    let program = "import shlex
-import typing
-
-fn main() -> None ! PyError:
-    print(py.shlex.quote(\"a b\")?)
-";
+    let program = "import shlex\nimport typing\n\nfn main() -> None ! PyError:\n    print(py.shlex.quote(\"a b\")?)\n";
     let dir = scratch("bare-import", &[(".git", ""), ("main.lotml", program)]);
     let checked = lotml(&["check", "main.lotml"], &dir);
     assert_eq!(checked.status.code(), Some(1));
     assert!(stdout(&checked).contains("write `py.shlex`"), "{}", stdout(&checked));
     lotml(&["check", "--fix", "main.lotml"], &dir);
     let fixed = std::fs::read_to_string(dir.join("main.lotml")).unwrap();
-    assert!(
-        fixed.starts_with(
-            "import py.shlex
-"
-        ),
-        "{fixed}"
-    );
+    assert!(fixed.starts_with("import py.shlex\n"), "{fixed}");
     assert!(
         !fixed.contains("py.typing") && !fixed.contains("import typing"),
         "typing is removed, not given an origin: {fixed}"
@@ -269,13 +247,7 @@ fn main() -> None ! PyError:
 
 #[test]
 fn a_bindings_file_where_a_stub_binds_is_used_and_warned_and_one_where_none_does_is_not() {
-    let program = "from py.textwrap import dedent
-import py.liar
-
-fn main() -> None ! PyError:
-    print(dedent(\"  x\")?)
-    print(py.liar.count()?)
-";
+    let program = "from py.textwrap import dedent\nimport py.liar\n\nfn main() -> None ! PyError:\n    print(dedent(\"  x\")?)\n    print(py.liar.count()?)\n";
     let dir = scratch(
         "shadowing",
         &[(".git", ""), ("stubs/textwrap.pyi", TEXTWRAP_PYI), ("stubs/liar.pyi", LIAR_PYI), ("main.lotml", program)],
@@ -287,6 +259,39 @@ fn main() -> None ! PyError:
     let said = stdout(&checked);
     assert_eq!(said.matches("E0224").count(), 1, "textwrap's file shadows typeshed's, liar's shadows nothing: {said}");
     assert!(said.contains("bindings/py.textwrap.lotmli shadows"), "{said}");
+}
+
+#[test]
+fn bind_lock_records_each_module_bound_on_import_with_its_source_and_hashes() {
+    let a = "from py.textwrap import dedent\nimport py.shlex\n\nfn main():\n    print(1)\n";
+    let b = "import py.textwrap\nimport py.liar\n\nfn main():\n    print(2)\n";
+    let dir = scratch("bind-lock", &[(".git", ""), ("a.lotml", a), ("app/b.lotml", b), ("stubs/liar.pyi", LIAR_PYI)]);
+    assert!(lotml(&["bind", "liar", "--stub", "stubs/liar.pyi"], &dir).status.success());
+    let out = lotml(&["bind", "--lock"], &dir.join("app"));
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(stdout(&out).contains("2 modules locked"), "{}", stdout(&out));
+    let lock: toml::Table = std::fs::read_to_string(dir.join("lotml.lock")).unwrap().parse().unwrap();
+    let modules = lock["module"].as_array().unwrap();
+    let names: Vec<&str> = modules.iter().map(|m| m["name"].as_str().unwrap()).collect();
+    assert_eq!(names, vec!["py.shlex", "py.textwrap"], "sorted; liar's bindings file is not locked");
+    let shlex = &modules[0];
+    assert!(shlex["source"].as_str().unwrap().starts_with("typeshed "), "{shlex}");
+    let lotml_bind::typeshed::Found::Stub { text, .. } = lotml_bind::typeshed::find("shlex") else { panic!() };
+    assert_eq!(shlex["stub"].as_str().unwrap(), format!("sha256:{}", lotml_llvm::sha256::hex_of(text.as_bytes())));
+    assert!(lotml(&["bind", "shlex", "--out", "generated"], &dir).status.success());
+    let written = std::fs::read(dir.join("generated").join("py.shlex.lotmli")).unwrap();
+    assert_eq!(
+        shlex["interface"].as_str().unwrap(),
+        format!("sha256:{}", lotml_llvm::sha256::hex_of(&written)),
+        "the interface bind writes"
+    );
+
+    std::fs::write(dir.join("c.lotml"), "import py.nowhere\n").unwrap();
+    std::fs::remove_file(dir.join("lotml.lock")).unwrap();
+    let out = lotml(&["bind", "--lock"], &dir);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("py.nowhere"), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(!dir.join("lotml.lock").exists(), "nothing written");
 }
 
 /// A Python module whose values no stub types: an object, a dataclass, and functions that change
@@ -518,18 +523,9 @@ fn bind_refuses_a_device_s_name() {
 }
 
 /// The manifest and lock of a project whose dependencies are none but itself.
-const MANIFEST: &str = "[project]
-name = \"app\"
-version = \"0.1.0\"
-";
-const LOCK: &str = "version = 1
-revision = 3
-
-[[package]]
-name = \"app\"
-version = \"0.1.0\"
-source = { virtual = \".\" }
-";
+const MANIFEST: &str = "[project]\nname = \"app\"\nversion = \"0.1.0\"\n";
+const LOCK: &str =
+    "version = 1\nrevision = 3\n\n[[package]]\nname = \"app\"\nversion = \"0.1.0\"\nsource = { virtual = \".\" }\n";
 
 /// Where a virtual environment keeps `site-packages` and its interpreter, under `prefix`.
 fn layout(prefix: &str) -> (String, String) {
@@ -613,17 +609,9 @@ fn bind_never_reads_the_project_s_virtual_environment() {
         "bind-venv",
         &[
             ("project/.git", ""),
-            (
-                "project/.venv/pyvenv.cfg",
-                "home = x
-",
-            ),
+            ("project/.venv/pyvenv.cfg", "home = x\n"),
             (&format!("project/{python}"), ""),
-            (
-                &format!("project/{stub}"),
-                "def hello(name: str) -> str: ...
-",
-            ),
+            (&format!("project/{stub}"), "def hello(name: str) -> str: ...\n"),
         ],
     );
     let venv = dir.join("project").join(".venv");

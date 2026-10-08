@@ -190,7 +190,7 @@ impl Server {
             "textDocument/didChange" => {
                 let Some(path) = params["textDocument"]["uri"].as_str().and_then(path_of) else { return Vec::new() };
                 let mut text = self.workspace.text(&path).unwrap_or_default().to_string();
-                let imported = files::python_imports(&text);
+                let imported = files::interface_names(&text);
                 for change in params["contentChanges"].as_array().into_iter().flatten() {
                     let Some(new) = change["text"].as_str() else { continue };
                     match self.span_in(&text, &change["range"]) {
@@ -199,7 +199,7 @@ impl Server {
                     }
                 }
                 // An edit that changes what the file imports from Python binds what it now imports.
-                if files::python_imports(&text) != imported {
+                if files::interface_names(&text) != imported {
                     let found = files::InterfaceCache::default().get(&path, &text);
                     self.workspace.set_interfaces(&path, found);
                 }

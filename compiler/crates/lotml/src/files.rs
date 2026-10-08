@@ -102,7 +102,7 @@ pub fn interfaces_for(path: &Path, text: &str) -> Vec<Binding> {
 /// project never applies. The name is the file's stem with its origin, `py.textwrap` or `c.m`,
 /// which is what an import names; a file without an origin is still read, so the checker can say
 /// to rename it.
-fn bindings_for(path: &Path) -> Vec<Binding> {
+pub fn bindings_for(path: &Path) -> Vec<Binding> {
     let mut found: Vec<Binding> = Vec::new();
     let mut dir = std::path::absolute(path).ok().and_then(|p| p.parent().map(Path::to_path_buf));
     while let Some(here) = dir {
@@ -131,7 +131,7 @@ fn bindings_for(path: &Path) -> Vec<Binding> {
 /// none of them covers and a stub binds; a bindings file an import uses where a stub binds is
 /// marked as shadowing the interface generated from it.
 fn with_generated(mut bindings: Vec<Binding>, path: &Path, text: &str) -> Vec<Binding> {
-    let imports = python_imports(text);
+    let imports = interface_names(text);
     if imports.is_empty() {
         return bindings;
     }
@@ -150,33 +150,56 @@ fn with_generated(mut bindings: Vec<Binding>, path: &Path, text: &str) -> Vec<Bi
     bindings
 }
 
+/// The `py.` modules `text` imports, named as their interfaces are (`py.textwrap`), each once.
+pub fn python_imports(text: &str) -> Vec<String> {
+    let mut found: Vec<String> = Vec::new();
+    for path in import_paths(text) {
+        if path.strip_prefix("py.").is_some_and(|m| !m.is_empty()) && !found.contains(&path) {
+            found.push(path);
+        }
+    }
+    found
+}
+
 /// The Python interfaces `text`'s imports may use, named as they are (`py.textwrap`), each once:
 /// each `py.` module it imports, and for a bare `import <name>` that is no LotML module and that
 /// the typeshed lotml carries covers, `py.<name>`, so the checker can offer to write the origin
 /// (specs/bind-on-import/ R1.5).
-pub fn python_imports(text: &str) -> Vec<String> {
+pub fn interface_names(text: &str) -> Vec<String> {
     let mut found: Vec<String> = Vec::new();
-    for item in &lotml_syntax::parse(text).module.items {
-        if let lotml_syntax::ast::Item::Import(import) = item {
-            let path = import.module.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(".");
-            let name = if path.strip_prefix("py.").is_some_and(|m| !m.is_empty()) {
-                path
-            } else if !path.is_empty()
-                && !path.starts_with("py.")
-                && !lotml_check::is_c_library(&path)
-                && !lotml_check::MODULES.contains(&path.as_str())
-                && matches!(lotml_bind::typeshed::find(&path), lotml_bind::typeshed::Found::Stub { .. })
-            {
-                format!("py.{path}")
-            } else {
-                continue;
-            };
-            if !found.contains(&name) {
-                found.push(name);
-            }
+    for path in import_paths(text) {
+        let name = if path.strip_prefix("py.").is_some_and(|m| !m.is_empty()) {
+            path
+        } else if !path.is_empty()
+            && !path.starts_with("py.")
+            && !lotml_check::is_c_library(&path)
+            && !lotml_check::MODULES.contains(&path.as_str())
+            && matches!(lotml_bind::typeshed::find(&path), lotml_bind::typeshed::Found::Stub { .. })
+        {
+            format!("py.{path}")
+        } else {
+            continue;
+        };
+        if !found.contains(&name) {
+            found.push(name);
         }
     }
     found
+}
+
+/// The module path of each import in `text`, in order.
+fn import_paths(text: &str) -> Vec<String> {
+    lotml_syntax::parse(text)
+        .module
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            lotml_syntax::ast::Item::Import(import) => {
+                Some(import.module.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join("."))
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 /// The interfaces generated in this process, by project and module.
@@ -295,20 +318,12 @@ mod tests {
 
     #[test]
     fn the_python_imports_are_the_py_modules_a_file_imports_each_once() {
-        let text = "import py.textwrap
-from py.os.path import join
-import py.textwrap
-import c.m
-import math
-from py import x
-";
+        let text = "import py.textwrap\nfrom py.os.path import join\nimport py.textwrap\nimport c.m\nimport math\nfrom py import x\n";
         assert_eq!(python_imports(text), vec!["py.textwrap", "py.os.path"], "math is LotML's");
-        let bare = "import shlex
-from random import choice
-import nowhere
-import distutils
-";
-        assert_eq!(python_imports(bare), vec!["py.shlex", "py.random"], "only what typeshed covers");
+        let bare = "import shlex\nfrom random import choice\nimport nowhere\nimport distutils\n";
+        assert!(python_imports(bare).is_empty());
+        assert_eq!(interface_names(bare), vec!["py.shlex", "py.random"], "only what typeshed covers");
+        assert_eq!(interface_names(text), vec!["py.textwrap", "py.os.path"]);
     }
 
     #[test]

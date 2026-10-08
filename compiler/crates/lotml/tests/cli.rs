@@ -593,9 +593,7 @@ fn a_project_with_a_uv_lock_runs_in_the_environment_lotml_makes_from_it() {
 fn run_and_test_make_a_lock_s_environment_before_they_compile() {
     let Ok(Some(_)) = lotml_py::uv::find(&lotml_py::uv::Places::here()) else { return };
     let Some(python) = lotml_py::python() else { return };
-    let broken = "fn main():
-    print(nothing)
-";
+    let broken = "fn main():\n    print(nothing)\n";
     for (command, name) in [("run", "lock-first-run"), ("test", "lock-first-test")] {
         let dir =
             scratch(name, &[(".git", ""), ("pyproject.toml", APP_PYPROJECT), ("uv.lock", APP_LOCK), ("p.lot", broken)]);

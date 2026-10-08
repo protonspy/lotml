@@ -15,11 +15,13 @@ pub enum Environment {
     Made(PathBuf),
 }
 
-/// A module's stub: its text, and what the interface says of it.
+/// A module's stub: its text, what the interface says of it, and its source as `lotml.lock`
+/// records it — typeshed's commit, or the distribution and version that installed it.
 #[derive(Debug)]
 pub struct Stub {
     pub text: String,
     pub said: String,
+    pub source: String,
 }
 
 /// Whether `module`, without its `py.` origin, may name a module: identifiers and dots only, so as
@@ -56,18 +58,30 @@ pub fn interface(module: &str, project: Option<&Path>) -> Result<String, String>
 /// [`interface`], kept in `cache` when given: a directory of the user's own, one file per stub
 /// and lotml version, written whole (specs/bind-on-import/ R3.1).
 fn interface_in(module: &str, project: Option<&Path>, cache: Option<&Path>) -> Result<String, String> {
+    generate(module, project, cache).map(|(_, text)| text)
+}
+
+/// The stub of `module` and the interface generated from it, kept in the user's cache: what
+/// `lotml.lock` records (specs/bind-on-import/ R2.1).
+pub fn bound_with_stub(module: &str, project: Option<&Path>) -> Result<(Stub, String), String> {
+    let cache = lotml_llvm::cache::user_root().map(|root| root.join("interfaces"));
+    generate(module, project, cache.as_deref())
+}
+
+/// [`interface_in`], with the stub it was generated from.
+fn generate(module: &str, project: Option<&Path>, cache: Option<&Path>) -> Result<(Stub, String), String> {
     name(module)?;
     let stub = find(module, || environment(project))?;
     let cache = cache.filter(|dir| lotml_llvm::cache::private_directory(dir).is_ok());
     let entry = cache.map(|dir| dir.join(format!("{}.lotmli", key(&stub))));
     if let Some(text) = entry.as_deref().and_then(|e| std::fs::read_to_string(e).ok()) {
-        return Ok(text);
+        return Ok((stub, text));
     }
     let text = bound(module, &stub)?;
     if let Some(entry) = entry {
         keep(&entry, &text);
     }
-    Ok(text)
+    Ok((stub, text))
 }
 
 /// The name a stub's interface is kept under: the SHA-256 of the stub and of where it was read,
@@ -123,8 +137,9 @@ pub fn find(module: &str, environment: impl FnOnce() -> Result<Environment, Stri
     match lotml_bind::typeshed::find(module) {
         lotml_bind::typeshed::Found::Stub { path, text } => {
             let commit = lotml_bind::typeshed::COMMIT.trim();
-            let said = format!("typeshed's stdlib/{path}, at commit {}", &commit[..commit.len().min(12)]);
-            Ok(Stub { text: text.to_string(), said })
+            let commit = &commit[..commit.len().min(12)];
+            let said = format!("typeshed's stdlib/{path}, at commit {commit}");
+            Ok(Stub { text: text.to_string(), said, source: format!("typeshed {commit}") })
         }
         lotml_bind::typeshed::Found::Absent { range } => {
             let (major, minor) = lotml_bind::typeshed::PYTHON;
@@ -155,9 +170,42 @@ pub fn find(module: &str, environment: impl FnOnce() -> Result<Environment, Stri
                 ));
             };
             let text = read(&found.path)?;
-            Ok(Stub { text, said: found.said })
+            Ok(Stub { text, said: found.said, source: distribution(&found.path, &roots) })
         }
     }
+}
+
+/// The distribution that installed `path`, a file under one of `roots`, as `<name> <version>`:
+/// the `.dist-info` beside it whose `RECORD` lists the file's top-level package or module.
+fn distribution(path: &Path, roots: &[PathBuf]) -> String {
+    let Some((root, top)) = roots.iter().find_map(|root| {
+        let root = root.canonicalize().ok()?;
+        let top = path.strip_prefix(&root).ok()?.components().next()?.as_os_str().to_string_lossy().into_owned();
+        Some((root, top))
+    }) else {
+        return "an unknown distribution".into();
+    };
+    let mut infos: Vec<PathBuf> = std::fs::read_dir(&root)
+        .map(|entries| {
+            entries.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "dist-info")).collect()
+        })
+        .unwrap_or_default();
+    infos.sort();
+    let lists = |record: &str| {
+        record
+            .lines()
+            .filter_map(|line| line.split(',').next())
+            .any(|file| file.split('/').next() == Some(top.as_str()))
+    };
+    for info in infos {
+        if std::fs::read_to_string(info.join("RECORD")).is_ok_and(|record| lists(&record)) {
+            let stem = info.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            if let Some((name, version)) = stem.rsplit_once('-') {
+                return format!("{name} {version}");
+            }
+        }
+    }
+    format!("{top}, which no distribution's RECORD lists")
 }
 
 /// A stub's text, read no further than one byte past what the binder reads, so a file that is
@@ -208,13 +256,7 @@ mod tests {
     #[test]
     fn an_interface_is_generated_from_typeshed_as_bind_writes_it() {
         let text = interface("textwrap", None).unwrap();
-        assert!(
-            text.contains(
-                "fn dedent(text: str) -> str ! PyError
-"
-            ),
-            "{text}"
-        );
+        assert!(text.contains("fn dedent(text: str) -> str ! PyError\n"), "{text}");
         assert!(interface("con", None).unwrap_err().contains("device"));
         assert!(interface("distutils", None).unwrap_err().contains("not in CPython"));
     }
@@ -229,62 +271,47 @@ mod tests {
         let name = kept[0].file_name().unwrap().to_string_lossy().into_owned();
         assert!(name.ends_with(&format!("-{}.lotmli", env!("CARGO_PKG_VERSION"))), "{name}");
         assert_eq!(std::fs::read_to_string(&kept[0]).unwrap(), first);
-        std::fs::write(
-            &kept[0],
-            "# read from the cache
-",
-        )
-        .unwrap();
-        assert_eq!(
-            interface_in("textwrap", None, Some(&cache)).unwrap(),
-            "# read from the cache
-"
-        );
+        std::fs::write(&kept[0], "# read from the cache\n").unwrap();
+        assert_eq!(interface_in("textwrap", None, Some(&cache)).unwrap(), "# read from the cache\n");
         let _ = std::fs::remove_dir_all(&cache);
     }
 
     #[test]
     fn the_key_changes_with_the_stub_and_where_it_was_read() {
-        let stub = |text: &str, said: &str| Stub { text: text.into(), said: said.into() };
-        let base = key(&stub(
-            "def f() -> int: ...
-",
-            "a.pyi",
-        ));
-        assert_ne!(
-            base,
-            key(&stub(
-                "def g() -> int: ...
-",
-                "a.pyi"
-            ))
+        let stub = |text: &str, said: &str| Stub { text: text.into(), said: said.into(), source: String::new() };
+        let base = key(&stub("def f() -> int: ...\n", "a.pyi"));
+        assert_ne!(base, key(&stub("def g() -> int: ...\n", "a.pyi")));
+        assert_ne!(base, key(&stub("def f() -> int: ...\n", "b.pyi")));
+    }
+
+    #[test]
+    fn a_package_s_source_is_the_distribution_whose_record_lists_it() {
+        let made = environment(
+            "distribution",
+            &[
+                ("greet-stubs/__init__.pyi", "def hello(name: str) -> str: ...\n"),
+                ("greet_stubs-1.2.0.dist-info/RECORD", "greet-stubs/__init__.pyi,sha256=x,10\n"),
+                ("other-0.1.dist-info/RECORD", "other/__init__.py,,\n"),
+                ("loose/__init__.pyi", "def f() -> int: ...\n"),
+            ],
         );
-        assert_ne!(
-            base,
-            key(&stub(
-                "def f() -> int: ...
-",
-                "b.pyi"
-            ))
-        );
+        let stub = find("greet", || Ok(Environment::Made(made.clone()))).unwrap();
+        assert_eq!(stub.source, "greet_stubs 1.2.0");
+        let stub = find("loose", || Ok(Environment::Made(made))).unwrap();
+        assert_eq!(stub.source, "loose, which no distribution's RECORD lists");
+        let typeshed = find("textwrap", || panic!("not asked")).unwrap();
+        assert!(typeshed.source.starts_with("typeshed ") && typeshed.source.len() == "typeshed ".len() + 12);
     }
 
     #[test]
     fn a_stub_that_binds_no_function_counts_as_none() {
         let classes = Stub {
-            text: "class Box:
-    def size(self) -> int: ...
-"
-            .into(),
+            text: "class Box:\n    def size(self) -> int: ...\n".into(),
             said: "box.pyi".into(),
+            source: String::new(),
         };
         assert!(bound("box", &classes).unwrap_err().contains("binds no function"));
-        let one = Stub {
-            text: "def size() -> int: ...
-"
-            .into(),
-            said: "box.pyi".into(),
-        };
+        let one = Stub { text: "def size() -> int: ...\n".into(), said: "box.pyi".into(), source: String::new() };
         assert!(bound("box", &one).unwrap().contains("fn size() -> int ! PyError"));
     }
 
