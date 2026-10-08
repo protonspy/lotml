@@ -1,0 +1,10 @@
+# The Python module `json`, bound by `lotml bind` from typeshed.
+# Do not edit: run `lotml bind` again.
+# Every function returns `T ! PyError`: a stub does not say what a call raises.
+# A parameter written `= todo()` is optional: Python supplies its default.
+# A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn dumps(obj: PyObject, skipkeys: bool = False, ensure_ascii: bool = True, check_circular: bool = True, allow_nan: bool = True, cls: PyObject? = None, indent: PyObject? = None, separators: (str, str)? = None, default: PyObject? = None, sort_keys: bool = False) -> str ! PyError
+fn dump(obj: PyObject, fp: PyObject, skipkeys: bool = False, ensure_ascii: bool = True, check_circular: bool = True, allow_nan: bool = True, cls: PyObject? = None, indent: PyObject? = None, separators: (str, str)? = None, default: PyObject? = None, sort_keys: bool = False) -> None ! PyError
+fn loads(s: PyObject, cls: PyObject? = None, object_hook: PyObject? = None, parse_float: PyObject? = None, parse_int: PyObject? = None, parse_constant: PyObject? = None, object_pairs_hook: PyObject? = None, array_hook: PyObject? = None) -> PyObject ! PyError
+fn load(fp: PyObject, cls: PyObject? = None, object_hook: PyObject? = None, parse_float: PyObject? = None, parse_int: PyObject? = None, parse_constant: PyObject? = None, object_pairs_hook: PyObject? = None, array_hook: PyObject? = None) -> PyObject ! PyError
+fn detect_encoding(b: PyObject) -> PyObject ! PyError

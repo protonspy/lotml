@@ -34,13 +34,6 @@ pub struct Compiled {
 /// The runtime every generated module imports, shipped next to it as `lotml_rt.py`.
 pub const RUNTIME: &str = include_str!("../runtime/lotml_rt.py");
 
-/// The script `lotml bind` runs: a stub read with Python's parser, written as a lotml interface.
-pub const BIND: &str = include_str!("../runtime/lotml_bind.py");
-
-/// The status [`BIND`] exits with when no stub is given and typeshed has none, so `lotml bind`
-/// looks in the project's packages (plans/bind-sources.md 1.1).
-pub const NO_TYPESHED_STUB: i32 = 3;
-
 /// The command that runs Python: `LOTML_PYTHON`, else the first of `python3`, `python` and the
 /// Windows launcher `py -3` that answers `--version` — a name that only opens an app store,
 /// as Windows ships `python.exe`, does not.

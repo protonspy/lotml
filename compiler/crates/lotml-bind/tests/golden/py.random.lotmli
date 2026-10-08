@@ -1,0 +1,31 @@
+# The Python module `random`, bound by `lotml bind` from typeshed.
+# Do not edit: run `lotml bind` again.
+# Every function returns `T ! PyError`: a stub does not say what a call raises.
+# A parameter written `= todo()` is optional: Python supplies its default.
+# A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn seed(a: PyObject? = None, version: int = 2) -> None ! PyError
+fn uniform(a: f64, b: f64) -> f64 ! PyError
+fn triangular(low: f64 = 0.0, high: f64 = 1.0, mode: f64? = None) -> f64 ! PyError
+fn randint(a: int, b: int) -> int ! PyError
+fn choice(seq: PyObject) -> PyObject ! PyError
+fn randrange(start: int, stop: int? = None, step: int = 1) -> int ! PyError
+fn sample(population: [PyObject], k: int, counts: [int]? = None) -> [PyObject] ! PyError
+fn shuffle(x: [PyObject]) -> None ! PyError
+fn choices(population: PyObject, weights: [PyObject]? = None, cum_weights: [PyObject]? = None, k: int = 1) -> [PyObject] ! PyError
+fn normalvariate(mu: f64 = 0.0, sigma: f64 = 1.0) -> f64 ! PyError
+fn lognormvariate(mu: f64, sigma: f64) -> f64 ! PyError
+fn expovariate(lambd: f64 = 1.0) -> f64 ! PyError
+fn vonmisesvariate(mu: f64, kappa: f64) -> f64 ! PyError
+fn gammavariate(alpha: f64, beta: f64) -> f64 ! PyError
+fn gauss(mu: f64 = 0.0, sigma: f64 = 1.0) -> f64 ! PyError
+fn binomialvariate(n: int = 1, p: f64 = 0.5) -> int ! PyError
+fn betavariate(alpha: f64, beta: f64) -> f64 ! PyError
+fn paretovariate(alpha: f64) -> f64 ! PyError
+fn weibullvariate(alpha: f64, beta: f64) -> f64 ! PyError
+fn getstate() -> PyObject ! PyError
+fn setstate(state: PyObject) -> None ! PyError
+fn randbytes(n: int) -> bytes ! PyError
+
+# Not bound:
+#   random: `Random` holds no `random` in this stub
+#   getrandbits: `Random` holds no `getrandbits` in this stub

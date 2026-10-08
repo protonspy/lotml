@@ -188,12 +188,16 @@ Phase 2 built both directions of R14 and R27 on one checked boundary
   `lotml_rt.LotmlError` carrying the error. `lotml build --target python` writes a `.pyi` beside
   each module, with records as classes and a sum type as the union of its variants. `lotml run`
   and `lotml test` still see the program unwrapped.
-- **lotml calling Python.** `lotml bind <module> --stub <file.pyi>` reads a stub with Python's own
-  parser — typeshed's, from an installed mypy or jedi, when no stub is given, and when typeshed has
-  none, the project's virtual environment's packages in PEP 561's order: a `<package>-stubs`, a
-  `.pyi` the package ships, or its own `.py` when it carries `py.typed`, each read as a file and
-  never imported — and writes `bindings/py.<module>.lotmli`, whose first line names the source it
-  was read from, an interface of bodyless signatures each returning `T ! PyError`;
+- **lotml calling Python.** `lotml bind <module> --stub <file.pyi>` reads a stub with the Python
+  parser lotml carries, Ruff's, and runs no Python (specs/rust-binder,
+  adr:0032-a-python-module-is-bound-at-check-time-from-stubs-read-in-rust). With no stub given, a
+  standard-library module's is typeshed's, embedded in lotml at a pinned commit and gated by
+  typeshed's `VERSIONS` for CPython 3.14; any other module's is found in the project's virtual
+  environment in PEP 561's order — a `<package>-stubs`, a `.pyi` the package ships, or its own
+  `.py` when it carries `py.typed` — read as a file and never imported. A stub is hostile input: one
+  past 8 MiB, nesting deeper than 100 or with a line of more than 20 000 tokens is refused unparsed.
+  It writes `bindings/py.<module>.lotmli`, whose first line names the source it was read from, an
+  interface of bodyless signatures each returning `T ! PyError`;
   names typeshed writes as methods of a module-level instance, `randint = _inst.randint`, are
   bound from those methods.
   A union other than `X | None`, `Any`, a callable or a class is bound as `PyObject`, an opaque

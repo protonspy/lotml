@@ -1,0 +1,10 @@
+# The Python module `textwrap`, bound by `lotml bind` from typeshed.
+# Do not edit: run `lotml bind` again.
+# Every function returns `T ! PyError`: a stub does not say what a call raises.
+# A parameter written `= todo()` is optional: Python supplies its default.
+# A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn wrap(text: str, width: int = 70, initial_indent: str = "", subsequent_indent: str = "", expand_tabs: bool = True, tabsize: int = 8, replace_whitespace: bool = True, fix_sentence_endings: bool = False, break_long_words: bool = True, break_on_hyphens: bool = True, drop_whitespace: bool = True, max_lines: int? = None, placeholder: str = " [...]") -> [str] ! PyError
+fn fill(text: str, width: int = 70, initial_indent: str = "", subsequent_indent: str = "", expand_tabs: bool = True, tabsize: int = 8, replace_whitespace: bool = True, fix_sentence_endings: bool = False, break_long_words: bool = True, break_on_hyphens: bool = True, drop_whitespace: bool = True, max_lines: int? = None, placeholder: str = " [...]") -> str ! PyError
+fn shorten(text: str, width: int, initial_indent: str = "", subsequent_indent: str = "", expand_tabs: bool = True, tabsize: int = 8, replace_whitespace: bool = True, fix_sentence_endings: bool = False, break_long_words: bool = True, break_on_hyphens: bool = True, drop_whitespace: bool = True, placeholder: str = " [...]") -> str ! PyError
+fn dedent(text: str) -> str ! PyError
+fn indent(text: str, prefix: str, predicate: PyObject? = None) -> str ! PyError

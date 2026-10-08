@@ -1,0 +1,19 @@
+[package]
+name = "lotml-bind"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+miniz_oxide = "0.9.1"
+ruff_python_ast = "=0.0.16"
+ruff_python_parser = "=0.0.16"
+
+[build-dependencies]
+miniz_oxide = "0.9.1"
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

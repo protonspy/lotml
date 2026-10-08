@@ -132,16 +132,13 @@ enum Command {
     Bind {
         /// The Python module: `textwrap`, `os.path`, with its `py.` or without.
         module: String,
-        /// The stub to read; typeshed's, from an installed mypy or jedi, when absent.
+        /// The stub to read; when absent, typeshed's for the standard library, which lotml carries,
+        /// else the project's packages'.
         #[arg(long)]
         stub: Option<PathBuf>,
         /// Where to write `py.<module>.lotmli`.
         #[arg(long, default_value = "bindings")]
         out: PathBuf,
-        /// Download nothing: a missing CPython is an error naming it. `LOTML_OFFLINE` set turns it
-        /// on as well, and nothing turns it off (adr:0026).
-        #[arg(long)]
-        offline: bool,
     },
     /// Set a project up for coding agents: AGENTS.md, the guide, and the MCP server in each harness.
     Init {
@@ -273,9 +270,7 @@ fn run() -> ExitCode {
         Command::Test { paths, json, target, offline } => {
             return status(exec::test(&paths, json, target, exec::offline(offline)));
         }
-        Command::Bind { module, stub, out, offline } => {
-            exec::bind(&module, stub.as_deref(), &out, exec::offline(offline))
-        }
+        Command::Bind { module, stub, out } => exec::bind(&module, stub.as_deref(), &out),
         Command::Init { dir, harness, yes } => return status(init::run(&dir, harness.as_deref(), yes)),
         Command::Lsp => return status(lsp::serve()),
         Command::Mcp { root } => return status(mcp::serve(&root)),

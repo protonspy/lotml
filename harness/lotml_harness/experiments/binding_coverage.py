@@ -2,13 +2,14 @@
 a fixed corpus, the public names its stub declares and those `lotml bind` binds from it.
 
 The corpus is `binding-corpus.json`; every stub is read from a distribution of the harness group
-`stubs`, pinned in the lock (adr:0030), and no module of the corpus is imported. Each measurement
-is kept under a label in `results/binding-coverage/<label>.json`, and the report
-`results/binding-coverage.md` shows every label recorded, so the share before a change to the
-binder stays beside the share after it.
+`stubs`, pinned in the lock (adr:0030), and no module of the corpus is imported. Each module is
+bound by running `lotml bind <module> --stub <stub>`, the binder a program gets
+(specs/rust-binder R3.1). Each measurement is kept under a label in
+`results/binding-coverage/<label>.json`, and the report `results/binding-coverage.md` shows every
+label recorded, so the share before a change to the binder stays beside the share after it.
 
     uv sync --group stubs
-    python -m lotml_harness.experiments.binding_coverage <label> [--binder <lotml_bind.py>]
+    python -m lotml_harness.experiments.binding_coverage <label> [--compiler <lotml>]
 """
 
 import argparse
@@ -17,18 +18,19 @@ import hashlib
 import importlib.metadata
 import importlib.util
 import json
+import subprocess
 import sysconfig
+import tempfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from types import ModuleType
 
 from lotml_harness import ROOT
+from lotml_harness.execute import child_environment
 from lotml_harness.experiments.build_speed import LABEL
-from lotml_harness.experiments.phase1 import RESULTS
+from lotml_harness.experiments.phase1 import COMPILER, RESULTS
 
 CORPUS = ROOT / "harness" / "binding-corpus.json"
-BINDER = ROOT / "compiler" / "crates" / "lotml-py" / "runtime" / "lotml_bind.py"
 RECORDS = RESULTS / "binding-coverage"
 REPORT = RESULTS / "binding-coverage.md"
 GROUPS = {"stdlib": "the standard library", "pypi": "PyPI"}
@@ -171,17 +173,32 @@ def public_names(tree: ast.Module) -> set[str]:
     return {n for n in names if not n.startswith("_")}
 
 
-def bound_names(binder: ModuleType, name: str, stub: Path) -> tuple[set[str], set[str]]:
+def interface(compiler: Path, name: str, stub: Path) -> str:
+    """The interface `lotml bind` writes for `name` from `stub`; empty when it binds nothing."""
+    with tempfile.TemporaryDirectory(prefix="lotml-coverage-") as out:
+        ran = subprocess.run(  # noqa: S603 - the compiler, with fixed arguments
+            [str(compiler), "bind", name, "--stub", str(stub), "--out", out],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=child_environment(),
+            check=False,
+        )
+        written = Path(out) / f"py.{name}.lotmli"
+        return written.read_text(encoding="utf-8") if ran.returncode == 0 else ""
+
+
+def bound_names(compiler: Path, name: str, stub: Path) -> tuple[set[str], set[str]]:
     """The names `lotml bind` writes as functions of the interface of `name` from `stub`: those
     typed, and those with a `PyObject` among their types."""
     typed, reachable = set(), set()
-    for line in binder.interface(name, stub).splitlines():
+    for line in interface(compiler, name, stub).splitlines():
         if line.startswith("fn "):
             (reachable if "PyObject" in line else typed).add(line[3 : line.index("(")])
     return typed, reachable
 
 
-def measure(module: Module, binder: ModuleType, typeshed: Path | None, purelib: Path) -> Module:
+def measure(module: Module, compiler: Path, typeshed: Path | None, purelib: Path) -> Module:
     stub = stub_of(module, typeshed, purelib)
     if stub is None:
         return module
@@ -190,20 +207,10 @@ def measure(module: Module, binder: ModuleType, typeshed: Path | None, purelib: 
     tree = ast.parse(stub.read_text(encoding="utf-8"), str(stub))
     public = public_names(tree)
     module.public = len(public)
-    typed, reachable = bound_names(binder, module.name, stub)
+    typed, reachable = bound_names(compiler, module.name, stub)
     module.bound = sorted(public & typed)
     module.reachable = sorted(public & reachable)
     return module
-
-
-def load_binder(path: Path) -> ModuleType:
-    """The binder at `path`, loaded as a module of its own."""
-    spec = importlib.util.spec_from_file_location("lotml_bind_measured", path)
-    if spec is None or spec.loader is None:
-        raise SystemExit(f"cannot load the binder {path}")
-    binder = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(binder)
-    return binder
 
 
 def versions(modules: list[Module]) -> dict[str, str]:
@@ -284,15 +291,14 @@ def markdown(records: list[Record]) -> str:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("label", help="what the measurement is kept under")
-    parser.add_argument("--binder", type=Path, default=BINDER, help="the lotml_bind.py to measure")
+    parser.add_argument("--compiler", type=Path, default=COMPILER, help="the lotml to measure")
     args = parser.parse_args(argv)
     if not LABEL.fullmatch(args.label):
         raise SystemExit("a label is letters, digits, `.`, `_` and `-`")
     text = CORPUS.read_text(encoding="utf-8")
-    binder = load_binder(args.binder)
     typeshed = typeshed_root()
     purelib = Path(sysconfig.get_paths()["purelib"])
-    modules = [measure(m, binder, typeshed, purelib) for m in corpus(text)]
+    modules = [measure(m, args.compiler, typeshed, purelib) for m in corpus(text)]
     record = Record(
         args.label,
         modules,

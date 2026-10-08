@@ -521,7 +521,7 @@ fn without_python(args: &[&str], offline_var: Option<&str>) -> String {
 
 #[test]
 fn offline_a_missing_python_is_an_error_naming_it_and_nothing_is_downloaded() {
-    for args in [&["run", "--offline", "p.lot"][..], &["test", "--offline", "p.lot"], &["bind", "--offline", "json"]] {
+    for args in [&["run", "--offline", "p.lot"][..], &["test", "--offline", "p.lot"]] {
         let said = without_python(args, None);
         assert!(said.contains("downloads nothing") && !said.contains("downloading"), "{args:?}: {said}");
     }

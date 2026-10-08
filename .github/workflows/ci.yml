@@ -107,6 +107,9 @@ jobs:
           for target in x86_64-unknown-linux-gnu x86_64-pc-windows-msvc aarch64-apple-darwin; do
             python3 release/uv.py check-pin "$target"
           done
+      - name: The vendored typeshed
+        # The stubs lotml embeds are still those of the typeshed commit COMMIT pins (adr:0032).
+        run: python3 release/typeshed.py --verify
       - name: Parity floor
         # Every program of harness/results/parity/floor.json still reports the same on the Python
         # and the LLVM target, and no fewer do; one that joins only asks for an update. A program

@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 95682a2f0279aba90352aac35e8e3a0e602ed4087aed29aad1466eb906d354b1
+checksum: 9ecf40683bb812640b18df5aedf45937a5697269e3b1b60f5c867dbd262d64be
 ---
 
 # Python compatibility
@@ -96,6 +96,17 @@ the typed share each spec added.
   _Depends 3.1_
 - [ ] 4.1 (Unit) Write the wiki page on calling Python from LotML through `py.<module>`
   _Depends 2.4_
+- [x] 2.6 (Unit) Write and build the spec rust-binder: `lotml bind` reads a stub with
+      `ruff_python_parser` in Rust and needs no Python, with typeshed's `stdlib`
+      vendored as text at a pinned commit and embedded in lotml, writing the interfaces
+      the Python binder writes
+  _Depends 2.3_
+  _Reason the owner split 2.4 into three specs on 2026-10-08, one PR each; this is adr:0032's parser and embedded typeshed_
+- [ ] 2.7 (Unit) Write and build the spec python-dependencies: `lotml run` and `lotml
+      test` install a project's Python dependencies from its `uv.lock` as adr:0033 has
+      it, so 2.4 runs the binding-coverage corpus's PyPI modules
+  _Depends 2.5_
+  _Reason the owner split 2.4 into three specs on 2026-10-08, one PR each; this is adr:0033's install_
 
 ## Done when
 

@@ -12,6 +12,7 @@ counts also the names bound with a `PyObject` among their types, reachable but n
 | functions | 20.7% | 0.8% | 11.5% | 11.5% | the latest corpus and versions |
 | aliases | 22.4% | 0.8% | 12.4% | 12.4% | the latest corpus and versions |
 | pyobject | 22.4% | 0.8% | 12.4% | 27.5% | the latest corpus and versions |
+| rust-binder | 22.4% | 0.8% | 12.4% | 27.5% | the latest corpus and versions |
 
 ## functions
 
@@ -96,6 +97,47 @@ counts also the names bound with a `PyObject` among their types, reachable but n
 | pandas | pandas-stubs | 112 | 0 | 0 | 0.0% |
 
 ## pyobject
+
+| module | from | public names | bound typed | through PyObject | share typed |
+| --- | --- | ---: | ---: | ---: | ---: |
+| math | mypy | 67 | 8 | 51 | 11.9% |
+| random | mypy | 26 | 15 | 7 | 57.7% |
+| string | mypy | 12 | 0 | 1 | 0.0% |
+| textwrap | mypy | 6 | 4 | 1 | 66.7% |
+| json | mypy | 7 | 0 | 4 | 0.0% |
+| re | mypy | 33 | 1 | 2 | 3.0% |
+| os | mypy | 446 | 136 | 68 | 30.5% |
+| os.path | mypy | 0 | 0 | 0 | 0.0% |
+| shutil | mypy | 26 | 6 | 9 | 23.1% |
+| datetime | mypy | 9 | 0 | 0 | 0.0% |
+| time | mypy | 44 | 17 | 9 | 38.6% |
+| collections | mypy | 9 | 0 | 1 | 0.0% |
+| itertools | mypy | 20 | 0 | 1 | 0.0% |
+| functools | mypy | 15 | 0 | 6 | 0.0% |
+| statistics | mypy | 22 | 3 | 17 | 13.6% |
+| fractions | mypy | 1 | 0 | 0 | 0.0% |
+| decimal | mypy | 40 | 0 | 0 | 0.0% |
+| heapq | mypy | 13 | 0 | 0 | 0.0% |
+| bisect | mypy | 2 | 0 | 0 | 0.0% |
+| base64 | mypy | 22 | 11 | 11 | 50.0% |
+| hashlib | mypy | 20 | 0 | 2 | 0.0% |
+| difflib | mypy | 12 | 1 | 6 | 8.3% |
+| csv | mypy | 23 | 0 | 0 | 0.0% |
+| urllib.parse | mypy | 21 | 1 | 7 | 4.8% |
+| uuid | mypy | 21 | 2 | 7 | 9.5% |
+| requests | types-requests | 27 | 1 | 0 | 3.7% |
+| urllib3 | urllib3 | 16 | 0 | 3 | 0.0% |
+| certifi | certifi | 2 | 0 | 0 | 0.0% |
+| idna | idna | 21 | 0 | 0 | 0.0% |
+| charset_normalizer | charset-normalizer | 10 | 0 | 0 | 0.0% |
+| dateutil.parser | types-python-dateutil | 7 | 0 | 0 | 0.0% |
+| packaging.version | packaging | 5 | 1 | 1 | 20.0% |
+| six | types-six | 58 | 4 | 27 | 6.9% |
+| yaml | types-PyYAML | 29 | 0 | 16 | 0.0% |
+| numpy | numpy | 500 | 0 | 1 | 0.0% |
+| pandas | pandas-stubs | 112 | 0 | 0 | 0.0% |
+
+## rust-binder
 
 | module | from | public names | bound typed | through PyObject | share typed |
 | --- | --- | ---: | ---: | ---: | ---: |

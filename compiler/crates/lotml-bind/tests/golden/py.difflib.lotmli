@@ -1,0 +1,15 @@
+# The Python module `difflib`, bound by `lotml bind` from typeshed.
+# Do not edit: run `lotml bind` again.
+# Every function returns `T ! PyError`: a stub does not say what a call raises.
+# A parameter written `= todo()` is optional: Python supplies its default.
+# A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn IS_LINE_JUNK(line: str, pat: PyObject? = None) -> bool ! PyError
+fn IS_CHARACTER_JUNK(ch: str, ws: str = " \x09") -> bool ! PyError
+fn unified_diff(a: [str], b: [str], fromfile: str = "", tofile: str = "", fromfiledate: str = "", tofiledate: str = "", n: int = 3, lineterm: str = "\n", color: bool = False) -> PyObject ! PyError
+fn context_diff(a: [str], b: [str], fromfile: str = "", tofile: str = "", fromfiledate: str = "", tofiledate: str = "", n: int = 3, lineterm: str = "\n") -> PyObject ! PyError
+fn ndiff(a: [str], b: [str], linejunk: PyObject? = None, charjunk: PyObject? = todo()) -> PyObject ! PyError
+fn restore(delta: [str], which: int) -> PyObject ! PyError
+fn diff_bytes(dfunc: PyObject, a: [PyObject], b: [PyObject], fromfile: PyObject = todo(), tofile: PyObject = todo(), fromfiledate: PyObject = todo(), tofiledate: PyObject = todo(), n: int = 3, lineterm: PyObject = todo()) -> PyObject ! PyError
+
+# Not bound:
+#   get_close_matches: it is overloaded
