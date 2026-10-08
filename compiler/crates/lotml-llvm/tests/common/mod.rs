@@ -119,6 +119,21 @@ pub fn run_python(name: &str, source: &str) -> Run {
 
 /// [`run_python`] for a program importing through `interfaces`.
 pub fn run_python_with(name: &str, source: &str, interfaces: &lotml_check::Interfaces) -> Run {
+    let python = lotml_py::python().expect("a Python interpreter");
+    run_python_on(&python, name, source, interfaces)
+}
+
+/// The interpreters the Python target is held to: each one `LOTML_PYTHONS` names, a list of paths
+/// as the system's `PATH` separates them, or else the one `lotml run` finds.
+pub fn pythons() -> Vec<Vec<String>> {
+    match std::env::var_os("LOTML_PYTHONS") {
+        Some(list) => std::env::split_paths(&list).map(|p| vec![p.display().to_string()]).collect(),
+        None => vec![lotml_py::python().expect("a Python interpreter")],
+    }
+}
+
+/// [`run_python_with`] on the interpreter `python`.
+pub fn run_python_on(python: &[String], name: &str, source: &str, interfaces: &lotml_check::Interfaces) -> Run {
     let dir = scratch("py-target", name);
     let path = dir.join("prog.lot");
     std::fs::write(&path, source).unwrap();
@@ -126,7 +141,6 @@ pub fn run_python_with(name: &str, source: &str, interfaces: &lotml_check::Inter
         lotml_py::compile_with(source, &path, interfaces).unwrap_or_else(|d| panic!("{source}\n{d:#?}")).module;
     std::fs::write(dir.join("prog.py"), module).unwrap();
     std::fs::write(dir.join("lotml_rt.py"), lotml_py::RUNTIME).unwrap();
-    let python = lotml_py::python().expect("a Python interpreter");
     let out = Command::new(&python[0])
         .args(&python[1..])
         .arg("-c")

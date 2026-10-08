@@ -90,6 +90,16 @@ fn main():\n    print(Node(1, []).size(), depth([1, 2], 3))\n";
 }
 
 #[test]
+fn a_function_that_recurses_through_a_lambda_counts_with_the_lambda() {
+    let source = "fn go(n: int) -> int:\n    if n == 0:\n        return 0\n    again = [lambda m: go(m)]\n    return again[0](n - 1) + 1\n\n\
+fn calls_one(n: int) -> int:\n    f = [lambda m: m + 1]\n    return f[0](n)\n\n\
+fn main():\n    print(go(3), calls_one(2))\n";
+    let mut expected = functions(&["go"]);
+    expected.extend([symbol::lambda(0), symbol::lambda(1)]);
+    assert_eq!(counted(source), expected, "a call through a value reaches what any value may be, and back");
+}
+
+#[test]
 fn a_cycle_through_a_bound_method_of_a_type_parameter_counts() {
     let source = "trait Walk:\n    fn walk(self, n: int) -> int\n\ntype A(x: int)\n\n\
 impl Walk for A:\n    fn walk(self, n: int) -> int:\n        return go(self, n - 1)\n\n\
