@@ -13,14 +13,16 @@ checkable while the code is still being written.
   ([Mündler et al.](https://arxiv.org/abs/2504.09246), PLDI 2025); in self-contained Rust, type
   mismatches lead (43.4%). Static typing does not create those errors; it brings them to compile
   time, where the agent sees and fixes them — see [[semantic-compiler]].
-- **Types catch what Python only finds at runtime.** On real-world Python functions, half of the
-  API-misuse runtime bugs were `TypeError`s and a fifth `AttributeError`s, and wrong arguments led
-  the runtime bugs ([arXiv 2407.06153](https://arxiv.org/abs/2407.06153)).
+- **Types catch what Python only finds at runtime.** On HumanEval+, MBPP+ and APPS+, API misuse
+  was the commonest runtime bug, and half of it was `TypeError`s and a fifth `AttributeError`s. On
+  real-world functions (RWPB) the share of runtime bugs rose, incorrect arguments and boundary
+  checks most of all ([arXiv 2407.06153](https://arxiv.org/abs/2407.06153)).
 - **Optionals target the commonest robustness gap.** In repository-level Java, 35.2% of compiling
   LLM outputs were less robust than the human code, over 90% of the gaps were missing conditional
   checks, and missing null checks were the most frequent pattern; try-catch was equally rare in both
-  ([arXiv 2503.20197](https://arxiv.org/abs/2503.20197)). Static types without null safety did not
-  close it; `T?` with a compile-time check is aimed exactly there.
+  ([arXiv 2503.20197](https://arxiv.org/abs/2503.20197); four models under 7B, GPT-4o as the
+  judge). Static types without null safety did not close it; `T?` with a compile-time check is
+  aimed exactly there.
 - **Annotations alone change little; `Any` makes things worse.** In
   [MultiPL-E](https://arxiv.org/abs/2208.08227), removing Python's annotations made no difference
   for Codex, but replacing TypeScript signature types with `Any` cost points; the authors read it as
@@ -31,8 +33,8 @@ checkable while the code is still being written.
   comparison. "Explicit at the boundary, inferred inside" is the right point, and MoonBit reached
   the same rule with mandatory signatures at module level.
 - **Checking types on prefixes works; masking by types is not a default.** Type constraints cut
-  52–75% of TypeScript compilation errors, but an independent replication found they lowered
-  functional correctness in every configuration; checking streamed prefixes with the compiler and
+  52–75% of TypeScript compilation errors, but in an independent replication unconstrained
+  decoding matched or beat the constrained decoder in every configuration, significantly in all but two; checking streamed prefixes with the compiler and
   feeding back the error cut Rust compile errors from 20.7% to 13.1% on closed models too
   ([[constrained-decoding]], [[semantic-compiler]]).
 
@@ -124,4 +126,18 @@ changes anything for the model before investing in an effect system. The same me
 
 ## Contracts
 
-`where` preconditions, checked in debug, stay in v3. No evidence was gathered on them.
+`where` preconditions, checked in debug, stay in v3. No study measures contracts in code a model
+writes, but the evidence on what models leave out points at them:
+
+- **The gap is input guards.** Over 90% of the robustness gaps in 2503.20197 were missing
+  conditional checks, 70% of them at the first line: null, value, range and state checks on the
+  inputs. That is four models under 7B, judged by GPT-4o, in Java (see above).
+- **Real-world code needs them more.** On RWPB, incorrect arguments and boundary checks rose
+  against the standard benchmarks (2407.06153).
+- **Unstated preconditions are not enforced.** Models enforced 0% of them when the prompt left them
+  out, and 23–41% when it stated them (ContractEval,
+  [arXiv 2510.12047](https://arxiv.org/abs/2510.12047); not yet in `claims.json`).
+
+A `where` clause states the guard in the signature, where the checker and the model both see it.
+None of this measures whether models write `where` clauses well; [[language-design-evidence]] has
+the evidence on verification languages if contracts go further.

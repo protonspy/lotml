@@ -14,8 +14,9 @@ Before any agent runs with the harness guide, it is measured alone: on failures 
 on problems it never trained on, against what the compiler already says (plans/harness-guide.md).
 The study behind it is why each part is here. Seeded bugs trained a detector whose accuracy on
 seeded bugs said little about real code (DeepBugs), and HDLdebugger's figures were on its own
-generator's split — so only real failures count. DrRepair found the line the compiler reports is
-often not the one to fix — so the compiler's location is the baseline to beat. Unchecked guidance
+generator's split — so only real failures count. DrRepair predicts the line to fix itself rather
+than trusting the reported one, without measuring how often they differ — so the compiler's
+location is the baseline to beat, and how often it misses is measured here. Unchecked guidance
 was right about half the time, and PyFiXV bought precision with silence — so silence and precision
 are both reported (docs/wiki/pages/compiler-embedded-model.md).
 

@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: dd1e184bbe9e14175a51b6f09b2b83c3ab2cc40256245515f0cd894aa9e239aa
+checksum: 17d751b1875527c4ef2f43a3b5584ec31e183b4aee0104cfa28cc69d4e555eb6
 ---
 
 # IR passes
@@ -51,15 +51,35 @@ and folding and inlining pass the parity suite both on and off. See
 - [ ] 1.1 (Unit) Add a visitor to `lotml-ir` — operands of a statement, mutable, and a walk over nested blocks — and move the existing passes onto it
 - [ ] 1.2 (Unit) Run the IR passes from a named list that can dump the IR after any pass and time each one, behind a `lotml dev` flag
   _Depends 1.1_
-- [ ] 1.3 (Unit) Drop functions unreachable from `main` and the exports before the LLVM backend emits them
+- [ ] 1.3 (Unit) Drop functions unreachable from `main` and the exports before the LLVM
+      backend emits them
   _Depends 1.1_
+  _Status removed_
+  _Reason review of the literature on 2026-10-08: LPython roots reachability at main, test blocks and exports, and says to measure first; lotml test --target llvm compiles test blocks; replaced by 1.5_
 - [ ] 1.4 (Unit) Golden-file tests that pin the inferred types of a set of programs and the IR after each pass
   _Depends 1.2_
 - [ ] 2.1 (Unit) Resolve operators through one table — operator, left type and right type to an implementation and its result type — read by the checker, the IR lowering and both backends
-- [ ] 2.2 (TDD) Fold constant expressions whose result cannot fail, leaving overflow, division by zero and every other error to run time, keeping the folding of set literals in `lower.rs` as it is, with the parity suite run with folding on and off
+- [ ] 2.2 (TDD) Fold constant expressions whose result cannot fail, leaving overflow,
+      division by zero and every other error to run time, keeping the folding of set
+      literals in `lower.rs` as it is, with the parity suite run with folding on and off
   _Depends 1.2, 2.1_
+  _Status removed_
+  _Reason review of the literature on 2026-10-08: LPython's folder computed another value than its runtime (round(-2.7): -3 folded, -1 at run time), a risk beside the moved error SPy showed; replaced by 2.4_
 - [ ] 2.3 (TDD) Inline functions whose body is `return <expression>` under a size cap, keeping the callee's source position on the inlined code
   _Depends 1.2_
+- [ ] 1.5 (Unit) Measure how many functions `lotml-llvm` emits that are unreachable, and
+      if any, drop those unreachable from `main`, the `test` blocks and the adr:0024
+      exports before the LLVM backend emits them
+  _Depends 1.1_
+  _Reason review of the literature on 2026-10-08: replaces 1.3_
+- [ ] 2.4 (TDD) Fold constant expressions only over operators whose meaning has one
+      definition — integers, `bool`, `str` concatenation — never float operations or
+      builtins, through one Rust function per operator, whose result cannot fail,
+      leaving overflow, division by zero and every other error to run time, keeping the
+      folding of set literals in `lower.rs` as it is, with the parity suite run with
+      folding on and off
+  _Depends 1.2, 2.1_
+  _Reason review of the literature on 2026-10-08: replaces 2.2_
 
 ## Done when
 

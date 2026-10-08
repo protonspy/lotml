@@ -38,7 +38,7 @@ the accepted ADRs under `docs/adr/`.
 | R27 | typed bindings generated from `.pyi` stubs; every call into Python returns `T ! PyError` | v2 | **new** |
 | R28 | a defined unit type for functions that fail without returning a value | v1 | **new** |
 | R29 | `check --prefix`: a partial file answers completable, error here, or not yet, never rejecting a completable prefix | v1 | **new** — checking streamed prefixes cut Rust compile errors from 20.7% to 13.1% on closed models ([[semantic-compiler]]) |
-| R30 | diagnostics carry admissible alternatives: the candidate names, methods, variants or types in scope | v1 | **new** — the alternatives carried a 42–44-point repair gain ([[semantic-compiler]]) |
+| R30 | diagnostics carry admissible alternatives: the candidate names, methods, variants or types in scope | v1 | **new** — the alternatives carried a 42–44-point repair gain on TextWorld games, not on code ([[semantic-compiler]]) |
 | R31 | `check --since <rev>`: only the diagnostics an edit introduced, with an explicit "no errors" | v1 | **new** — check-on-edit without blocking files that already had errors ([[semantic-compiler]]) |
 | R32 | edits addressed to symbols — replace a function body, a `match` arm, a method — re-indented by the tool and rejected if they break the syntax | v2 | **new** — entity-addressed edits cut edit errors by 76–88% ([[editing-robustness]]) |
 | R33 | a never-typed placeholder (`todo()`) that fills any hole | v1 | **new** — keeps prefixes free of dead ends and gives the model a legal way to leave a hole ([[type-system]]) |

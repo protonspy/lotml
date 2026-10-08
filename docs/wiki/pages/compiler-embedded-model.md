@@ -18,11 +18,13 @@ numbers.
   pairs per language, each sampled 10 times from five strong models. Behind Qwen2.5-Coder 7B it
   raised validator pass rates to 96.92% (Ansible) and 75.48% (Lean), against 59.56% and 15.96% for
   the 7B model alone and 73.83% and 7.31% for the 7B model fine-tuned with LoRA, adding 7.35 ms per
-  sample.
+  sample — served by vLLM on the A40 GPUs its experiments ran on, not on a CPU.
 - **The same small model cannot author.** Trained with the same recipe to write Ansible directly,
   the 0.5B model passed the validator 48.83% of the time, against 94.30% as a fixer of a larger
   model's drafts — the fixer starts from those drafts, so this measures the division of labour,
-  not the small model alone.
+  not the small model alone. The authors say only that their RL method "does not work well" on
+  direct generation, possibly from the small model's limited capability, on this one Ansible
+  ablation. Cite the pair with that caveat.
 - **It fixes syntax, not meaning.** On Spider's SQL test suites SLMFix left functional correctness
   where it was (0.702 against 0.699), below fine-tuning and in-context examples (0.716), and Lean's
   CodeBERTScore fell from 0.7320 to 0.6598. Its authors list the dependency on an efficient
@@ -83,11 +85,14 @@ candidates the grammar enumerates is the smallest model that adds anything to it
   means it parses within an edit distance under 5 tokens, not that it means the same.
 - **Corruption shaped like compiler errors, and the message as input.** DrRepair
   ([arXiv 2005.10636](https://arxiv.org/abs/2005.10636)) pre-trains on about 1.5M examples made by
-  corrupting 310K compiling programs, no human labels. Corruptions weighted by compiler-error
-  statistics repaired 62.5% of DeepFix against 49.4% for random token dropout. Without the compiler
+  corrupting 310K compiling programs, no human labels. Its DrPerturb applies one to five edits per
+  program from four error-shaped modules — syntax, identifier type, identifier typo, keyword —
+  sampled by how often each error occurs; it repaired 62.5% of DeepFix against 49.4% for random
+  token dropout, which made more distinct errors (170 against 156). The weights alone were never
+  ablated: the authors credit the error distribution. Without the compiler
   message the model looked the same on synthetic data and fell to 34.0% on the real test set — it
-  had learned the corruptions. It must predict the line to fix itself, because the line the compiler
-  reports is often not the one.
+  had learned the corruptions. It predicts the line to fix itself rather than trusting the reported
+  one; its motivating example has the error reported on line 9 and the fix on line 5.
 - **Mutate clean code, compile it, keep the messages.** HDLdebugger ([arXiv 2403.11671](https://arxiv.org/abs/2403.11671),
   KDD 2024) built 92,143 (broken code, compiler messages, fix) triples this way and fine-tuned
   CodeLlama-13b: direct prompting fixed 4.01%, retrieval 15.05%, fine-tuning 70.56% and the full
@@ -211,8 +216,11 @@ switch.
    SLMFix's own setting — a 7B generator with a 0.5B fixer behind it — and is where a fixer could
    move pass@1.
 4. **Data comes from the compiler.** The refused answers, mutations of programs that check, and the
-   checker as critic and reward; a ranker needs tens of thousands of well-formed programs, which is
-   what the Python→lotml corpus in [[transpilation-strategy]] would provide.
+   checker as critic and reward; a ranker needs tens of thousands of well-formed programs, and
+   lotml has no such trainable corpus. The 509 programs translated from MultiPL-E may not be
+   trained on, and the rebuild from the HumanEval and MBPP originals (`plans/seed-corpus-rebuild.md`)
+   stops at those two sources — hundreds of programs; [[transpilation-strategy]] would have to grow
+   past them.
 5. **A trained model goes stale with its language.** Lean Copilot and AutoCommenter both hit it;
    a rule changes with the compiler, a model needs retraining, and lotml is still changing.
 6. **Open:** no study measures an agent consuming a small model's repairs. The harness can: the same

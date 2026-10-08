@@ -33,7 +33,8 @@ indentation, this project's own test settles the cost question. Every number tak
 - **Without masks:** checking each streamed prefix with the compiler and restarting at the first
   unrecoverable error needs no grammar support from the API, and was evaluated on Claude Opus and
   Gemini Flash among others ([Generative Compilation](https://arxiv.org/abs/2607.13921),
-  [[semantic-compiler]]). Masking is for open models and OpenAI; prefix checking is for everyone.
+  [[semantic-compiler]]). Masking is for open models and OpenAI; prefix checking is available to
+  every model, measured on open models only in lotml.
 
 ## Does constraining help or hurt?
 
@@ -52,9 +53,11 @@ indentation, this project's own test settles the cost question. Every number tak
   few points while emitting 28–36 tokens instead of 1,100–2,000
   ([arXiv 2609.35425](https://arxiv.org/abs/2609.35425)).
 - **A syntax-only mask can hurt even when it rejects nothing valid:** 38.4% against 44.4% free on a
-  typed lambda calculus, 25.4% against 30.2% on an ML; only the typed mask recovered the loss, and
-  only where the type system constrains the surface. Constraints helped weak and base models (a 2B
-  base model from 0% to 50%) and taxed fluent ones (9B and 27B lost ground).
+  typed lambda calculus, 25.4% against 30.2% on an ML. The typed mask recovered the loss on the ML
+  only (32.5%); on the lambda calculus it stayed below free decoding (40.4% against 44.4%), and on
+  the C-like fragment it added nothing. Constraints helped weak and base models (a 2B base model
+  from 0% to 50%) and taxed fluent ones (9B and 27B lost ground). The corpus is 52 single-shot
+  tasks, on open models of up to 27B.
 - **Distortion is real and not cheaply fixed.** [Grammar-Aligned Decoding](https://arxiv.org/abs/2405.21047)
   names the problem; its algorithm removes the bias only asymptotically, over thousands of samples of
   the same prompt, with no strong effect on downstream tasks.
@@ -73,8 +76,14 @@ it work they made TypeScript stricter — annotated parameters and returns, init
 variables — and excluded features that block left-to-right typing.
 
 The alignment paper replicated that decoder at scale (about 104,000 programs): type constraints
-raised compile rates for weaker models but **lowered functional correctness in every configuration**
-(Qwen-2.5-32B on HumanEval at temperature 0.1: 72.3% constrained against 82.3% free).
+raised compile rates for weaker models but **free decoding passed more tests in every configuration,
+significantly in all but two** (Gemma-2-2B and CodeLlama-34B at temperature 1.0)
+(Qwen-2.5-32B on HumanEval at temperature 0.1: 72.3% constrained against 82.3% free). The cause it
+names is the constrainer's incompleteness — no forward references, imports or user-defined types.
+The same paper shows the other side: with a complete syntax constrainer for TOML, constrained
+decoding beat free decoding "by 2.5% for a 32B model and up to 54% for a 2B model", and fine-tuning
+the model towards the type constrainer by reinforcement learning (GRPO) narrowed the gap
+(Qwen-2.5-32B constrained up 5.3 points on HumanEval, to about 77% against 82% free). A complete grammar is what makes a mask pay.
 [Monitor-Guided Decoding](https://arxiv.org/abs/2306.10763) raised Java compilation by 13.18–24.69%,
 relative. The lesson for lotml: a type system checkable on prefixes is worth having for the
 [[semantic-compiler]]'s prefix checks and repair, and masking by types is a tool for weak open
@@ -128,6 +137,11 @@ legal. Building them surfaced one engine constraint: llguidance's lexer decides 
 ahead, so no lexeme may run on into the next line's indentation — a line end is one lexeme per line,
 and GBNF whitespace is a recursive rule so a converter cannot fuse `is` and `not` into one lexeme.
 
+So the constrained dialects do not yet meet requirement 1 below: they reject what the parser
+accepts — indentation other than four spaces per level, and blocks deeper than eight. And the
+programs they are tested on are canonical ones (the paired corpus, the reference, the pilot), not
+models' answers, so how often they would refuse what a model prefers to write is unmeasured.
+
 A fourth dialect is for editors, not for decoding: `reference/grammar/tree-sitter/`, a
 tree-sitter grammar generated from the same source, with highlight queries whose keywords come
 from it too. Three things had to be said explicitly that Lark implies. The layout tokens come
@@ -143,7 +157,7 @@ every variant B program of the paired corpus and every reference example without
    same source as the parser and tested against the same corpus on every change. What it may never
    forbid is what models prefer to write.
 2. **Three dialects:** an llguidance-compatible Lark grammar (no priorities, no `%declare`;
-   line-oriented blocks generated to a depth bound such as 16), GBNF (llama.cpp, Fireworks) and EBNF
+   line-oriented blocks generated to a depth bound — eight in the published dialects), GBNF (llama.cpp, Fireworks) and EBNF
    (vLLM, XGrammar).
 3. **Bounded repetition** and no chains of optionals — the GBNF README warns that `x? x? x?` can make
    sampling "extremely slow".

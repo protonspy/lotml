@@ -101,7 +101,10 @@ Sources: [Seed-Coder](https://arxiv.org/abs/2506.03524), [AceCoder](https://arxi
 ## What it means for lotml
 
 1. **Start on-policy and plain:** one update per batch of samples, no KL or a very small one, an
-   upper clip between 0.25 and 0.28, temperature near 1.0, FP16, and a loss that does not divide by
+   upper clip between 0.25 and 0.28, temperature near 1.0, FP16 where samples come from a separate
+   inference engine such as vLLM — the mismatch it removes is between that engine and the trainer,
+   so a run that generates inside the trainer has little of it to remove, and logs the mismatch
+   instead — and a loss that does not divide by
    answer length — checked in the pinned trl 1.0.0
    (adr:0017-a-half-billion-coder-model-tuned-locally-and-served-by-llama-server), since Dr. GRPO
    found trl dividing by length when it was written.

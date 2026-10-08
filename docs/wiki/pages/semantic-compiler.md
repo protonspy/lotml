@@ -20,8 +20,9 @@ checking partial programs while the model is still writing. Every number taken f
   and variables of the surrounding repository — cause 67.6% of failures, and a failed translation
   carries 7.7 errors on average, up to 193: cascades inflate every count.
 - **Type mismatches lead in self-contained Rust.** In Nogueira et al.
-  ([arXiv 2608.00661](https://arxiv.org/abs/2608.00661)), Rust compile errors are type mismatches
-  (43.4%), missing imports (20.5%), ownership and lifetimes (16.7%) and traits (6.1%). Missing
+  ([arXiv 2608.00661](https://arxiv.org/abs/2608.00661)), Rust compile-error labels are incompatible
+  parameter types (43.4%), missing imports (20.5%), ownership and lifetimes (16.7%) and traits
+  (6.1%) — several labels per sample, assigned by GPT-4.1-mini. Missing
   imports dominate C++ (56.6%) but not Java (8.1%): a prelude removes a whole error class.
   Errors needing a non-local fix were repaired far less often than local ones.
 - **In lotml, the pilot found semantic errors the parser accepts** — reassigned immutable locals,
@@ -124,7 +125,8 @@ numbers alone.
 
 SWE-agent's lint-on-edit ([arXiv 2405.15793](https://arxiv.org/abs/2405.15793)) reverts an edit that
 introduces a lint error and shows the error, the attempted edit and the original text. Removing it
-cost 3 points on SWE-bench Lite in a single run, within the 17.33–18.67% spread of six default runs;
+cost 3 points on SWE-bench Lite in a single run: 15.0% against 18.0%, below the lowest of six
+default runs (17.33–18.67%, mean 17.94);
 looping on failing edits accounts for 23.4% of unresolved instances. The guard's two costs are
 lessons for lotml: it rejects legitimate intermediate states, and it assumes the file was clean
 before the edit. lotml's check-on-edit reports only the diagnostics an edit introduces, diffed
@@ -138,7 +140,10 @@ what makes this affordable; [[compiler-performance]] says what `lotml-db` needs 
   repository-level Rust it cut the compile-error rate from 20.7% (feedback after generation) to
   13.1%, flagged errors a median 3 lines from where the compiler would, and lowered total overhead
   by stopping files that could never compile ([arXiv 2607.13921](https://arxiv.org/abs/2607.13921)).
-  It needs no token masks, so it applies to Claude and Gemini, which accept no grammar.
+  It needs no token masks, so it applies to Claude and Gemini, which accept no grammar. Weaker
+  models needed more restarts and often regenerated the same erroneous prefix (Qwen 9B past ten
+  restarts on 40.9% of tasks). In lotml it is available to every model, measured on open models
+  only ([[constrained-decoding]]).
 - **Completeness first.** A checker that feeds back diagnostics must never reject a prefix that can
   still be completed; errors that depend on later code — items declared further down, incomplete
   impls — are held until the end of the file. Late detection was dominated by exactly those

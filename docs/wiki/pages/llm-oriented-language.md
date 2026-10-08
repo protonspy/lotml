@@ -20,6 +20,9 @@ every source in full, checked each quoted number against the downloaded paper
    executing the programs found code whose result a Python reader would predict wrongly
    ([[python-leakage-pilot]]). The literature agrees: a short, example-based syntax reference fixes
    most syntax, and familiar syntax with a new meaning is the costliest kind ([[training-prior]]).
+   That holds for frontier models only: at the phase 1 gate, `lotml check` refused 91 (Qwen 2.5
+   Coder 7B) and 143 (Llama 3.1 8B) of 200 first answers, which also wrote syntax lotml does not
+   have (adr:0011-proceed-to-phase-2-past-the-failed-phase-1-gate).
 4. **Where the semantics are Python's, the syntax should be Python's — and where they differ, the
    difference must be visible.** Variant B costs 0.8 percentage points more tokens and removes two
    traps that execution showed in model-written variant A code ([[lotml-syntax]]).
@@ -119,4 +122,6 @@ indentation and adds edits addressed to symbols.
   overflow cost, sample size, a research transpiler that executes the pilot, indentation slips,
   grammars under llguidance, and the editing pilot — each reproducible with `uv run`.
 - **Limits:** the Claude tokenizer was not measured; the pilots used only Claude models and the
-  models' own tests or small hidden ones; the paired corpus has a single author.
+  models' own tests or small hidden ones; the paired corpus has a single author. The phase 0 and
+  phase 1 gates later added two 7–8B open models, and phase 1 found them refused far more often
+  than the Claude models (adr:0011-proceed-to-phase-2-past-the-failed-phase-1-gate).

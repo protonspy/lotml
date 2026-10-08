@@ -77,8 +77,9 @@ Almide, Mog, Jacquard, NERD, Codong and Sui — and four more have a compiler th
   "modification survival rate". On its 38-task dojo, Llama 3.3 70B scored 65% and Llama 3.1 8B
   44%, with no other language run on it.
 
-Quasar's v2 adds the strongest result of the family: its Python subset, repaired from static
-errors, reached 89.2% execution on AgentDojo against 76.3% for unrestricted Python. None of them
+Quasar's v2 adds a feedback-loop result: with multi-turn repair, 89.2% of its AgentDojo programs
+ran without error against 76.3% for single-shot Python, while accuracy moved from 64.5% to 67.7%
+on 93 tasks, and the subset alone left accuracy unchanged (63.4% against 64.5%). None of them
 has lotml's paired design with exact tests, or measures 7–8B models. The evidence by language
 property is in [[language-design-evidence]]; the sources are in
 `research/llm-landscape/languages.md`.

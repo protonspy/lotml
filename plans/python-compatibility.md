@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: e6af8a780634590d771ba0b115e94000893d30c0242e7eabf2512204713b8843
+checksum: f9821f1bcd882849054210ab1e395ae24119a1b60a38401c4c0e8f80d2c9e845
 ---
 
 # Python compatibility
@@ -107,6 +107,10 @@ the typed share each spec added.
       it, so 2.4 runs the binding-coverage corpus's PyPI modules
   _Depends 2.5_
   _Reason the owner split 2.4 into three specs on 2026-10-08, one PR each; this is adr:0033's install_
+- [ ] 4.2 (Unit) Write a proposed ADR on CPython loading a `lotml build --shared`
+      library through a generated loader that keeps adr:0012's checked, copying
+      boundary, or on leaving it out with the reason
+  _Reason review of the literature on 2026-10-08: the IR report's --pyext and research/prior-art/studies/lpython.md idea 6 are planned nowhere, and adr:0012 covers the Python target only, so Out of scope's 'adr:0012 already settles' does not reach native libraries_
 
 ## Done when
 

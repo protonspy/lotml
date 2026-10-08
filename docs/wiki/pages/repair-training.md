@@ -68,7 +68,8 @@ taken from a paper in `research/literature/sources.json` is quoted in `claims.js
   96.92% Ansible validator pass against 59.56% for the 7B model and 73.83% for the 7B model
   fine-tuned. Trained to write Ansible directly, the same 0.5B model reached 48.83% against 94.30% as
   a fixer. Its experiments took about 100 GPU hours on two A40s.
-- **Small models do not repair themselves.** Qwen2.5-1.5B left 93% of its wrong second attempts
+- **Small models do not repair themselves.** Prompted few-shot with no compiler or test feedback,
+  only an instruction to revise, pre-trained Qwen2.5-1.5B left 93% of its wrong second attempts
   nearly identical to the first, against 32% for Gemini, and judged its own code's correctness at 42%
   accuracy ([CoCoS](https://arxiv.org/abs/2505.23060)); RLEF's instruct models resubmitted the same
   code despite feedback ([RLEF](https://arxiv.org/abs/2410.02089)). Self-repair is bottlenecked by the

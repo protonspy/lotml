@@ -49,8 +49,11 @@ Both keep: `fn`, `type` for records and sum types, `T?`, `T ! E`, `?`, `fail`, `
 - **Familiar syntax with a new meaning is the costliest kind.** Asked to predict what programs do
   under supplied semantics, models lost 40–70 points when familiar operators carried new meanings,
   far more than when the same rules used new symbols, and chain-of-thought did not recover it
-  ([arXiv 2510.03415](https://arxiv.org/abs/2510.03415); reading code, not writing it). That is the
-  rule's second clause measured: different semantics needs visibly different syntax.
+  ([arXiv 2510.03415](https://arxiv.org/abs/2510.03415); reading code, not writing it). The
+  programs were in a featherweight C, the swaps adversarial — `+` evaluated as subtraction — and
+  the task was predicting final states, so lotml's milder divergences, such as copying on `=`, sit
+  outside what was measured. That is the rule's second clause measured, at its extreme: different
+  semantics needs visibly different syntax.
 
 **Decision:** variant B (adr:0004-python-syntax-where-semantics-match), confirmed by the phase 0
 gate and frozen for v1 (adr:0010-variant-b-and-indented-blocks-settled-by-the-phase-0-gate).

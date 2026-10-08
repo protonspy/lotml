@@ -12,13 +12,15 @@ trajectories, and the repairs it makes when `check` refuses its code.
 ## Why
 
 The agent benchmark exercises the harness but cannot settle anything: a 10-point difference
-between its arms needs 168 paired tasks (docs/wiki/pages/evaluation-harness.md). HumanEval was
-written for Python, which lotml's syntax follows, and its original release is MIT-licensed, so its
-tasks can be both measured and trained on — unlike the task set's copy, which comes through
-MultiPL-E and may not be trained on. `harness/results/agent-humaneval.md` keeps 157 of its 164
-problems, holding 1272 cases: 11 short of 168, so a 10-point difference stays just out of reach
-and MBPP's 859 kept tasks (`harness/results/agent-mbpp.md`) are the reserve. The same runs are the data the wiki says a compiler-embedded
-model needs — refused answers, the checker as critic, repairs that check
+between its arms needs 168 paired tasks at 20% discordant pairs, and more at the rates cheap
+models showed in phase 1 (docs/wiki/pages/evaluation-harness.md). HumanEval was written for
+Python, which lotml's syntax follows, and its original release is MIT-licensed, so its tasks can be
+both measured and trained on — unlike the task set's copy, which comes through MultiPL-E and may
+not be trained on. `harness/results/agent-humaneval.md` keeps 157 of its 164 problems, holding 1272
+cases: 77% power for 10 points at 20% discordance, short of the 80% target. MBPP's kept tasks
+(`harness/results/agent-mbpp.md`) are held out whole for the guide arms (`plans/harness-guide.md`
+1.1): they can extend a measurement, never the dataset. The same runs are the data the wiki says a
+compiler-embedded model needs — refused answers, the checker as critic, repairs that check
 (docs/wiki/pages/compiler-embedded-model.md). Done when every HumanEval task kept
 has run in both arms with its report committed, and a dataset has been exported from it holding
 only sources and models whose terms allow training, each with its evidence.
@@ -47,8 +49,8 @@ only sources and models whose terms allow training, each with its evidence.
   this produces the data and stops there.
 - MBPP, LiveCodeBench and MultiPL-E's translations. A grant to train on MultiPL-E and
   LiveCodeBench was reported in conversation on 2026-10-06; until it is in writing from their
-  holders, the registry keeps them out. MBPP's CC BY 4.0 original is the next source if more tasks
-  are needed.
+  holders, the registry keeps them out. MBPP's CC BY 4.0 original is held out of every training
+  set by `plans/harness-guide.md` 1.1.
 - The phase 1 gate's refused answers, real errors the study rates highest: they answer MultiPL-E's
   prompts, so `harness/results/NOTICE.md` keeps them out of training.
 

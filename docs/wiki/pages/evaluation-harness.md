@@ -101,16 +101,32 @@ The approximation is 5–9% short: at Connor's n the exact test has 76–78% pow
 exact test's power is a sawtooth in n. Settling a syntax question takes a few hundred tasks per
 comparison, independent ones — repeated samples of the same task are not independent pairs.
 
+**The 168 assumes 20% discordant pairs.** Phase 1 measured 4.5% (Sonnet), 11% (Haiku), 41% (Qwen)
+and 51.5% (Llama) (`harness/results/phase1.md`). At 7–8B-like rates a 10-point difference needs
+320–400+ paired tasks — Connor's n is 320 at 41% and 402 at 51.5%, and the exact test needs more —
+and 168 pairs detect it with 48% and 40% power (`exact_power` in
+`research/experiments/sample_size/`). A comparison is sized from the discordance its models are
+expected to show, not from the 20% row.
+
 **More samples per task narrow what a gate can see, but tasks still count most.** In Miller's
 worked example ([arXiv 2411.00640](https://arxiv.org/abs/2411.00640)), 198 paired questions at one
 sample each can detect about 13 points, and at ten samples each about 7.5, under his assumed
-variances. With several samples per task, an interval clusters by task: a Wilson interval over
+variances. That is the table above at a different assumption, not a contradiction of it: by
+Connor's formula, 13.2 points at 198 pairs corresponds to about 44% discordant pairs, where the
+table's 168 for 10 points assumes 20%. With several samples per task, an interval clusters by
+task: a Wilson interval over
 pooled runs, as `harness/lotml_harness/agent/report.py` computes it, treats repeated runs of one
 task as independent and comes out too narrow. Exact McNemar stays the test for one sample per
-task, the only one with acceptable type I error by Dietterich's comparison. A gate stated as "not
-significantly worse" at about 200 pairs cannot exclude a 10-point loss. Gates written from now
+task: for algorithms that can be run only once — his setting, two classifiers scored on one test
+set — Dietterich found McNemar's the only test with acceptable type I error. A gate stated as "not
+significantly worse" at about 200 pairs often cannot exclude a 10-point loss; whether it can
+depends on the discordance and the observed difference (at Sonnet's 4.5% discordance a 10-point
+loss is impossible). Gates written from now
 on name a non-inferiority margin before their run; gates already decided stand
 (adr:0011-proceed-to-phase-2-past-the-failed-phase-1-gate forbids rewriting one after its result).
+
+Miller, Dietterich, Riddell et al. (2403.04811) and EvalPlus (2305.01210) are not yet in
+`research/literature/`, so the numbers this page takes from them are not machine-checked.
 
 **The tasks carry known flaws.**
 - **Contamination survives translation.** 18.9% of HumanEval's and 20.8% of MBPP's solutions
@@ -160,7 +176,8 @@ adr:0011-proceed-to-phase-2-past-the-failed-phase-1-gate, which keeps the result
 syntax as it is. Each of four models wrote the
 same 200 tasks in lotml, with `lotml check` and the hidden tests' feedback for up to three
 answers, and in typed Python. Rounds to green (median 1 for every model) and tokens (lotml/Python
-0.99, median of models) pass; pass@1 does not:
+0.99, median of models) pass; pass@1 does not. The tokens median hides that both frontier models
+were above 1 — Haiku 1.05, Sonnet 1.04 — while Llama's 0.48 is over its 38 passing programs:
 
 | model | lotml pass@1 | Python pass@1 | only lotml / only Python | McNemar p | solved after feedback, lotml / Python |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -169,9 +186,12 @@ answers, and in typed Python. Rounds to green (median 1 for every model) and tok
 | Qwen 2.5 Coder 7B | 45.5% | 83.5% | 3 / 79 | < 0.001 | 62.0% / 87.5% |
 | Llama 3.1 8B | 19.0% | 65.5% | 5 / 98 | < 0.001 | 31.5% / 73.5% |
 
-The gap is not in the programs' logic: every model's first lotml answer failed the hidden tests
-*less* often than its Python one (Haiku 12 against 14, Sonnet 2 against 4, Qwen 18 against 31,
-Llama 18 against 63). It is the answers the compiler refused — Haiku 20, Sonnet 4, Qwen 91,
+The gap is not in the programs' logic: among first answers that checked, lotml's failed the
+hidden tests about as often as Python's — Haiku 12 of 180 (6.7%) against 14 of 200 (7.0%), Sonnet
+2 of 196 against 4 of 200, Qwen 18 of 109 (16.5%) against 31 of 200 (15.5%), Llama 18 of 57
+(31.6%) against 63 of 200 (31.5%). The raw counts are lower in lotml only because fewer of its
+answers reached the tests; the logic of the refused answers is unmeasured. The gap is the answers
+the compiler refused — Haiku 20, Sonnet 4, Qwen 91,
 Llama 143 of 200 — which Python has no equivalent of. The frontier models were refused mostly
 by mutability (E0301, E0302) and unknown names (E0201), and fixed nearly all of it from the
 diagnostics; the 7–8B models also wrote syntax lotml does not have (E0003; Llama 73 times)
