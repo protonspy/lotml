@@ -2,7 +2,8 @@
 autonomy: auto
 ci: wait
 branch: feat/bind-on-import
-delivery: in-progress
+delivery: in-review
+pr: 58
 ---
 
 # Bind on import — requirements
