@@ -12,7 +12,7 @@
 
 ## 2 · Room and cost
 
-- [ ] 2.1 (Unit) Run `main`, the `test` runner and the `parallel` workers natively on threads reserving 64 MiB, with the reservation flag on Windows, keeping today's exit codes and stopping with a named panic when `main`'s thread cannot be made — R2.1, R2.4
+- [x] 2.1 (Unit) Run `main`, the `test` runner and the `parallel` workers natively on threads reserving 64 MiB, with the reservation flag on Windows, keeping today's exit codes and stopping with a named panic when `main`'s thread cannot be made — R2.1, R2.4
   _Depends 1.4_
 - [ ] 2.2 (Unit) Run `main` and the tests on the Python target on a thread with a 64 MiB stack and CPython's limit at 20,000, set by `lotml run` and `lotml test` only, never on a host's import — R2.2
   _Depends 1.3_

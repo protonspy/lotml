@@ -747,6 +747,68 @@ double lt_pow_f64(double a, double b, const lt_at *at) {
     return r;
 }
 
+/* The program's threads --------------------------------------------------------------------- */
+
+/* The stack each thread the runtime starts reserves: 64 KiB for each of the 1,000 calls the
+ * recursion limit lets be in progress, with the uncounted ones between them. Reserved, not
+ * committed: on Windows only `STACK_SIZE_PARAM_IS_A_RESERVATION` makes it so, and 256 workers
+ * would otherwise commit 16 GiB. */
+#define LT_STACK ((size_t)64 << 20)
+
+typedef struct lt_main_job {
+    lt_program_fn program;
+    int status;
+} lt_main_job;
+
+#ifdef _WIN32
+static unsigned __stdcall lt_main_thread(void *job) {
+    lt_main_job *main = (lt_main_job *)job;
+    main->status = main->program();
+    return 0;
+}
+
+/* A thread running `body(arg)` with LT_STACK reserved; 0 when it cannot be made. */
+static HANDLE lt_thread(unsigned(__stdcall *body)(void *), void *arg) {
+    return (HANDLE)_beginthreadex(NULL, (unsigned)LT_STACK, body, arg, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+}
+#else
+static void *lt_main_thread(void *job) {
+    lt_main_job *main = (lt_main_job *)job;
+    main->status = main->program();
+    return NULL;
+}
+
+/* A thread running `body(arg)` with LT_STACK reserved, in `thread`; false when it cannot be made. */
+static bool lt_thread(pthread_t *thread, void *(*body)(void *), void *arg) {
+    pthread_attr_t attr;
+    if (pthread_attr_init(&attr) != 0) return false;
+    bool made = pthread_attr_setstacksize(&attr, LT_STACK) == 0 && pthread_create(thread, &attr, body, arg) == 0;
+    pthread_attr_destroy(&attr);
+    return made;
+}
+#endif
+
+int lt_run_main(lt_program_fn program) {
+    lt_main_job job = {program, 0};
+#ifdef _WIN32
+    HANDLE thread = lt_thread(lt_main_thread, &job);
+    bool made = thread != 0;
+#else
+    pthread_t thread;
+    bool made = lt_thread(&thread, lt_main_thread, &job);
+#endif
+    if (!made) {
+        lt_panic(&(lt_at){NULL, 0, NULL}, "RuntimeError", "cannot start the thread the program runs on, with 64 MiB of stack");
+    }
+#ifdef _WIN32
+    WaitForSingleObject(thread, INFINITE);
+    CloseHandle(thread);
+#else
+    pthread_join(thread, NULL);
+#endif
+    return job.status;
+}
+
 /* parallel --------------------------------------------------------------------------------- */
 
 #define LT_TASK_THREADS 256
@@ -827,7 +889,7 @@ lt_list *lt_parallel(const lt_list *tasks, const lt_type *result, lt_task_fn run
     HANDLE threads[LT_TASK_THREADS];
     int64_t started = 0;
     for (; started < workers; started++) {
-        threads[started] = (HANDLE)_beginthreadex(NULL, 0, lt_worker, &job, 0, NULL);
+        threads[started] = lt_thread(lt_worker, &job);
         if (threads[started] == 0) break;
     }
     if (started == 0) lt_work(&job);
@@ -839,7 +901,7 @@ lt_list *lt_parallel(const lt_list *tasks, const lt_type *result, lt_task_fn run
     pthread_t threads[LT_TASK_THREADS];
     int64_t started = 0;
     for (; started < workers; started++) {
-        if (pthread_create(&threads[started], NULL, lt_worker, &job) != 0) break;
+        if (!lt_thread(&threads[started], lt_worker, &job)) break;
     }
     if (started == 0) lt_work(&job);
     for (int64_t i = 0; i < started; i++) pthread_join(threads[i], NULL);

@@ -119,11 +119,16 @@ pub fn program(lowered: &Lowered, file: &str, entry: Entry, lines: bool) -> Resu
     Ok(out)
 }
 
-/// The program's `main`: the runtime started, the program's `main` or its tests run, its status.
+/// The program's `main`: the runtime started, then the program's `main` or its tests run on a
+/// thread with room for the recursion limit (specs/recursion-depth R2.1), and their status.
 fn main(module: &mut Module, lowered: &Lowered, types: &Types, tests: bool) -> String {
     module.runtime("lt_init");
     module.runtime("lt_exit");
-    let mut out = String::from("define i32 @main() {\nentry:\n  call void @lt_init()\n");
+    module.runtime("lt_run_main");
+    let mut out = String::from(
+        "define i32 @main() {\nentry:\n  call void @lt_init()\n  %status = call i32 @lt_run_main(ptr @lt_program)\n  \
+         ret i32 %status\n}\n\ndefine internal i32 @lt_program() {\nentry:\n",
+    );
     if tests {
         module.runtime("lt_run_test");
         module.runtime("lt_test_report");

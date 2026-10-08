@@ -151,6 +151,13 @@ void lt_write(const char *bytes, size_t length);
 void lt_flush(void);
 void lt_init(void);
 int lt_exit(int status);
+
+/* The program as the process runs it: its `main` or its tests, returning its exit status. */
+typedef int (*lt_program_fn)(void);
+/* Run `program` on a thread reserving 64 MiB of stack, so the recursion limit and not the stack
+ * stops a recursion (specs/recursion-depth R2.1), and give its status; a panic naming it when the
+ * thread cannot be made, rather than a run on the system's smaller stack (R2.4). */
+int lt_run_main(lt_program_fn program);
 /* A program without `fn main()`: it says so and stops with status 2. */
 int lt_no_main(void);
 /* A library's exported function (specs/c-abi-export R2.1), called from any thread of its host:

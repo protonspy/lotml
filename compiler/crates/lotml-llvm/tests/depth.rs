@@ -92,3 +92,44 @@ fn main():\n    print(spawn(400, 500))\n    print(spawn(600, 500))\n"
         assert!(stopped(&run.stderr), "{level:?}: {}", run.stderr);
     }
 }
+
+/// `deep(n)`, a function whose frame holds `locals` integers live across its recursive call: a
+/// thousand of them pass the 1 MiB a thread is given by default on Windows.
+fn deep(locals: usize) -> String {
+    let mut source = String::from("fn deep(n: int) -> int:\n");
+    for i in 0..locals {
+        source += &format!("    a{i} = n * {i}\n");
+    }
+    source += "    if n == 0:\n        return 0\n    var total = deep(n - 1)\n";
+    for i in 0..locals {
+        source += &format!("    total += a{i}\n");
+    }
+    source + "    return total\n\n"
+}
+
+/// What `deep(n)` returns with `locals` locals.
+fn deep_sum(locals: i64, n: i64) -> i64 {
+    (locals * (locals - 1) / 2) * (n * (n + 1) / 2)
+}
+
+#[test]
+fn the_limit_and_not_the_stack_stops_a_recursion_of_large_frames() {
+    let Some(clang) = clang() else { return };
+    let locals = 150;
+    let expected = deep_sum(locals, 999);
+    // The task's lambda is a call that counts, which leaves the task room for 998 more.
+    let in_task = deep_sum(locals, 998);
+    let main = format!(
+        "{}fn main():\n    print(deep(999))\n    print(parallel([lambda: deep(998)])[0])\n    print(deep(1000))\n",
+        deep(locals as usize)
+    );
+    let tests = format!("{}test \"deep\":\n    assert deep(999) == {expected}\n", deep(locals as usize));
+    for level in LEVELS {
+        let run = run_llvm(&clang, "large-frames", &main, level);
+        assert_eq!(run.stdout, format!("{expected}\n{in_task}\n"), "{level:?}: {}", run.stderr);
+        assert!(stopped(&run.stderr), "{level:?}: {}", run.stderr);
+        assert_eq!(run.code, Some(101), "{level:?}");
+        let run = build_and_run(&clang, "large-frames-tests", &tests, level, Build::Tests);
+        assert!(run.stdout.contains(r#""outcome": "pass""#), "{level:?}: {}\n{}", run.stdout, run.stderr);
+    }
+}
