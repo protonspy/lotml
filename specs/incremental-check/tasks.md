@@ -12,7 +12,7 @@
 
 ## 2 · The file's report, and what it costs
 
-- [ ] 2.1 (TDD) Assemble a file's diagnostics and `Checked` from its items moved to their positions, with `E0222` over the count in source order, shown equal to the whole-file check over every corpus program, from an empty database and after an edit to each body — R2.1, R2.2, R2.3
+- [x] 2.1 (TDD) Assemble a file's diagnostics and `Checked` from its items moved to their positions, with `E0222` over the count in source order, shown equal to the whole-file check over every corpus program, from an empty database and after an edit to each body — R2.1, R2.2, R2.3
   _Depends 1.4_
 - [ ] 2.2 (Unit) Measure with `check_speed` under a new label, and record in `docs/wiki/pages/compiler-performance.md` whether the edit and the empty database meet their bounds — R3.1, R3.2
   _Depends 2.1_

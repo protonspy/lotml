@@ -173,10 +173,16 @@ pub fn check_item<'db>(db: &'db dyn salsa::Database, item: Item<'db>) -> PartChe
 }
 
 /// What the checker found in a file: its type errors, the type of every expression, and what
-/// each local's name refers to.
+/// each local's name refers to, assembled from its items moved to where they are. Built only
+/// when asked for: reporting diagnostics never builds it.
 #[salsa::tracked(returns(ref))]
 pub fn checked(db: &dyn salsa::Database, file: SourceFile) -> Checked {
-    lotml_check::check_resolved_with(&parse(db, file).module, file.text(db), interfaces(db, file))
+    let declarations = declarations(db, file);
+    let mut assembly = Assembly::new(declarations, true);
+    for &item in items(db, file) {
+        assembly.absorb(check_item(db, item), item.start(db));
+    }
+    assembly.finish(&parse(db, file).module, declarations)
 }
 
 /// Every diagnostic of a file, in source order: syntax errors, then type errors, each item's
