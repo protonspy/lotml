@@ -1,6 +1,7 @@
 //! What a built executable or library imports and exports, read from its bytes by a PE and an ELF
-//! reader with no dependency (plans/target-parity-assurance.md 3.2): every read is bounded, and a
-//! file cut short is an error, never a panic or a read past its end.
+//! reader with no dependency (plans/target-parity-assurance.md 3.2): every read is bounded and
+//! every offset a file gives is added and multiplied checked, so a file cut short or lying is an
+//! error, never a panic or a read past its end.
 
 #![allow(dead_code)]
 
@@ -56,9 +57,15 @@ impl Bytes<'_> {
 
     /// The NUL-terminated string at `at`, at most 4096 bytes.
     fn string(&self, at: u64) -> Result<String, String> {
+        self.string_within(at, 4096)
+    }
+
+    /// The NUL-terminated string at `at`, ending within `room` bytes.
+    fn string_within(&self, at: u64, room: u64) -> Result<String, String> {
         let start = usize::try_from(at).map_err(|_| "an offset too large".to_string())?;
         let rest = self.0.get(start..).ok_or_else(|| format!("a name at {start}, past the end"))?;
-        let end = rest.iter().take(4096).position(|b| *b == 0).ok_or("a name with no end")?;
+        let room = usize::try_from(room.min(4096)).unwrap_or(4096);
+        let end = rest.iter().take(room).position(|b| *b == 0).ok_or("a name with no end")?;
         Ok(String::from_utf8_lossy(&rest[..end]).into_owned())
     }
 }
@@ -90,6 +97,9 @@ fn pe(data: &[u8]) -> Result<Linkage, String> {
         let raw_size = u64::from(b.u32(at + 16)?);
         let raw = u64::from(b.u32(at + 20)?);
         spans.push((address, virtual_size.max(raw_size), raw));
+        if raw_size != 0 {
+            b.slice(raw, raw_size)?;
+        }
     }
     let offset = |rva: u64| -> Result<u64, String> {
         spans
@@ -108,19 +118,38 @@ fn pe(data: &[u8]) -> Result<Linkage, String> {
             linkage.exports.push(b.string(offset(u64::from(b.u32(names + 4 * k)?))?)?);
         }
     }
-    let imports = u64::from(b.u32(directories + 8)?);
-    if imports != 0 {
-        let mut at = offset(imports)?;
+    let directory_count = u64::from(b.u32(directories - 4)?);
+    // The import directory (1), and the delay-load one (13): descriptors of 20 and of 32 bytes,
+    // the library's name at 12 and at 4, until one names none.
+    for (index, size, name_at) in [(1, 20, 12), (13, 32, 4)] {
+        if index >= directory_count {
+            continue;
+        }
+        let table = u64::from(b.u32(directories + 8 * index)?);
+        if table == 0 {
+            continue;
+        }
+        let mut at = offset(table)?;
         for _ in 0..MOST {
-            let name = u64::from(b.u32(at + 12)?);
+            let name = u64::from(b.u32(at + name_at)?);
             if name == 0 {
                 break;
             }
             linkage.imports.push(b.string(offset(name)?)?);
-            at += 20;
+            at += size;
         }
     }
     Ok(linkage)
+}
+
+/// `a + b`, or an error where it would overflow: an offset a file gives is never trusted.
+fn plus(a: u64, b: u64) -> Result<u64, String> {
+    a.checked_add(b).ok_or_else(|| "an offset that overflows".to_string())
+}
+
+/// `a * b`, or an error where it would overflow.
+fn times(a: u64, b: u64) -> Result<u64, String> {
+    a.checked_mul(b).ok_or_else(|| "a size that overflows".to_string())
 }
 
 fn elf(data: &[u8]) -> Result<Linkage, String> {
@@ -139,6 +168,8 @@ fn elf(data: &[u8]) -> Result<Linkage, String> {
     } else {
         (u64::from(b.u32(0x20)?), u64::from(b.u16(0x2e)?), u64::from(b.u16(0x30)?))
     };
+    // The whole table of section headers lies inside the file, or nothing of it is read.
+    b.slice(sections, times(size, count)?)?;
     struct Section {
         kind: u32,
         offset: u64,
@@ -148,48 +179,58 @@ fn elf(data: &[u8]) -> Result<Linkage, String> {
     }
     let mut table = Vec::new();
     for k in 0..count.min(MOST) {
-        let at = sections + size * k;
+        let at = plus(sections, times(size, k)?)?;
+        let field = |offset: u64| plus(at, offset);
         let (offset, length, link, entry) = if wide {
-            (b.u64(at + 0x18)?, b.u64(at + 0x20)?, u64::from(b.u32(at + 0x28)?), b.u64(at + 0x38)?)
+            (b.u64(field(0x18)?)?, b.u64(field(0x20)?)?, u64::from(b.u32(field(0x28)?)?), b.u64(field(0x38)?)?)
         } else {
-            (word(at + 0x10)?, word(at + 0x14)?, u64::from(b.u32(at + 0x18)?), word(at + 0x24)?)
+            (word(field(0x10)?)?, word(field(0x14)?)?, u64::from(b.u32(field(0x18)?)?), word(field(0x24)?)?)
         };
-        table.push(Section { kind: b.u32(at + 4)?, offset, size: length, link, entry });
+        let kind = b.u32(field(4)?)?;
+        // SHT_NOBITS (8) and SHT_NULL (0) have no bytes in the file.
+        if !matches!(kind, 0 | 8) {
+            b.slice(offset, length)?;
+        }
+        table.push(Section { kind, offset, size: length, link, entry });
     }
     let strings = |s: &Section| -> Result<&Section, String> {
         let link = usize::try_from(s.link).map_err(|_| "a link too large".to_string())?;
-        table.get(link).ok_or_else(|| format!("a link to section {link}, which is not there"))
+        let linked = table.get(link).ok_or_else(|| format!("a link to section {link}, which is not there"))?;
+        b.slice(linked.offset, linked.size)?;
+        Ok(linked)
     };
     let name = |s: &Section, at: u64| -> Result<String, String> {
         if at >= s.size {
             return Err(format!("a name at {at} past its table of {} bytes", s.size));
         }
-        b.string(s.offset + at)
+        b.string_within(plus(s.offset, at)?, s.size - at)
     };
     let mut linkage = Linkage::default();
     for s in &table {
         match s.kind {
             // SHT_DYNAMIC: tag and value pairs, DT_NEEDED (1) naming a library.
             6 => {
-                let entry = if wide { 16 } else { 8 };
+                let entry: u64 = if wide { 16 } else { 8 };
                 b.slice(s.offset, s.size)?;
                 for k in 0..(s.size / entry).min(MOST) {
-                    let tag = word(s.offset + entry * k)?;
+                    let at = plus(s.offset, entry * k)?;
+                    let tag = word(at)?;
                     if tag == 0 {
                         break;
                     }
                     if tag == 1 {
-                        let value = word(s.offset + entry * k + entry / 2)?;
+                        let value = word(plus(at, entry / 2)?)?;
                         linkage.imports.push(name(strings(s)?, value)?);
                     }
                 }
             }
             // SHT_DYNSYM: a function defined here, global or weak, of default visibility.
             11 => {
-                let entry = if s.entry == 0 { if wide { 24 } else { 16 } } else { s.entry };
+                let least: u64 = if wide { 24 } else { 16 };
+                let entry = s.entry.max(least);
                 b.slice(s.offset, s.size)?;
                 for k in 0..(s.size / entry).min(MOST) {
-                    let at = s.offset + entry * k;
+                    let at = plus(s.offset, entry * k)?;
                     let (info, other, index) = if wide {
                         (b.u8(at + 4)?, b.u8(at + 5)?, b.u16(at + 6)?)
                     } else {

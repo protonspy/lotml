@@ -53,13 +53,10 @@ fn a_file_cut_short_is_an_error_and_never_a_panic() {
     if read(&exe, &bytes).is_none() {
         return;
     }
-    for end in [0, 1, 3, 4, 16, 63, 64, 100, 200, 300, 400, 512] {
-        assert!(linkage(&bytes[..end.min(bytes.len())]).is_err(), "cut at {end}");
-    }
-    // Wherever it is cut, the reader answers: an error, or what the part it kept holds.
+    // Cut anywhere before its end, a file no longer holds what its headers say it does.
     let step = (bytes.len() / 997).max(1);
-    for end in (0..bytes.len()).step_by(step) {
-        let _ = linkage(&bytes[..end]);
+    for end in (0..bytes.len()).step_by(step).chain([1, 3, 4, 16, 63, 64, bytes.len() - 1]) {
+        assert!(linkage(&bytes[..end]).is_err(), "cut at {end} of {}", bytes.len());
     }
 }
 
@@ -89,4 +86,24 @@ fn counts_that_lie_are_bounded_rather_than_followed() {
 fn neither_format_is_an_error() {
     assert!(linkage(b"").is_err());
     assert!(linkage(b"#!/bin/sh\necho hi\n").is_err());
+}
+
+/// A 64-bit little-endian ELF header and nothing else, its section headers at `offset`.
+fn elf_header(offset: u64, count: u16) -> Vec<u8> {
+    let mut bytes = vec![0u8; 64];
+    bytes[..4].copy_from_slice(b"\x7fELF");
+    bytes[4] = 2;
+    bytes[5] = 1;
+    bytes[0x28..0x30].copy_from_slice(&offset.to_le_bytes());
+    bytes[0x3a..0x3c].copy_from_slice(&64u16.to_le_bytes());
+    bytes[0x3c..0x3e].copy_from_slice(&count.to_le_bytes());
+    bytes
+}
+
+#[test]
+fn offsets_that_would_overflow_are_errors() {
+    for offset in [u64::MAX - 5, u64::MAX, u64::MAX / 2] {
+        assert!(linkage(&elf_header(offset, 1)).is_err(), "{offset:#x}");
+        assert!(linkage(&elf_header(offset, u16::MAX)).is_err(), "{offset:#x}");
+    }
 }

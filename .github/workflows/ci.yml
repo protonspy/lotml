@@ -60,6 +60,7 @@ jobs:
       - name: Clang
         run: |
           "/c/Program Files/LLVM/bin/clang.exe" --version
+          ls "/c/Program Files/LLVM/bin/llvm-objdump.exe"
           python --version
       - name: Test
         run: cargo test --manifest-path compiler/Cargo.toml --locked -p lotml-llvm
