@@ -7,7 +7,7 @@
   _Depends 1.1_
 - [x] 1.3 (TDD) Count on the Python target with a per-thread counter and its own `RecursionError` past 1,000, checked before it increases, carried into `parallel` tasks and restored where a `test` block or a task ends in a panic — R1.2, R1.5, R1.6
   _Depends 1.2_
-- [ ] 1.4 (TDD) Count on the LLVM target with a thread-local counter emitted inline, checked before it increases, carried into `parallel` tasks, panicking through the runtime past 1,000 and restoring the count at the `test` runner's and the workers' jump points — R1.2, R1.5, R1.6
+- [x] 1.4 (TDD) Count on the LLVM target with a thread-local counter emitted inline, checked before it increases, carried into `parallel` tasks, panicking through the runtime past 1,000 and restoring the count at the `test` runner's and the workers' jump points — R1.2, R1.5, R1.6
   _Depends 1.2_
 
 ## 2 · Room and cost

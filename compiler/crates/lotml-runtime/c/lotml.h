@@ -76,6 +76,15 @@ LT_NORETURN void lt_value_error(const lt_at *at, const char *message);
 LT_NORETURN void lt_todo(const lt_at *at);
 LT_NORETURN void lt_assert_failed(const lt_at *at, const char *expression);
 
+/* The calls in progress on this thread of the program's functions that can recurse, raised and
+ * lowered by the code the compiler writes around each such function, which checks the limit of
+ * 1,000 (specs/recursion-depth R1.1). A test and a `parallel` task get back the count they began
+ * with when they end in a panic, which does not run the code that lowers it (R1.5). */
+extern LT_THREAD int32_t lt_depth;
+
+/* A call that would put more than the limit of calls in progress: `RecursionError` (R1.2). */
+LT_NORETURN void lt_recursion_error(const lt_at *at);
+
 /* The header of every heap cell. */
 typedef struct lt_cell {
     int32_t count;

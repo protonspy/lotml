@@ -374,7 +374,9 @@ void lt_run_test(const char *name, lt_test_fn test) {
     lt_failure *outer_failure = lt_task_failure;
     lt_task_jump = &here;
     lt_task_failure = &result->failure;
+    int32_t depth = lt_depth;
     if (setjmp(here) == 0) test();
+    lt_depth = depth;
     lt_task_jump = outer;
     lt_task_failure = outer_failure;
 }
@@ -499,6 +501,12 @@ void lt_value_error(const lt_at *at, const char *message) {
 
 void lt_todo(const lt_at *at) {
     lt_panic(at, "Todo", "not written yet");
+}
+
+LT_THREAD int32_t lt_depth = 0;
+
+void lt_recursion_error(const lt_at *at) {
+    lt_panic(at, "RecursionError", "maximum recursion depth exceeded");
 }
 
 void lt_assert_failed(const lt_at *at, const char *expression) {
@@ -750,6 +758,8 @@ typedef struct lt_job {
     size_t size;
     int64_t next;
     lt_failure *failures;
+    /* The count of calls in progress of the thread that started the tasks: each task's (R1.6). */
+    int32_t depth;
 } lt_job;
 
 static int64_t lt_next_task(lt_job *job) {
@@ -776,6 +786,7 @@ static void lt_work(lt_job *job) {
         jmp_buf here;
         lt_task_jump = &here;
         lt_task_failure = &job->failures[i];
+        lt_depth = job->depth;
         if (setjmp(here) == 0) {
             lt_closure *task = *(lt_closure **)(job->tasks->data + (size_t)i * job->tasks->type->size);
             lt_inc(task);
@@ -806,7 +817,7 @@ lt_list *lt_parallel(const lt_list *tasks, const lt_type *result, lt_task_fn run
     lt_failure *failures = calloc((size_t)n, sizeof(lt_failure));
     if (failures == NULL) lt_panic(at, "MemoryError", "out of memory");
     memset(results->data, 0, (size_t)n * result->size);
-    lt_job job = {tasks, run, results->data, result->size, 0, failures};
+    lt_job job = {tasks, run, results->data, result->size, 0, failures, lt_depth};
     int64_t workers = n < LT_TASK_THREADS ? n : LT_TASK_THREADS;
     /* jmp_buf and the failure the caller is itself a task of, if it is one */
     jmp_buf *outer_jump = lt_task_jump;
@@ -834,6 +845,7 @@ lt_list *lt_parallel(const lt_list *tasks, const lt_type *result, lt_task_fn run
     for (int64_t i = 0; i < started; i++) pthread_join(threads[i], NULL);
 #endif
     lt_add_running(-1);
+    lt_depth = job.depth;
     lt_task_jump = outer_jump;
     lt_task_failure = outer_failure;
     results->len = n;

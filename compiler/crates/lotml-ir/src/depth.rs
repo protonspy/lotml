@@ -13,6 +13,9 @@ use crate::ir::{Block, Callee, Expr, Stmt, StmtKind, block_exprs};
 use crate::lower::Lowered;
 use crate::symbol;
 
+/// The most calls of counted functions a thread may have in progress (specs/recursion-depth R1.2).
+pub const LIMIT: i32 = 1000;
+
 /// The functions of `lowered`, by name, that a call can nest through without bound: each one in a
 /// cycle of the call graph, each one used as a value, and each method of a type made a `dyn`
 /// value. A call through a value or through `dyn` has no edge in the graph, so every cycle that

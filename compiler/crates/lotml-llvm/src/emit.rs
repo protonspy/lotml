@@ -21,6 +21,9 @@ use crate::export::Export;
 use crate::module::Module;
 use crate::types::{self, Types, int_bits};
 
+/// The runtime's count of calls in progress on the thread, `lt_depth` of `lotml.h`.
+const DEPTH: &str = "@lt_depth = external thread_local global i32";
+
 /// Where the emitter reads the runtime's cells by offset (specs/llvm-parity R3.1, checked against
 /// `offsetof` by `layout`): an `lt_str`'s size in bytes, its length in characters and its bytes,
 /// the length of an `lt_list` and of an `lt_dict`, and the used slots of an `lt_set`.
@@ -1836,6 +1839,32 @@ impl Writer<'_, '_> {
     // Statements --------------------------------------------------------------------------------
 
     /// A panic: the runtime function that stops the program, given the place.
+    /// A call of a function that can recurse begins: past the limit the runtime stops the program,
+    /// before the count grows (specs/recursion-depth R1.2); else the count grows by one. Inline, so
+    /// a counted call pays a load, a compare and a store (R3.1).
+    fn enter(&mut self) {
+        self.module.declare(DEPTH);
+        let depth = self.value("load i32, ptr @lt_depth");
+        let full = self.value(format!("icmp sge i32 {depth}, {}", lotml_ir::depth::LIMIT));
+        let (deep, within) = (self.name("deep"), self.name("within"));
+        self.terminate(format!("br i1 {full}, label %{deep}, label %{within}"));
+        self.label(&deep);
+        let site = self.site();
+        self.runtime("lt_recursion_error", &[site]);
+        self.terminate("unreachable");
+        self.label(&within);
+        let more = self.value(format!("add i32 {depth}, 1"));
+        self.emit(format!("store i32 {more}, ptr @lt_depth"));
+    }
+
+    /// The call `enter` counted ends (R1.3).
+    fn leave(&mut self) {
+        self.module.declare(DEPTH);
+        let depth = self.value("load i32, ptr @lt_depth");
+        let less = self.value(format!("sub i32 {depth}, 1"));
+        self.emit(format!("store i32 {less}, ptr @lt_depth"));
+    }
+
     fn panic(&mut self, panic: &Panic) {
         let site = self.site();
         match panic {
@@ -2054,7 +2083,8 @@ impl Writer<'_, '_> {
                 }
                 StmtKind::ForStr { var, over, body, exit } => self.for_str(*var, over, body, exit)?,
                 StmtKind::Panic(p) => self.panic(p),
-                StmtKind::Enter | StmtKind::Leave => {}
+                StmtKind::Enter => self.enter(),
+                StmtKind::Leave => self.leave(),
             }
         }
         Ok(())
