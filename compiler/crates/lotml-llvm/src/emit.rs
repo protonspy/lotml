@@ -2054,6 +2054,7 @@ impl Writer<'_, '_> {
                 }
                 StmtKind::ForStr { var, over, body, exit } => self.for_str(*var, over, body, exit)?,
                 StmtKind::Panic(p) => self.panic(p),
+                StmtKind::Enter | StmtKind::Leave => {}
             }
         }
         Ok(())

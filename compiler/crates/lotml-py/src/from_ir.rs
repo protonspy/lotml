@@ -905,6 +905,7 @@ impl<'m, 'l> Writer<'m, 'l> {
                 vec![self.at(self.at_expr(raised))]
             }
             StmtKind::Inc(_) | StmtKind::Dec(_) | StmtKind::DropReuse { .. } => Vec::new(),
+            StmtKind::Enter | StmtKind::Leave => Vec::new(),
         }
     }
 

@@ -375,6 +375,11 @@ pub enum StmtKind {
         local: Local,
         token: usize,
     },
+    /// Count a call of this function toward the recursion limit, after stopping the program with
+    /// a `RecursionError` when the count is already at it (specs/recursion-depth R1.2).
+    Enter,
+    /// Take back the count `Enter` added, on the way out of the function (R1.3).
+    Leave,
 }
 
 #[derive(Clone, Debug)]
@@ -882,7 +887,9 @@ pub fn block_operands(block: &Block, f: &mut impl FnMut(&Operand)) {
             | StmtKind::Panic(_)
             | StmtKind::Inc(_)
             | StmtKind::Dec(_)
-            | StmtKind::DropReuse { .. } => {}
+            | StmtKind::DropReuse { .. }
+            | StmtKind::Enter
+            | StmtKind::Leave => {}
         }
     }
 }
@@ -1034,7 +1041,9 @@ fn block_types_mut(block: &mut Block, f: &mut impl FnMut(&mut Ty)) {
             | StmtKind::Panic(_)
             | StmtKind::Inc(_)
             | StmtKind::Dec(_)
-            | StmtKind::DropReuse { .. } => {}
+            | StmtKind::DropReuse { .. }
+            | StmtKind::Enter
+            | StmtKind::Leave => {}
         }
     }
 }

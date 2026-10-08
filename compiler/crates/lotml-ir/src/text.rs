@@ -81,6 +81,8 @@ impl Lowered {
                 StmtKind::Inc(l) => line(format!("inc %{l}"), out),
                 StmtKind::Dec(l) => line(format!("dec %{l}"), out),
                 StmtKind::DropReuse { local, token } => line(format!("drop %{local} keeping token {token}"), out),
+                StmtKind::Enter => line("enter".to_string(), out),
+                StmtKind::Leave => line("leave".to_string(), out),
             }
         }
     }

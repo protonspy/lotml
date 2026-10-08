@@ -7,7 +7,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use lotml_check::ty::Ty;
 
-use crate::ir::{Block, Callee, Expr, block_exprs};
+use lotml_syntax::span::Span;
+
+use crate::ir::{Block, Callee, Expr, Stmt, StmtKind, block_exprs};
 use crate::lower::Lowered;
 use crate::symbol;
 
@@ -56,6 +58,48 @@ pub fn recursive(lowered: &Lowered) -> BTreeSet<String> {
         counted.extend(component.into_iter().map(|i| names[i].to_string()));
     }
     counted
+}
+
+/// Count the calls of each function [`recursive`] marks: its body begins with `Enter`, and it
+/// leaves through `Leave` at each `return` and at the end of a body control can run past
+/// (specs/recursion-depth R1.3). A panic leaves through neither: where it is caught, the count is
+/// put back (R1.5).
+pub fn count(lowered: &mut Lowered) {
+    let marked = recursive(lowered);
+    for f in lowered.functions.iter_mut().filter(|f| marked.contains(&f.name)) {
+        let falls_off = crate::verify::reaches_end(f);
+        let span = f.span;
+        leave_at_returns(&mut f.body);
+        f.body.insert(0, Stmt { span, at: span, kind: StmtKind::Enter });
+        if falls_off {
+            let end = Span { start: span.end, end: span.end };
+            f.body.push(Stmt { span: end, at: end, kind: StmtKind::Leave });
+        }
+    }
+}
+
+fn leave_at_returns(block: &mut Block) {
+    let mut i = 0;
+    while i < block.len() {
+        match &mut block[i].kind {
+            StmtKind::Return(_) => {
+                let (span, at) = (block[i].span, block[i].at);
+                block.insert(i, Stmt { span, at, kind: StmtKind::Leave });
+                i += 1;
+            }
+            StmtKind::If(_, then, otherwise) => {
+                leave_at_returns(then);
+                leave_at_returns(otherwise);
+            }
+            StmtKind::Loop(body) => leave_at_returns(body),
+            StmtKind::ForRange { body, exit, .. } | StmtKind::ForStr { body, exit, .. } => {
+                leave_at_returns(body);
+                leave_at_returns(exit);
+            }
+            _ => {}
+        }
+        i += 1;
+    }
 }
 
 /// What a body refers to: the functions it calls, by name, the methods it calls on a type

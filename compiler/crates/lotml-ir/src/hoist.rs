@@ -115,7 +115,12 @@ fn kept(body: &Block, l: Local) -> bool {
         StmtKind::ForStr { var, over, body, exit } => *var != l && !is(over) && kept(body, l) && kept(exit, l),
         StmtKind::Return(Some(v)) => !is(v),
         StmtKind::Inc(x) | StmtKind::Dec(x) | StmtKind::DropReuse { local: x, .. } => *x != l,
-        StmtKind::Break | StmtKind::Continue | StmtKind::Return(None) | StmtKind::Panic(_) => true,
+        StmtKind::Break
+        | StmtKind::Continue
+        | StmtKind::Return(None)
+        | StmtKind::Panic(_)
+        | StmtKind::Enter
+        | StmtKind::Leave => true,
     })
 }
 

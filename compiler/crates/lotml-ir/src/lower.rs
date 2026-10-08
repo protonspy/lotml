@@ -513,7 +513,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
     for f in &functions {
         crate::verify::assert_valid(f, "lowering");
     }
-    Ok(Lowered {
+    let mut lowered = Lowered {
         main: cx.fns.contains_key("main"),
         functions,
         declared: checked.declared.clone(),
@@ -536,7 +536,12 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
         defaults,
         c_libraries: std::mem::take(&mut cx.c_libraries),
         line_starts: std::mem::take(&mut cx.line_starts),
-    })
+    };
+    crate::depth::count(&mut lowered);
+    for f in &lowered.functions {
+        crate::verify::assert_valid(f, "counting the recursion depth");
+    }
+    Ok(lowered)
 }
 
 struct Context<'a> {

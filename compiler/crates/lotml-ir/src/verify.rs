@@ -9,13 +9,23 @@ use crate::ir::{Arg, BinOp, Block, Const, Expr, Function, Local, Operand, Stmt, 
 
 /// What is wrong with `f` after the pass `pass`, one line per finding; empty when nothing is.
 pub fn verify(f: &Function, pass: &str) -> Vec<String> {
+    walk(f, pass).1
+}
+
+/// Whether control can run past the last statement of `f`'s body: a function returning `()`
+/// that ends without a `return`.
+pub fn reaches_end(f: &Function) -> bool {
+    walk(f, "").0
+}
+
+fn walk(f: &Function, pass: &str) -> (bool, Vec<String>) {
     let mut check = Check { f, pass, breaks: Vec::new(), findings: Vec::new() };
     let mut set = vec![false; f.locals.len()];
     for &p in &f.params {
         set[p] = true;
     }
-    check.block(&f.body, set);
-    check.findings
+    let end = check.block(&f.body, set);
+    (end.is_some(), check.findings)
 }
 
 /// Panics with every finding of `verify`, in a build with debug assertions.
@@ -165,6 +175,7 @@ impl Check<'_> {
             StmtKind::Inc(l) | StmtKind::Dec(l) | StmtKind::DropReuse { local: l, .. } => {
                 self.read_local(stmt, &set, *l)
             }
+            StmtKind::Enter | StmtKind::Leave => {}
         }
         Some(set)
     }
