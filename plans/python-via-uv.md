@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 0937ca0bd713f8863e5c3b8a3304f26bedeb0fc4115009b4733c798cfd4b63b2
+checksum: 105453a45c3800e354c89453521cc3d20b91930b1d8f381e9dd35b53c10885d3
 ---
 
 # Python via uv
@@ -60,7 +60,7 @@ directory's uv configuration must change nothing, and the docs must describe the
 
 - [x] 1.1 (Unit) Run the parity suite and the Python-target tests on CPython 3.14 through `LOTML_PYTHON`, and fix what differs from 3.11–3.13, before anything makes 3.14 the default
 - [x] 1.2 (Unit) Commit uv's version and each target's SHA-256. Have the release workflow download that exact file over HTTPS from uv's release URL, fail on a mismatch, and put it beside `lotml` with uv's licence texts and third-party notices, adding those files to `SHA256SUMS`. A script that lists the archive verifies this in CI
-- [ ] 1.3 (Unit) Find uv by absolute path: `LOTML_UV` (an existing file, absolute), then the uv beside the running executable, then an explicit search of the path that skips relative and empty entries and the current directory, logging the uv chosen and its version
+- [x] 1.3 (Unit) Find uv by absolute path: `LOTML_UV` (an existing file, absolute), then the uv beside the running executable, then an explicit search of the path that skips relative and empty entries and the current directory, logging the uv chosen and its version
 - [ ] 1.4 (Unit) Run every uv call from lotml's cache directory, with uv's configuration files ignored. Forbid Python downloads outside the install step, ask only for managed interpreters, install no shims, and refuse to download while a variable that disables verification or replaces download metadata is set. Each rule gets a test using a project with a hostile `uv.toml` and `.python-version`
   _Depends 1.3_
 - [ ] 1.5 (Unit) Resolve the Python for `run`, `test`, `bind` and the MCP `test` tool in the order adr:0026 sets:
