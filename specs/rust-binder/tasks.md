@@ -20,5 +20,5 @@
   _Depends 2.3_
 - [x] 3.2 (Unit) Have the binding coverage report bind through `lotml bind`, and record a measurement under a new label beside the last — R3.1
   _Depends 3.1_
-- [ ] 3.3 (Unit) Update the wiki page on transpilation and the glossary for a binder that runs no Python — R1.1, R2.2
+- [x] 3.3 (Unit) Update the wiki page on transpilation and the glossary for a binder that runs no Python — R1.1, R2.2
   _Depends 3.1_
