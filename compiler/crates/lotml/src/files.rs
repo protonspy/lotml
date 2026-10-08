@@ -136,7 +136,7 @@ fn with_generated(mut bindings: Vec<Binding>, path: &Path, text: &str) -> Vec<Bi
         return bindings;
     }
     let project = crate::exec::project_of(path);
-    for module in imports {
+    for module in imports.into_iter().take(MOST) {
         let made = generated(project.as_deref(), &module);
         match bindings.iter_mut().find(|b| b.module == module) {
             Some(file) => file.shadows = made.is_some(),
@@ -202,22 +202,31 @@ fn import_paths(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// The interfaces generated in this process, by project and module.
-type Made = HashMap<(Option<PathBuf>, String), String>;
+/// The interfaces generated in this process, by project and module, or when one could not be.
+type Made = HashMap<(Option<PathBuf>, String), Result<String, std::time::Instant>>;
+
+/// How long a module no stub binds is not tried again: long enough that one check asks once.
+const RETRY: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// The most `py.` modules one file binds on import; an import past it is reported unbound.
+const MOST: usize = 256;
 
 /// The interface generated for `module` (`py.<name>`) in the project at `project`, remembered for
-/// as long as the process runs once one is made; `None` while no stub binds it, so a later call
-/// tries again.
+/// as long as the process runs once one is made; `None` while no stub binds it, which a call
+/// [`RETRY`] later tries again.
 fn generated(project: Option<&Path>, module: &str) -> Option<String> {
     static MADE: std::sync::OnceLock<std::sync::Mutex<Made>> = std::sync::OnceLock::new();
     let key = (project.map(Path::to_path_buf), module.to_string());
     let made = MADE.get_or_init(Default::default);
-    if let Some(text) = made.lock().ok()?.get(&key) {
-        return Some(text.clone());
+    match made.lock().ok()?.get(&key) {
+        Some(Ok(text)) => return Some(text.clone()),
+        Some(Err(when)) if when.elapsed() < RETRY => return None,
+        _ => {}
     }
-    let text = crate::stubs::interface(module.strip_prefix("py.")?, project).ok()?;
-    made.lock().ok()?.insert(key, text.clone());
-    Some(text)
+    let generated =
+        crate::stubs::interface(module.strip_prefix("py.")?, project).map_err(|_| std::time::Instant::now());
+    made.lock().ok()?.insert(key, generated.clone());
+    generated.ok()
 }
 
 /// [`interfaces_for`] as the incremental engine keeps them, each module's name with its text, the
@@ -314,6 +323,16 @@ mod tests {
         let found: Vec<String> = interfaces_for(&project.join("a.lotml"), "").into_iter().map(|b| b.module).collect();
         let _ = std::fs::remove_dir_all(&base);
         assert_eq!(found, vec!["inside"], "a bindings/ above the repository never applies");
+    }
+
+    #[test]
+    fn a_file_binds_at_most_so_many_modules_on_import() {
+        let mut text: String = (0..MOST).map(|i| format!("import py.nowhere{i}\n")).collect();
+        text += "import py.textwrap\n";
+        let bound = with_generated(Vec::new(), Path::new("a.lot"), &text);
+        assert!(bound.is_empty(), "past {MOST} imports nothing more is bound, textwrap included");
+        let bound = with_generated(Vec::new(), Path::new("a.lot"), "import py.textwrap\n");
+        assert_eq!(bound.len(), 1);
     }
 
     #[test]

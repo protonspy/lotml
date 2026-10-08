@@ -77,6 +77,13 @@ fn trusted(root: &Path, lock: &Path) -> bool {
 /// The text of the regular file at `path`, read no further than [`LARGEST`]; `None` when there is
 /// no file there.
 fn read_bounded(path: &Path) -> Result<Option<String>, String> {
+    read_regular(path, LARGEST)
+}
+
+/// The text of the regular file at `path`, read no further than `largest` bytes; `None` when there
+/// is no file there. A link is followed, but what it leads to must be a regular file, so a pipe or
+/// a device never blocks the read.
+pub fn read_regular(path: &Path, largest: u64) -> Result<Option<String>, String> {
     let cannot = |e: std::io::Error| format!("cannot read {}: {e}", path.display());
     match std::fs::metadata(path) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -89,9 +96,9 @@ fn read_bounded(path: &Path) -> Result<Option<String>, String> {
         return Err(format!("{} is not a regular file", path.display()));
     }
     let mut text = String::new();
-    file.take(LARGEST + 1).read_to_string(&mut text).map_err(cannot)?;
-    if text.len() as u64 > LARGEST {
-        return Err(format!("{} is past the {LARGEST} bytes lotml reads", path.display()));
+    file.take(largest + 1).read_to_string(&mut text).map_err(cannot)?;
+    if text.len() as u64 > largest {
+        return Err(format!("{} is past the {largest} bytes lotml reads", path.display()));
     }
     Ok(Some(text))
 }

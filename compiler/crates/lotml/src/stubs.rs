@@ -187,6 +187,9 @@ pub fn find(module: &str, environment: impl FnOnce() -> Result<Environment, Stri
     }
 }
 
+/// Past this, a `RECORD` is not read.
+const RECORD_LARGEST: u64 = 8 << 20;
+
 /// The distribution that installed `path`, a file under one of `roots`, as `<name> <version>`:
 /// the `.dist-info` beside it whose `RECORD` lists the file's top-level package or module.
 fn distribution(path: &Path, roots: &[PathBuf]) -> String {
@@ -210,7 +213,10 @@ fn distribution(path: &Path, roots: &[PathBuf]) -> String {
             .any(|file| file.split('/').next() == Some(top.as_str()))
     };
     for info in infos {
-        if std::fs::read_to_string(info.join("RECORD")).is_ok_and(|record| lists(&record)) {
+        let own = std::fs::symlink_metadata(&info).is_ok_and(|m| m.is_dir());
+        let record =
+            own.then(|| crate::dependencies::read_regular(&info.join("RECORD"), RECORD_LARGEST).ok().flatten());
+        if record.flatten().is_some_and(|record| lists(&record)) {
             let stem = info.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
             if let Some((name, version)) = stem.rsplit_once('-') {
                 return format!("{name} {version}");
@@ -345,10 +351,14 @@ mod tests {
                 ("greet_stubs-1.2.0.dist-info/RECORD", "greet-stubs/__init__.pyi,sha256=x,10\n"),
                 ("other-0.1.dist-info/RECORD", "other/__init__.py,,\n"),
                 ("loose/__init__.pyi", "def f() -> int: ...\n"),
+                ("odd/__init__.pyi", "def f() -> int: ...\n"),
+                ("odd-1.0.dist-info/RECORD/odd/__init__.pyi", ""),
             ],
         );
         let stub = find("greet", || Ok(Environment::Made(made.clone()))).unwrap();
         assert_eq!(stub.source, "greet_stubs 1.2.0");
+        let stub = find("odd", || Ok(Environment::Made(made.clone()))).unwrap();
+        assert_eq!(stub.source, "odd, which no distribution's RECORD lists", "a RECORD that is no file is not read");
         let stub = find("loose", || Ok(Environment::Made(made))).unwrap();
         assert_eq!(stub.source, "loose, which no distribution's RECORD lists");
         let typeshed = find("textwrap", || panic!("not asked")).unwrap();

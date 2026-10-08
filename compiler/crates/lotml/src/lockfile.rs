@@ -3,7 +3,7 @@
 //! R2, adr:0032-a-python-module-is-bound-at-check-time-from-stubs-read-in-rust). It records what
 //! was bound, so two machines bind alike; it is no root of trust.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use crate::files;
@@ -12,7 +12,7 @@ use crate::files;
 pub const NAME: &str = "lotml.lock";
 
 /// What one module was bound from.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
     pub name: String,
     pub source: String,
@@ -31,14 +31,8 @@ const LARGEST: u64 = 16 << 20;
 /// The lock at `root`, read as data: `None` when there is none, an error for one lotml cannot read
 /// or that names a module by anything but a dotted identifier after `py.`.
 pub fn read(root: &Path) -> Result<Option<Vec<Entry>>, String> {
-    use std::io::Read;
     let path = root.join(NAME);
-    let Ok(file) = std::fs::File::open(&path) else { return Ok(None) };
-    let mut text = String::new();
-    file.take(LARGEST + 1).read_to_string(&mut text).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-    if text.len() as u64 > LARGEST {
-        return Err(format!("{} is past the {LARGEST} bytes lotml reads", path.display()));
-    }
+    let Some(text) = crate::dependencies::read_regular(&path, LARGEST)? else { return Ok(None) };
     let table: toml::Table =
         text.parse().map_err(|e: toml::de::Error| format!("{} is not TOML: {}", path.display(), e.message()))?;
     if table.get("version").and_then(toml::Value::as_integer) != Some(1) {
@@ -61,9 +55,22 @@ pub fn read(root: &Path) -> Result<Option<Vec<Entry>>, String> {
     Ok(Some(entries))
 }
 
-/// The entry the lock at `root` has for `name` (`py.<module>`), if it can be read and has one.
+/// The entry the lock at `root` has for `name` (`py.<module>`), if it can be read and has one. The
+/// lock is parsed once for each version of the file — its length and modification time — however
+/// many modules a check asks it for.
 pub fn entry(root: &Path, name: &str) -> Option<Entry> {
-    read(root).ok().flatten()?.into_iter().find(|e| e.name == name)
+    type Parsed = HashMap<PathBuf, (u64, Option<std::time::SystemTime>, Option<Vec<Entry>>)>;
+    static PARSED: std::sync::OnceLock<std::sync::Mutex<Parsed>> = std::sync::OnceLock::new();
+    let path = root.join(NAME);
+    let meta = std::fs::metadata(&path).ok()?;
+    let version = (meta.len(), meta.modified().ok());
+    let parsed = PARSED.get_or_init(Default::default);
+    let mut parsed = parsed.lock().ok()?;
+    let fresh = parsed.get(&path).is_some_and(|(len, when, _)| (*len, *when) == version);
+    if !fresh {
+        parsed.insert(path.clone(), (version.0, version.1, read(root).ok().flatten()));
+    }
+    parsed.get(&path)?.2.as_ref()?.iter().find(|e| e.name == name).cloned()
 }
 
 /// What `lotml check --locked` fails on for the files at `paths` (specs/bind-on-import/ R2.3): a
@@ -206,6 +213,20 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join(NAME), lock).unwrap();
         dir
+    }
+
+    #[test]
+    fn a_lock_that_is_no_regular_file_is_refused_and_one_rewritten_is_read_again() {
+        let dir = std::env::temp_dir().join(format!("lotml-lockfile-dir-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join(NAME)).unwrap();
+        assert!(read(&dir).unwrap_err().contains("not a regular file"));
+        let one = Entry { name: "py.a".into(), source: "s".into(), stub: hash("1"), interface: hash("1") };
+        let dir = root("versions", &text(std::slice::from_ref(&one)));
+        assert_eq!(entry(&dir, "py.a"), Some(one));
+        let longer = Entry { name: "py.a".into(), source: "longer".into(), stub: hash("2"), interface: hash("2") };
+        std::fs::write(dir.join(NAME), text(std::slice::from_ref(&longer))).unwrap();
+        assert_eq!(entry(&dir, "py.a"), Some(longer), "a lock that changed is parsed again");
     }
 
     #[test]

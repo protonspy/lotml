@@ -27,6 +27,9 @@ SCRATCH = ROOT / "harness" / "cache" / "bind-on-import"
 """The scratch project, git-ignored, kept between runs so its environment is made once."""
 REPORT = RESULTS / "bind-on-import.md"
 TIMEOUT = 300
+EXCLUDE_NEWER = "2026-10-09T00:00:00Z"
+"""No release after this enters the lock: the runtime distributions are not pinned by the harness,
+and a release published later is code the measurement would run unreviewed."""
 PYPROJECT = ROOT / "harness" / "pyproject.toml"
 
 
@@ -135,7 +138,12 @@ def provision(compiler: Path, modules: list[Module]) -> None:
     uv = shutil.which("uv")
     if uv is None:
         raise SystemExit("locking the scratch project needs uv on the path")
-    subprocess.run([uv, "lock"], cwd=project, check=True)  # noqa: S603 - uv, with fixed arguments
+    subprocess.run(  # noqa: S603 - uv, with fixed arguments
+        [uv, "lock", "--exclude-newer", EXCLUDE_NEWER],
+        cwd=project,
+        env=environment(online=True),
+        check=True,
+    )
     first = next(m for m in modules if m.group == "pypi")
     source = project / "provision.lotml"
     source.write_text(program(first.name), encoding="utf-8", newline="\n")
