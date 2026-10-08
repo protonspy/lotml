@@ -1,0 +1,22 @@
+{
+  "about": "The uv lotml ships beside its binary (adr:0026-lotml-ships-uv-and-runs-python-3-14-by-default). Each archive and licence is downloaded from uv's own release and checked against the hash here, which a pull request changes with the version, never fetched from the same place.",
+  "version": "0.11.29",
+  "archives": {
+    "x86_64-unknown-linux-gnu": {
+      "file": "uv-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "04f8b82f5d47f0512dcd32c67a4a6f16a0ea27c81537c338fd0ad6b23cebe829"
+    },
+    "x86_64-pc-windows-msvc": {
+      "file": "uv-x86_64-pc-windows-msvc.zip",
+      "sha256": "a047d55651bc3e0ca24595b25ec4cfcb10f9dca9fb56514e661269b37d4fae68"
+    },
+    "aarch64-apple-darwin": {
+      "file": "uv-aarch64-apple-darwin.tar.gz",
+      "sha256": "61c04acc52a33ef0f331e494bdfbedcdb6c26c6970c022ed3699e5860f8930e3"
+    }
+  },
+  "licences": {
+    "LICENSE-APACHE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "LICENSE-MIT": "860e3d7a86b84e6a7012c7a635fc64df475cebc6cce34dfeb73a5982ec58176c"
+  }
+}

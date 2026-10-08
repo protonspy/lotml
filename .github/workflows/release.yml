@@ -100,11 +100,19 @@ jobs:
           name="lotml-$VERSION-$TARGET"
           mkdir -p "dist/$name"
           cp "$built" README.md LICENSE "dist/$name/"
+          # uv beside lotml, its hash checked against release/uv.json, with its licences and the
+          # sums of every file the archive holds (adr:0026).
+          python=python3
+          if [ "$RUNNER_OS" = Windows ]; then python=python; fi
+          "$python" release/uv.py fetch "$TARGET" "dist/$name"
           if [ "$RUNNER_OS" = Windows ]; then
             (cd dist && 7z a -tzip "$name.zip" "$name" > /dev/null)
+            archive="dist/$name.zip"
           else
             tar -C dist -czf "dist/$name.tar.gz" "$name"
+            archive="dist/$name.tar.gz"
           fi
+          "$python" release/uv.py check "$archive" "$TARGET"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: lotml-${{ matrix.target }}
