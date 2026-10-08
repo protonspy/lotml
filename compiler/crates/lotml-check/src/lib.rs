@@ -4,6 +4,7 @@
 
 mod body;
 mod builtins;
+mod format;
 mod interface;
 mod prefix;
 mod program;

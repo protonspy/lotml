@@ -127,7 +127,7 @@ over this file answers with the example above as well as with the notes. -->
 - n-0087 2026-10-07 #ceiling @compiler/crates/lotml-runtime/c/lotml.c — c-abi-export: lt_tasks_running is changed without atomics around a parallel call, which holds within one program; two host threads each calling an exported function that runs parallel at once race on it, and so on whether output is locked; an atomic count lifts it
 - n-0088 2026-10-07 #gotcha @compiler/crates/lotml-py/src/from_ir.rs — lotml-py: Python 3.12 refuses a Name, Attribute, Subscript, List, Tuple or Starred node without ctx where 3.13 defaults it, so a node missing one passes on a 3.13 machine and fails CI; the backend test every_node_with_a_context_carries_one guards it
 <!-- n-0089 removed -->
-- n-0090 2026-10-07 #gotcha @compiler/crates/lotml-check/src/lib.rs — expression types are keyed by span, so a desugared node that reuses its source span overwrites the type recorded for it
+<!-- n-0090 removed -->
 <!-- n-0091 removed -->
 - n-0092 2026-10-07 #ceiling @compiler/crates/lotml-runtime/c/lotml_text.c — lt_offset counts code points from the start, so s[i] is O(n) on non-ASCII text and an index loop over it quadratic
 - n-0093 2026-10-07 #ceiling @compiler/crates/lotml-runtime/c/lotml.c — lt_shortest tries up to 17 precisions through snprintf and strtod; Ryu finds the shortest form directly
@@ -136,3 +136,4 @@ over this file answers with the example above as well as with the notes. -->
 - n-0096 2026-10-07 #ceiling @compiler/crates/lotml-db/src/lib.rs — checked is one query per file with absolute spans, and interfaces is untracked, so an edit re-checks every function and re-parses every interface
 - n-0097 2026-10-07 #gotcha @harness/lotml_harness/agent/report.py — wilson() pools every graded run, so several runs of one task count as independent trials and the interval comes out too narrow
 - n-0098 2026-10-07 #gotcha @harness/lotml_harness/corpus/pipeline.py — the corpus translates MultiPL-E's typed copies, whose licence forbids training; it is a measurement, never a training seed
+- n-0099 2026-10-07 #gotcha @compiler/crates/lotml-check/src/body.rs — the checker keys expression types by span: a debug build asserts no two expressions record one, bar two parse-error nodes at the same missing text, both typed Error

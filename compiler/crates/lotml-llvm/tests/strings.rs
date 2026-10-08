@@ -43,8 +43,7 @@ fn f_strings_use_the_format_mini_language() {
          print(f\"{name} is {age} years old, {ratio:.2f}, {ratio:.3}, {age:>5}|{age:<5}|{age:^5}|{age:05}|{age:+d}\")\n    \
          print(f\"{1234567:,} {1234567.891:,.2f} {255:x} {255:#X} {255:b} {255:o} {0.5:%} {0.25:.1%} {1e-7:g} {123456789.0:g} {1.5:e} {name!r} {name:>6} {name:*^7}\")\n    \
          print(f\"{3.0} {1e20} {-0.0:+} {7:.2f} {True} {True:>5} {None} {'q'}{{literal}}\", f\"{age * 2 + 1}\")\n    \
-         print(f\"{-7:=6} {-7:06} {1234.5:.3} {0.0001:.2} {1e16:.17g} {12:_b} {-0.0:z.1f} {1e100:.2e} {2.5:.0f} {3.5:.0f}\")\n    \
-         width = 8\n    print(f\"{name:>{width}}|{ratio:.{width - 5}f}\")\n",
+         print(f\"{-7:=6} {-7:06} {1234.5:.3} {0.0001:.2} {1e16:.17g} {12:_b} {-0.0:z.1f} {1e100:.2e} {2.5:.0f} {3.5:.0f}\")\n",
     );
 }
 

@@ -65,6 +65,12 @@ pub struct Body<'p> {
     returned: BTreeSet<String>,
     /// The type of every expression checked, by its span; resolved by `types`.
     seen: HashMap<Span, Ty>,
+    /// Which expression each span of `seen` was recorded from, by address, and whether it stands
+    /// for text the parser could not read. Keying types by span is sound only while no two
+    /// expressions share one, which a debug build checks; two such error nodes at one place,
+    /// both typed as errors, are the exception.
+    #[cfg(debug_assertions)]
+    typed_by: HashMap<Span, (usize, bool)>,
     /// How many type nodes `seen` holds, up to [`BODY_TYPES`]: past it, an expression keeps an
     /// error, and the first one past it is reported.
     stored: usize,
@@ -108,6 +114,8 @@ impl<'p> Body<'p> {
             mutated: BTreeSet::new(),
             returned: BTreeSet::new(),
             seen: HashMap::new(),
+            #[cfg(debug_assertions)]
+            typed_by: HashMap::new(),
             stored: 0,
             full: false,
             locals: Vec::new(),
@@ -1047,8 +1055,38 @@ impl<'p> Body<'p> {
             self.too_large(expr.span, format!("this type has more than {TYPE_LIMIT} parts"));
         }
         let ty = self.kept(expr.span, ty);
+        #[cfg(debug_assertions)]
+        {
+            let node = (std::ptr::from_ref(expr) as usize, matches!(expr.kind, ExprKind::Error));
+            let before = self.typed_by.insert(expr.span, node);
+            debug_assert!(
+                before.is_none_or(|b| b.0 == node.0 || (b.1 && node.1)),
+                "two expressions share the span {:?}, and the type map keeps one of their types",
+                expr.span
+            );
+        }
         self.seen.insert(expr.span, ty.clone());
         ty
+    }
+
+    /// Report a field's format spec that the value it formats would refuse when the program runs
+    /// (plans/frontend-robustness.md 2.2); a value whose type is not known yet is left to the run.
+    fn format_spec(&mut self, value: &Expr, ty: &Ty, conversion: Option<char>, spec: &[StrPart]) {
+        let text: String = spec
+            .iter()
+            .map(|p| match p {
+                StrPart::Text(t) => t.as_str(),
+                StrPart::Expr { .. } => "{…}",
+            })
+            .collect();
+        let resolved = self.resolve(ty);
+        let Some(kind) = crate::format::kind(&resolved, conversion) else { return };
+        if let Some(why) = crate::format::check(&text, kind) {
+            self.report(
+                Diagnostic::error("E0223", value.span, format!("`{text}` is no format spec for this value: {why}"))
+                    .note("the spec after `:` follows Python's format mini-language for the value's type"),
+            );
+        }
     }
 
     /// `ty`, counted against [`BODY_TYPES`]: an error once the body's types pass it, the first
@@ -1211,8 +1249,9 @@ impl<'p> Body<'p> {
             ExprKind::Str(literals) => {
                 for literal in literals {
                     for part in &literal.parts {
-                        if let StrPart::Expr { expr, .. } = part {
-                            self.expr(expr, None);
+                        if let StrPart::Expr { expr, conversion, spec } = part {
+                            let ty = self.expr(expr, None);
+                            self.format_spec(expr, &ty, *conversion, spec);
                         }
                     }
                 }
