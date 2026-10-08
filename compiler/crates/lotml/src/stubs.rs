@@ -49,8 +49,44 @@ pub fn name(module: &str) -> Result<(), String> {
 /// The interface of the Python module `module`, without its `py.` origin, generated from its stub
 /// as `lotml bind` writes it, for the project at `project`; or why there is none.
 pub fn interface(module: &str, project: Option<&Path>) -> Result<String, String> {
+    let cache = lotml_llvm::cache::user_root().map(|root| root.join("interfaces"));
+    interface_in(module, project, cache.as_deref())
+}
+
+/// [`interface`], kept in `cache` when given: a directory of the user's own, one file per stub
+/// and lotml version, written whole (specs/bind-on-import/ R3.1).
+fn interface_in(module: &str, project: Option<&Path>, cache: Option<&Path>) -> Result<String, String> {
     name(module)?;
-    bound(module, &find(module, || environment(project))?)
+    let stub = find(module, || environment(project))?;
+    let cache = cache.filter(|dir| lotml_llvm::cache::private_directory(dir).is_ok());
+    let entry = cache.map(|dir| dir.join(format!("{}.lotmli", key(&stub))));
+    if let Some(text) = entry.as_deref().and_then(|e| std::fs::read_to_string(e).ok()) {
+        return Ok(text);
+    }
+    let text = bound(module, &stub)?;
+    if let Some(entry) = entry {
+        keep(&entry, &text);
+    }
+    Ok(text)
+}
+
+/// The name a stub's interface is kept under: the SHA-256 of the stub and of where it was read,
+/// which the interface's first line names, and lotml's version, whose binder wrote it.
+fn key(stub: &Stub) -> String {
+    let mut bytes = stub.text.as_bytes().to_vec();
+    bytes.push(0);
+    bytes.extend_from_slice(stub.said.as_bytes());
+    format!("{}-{}", lotml_llvm::sha256::hex_of(&bytes), env!("CARGO_PKG_VERSION"))
+}
+
+/// `text` written to `entry` whole: to a name of its own first, then renamed, so a reader never
+/// sees half of it; a cache that cannot be written is passed over.
+fn keep(entry: &Path, text: &str) {
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    let partial = entry.with_extension(format!("{}.{nanos}", std::process::id()));
+    if std::fs::write(&partial, text).is_ok() && std::fs::rename(&partial, entry).is_err() {
+        let _ = std::fs::remove_file(&partial);
+    }
 }
 
 /// The interface `stub` gives `module`, or why it gives none: it does not check, or it binds no
@@ -181,6 +217,56 @@ mod tests {
         );
         assert!(interface("con", None).unwrap_err().contains("device"));
         assert!(interface("distutils", None).unwrap_err().contains("not in CPython"));
+    }
+
+    #[test]
+    fn a_generated_interface_is_kept_by_its_stub_and_read_back() {
+        let cache = std::env::temp_dir().join(format!("lotml-stubs-cache-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&cache);
+        let first = interface_in("textwrap", None, Some(&cache)).unwrap();
+        let kept: Vec<PathBuf> = std::fs::read_dir(&cache).unwrap().flatten().map(|e| e.path()).collect();
+        assert_eq!(kept.len(), 1, "one entry, no partial file left: {kept:?}");
+        let name = kept[0].file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.ends_with(&format!("-{}.lotmli", env!("CARGO_PKG_VERSION"))), "{name}");
+        assert_eq!(std::fs::read_to_string(&kept[0]).unwrap(), first);
+        std::fs::write(
+            &kept[0],
+            "# read from the cache
+",
+        )
+        .unwrap();
+        assert_eq!(
+            interface_in("textwrap", None, Some(&cache)).unwrap(),
+            "# read from the cache
+"
+        );
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    #[test]
+    fn the_key_changes_with_the_stub_and_where_it_was_read() {
+        let stub = |text: &str, said: &str| Stub { text: text.into(), said: said.into() };
+        let base = key(&stub(
+            "def f() -> int: ...
+",
+            "a.pyi",
+        ));
+        assert_ne!(
+            base,
+            key(&stub(
+                "def g() -> int: ...
+",
+                "a.pyi"
+            ))
+        );
+        assert_ne!(
+            base,
+            key(&stub(
+                "def f() -> int: ...
+",
+                "b.pyi"
+            ))
+        );
     }
 
     #[test]

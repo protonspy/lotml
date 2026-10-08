@@ -61,8 +61,9 @@ Sorted by name, one entry per `py.` module a program of the project imports. It 
 name that is not a dotted ASCII identifier is an error, and the lock is never a root (adr:0032).
 
 The cache of generated interfaces is `interfaces/` under `lotml_llvm::cache::user_root()`, made
-with `private_directory`, one file per `<stub sha256>-<lotml version>.lotmli`, written to a
-temporary name and renamed into place. An entry for a module the lock names is used only when its
+with `private_directory`, one file per `<sha256>-<lotml version>.lotmli`, the SHA-256 taken over
+the stub and where it was read, which the interface's first line names; written to a temporary
+name and renamed into place. An entry for a module the lock names is used only when its
 SHA-256 is the lock's `interface` (R3.1); otherwise it is generated again.
 
 ## Boundaries and contracts

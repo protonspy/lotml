@@ -18,7 +18,7 @@
 
 ## 2 · The lock and the cache
 
-- [ ] 2.1 (Unit) Keep generated interfaces in the user's private `interfaces/` cache, keyed by the stub's SHA-256 and lotml's version, written whole — R3.1
+- [x] 2.1 (Unit) Keep generated interfaces in the user's private `interfaces/` cache, keyed by the stub's SHA-256 and lotml's version, written whole — R3.1
   _Depends 1.3_
 - [ ] 2.2 (Unit) Write `lotml.lock` with `lotml bind --lock`: each `py.` module the project's programs import, its source, its stub's and its interface's SHA-256, sorted, names checked — R2.1
   _Depends 1.1_
