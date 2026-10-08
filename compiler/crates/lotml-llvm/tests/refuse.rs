@@ -17,3 +17,16 @@ fn a_python_import_is_refused_at_the_import_pointing_at_run() {
     assert_eq!(errors[0].span.start, 0, "the import is what is refused");
     assert!(errors[0].message.contains("LLVM target runs without Python"), "{}", errors[0].message);
 }
+
+#[test]
+fn a_python_object_is_refused_naming_the_python_target() {
+    let source = "fn keep(o: PyObject) -> PyObject:\n    return o\n\nfn main():\n    print(1)\n";
+    let Err(errors) =
+        lotml_llvm::compile_program(source, Path::new("prog.lot"), &lotml_check::Interfaces::new(), false, false)
+    else {
+        panic!("a PyObject compiled to LLVM");
+    };
+    assert_eq!(errors[0].code, "E0402", "{:?}", errors.iter().map(|d| &d.message).collect::<Vec<_>>());
+    assert!(errors[0].message.contains("PyObject"), "{}", errors[0].message);
+    assert!(errors[0].notes.iter().any(|n| n.contains("Python target")), "{:?}", errors[0].notes);
+}

@@ -87,6 +87,19 @@ impl Ty {
         }
     }
 
+    /// Whether this is or holds a `PyObject`: what a native program and a function Python calls
+    /// cannot have (specs/python-object R3).
+    pub fn holds_py_object(&self) -> bool {
+        match self {
+            Ty::PyObject => true,
+            Ty::List(t) | Ty::Set(t) | Ty::Optional(t) | Ty::Heap(t) => t.holds_py_object(),
+            Ty::Dict(a, b) | Ty::Result(a, b) => a.holds_py_object() || b.holds_py_object(),
+            Ty::Tuple(items) | Ty::Adt(_, items) => items.iter().any(Ty::holds_py_object),
+            Ty::Func(params, ret) => params.iter().any(Ty::holds_py_object) || ret.holds_py_object(),
+            _ => false,
+        }
+    }
+
     pub fn is_poison(&self) -> bool {
         matches!(self, Ty::Error | Ty::Never)
     }

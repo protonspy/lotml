@@ -19,6 +19,9 @@ struct Module {
     name: String,
     source: PathBuf,
     shown: String,
+    text: String,
+    /// The functions left out of what Python sees (specs/python-object R3.2).
+    warnings: Vec<lotml_diag::Diagnostic>,
 }
 
 /// The Python modules compiled from `paths`, written into `dir` with the runtime, each with the
@@ -43,7 +46,7 @@ fn compile(paths: &[PathBuf], dir: &Path) -> Result<Result<Vec<Module>, String>,
     }
     for (name, text, result, absolute) in &texts {
         match result {
-            Ok(module) => compiled.push((module, absolute.clone(), name.clone())),
+            Ok(module) => compiled.push((module, absolute.clone(), name.clone(), text.clone())),
             Err(diagnostics) => reports.push(Report { file: name, text, diagnostics: diagnostics.clone() }),
         }
     }
@@ -53,14 +56,14 @@ fn compile(paths: &[PathBuf], dir: &Path) -> Result<Result<Vec<Module>, String>,
     std::fs::create_dir_all(dir).map_err(|e| Failure(format!("cannot create {}: {e}", dir.display())))?;
     write(&dir.join("lotml_rt.py"), lotml_py::RUNTIME)?;
     let mut modules = Vec::new();
-    for (module, source, shown) in compiled {
+    for (module, source, shown, text) in compiled {
         let stem = source
             .file_stem()
             .map_or("program".into(), |s| s.to_string_lossy().replace(|c: char| !c.is_alphanumeric(), "_"));
         let name = format!("{stem}_lotml");
         write(&dir.join(format!("{name}.py")), &module.module)?;
         write(&dir.join(format!("{name}.pyi")), &lotml_py::stub(&shown, &name, &module.checked))?;
-        modules.push(Module { name, source, shown });
+        modules.push(Module { name, source, shown, text, warnings: module.warnings.clone() });
     }
     Ok(Ok(modules))
 }
@@ -205,6 +208,10 @@ pub fn build(paths: &[PathBuf], out: &Path, target: Target, shared: bool) -> Res
     }
     let Some(modules) = compile_or_report(paths, out)? else { return Ok(1) };
     for module in modules {
+        if !module.warnings.is_empty() {
+            let report = Report { file: &module.shown, text: &module.text, diagnostics: module.warnings.clone() };
+            print!("{}", lotml_diag::text(&[report], Some(lotml_diag::DEFAULT_LIMIT)));
+        }
         println!("{} -> {}", module.shown, out.join(format!("{}.py", module.name)).display());
     }
     Ok(0)

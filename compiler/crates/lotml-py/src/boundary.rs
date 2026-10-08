@@ -6,6 +6,7 @@ use std::fmt::Write as _;
 
 use lotml_check::ty::Ty;
 use lotml_check::{Checked, FieldSig, FnSig, TypeDef};
+use lotml_diag::Diagnostic;
 use serde_json::{Map, Value, json};
 
 use crate::from_ir::range_of;
@@ -47,11 +48,36 @@ fn fields(fields: &[FieldSig]) -> Value {
         .collect()
 }
 
+/// Whether Python sees the function of `sig`: not when it takes or returns a `PyObject`, which the
+/// wrapper around it has nothing to check against (specs/python-object R3.2).
+fn exported(sig: &FnSig) -> bool {
+    !(sig.params.iter().any(|p| p.ty.holds_py_object())
+        || sig.ret.holds_py_object()
+        || sig.error.as_ref().is_some_and(Ty::holds_py_object))
+}
+
+/// A warning for each function of `checked` Python does not see, saying why.
+pub fn left_out(checked: &Checked) -> Vec<Diagnostic> {
+    checked
+        .functions
+        .iter()
+        .filter(|(_, sig)| !exported(sig))
+        .map(|(name, sig)| {
+            Diagnostic::warning(
+                "E0403",
+                sig.span,
+                format!("`{name}` is left out of the module Python imports: it takes or returns a `PyObject`"),
+            )
+            .note("a Python caller would hand it a value nothing checks; take the `PyObject` in a function LotML calls")
+        })
+        .collect()
+}
+
 /// What Python sees of a compiled module: each function's signature as descriptors, the shape
 /// of each record and sum type, and the names of the types and variants it can build.
 pub fn exports(checked: &Checked) -> Value {
     let mut functions = Map::new();
-    for (name, sig) in &checked.functions {
+    for (name, sig) in checked.functions.iter().filter(|(_, sig)| exported(sig)) {
         functions.insert(
             name.clone(),
             json!({
@@ -156,7 +182,7 @@ pub fn stub(source: &str, module: &str, checked: &Checked) -> String {
             }
         }
     }
-    for (name, sig) in &checked.functions {
+    for (name, sig) in checked.functions.iter().filter(|(_, sig)| exported(sig)) {
         out.push('\n');
         if let Some(error) = &sig.error {
             let _ =

@@ -268,6 +268,23 @@ fn main() -> None ! PyError:
 }
 
 #[test]
+fn a_function_taking_a_python_object_is_left_out_of_what_python_imports() {
+    let library =
+        "fn keep(o: PyObject) -> PyObject:\n    return o\n\nfn add(a: int, b: int) -> int:\n    return a + b\n";
+    let dir = scratch("python-object-exports", &[("lib.lot", library)]);
+    let built = lotml(&["build", "--target", "python", "lib.lot", "-o", "out"], &dir);
+    assert!(built.status.success(), "{}", stdout(&built));
+    assert!(stdout(&built).contains("E0403") && stdout(&built).contains("`keep`"), "{}", stdout(&built));
+    let stub = std::fs::read_to_string(dir.join("out").join("lib_lotml.pyi")).unwrap();
+    assert!(stub.contains("def add(") && !stub.contains("def keep("), "{stub}");
+    let out = python(
+        &dir,
+        "import sys\nsys.path.insert(0, 'out')\nimport lib_lotml as m\nprint(m.add(1, 2), hasattr(m, 'keep'))",
+    );
+    assert_eq!(stdout(&out), "3 False\n", "{}", String::from_utf8_lossy(&out.stderr));
+}
+
+#[test]
 fn a_broken_interface_is_reported_by_check() {
     let dir = scratch(
         "broken-interface",
