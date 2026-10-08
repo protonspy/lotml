@@ -113,23 +113,33 @@ def test_a_module_counts_the_public_names_lotml_bind_binds_and_one_without_a_stu
     assert (missing.stub, missing.public, missing.share) == (None, 0, 0.0)
 
 
-def record(label: str, taken: str, bound: int, versions: dict | None = None) -> bc.Record:
+def record(
+    label: str,
+    taken: str,
+    bound: int,
+    versions: dict | None = None,
+    typeshed: str = "0d9b1926fc75ea33",
+) -> bc.Record:
     modules = [
         bc.Module("random", "stdlib", "mypy", "random.pyi", 4, ["a", "b", "c", "d"][:bound]),
         bc.Module("numpy", "pypi", "numpy", "numpy/__init__.pyi", 10, [], ["array", "zeros"]),
     ]
-    return bc.Record(label, modules, versions or {"mypy": "1", "numpy": "2"}, "digest", taken)
+    return bc.Record(label, modules, versions or {"numpy": "2"}, "digest", taken, typeshed)
 
 
 def test_a_record_reads_back_as_it_was_written():
     r = record("aliases", "2026-10-08T00:00:00+00:00", 3)
     again = bc.load(bc.dump(r))
     assert again == r
-    assert json.loads(bc.dump(r))["versions"] == {"mypy": "1", "numpy": "2"}
+    assert json.loads(bc.dump(r))["versions"] == {"numpy": "2"}
+    assert json.loads(bc.dump(r))["typeshed"] == "0d9b1926fc75ea33"
+    old = json.loads(bc.dump(r))
+    del old["typeshed"]
+    assert bc.load(json.dumps(old)).typeshed == "", "a record from before still reads"
 
 
 def test_the_report_shows_every_label_and_marks_one_measured_on_other_versions():
-    before = record("functions", "2026-10-08T00:00:00+00:00", 1, {"mypy": "0", "numpy": "2"})
+    before = record("functions", "2026-10-08T00:00:00+00:00", 1, typeshed="another commit")
     after = record("aliases", "2026-10-08T01:00:00+00:00", 3)
     report = bc.markdown([after, before])
     assert report.index("| functions |") < report.index("| aliases |"), "in the order taken"
@@ -137,5 +147,16 @@ def test_the_report_shows_every_label_and_marks_one_measured_on_other_versions()
         "| functions | 25.0% | 0.0% | 7.1% | 21.4% | another corpus or other versions |" in report
     )
     assert "| aliases | 75.0% | 0.0% | 21.4% | 35.7% | the latest corpus and versions |" in report
-    assert "| random | mypy | 4 | 3 | 0 | 75.0% |" in report
+    assert "| random | typeshed 0d9b1926fc75 | 4 | 3 | 0 | 75.0% |" in report
     assert "| numpy | numpy | 10 | 0 | 2 | 0.0% |" in report
+
+
+def test_the_standard_library_is_bound_from_the_typeshed_lotml_carries_and_its_commit_recorded():
+    commit = bc.typeshed_commit()
+    assert len(commit) == 40 and all(c in "0123456789abcdef" for c in commit)
+    stdlib = bc.typeshed_root()
+    assert stdlib is not None and (stdlib / "textwrap.pyi").is_file()
+    measured = bc.measure(bc.Module("textwrap", "stdlib", "mypy"), COMPILER, stdlib, Path("unused"))
+    assert measured.stub == "textwrap.pyi"
+    assert "dedent" in measured.bound, "bound by `lotml bind textwrap`, with no --stub"
+    assert bc.versions([measured]) == {}, "no distribution is read for the standard library"
