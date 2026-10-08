@@ -73,6 +73,55 @@ fn bind_writes_an_interface_from_a_stub() {
     assert!(!interface.contains("_private") && !interface.contains("TextWrapper"));
 }
 
+/// A stub written as typeshed writes `random`: module-level names bound to the methods of an
+/// instance it declares, some under a version check, one of a method the stub does not hold.
+const ALIASES_PYI: &str = "\
+import sys
+
+class Random(_random.Random):
+    def randint(self, a: int, b: int) -> int: ...
+    if sys.version_info >= (3, 12):
+        def binomialvariate(self, n: int = 1, p: float = 0.5) -> int: ...
+    @overload
+    def pick(self, x: int) -> int: ...
+    @overload
+    def pick(self, x: str) -> str: ...
+    @staticmethod
+    def make(seed: int) -> float: ...
+    @classmethod
+    def named(cls, name: str) -> str: ...
+
+_inst: Random
+randint = _inst.randint
+if sys.version_info >= (3, 12):
+    binomialvariate = _inst.binomialvariate
+pick = _inst.pick
+make = _inst.make
+named = _inst.named
+getrandbits = _inst.getrandbits
+_hidden = _inst.randint
+";
+
+#[test]
+fn bind_binds_the_names_a_stub_writes_as_methods_of_an_instance() {
+    let dir = scratch("bind-aliases", &[("stubs/rand.pyi", ALIASES_PYI)]);
+    let out = lotml(&["bind", "rand", "--stub", "stubs/rand.pyi"], &dir);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let interface = std::fs::read_to_string(dir.join("bindings").join("rand.lotmli")).unwrap();
+    for bound in [
+        "fn randint(a: int, b: int) -> int ! PyError\n",
+        "fn binomialvariate(n: int = 1, p: f64 = 0.5) -> int ! PyError\n",
+        "fn make(seed: int) -> f64 ! PyError\n",
+        "fn named(name: str) -> str ! PyError\n",
+    ] {
+        assert!(interface.contains(bound), "{bound}in\n{interface}");
+    }
+    assert!(interface.contains("#   pick: it is overloaded\n"), "{interface}");
+    assert!(interface.contains("#   getrandbits: `Random` holds no `getrandbits` in this stub\n"), "{interface}");
+    assert!(!interface.contains("_hidden"));
+    assert!(stdout(&out).contains("4 functions bound, 2 not"), "{}", stdout(&out));
+}
+
 #[test]
 fn bind_refuses_a_name_that_is_not_a_module() {
     let dir = scratch("bind-name", &[]);

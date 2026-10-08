@@ -1,5 +1,6 @@
 """`lotml bind`: a Python module's stub read with Python's own parser, and its module-level
-functions written as a lotml interface (adr:0012).
+functions written as a lotml interface (adr:0012), with the names typeshed writes as methods of
+a module-level instance, `randint = _inst.randint`, bound from those methods.
 
 Run as `python -c <this file> <module> [<stub.pyi>]`; without a stub, typeshed's copy in an
 installed mypy or jedi is used. Prints the interface on stdout. A function whose types lotml
@@ -7,6 +8,7 @@ cannot express is listed in a comment with the reason, never bound half-way.
 """
 
 import ast
+import copy
 import importlib.util
 import sys
 from pathlib import Path
@@ -122,13 +124,55 @@ def signature(function: ast.FunctionDef) -> str:
 
 def definitions(body: list) -> list:
     """The module-level functions, including those under `if sys.version_info …` blocks."""
+    return module_level(body, (ast.FunctionDef, ast.AsyncFunctionDef))
+
+
+def module_level(body: list, kind) -> list:
+    """The module-level statements of `kind`, including those under `if sys.version_info …`."""
     found = []
     for node in body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(node, kind):
             found.append(node)
         elif isinstance(node, ast.If):
-            found.extend(definitions(node.body) + definitions(node.orelse))
+            found.extend(module_level(node.body, kind) + module_level(node.orelse, kind))
     return found
+
+
+def aliases(body: list) -> list:
+    """Each module-level name typeshed writes as a method of an instance it declares, `randint =
+    _inst.randint` after `_inst: Random`, as the name, the instance's class and the method."""
+    instances = {
+        node.target.id: name_of(node.annotation)
+        for node in module_level(body, ast.AnnAssign)
+        if isinstance(node.target, ast.Name) and name_of(node.annotation) is not None
+    }
+    found = []
+    for node in module_level(body, ast.Assign):
+        value = node.value
+        if (
+            len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and isinstance(value, ast.Attribute)
+            and isinstance(value.value, ast.Name)
+            and value.value.id in instances
+        ):
+            found.append((node.targets[0].id, instances[value.value.id], value.attr))
+    return found
+
+
+def method_as_function(name: str, method: ast.FunctionDef) -> ast.FunctionDef:
+    """`method`, bound to its instance, as the module-level function `name`: an instance's or a
+    class's method loses its first parameter, a static one keeps them all."""
+    function = copy.deepcopy(method)
+    function.name = name
+    decorators = {name_of(d) for d in method.decorator_list}
+    if "staticmethod" not in decorators:
+        arguments = function.args
+        if arguments.posonlyargs:
+            arguments.posonlyargs = arguments.posonlyargs[1:]
+        elif arguments.args:
+            arguments.args = arguments.args[1:]
+    return function
 
 
 def interface(module: str, stub: Path) -> str:
@@ -139,18 +183,32 @@ def interface(module: str, stub: Path) -> str:
         for f in definitions(tree.body)
         if any(name_of(d) == "overload" for d in f.decorator_list)
     }
-    for function in definitions(tree.body):
-        if function.name in seen or function.name.startswith("_"):
+    classes = {c.name: c for c in module_level(tree.body, ast.ClassDef)}
+    functions = [(f.name, f, f.name in overloaded) for f in definitions(tree.body)]
+    for name, class_name, method_name in aliases(tree.body):
+        body = classes[class_name].body if class_name in classes else []
+        # A method under `if sys.version_info …` counts, the first version written winning, as
+        # for a module-level function.
+        methods = [m for m in definitions(body) if m.name == method_name]
+        if not methods:
+            functions.append((name, None, f"`{class_name}` holds no `{method_name}` in this stub"))
             continue
-        seen.add(function.name)
+        is_overloaded = any(name_of(d) == "overload" for d in methods[0].decorator_list)
+        functions.append((name, method_as_function(name, methods[0]), is_overloaded))
+    for name, function, problem in functions:
+        if name in seen or name.startswith("_"):
+            continue
+        seen.add(name)
         try:
-            if function.name in overloaded:
+            if isinstance(problem, str):
+                raise Unsupported(problem)
+            if problem:
                 raise Unsupported("it is overloaded")
             if isinstance(function, ast.AsyncFunctionDef):
                 raise Unsupported("it is a coroutine")
             bound.append(signature(function))
         except Unsupported as why:
-            skipped.append(f"#   {function.name}: {why}")
+            skipped.append(f"#   {name}: {why}")
     lines = [
         f"# The Python module `{module}`, bound by `lotml bind` from {stub.name}.",
         "# Do not edit: run `lotml bind` again.",

@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: ff3a2588193ba063e48911eee545b46f4f6918ab156a5c81c3f02aa453632a2b
+checksum: 1031431e6383251c223c409f7dd229c44584eef9ce6f2bf0c9ebd3d31369fbb4
 ---
 
 # Python compatibility
@@ -63,7 +63,7 @@ the typed share each spec added.
 
 ## Tasks
 
-- [ ] 1.1 (Unit) Bind the module-level aliases typeshed writes as `name = _inst.method`, from
+- [x] 1.1 (Unit) Bind the module-level aliases typeshed writes as `name = _inst.method`, from
   that method of the class the stub declares `_inst` with, and list one whose method the stub
   does not hold among the names not bound
 - [ ] 1.2 (Unit) Write and build the spec binding-coverage: a fixed corpus of the standard library
