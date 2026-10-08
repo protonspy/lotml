@@ -372,7 +372,9 @@ impl<'l> ModuleWriter<'l> {
                 Ty::Result(value, _) => descriptor(value),
                 other => descriptor(other),
             };
-            let bound = call(rt("foreign"), vec![text(module), text(function), text(&returns.to_string())]);
+            // A program names the module by its origin, `py.textwrap`; CPython by its own name.
+            let python = module.strip_prefix("py.").unwrap_or(module);
+            let bound = call(rt("foreign"), vec![text(python), text(function), text(&returns.to_string())]);
             imports.push(self.at(assign(vec![target(&format!("__py{k}"))], bound), Span::new(0, 0)));
         }
         let body: Vec<Value> = imports

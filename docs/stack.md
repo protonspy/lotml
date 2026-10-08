@@ -40,6 +40,13 @@ group the default environment leaves out.
   over OpenRouter, with its provider routing; the raw completions above stay on the standard
   library.
 
+- **mypy**, **types-requests**, **types-PyYAML**, **types-python-dateutil**, **types-six**,
+  **pandas-stubs**, **numpy**, **urllib3**, **packaging**, **idna**, **certifi** and
+  **charset-normalizer** (group `stubs`, pinned) — the stubs of the binding coverage corpus,
+  read and never imported: typeshed's `stdlib` from mypy's wheel, the others' from their stub
+  distributions or their own types
+  (adr:0030-the-binding-coverage-report-reads-stubs-from-pinned-distributions).
+
 - **tree-sitter CLI** 0.27 (development only, through `npx`) — generates the editor grammar in
   `reference/grammar/tree-sitter/` and parses the corpus with it in the harness tests, which
   skip without `npx`; it compiles the parser with the platform's C compiler.

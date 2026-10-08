@@ -445,8 +445,10 @@ fn report_rows(rows: Vec<Value>, as_json: bool) -> (u8, String) {
 }
 
 /// `lotml bind`: the interface of a Python module, read from its stub by Python's own parser
-/// and written to `out/<module>.lotmli` (adr:0012).
+/// and written to `out/py.<module>.lotmli`, the name a program imports it by (adr:0012,
+/// adr:0029); the module may be given with its `py.` or without.
 pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failure> {
+    let module = module.strip_prefix("py.").unwrap_or(module);
     // The name becomes a file name: identifiers and dots only, so it cannot leave `out`.
     let valid = module.split('.').all(|part| {
         part.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
@@ -487,7 +489,7 @@ pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failu
         return Err(Failure(format!("the binding of `{module}` does not check: {} {}", problem.code, problem.message)));
     }
     std::fs::create_dir_all(out).map_err(|e| Failure(format!("cannot create {}: {e}", out.display())))?;
-    let path = out.join(format!("{module}.lotmli"));
+    let path = out.join(format!("py.{module}.lotmli"));
     write(&path, &text)?;
     let bound = interface.names().count();
     let skipped = text.lines().filter(|l| l.starts_with("#   ")).count();

@@ -61,13 +61,13 @@ fn a_c_call_that_blocks_holds_up_only_its_task() {
     let (_, library, declaration) = platform();
     let (function, wait) = if cfg!(windows) { ("Sleep", "400") } else { ("usleep", "400000") };
     let source = format!(
-        "from {library} import {function}\nfrom time import monotonic\n\n\
+        "from {library} import {function}\nfrom py.time import monotonic\n\n\
          fn nap() -> int:\n    {function}({wait})\n    return 1\n\n\
          fn main() -> None ! PyError:\n    start = monotonic()?\n\
          \x20   done = sum(parallel([lambda: nap(), lambda: nap(), lambda: nap(), lambda: nap()]))\n\
          \x20   print(done)\n    print(monotonic()? - start < 1.2)\n"
     );
-    let out = run("blocking", &source, &[(library, declaration), ("time", "fn monotonic() -> f64 ! PyError\n")]);
+    let out = run("blocking", &source, &[(library, declaration), ("py.time", "fn monotonic() -> f64 ! PyError\n")]);
     assert_eq!(stdout(&out), "4\nTrue\n", "{}", String::from_utf8_lossy(&out.stderr));
 }
 

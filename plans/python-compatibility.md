@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: ff3a2588193ba063e48911eee545b46f4f6918ab156a5c81c3f02aa453632a2b
+checksum: e8ed796b8a64678d2fb05886d0cba2ebcc1cbadfce3b3786946bca59f1b69578
 ---
 
 # Python compatibility
@@ -63,13 +63,13 @@ the typed share each spec added.
 
 ## Tasks
 
-- [ ] 1.1 (Unit) Bind the module-level aliases typeshed writes as `name = _inst.method`, from
+- [x] 1.1 (Unit) Bind the module-level aliases typeshed writes as `name = _inst.method`, from
   that method of the class the stub declares `_inst` with, and list one whose method the stub
   does not hold among the names not bound
-- [ ] 1.2 (Unit) Write and build the spec binding-coverage: a fixed corpus of the standard library
+- [x] 1.2 (Unit) Write and build the spec binding-coverage: a fixed corpus of the standard library
   and the most downloaded PyPI packages, the share of public names bound typed per module, and
   the report the harness writes
-- [ ] 1.3 (Unit) Write and build the spec origin-imports: `import py.<module>` and `from
+- [x] 1.3 (Unit) Write and build the spec origin-imports: `import py.<module>` and `from
   py.<module> import`, a bare import of a Python module an error suggesting `py.<name>`, and the
   tests, guide and reference moved to it
   (adr:0029-foreign-modules-are-imported-by-origin-and-their-interfaces-generated)

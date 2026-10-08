@@ -152,6 +152,13 @@ impl<'p> Body<'p> {
         self.diagnostics.push(d);
     }
 
+    /// Whether `path` leads to a module imported by its full path, as `py` and `py.os` lead to
+    /// `py.os.path` after `import py.os.path`: a package, which an attribute descends.
+    fn is_package(&self, path: &str) -> bool {
+        let prefix = format!("{path}.");
+        self.program.modules.iter().any(|m| m.starts_with(&prefix))
+    }
+
     /// Whether this body already has an error, so a program it belongs to cannot compile.
     fn has_error(&self) -> bool {
         self.diagnostics.iter().any(|d| d.severity == lotml_diag::Severity::Error)
@@ -1635,7 +1642,7 @@ impl<'p> Body<'p> {
         if let Some(module) = self.program.imported.get(name) {
             return builtins::module_member(module, name).unwrap_or(Ty::Error);
         }
-        if self.program.modules.contains(name) {
+        if self.program.modules.contains(name) || self.is_package(name) {
             return Ty::Module(name.to_string());
         }
         if builtins::is_prelude(name) {
@@ -1975,6 +1982,12 @@ impl<'p> Body<'p> {
                     Ty::Error
                 }
             },
+            Ty::Module(module) if self.is_package(&format!("{module}.{}", name.name)) => {
+                Ty::Module(format!("{module}.{}", name.name))
+            }
+            Ty::Module(module) if self.program.modules.contains(&format!("{module}.{}", name.name)) => {
+                Ty::Module(format!("{module}.{}", name.name))
+            }
             Ty::Module(module) if self.program.foreign.contains_key(module) => {
                 match self.program.foreign[module].get(&name.name) {
                     Some(sig) => function_value(sig),

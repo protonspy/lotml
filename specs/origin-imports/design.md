@@ -1,40 +1,40 @@
 # Origin imports — design
 
-<!-- The design must fit the decision being made. Every heading below except
-     "What changes" is OPTIONAL: delete the ones this change does not decide.
+## The interface's name is the import's
 
-     A heading filled with "N/A", or with prose written to satisfy the heading, is
-     worse than an absent heading — the next session reads invented architecture as
-     a decision somebody made, and honors it. Filler becomes binding.
+Serves R1.1, R1.2, R1.3, R2.2.
 
-     Delete this comment too. -->
+An interface is keyed by its file's stem, as today: `bindings/py.textwrap.lotmli` is the
+interface of `py.textwrap`, as `bindings/c.m.lotmli` is that of `c.m`. `Program::import` reads a
+path starting `py.` as a Python module, through the interface of that exact name; `lotml bind
+<module>` writes `bindings/py.<module>.lotmli`, a `py.` given with the name taken off first. An
+interface whose name has no origin is no longer one a program can import: a bare import naming it
+is E0216 with the rename to make (R2.2). Keying by the full name keeps a Python `json` and a
+future LotML `json` apart.
 
-## What changes
+## `py` in an expression
 
 Serves R1.1.
 
-<!-- Required. What changes, where, and why. For a change that decides nothing
-     structural, this section is the whole design and that is the correct outcome.
+`import py.textwrap` brings in the module path `py.textwrap`, as Python's `import os.path` does.
+A name that is the first segment of an imported module path, `py`, has the type of a package,
+`Ty::Module("py")`; an attribute of a package is the module or the package it names,
+`Ty::Module("py.textwrap")`, and an attribute of a module with an interface is its function, as
+for a bare module today. Neither a package nor a module is a value: lowering reaches the call
+through the module's type and never evaluates the path.
 
-     Keep the "Serves" line above and make it real: the design has to name the
-     requirements it answers, or the trace from what to how is unreadable — and
-     `scc spec validate` says so. -->
+## The Python target
 
-## Boundaries and contracts <!-- optional -->
+Serves R1.4.
 
-<!-- Only if this change moves a boundary or an external contract, and only for the
-     parts that actually move. -->
+The runtime's `foreign(module, function, returns)` imports the module named, so the backend writes
+the module's name with `py.` taken off. The native target keeps refusing a Python import
+(adr:0025), whatever its prefix.
 
-## Data <!-- optional -->
+## A bare import
 
-<!-- Only if a data shape changes. -->
+Serves R2.1.
 
-## Alternatives considered <!-- optional -->
-
-<!-- Only where there were real alternatives with trade-offs. Say which won and why.
-     If the decision is hard to reverse, write an ADR under docs/adr/ and cite it
-     here instead of arguing it twice. -->
-
-## Risks <!-- optional -->
-
-<!-- What could go wrong that the task list does not already cover. -->
+E0216 for a bare name now says that a Python module is imported as `py.<name>`, and when the
+interface of `py.<name>` is available, it lists `py.<name>` among the alternatives with a
+machine-applicable fix over the module's name. `math` stays LotML's own module.

@@ -127,7 +127,7 @@ def shorten(text: str, width: int, *, placeholder: str = ...) -> str: ...
 """
 
 PROGRAM = """\
-from textwrap import dedent, wrap, shorten
+from py.textwrap import dedent, wrap, shorten
 
 fn main() -> None ! PyError:
     text = dedent("    lotml calls Python through a checked boundary")?

@@ -367,8 +367,9 @@ test "concurrency":
 # `from m import a, b` or `import m`; no `import *`. A project's files do not import each
 # other: each module stands alone. The prelude needs no import: print len range enumerate zip
 # sorted reversed sum min max abs any all round int float str bool ord chr set list Heap todo
-# Ok Err parallel PyError. A Python module is imported after `lotml bind <module>`, each of
-# its functions returning `T ! PyError`; a C library through `bindings/c.<library>.lotmli`.
+# Ok Err parallel PyError. A Python module is imported by its origin, `from py.textwrap import
+# dedent` or `import py.textwrap`, after `lotml bind <module>`, each of its functions returning
+# `T ! PyError`; a C library as `c.<library>`, through `bindings/c.<library>.lotmli`.
 
 test "modules and the prelude":
     assert sqrt(4.0) == 2.0

@@ -227,8 +227,32 @@ impl Program {
             .first()
             .map_or(import.span, |m| m.span)
             .to(import.module.last().map_or(import.span, |m| m.span));
-        if let Some(functions) = self.available.get(&path).cloned() {
+        // A foreign module is imported by its origin, `py.` or `c.` (adr:0029).
+        let python = path.strip_prefix("py.").filter(|m| !m.is_empty());
+        let foreign = python.is_some() || crate::interface::is_c_library(&path);
+        if foreign && let Some(functions) = self.available.get(&path).cloned() {
             self.import_python(import, &path, functions);
+            return;
+        }
+        if let Some(module) = python {
+            self.diagnostics.push(
+                Diagnostic::error("E0216", span, format!("there is no interface of the Python module `{module}`"))
+                    .alternatives(self.available.keys().filter(|k| k.starts_with("py.")).cloned())
+                    .note(format!("`lotml bind {module}` writes it: bindings/py.{module}.lotmli")),
+            );
+            return;
+        }
+        if !foreign && self.available.contains_key(&path) {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E0216",
+                    span,
+                    format!("`{path}` is a Python module's interface named without its origin"),
+                )
+                .note(format!(
+                    "a Python module is imported as `py.{path}`: rename bindings/{path}.lotmli to bindings/py.{path}.lotmli"
+                )),
+            );
             return;
         }
         if !MODULES.contains(&path.as_str()) {
@@ -237,8 +261,12 @@ impl Program {
                 .alternatives(known)
                 .note("the common names are in the prelude and need no import")
                 .note(format!(
-                    "a Python module is reached through its interface: `lotml bind {path} --stub <{path}.pyi>` writes bindings/{path}.lotmli"
+                    "a Python module is imported as `py.{path}`, its interface written by `lotml bind {path}`"
                 ));
+            let origin = format!("py.{path}");
+            if self.available.contains_key(&origin) {
+                d = d.fix(format!("write `{origin}`"), Applicability::MachineApplicable, vec![(span, origin)]);
+            }
             if matches!(path.as_str(), "typing" | "__future__" | "dataclasses" | "enum" | "collections.abc") {
                 d = d.fix(
                     "remove the import: lotml writes these in its own syntax",

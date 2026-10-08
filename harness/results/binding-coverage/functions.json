@@ -1,0 +1,519 @@
+{
+  "label": "functions",
+  "taken": "2026-10-08T11:29:45+00:00",
+  "corpus": "ddfcf8f2992108c3",
+  "versions": {
+    "certifi": "2026.7.22",
+    "charset-normalizer": "3.5.2",
+    "idna": "3.20",
+    "mypy": "2.4.0",
+    "numpy": "2.5.3",
+    "packaging": "26.3",
+    "pandas-stubs": "3.0.5.260914",
+    "types-PyYAML": "6.0.12.20260906",
+    "types-python-dateutil": "2.9.0.20260807",
+    "types-requests": "2.33.0.20261006",
+    "types-six": "1.17.0.20261008",
+    "urllib3": "2.8.0"
+  },
+  "modules": [
+    {
+      "name": "math",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "math/__init__.pyi",
+      "public": 67,
+      "bound": [
+        "comb",
+        "factorial",
+        "gcd",
+        "hypot",
+        "isqrt",
+        "lcm",
+        "perm",
+        "sumprod"
+      ]
+    },
+    {
+      "name": "random",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "random.pyi",
+      "public": 26,
+      "bound": []
+    },
+    {
+      "name": "string",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "string/__init__.pyi",
+      "public": 12,
+      "bound": []
+    },
+    {
+      "name": "textwrap",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "textwrap.pyi",
+      "public": 6,
+      "bound": [
+        "dedent",
+        "fill",
+        "shorten",
+        "wrap"
+      ]
+    },
+    {
+      "name": "json",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "json/__init__.pyi",
+      "public": 7,
+      "bound": []
+    },
+    {
+      "name": "re",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "re.pyi",
+      "public": 33,
+      "bound": [
+        "purge"
+      ]
+    },
+    {
+      "name": "os",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "os/__init__.pyi",
+      "public": 446,
+      "bound": [
+        "WCOREDUMP",
+        "WEXITSTATUS",
+        "WIFCONTINUED",
+        "WIFEXITED",
+        "WIFSIGNALED",
+        "WIFSTOPPED",
+        "WSTOPSIG",
+        "WTERMSIG",
+        "chflags",
+        "chroot",
+        "close",
+        "closerange",
+        "copy_file_range",
+        "cpu_count",
+        "ctermid",
+        "device_encoding",
+        "dup",
+        "dup2",
+        "fchmod",
+        "fchown",
+        "fork",
+        "forkpty",
+        "fsdecode",
+        "fsencode",
+        "ftruncate",
+        "get_blocking",
+        "get_exec_path",
+        "get_handle_inheritable",
+        "get_inheritable",
+        "getcwd",
+        "getcwdb",
+        "getegid",
+        "geteuid",
+        "getgid",
+        "getgrouplist",
+        "getgroups",
+        "getloadavg",
+        "getlogin",
+        "getpgid",
+        "getpgrp",
+        "getpid",
+        "getppid",
+        "getpriority",
+        "getrandom",
+        "getresgid",
+        "getresuid",
+        "getsid",
+        "getuid",
+        "initgroups",
+        "isatty",
+        "kill",
+        "killpg",
+        "lchflags",
+        "lchmod",
+        "lchown",
+        "link",
+        "listdrives",
+        "listmounts",
+        "listvolumes",
+        "lockf",
+        "login_tty",
+        "lseek",
+        "major",
+        "makedev",
+        "makedirs",
+        "memfd_create",
+        "minor",
+        "mkdir",
+        "mkfifo",
+        "mknod",
+        "nice",
+        "open",
+        "openpty",
+        "pidfd_open",
+        "pipe",
+        "pipe2",
+        "posix_fadvise",
+        "posix_fallocate",
+        "posix_openpt",
+        "pread",
+        "putenv",
+        "pwrite",
+        "read",
+        "readinto",
+        "reload_environ",
+        "remove",
+        "removedirs",
+        "rename",
+        "renames",
+        "replace",
+        "rmdir",
+        "sched_get_priority_max",
+        "sched_get_priority_min",
+        "sched_getaffinity",
+        "sched_getscheduler",
+        "sched_rr_get_interval",
+        "sched_setaffinity",
+        "sched_yield",
+        "set_blocking",
+        "set_handle_inheritable",
+        "set_inheritable",
+        "setegid",
+        "seteuid",
+        "setgid",
+        "setgroups",
+        "setpgid",
+        "setpgrp",
+        "setpriority",
+        "setregid",
+        "setresgid",
+        "setresuid",
+        "setreuid",
+        "setsid",
+        "setuid",
+        "spawnl",
+        "spawnle",
+        "spawnlp",
+        "spawnlpe",
+        "startfile",
+        "strerror",
+        "symlink",
+        "sync",
+        "system",
+        "tcgetpgrp",
+        "tcsetpgrp",
+        "timerfd_create",
+        "ttyname",
+        "umask",
+        "unlink",
+        "unsetenv",
+        "unshare",
+        "urandom",
+        "wait",
+        "waitpid",
+        "waitstatus_to_exitcode",
+        "write"
+      ]
+    },
+    {
+      "name": "os.path",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "os/path.pyi",
+      "public": 0,
+      "bound": []
+    },
+    {
+      "name": "shutil",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "shutil.pyi",
+      "public": 26,
+      "bound": [
+        "copymode",
+        "copystat",
+        "get_archive_formats",
+        "get_unpack_formats",
+        "unregister_archive_format",
+        "unregister_unpack_format"
+      ]
+    },
+    {
+      "name": "datetime",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "datetime.pyi",
+      "public": 9,
+      "bound": []
+    },
+    {
+      "name": "time",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "time.pyi",
+      "public": 44,
+      "bound": [
+        "clock_getres",
+        "clock_gettime",
+        "clock_gettime_ns",
+        "clock_settime",
+        "clock_settime_ns",
+        "monotonic",
+        "monotonic_ns",
+        "perf_counter",
+        "perf_counter_ns",
+        "process_time",
+        "process_time_ns",
+        "pthread_getcpuclockid",
+        "thread_time",
+        "thread_time_ns",
+        "time",
+        "time_ns",
+        "tzset"
+      ]
+    },
+    {
+      "name": "collections",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "collections/__init__.pyi",
+      "public": 9,
+      "bound": []
+    },
+    {
+      "name": "itertools",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "itertools.pyi",
+      "public": 20,
+      "bound": []
+    },
+    {
+      "name": "functools",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "functools.pyi",
+      "public": 15,
+      "bound": []
+    },
+    {
+      "name": "statistics",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "statistics.pyi",
+      "public": 22,
+      "bound": [
+        "fmean",
+        "geometric_mean",
+        "median_grouped"
+      ]
+    },
+    {
+      "name": "fractions",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "fractions.pyi",
+      "public": 1,
+      "bound": []
+    },
+    {
+      "name": "decimal",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "decimal.pyi",
+      "public": 40,
+      "bound": []
+    },
+    {
+      "name": "heapq",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "heapq.pyi",
+      "public": 13,
+      "bound": []
+    },
+    {
+      "name": "bisect",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "bisect.pyi",
+      "public": 2,
+      "bound": []
+    },
+    {
+      "name": "base64",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "base64.pyi",
+      "public": 22,
+      "bound": [
+        "a85encode",
+        "b16encode",
+        "b32encode",
+        "b32hexencode",
+        "b64encode",
+        "b85encode",
+        "decodebytes",
+        "encodebytes",
+        "standard_b64encode",
+        "urlsafe_b64encode",
+        "z85encode"
+      ]
+    },
+    {
+      "name": "hashlib",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "hashlib.pyi",
+      "public": 20,
+      "bound": []
+    },
+    {
+      "name": "difflib",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "difflib.pyi",
+      "public": 12,
+      "bound": [
+        "IS_CHARACTER_JUNK"
+      ]
+    },
+    {
+      "name": "csv",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "csv.pyi",
+      "public": 23,
+      "bound": []
+    },
+    {
+      "name": "urllib.parse",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "urllib/parse.pyi",
+      "public": 21,
+      "bound": [
+        "unquote_plus"
+      ]
+    },
+    {
+      "name": "uuid",
+      "group": "stdlib",
+      "distribution": "mypy",
+      "stub": "uuid.pyi",
+      "public": 21,
+      "bound": [
+        "getnode",
+        "main"
+      ]
+    },
+    {
+      "name": "requests",
+      "group": "pypi",
+      "distribution": "types-requests",
+      "stub": "requests-stubs/__init__.pyi",
+      "public": 27,
+      "bound": [
+        "check_compatibility"
+      ]
+    },
+    {
+      "name": "urllib3",
+      "group": "pypi",
+      "distribution": "urllib3",
+      "stub": "urllib3/__init__.py",
+      "public": 16,
+      "bound": []
+    },
+    {
+      "name": "certifi",
+      "group": "pypi",
+      "distribution": "certifi",
+      "stub": "certifi/__init__.py",
+      "public": 2,
+      "bound": []
+    },
+    {
+      "name": "idna",
+      "group": "pypi",
+      "distribution": "idna",
+      "stub": "idna/__init__.py",
+      "public": 21,
+      "bound": []
+    },
+    {
+      "name": "charset_normalizer",
+      "group": "pypi",
+      "distribution": "charset-normalizer",
+      "stub": "charset_normalizer/__init__.py",
+      "public": 10,
+      "bound": []
+    },
+    {
+      "name": "dateutil.parser",
+      "group": "pypi",
+      "distribution": "types-python-dateutil",
+      "stub": "dateutil-stubs/parser/__init__.pyi",
+      "public": 7,
+      "bound": []
+    },
+    {
+      "name": "packaging.version",
+      "group": "pypi",
+      "distribution": "packaging",
+      "stub": "packaging/version.py",
+      "public": 5,
+      "bound": [
+        "normalize_pre"
+      ]
+    },
+    {
+      "name": "six",
+      "group": "pypi",
+      "distribution": "types-six",
+      "stub": "six-stubs/__init__.pyi",
+      "public": 58,
+      "bound": [
+        "b",
+        "int2byte",
+        "remove_move",
+        "u"
+      ]
+    },
+    {
+      "name": "yaml",
+      "group": "pypi",
+      "distribution": "types-PyYAML",
+      "stub": "yaml-stubs/__init__.pyi",
+      "public": 29,
+      "bound": []
+    },
+    {
+      "name": "numpy",
+      "group": "pypi",
+      "distribution": "numpy",
+      "stub": "numpy/__init__.pyi",
+      "public": 500,
+      "bound": []
+    },
+    {
+      "name": "pandas",
+      "group": "pypi",
+      "distribution": "pandas-stubs",
+      "stub": "pandas-stubs/__init__.pyi",
+      "public": 112,
+      "bound": []
+    }
+  ]
+}

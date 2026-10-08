@@ -117,14 +117,14 @@ enum Command {
         #[arg(long, value_enum, default_value = "python")]
         target: Target,
     },
-    /// Write the interface LotML imports a Python module through, from the module's stub.
+    /// Write the interface LotML imports a Python module through, `py.<module>`, from its stub.
     Bind {
-        /// The Python module: `textwrap`, `os.path`.
+        /// The Python module: `textwrap`, `os.path`, with its `py.` or without.
         module: String,
         /// The stub to read; typeshed's, from an installed mypy or jedi, when absent.
         #[arg(long)]
         stub: Option<PathBuf>,
-        /// Where to write `<module>.lotmli`.
+        /// Where to write `py.<module>.lotmli`.
         #[arg(long, default_value = "bindings")]
         out: PathBuf,
     },

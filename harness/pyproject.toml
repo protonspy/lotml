@@ -29,6 +29,20 @@ dev = [
     "llguidance==1.9.1",
     "ruff==0.14.0",
 ]
+stubs = [
+    "certifi==2026.7.22",
+    "charset-normalizer==3.5.2",
+    "idna==3.20",
+    "mypy==2.4.0",
+    "numpy==2.5.3",
+    "packaging==26.3",
+    "pandas-stubs==3.0.5.260914",
+    "types-python-dateutil==2.9.0.20260807",
+    "types-pyyaml==6.0.12.20260906",
+    "types-requests==2.33.0.20261006",
+    "types-six==1.17.0.20261008",
+    "urllib3==2.8.0",
+]
 
 [tool.uv]
 package = false

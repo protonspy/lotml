@@ -91,7 +91,7 @@ fn program(functions: usize, edited: usize, step: usize) -> String {
     }
     let mut out = String::new();
     for (module, names) in names.iter().enumerate().filter(|(_, n)| !n.is_empty()) {
-        out += &format!("from m{module} import {}\n", names.join(", "));
+        out += &format!("from py.m{module} import {}\n", names.join(", "));
     }
     for i in 0..functions {
         let add = if i == edited { step } else { 1 };
@@ -116,7 +116,7 @@ fn interfaces() -> Vec<(String, String)> {
             let text: String = (0..SIGNATURES)
                 .map(|k| format!("fn g{module}_{k}(text: str, count: int) -> str ! PyError\n"))
                 .collect();
-            (format!("m{module}"), text)
+            (format!("py.m{module}"), text)
         })
         .collect()
 }

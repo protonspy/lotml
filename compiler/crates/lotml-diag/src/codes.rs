@@ -195,7 +195,10 @@ pub const ALL: &[Code] = &[
     Code {
         code: "E0216",
         title: "an unknown module or import",
-        explanation: "lotml programs import from the standard modules (`math`); the common names need no import.",
+        explanation: "lotml programs import from the standard modules (`math`); the common names need no import. \
+        A Python module is imported by its origin, `import py.textwrap` or `from py.textwrap import dedent`, \
+        through the interface `lotml bind textwrap` writes, `bindings/py.textwrap.lotmli`; a C library as \
+        `c.<library>`. A bare `import textwrap` names a LotML module only.",
     },
     Code {
         code: "E0217",
@@ -224,7 +227,7 @@ pub const ALL: &[Code] = &[
     Code {
         code: "E0221",
         title: "not allowed in an interface",
-        explanation: "An interface (`bindings/<module>.lotmli`) declares the functions of a Python module, as \
+        explanation: "An interface (`bindings/py.<module>.lotmli`) declares the functions of a Python module, as \
         `lotml bind` wrote them: one signature per line, no body, no type parameters, over the types every \
         program has, each returning `T ! PyError` because any call into Python can fail:\n\n    \
         fn dedent(text: str) -> str ! PyError\n\nRegenerate the file with `lotml bind <module> --stub <file.pyi>` \

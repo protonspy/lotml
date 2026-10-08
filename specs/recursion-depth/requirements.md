@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/recursion-depth
-delivery: in-review
+delivery: merged
 pr: 50
 ---
 
