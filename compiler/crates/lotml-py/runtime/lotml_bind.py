@@ -4,7 +4,9 @@ a module-level instance, `randint = _inst.randint`, bound from those methods.
 
 Run as `python -c <this file> <module> [<stub> [<what the stub is>]]`; without a stub, typeshed's
 copy in an installed mypy or jedi is used, and with none there the exit status is 3, so lotml can
-look in the project's packages (plans/bind-sources.md 1.1). Prints the interface on stdout. A
+look in the project's packages (plans/bind-sources.md 1.1) — never for a standard-library name,
+which a package could shadow. The source named in the interface's first line is printable or
+`?`, so no file name can end that comment and add a line. Prints the interface on stdout. A
 function whose types lotml cannot express is listed in a comment with the reason, never bound
 half-way.
 """
@@ -214,8 +216,9 @@ def interface(module: str, stub: Path, said: str | None = None) -> str:
             bound.append(signature(function))
         except Unsupported as why:
             skipped.append(f"#   {name}: {why}")
+    source = "".join(c if c.isprintable() else "?" for c in said or stub.name)
     lines = [
-        f"# The Python module `{module}`, bound by `lotml bind` from {said or stub.name}.",
+        f"# The Python module `{module}`, bound by `lotml bind` from {source}.",
         "# Do not edit: run `lotml bind` again.",
         "# Every function returns `T ! PyError`: a stub does not say what a call raises.",
         "# A parameter written `= todo()` is optional: Python supplies its default.",
@@ -252,13 +255,26 @@ def main(args: list[str]) -> int:
         found = (stub, args[2] if len(args) > 2 and args[2] else f"{stub.name}, the stub given")
     else:
         found = typeshed(module)
+    if found is None and module.split(".")[0] in sys.stdlib_module_names:
+        sys.stderr.write(
+            f"typeshed has no stub for the standard library's `{module}`: install mypy, or give "
+            "one with --stub <file.pyi>\n"
+        )
+        return 2
     if found is None:
         sys.stderr.write(f"typeshed has no stub for `{module}`\n")
         return 3
     stub, said = found
     try:
         sys.stdout.write(interface(module, stub, said))
-    except (OSError, SyntaxError, UnicodeDecodeError) as error:
+    except (
+        OSError,
+        SyntaxError,
+        UnicodeDecodeError,
+        ValueError,
+        RecursionError,
+        MemoryError,
+    ) as error:
         sys.stderr.write(f"cannot read {stub}: {error}\n")
         return 2
     return 0

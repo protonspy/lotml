@@ -170,8 +170,8 @@ pub struct Limits {
 }
 
 /// A child's exit status and the end of its output, at most `limits.output` bytes of each
-/// stream; killed when it runs past `limits.seconds`.
-fn wait_limited(mut child: std::process::Child, limits: &Limits) -> Result<std::process::Output, Failure> {
+/// stream; killed when it runs past `limits.seconds`, which the error says of `what`.
+fn wait_limited(mut child: std::process::Child, limits: &Limits, what: &str) -> Result<std::process::Output, Failure> {
     fn tail(mut stream: impl std::io::Read + Send + 'static, keep: usize) -> std::thread::JoinHandle<Vec<u8>> {
         std::thread::spawn(move || {
             let mut kept: Vec<u8> = Vec::new();
@@ -201,7 +201,7 @@ fn wait_limited(mut child: std::process::Child, limits: &Limits) -> Result<std::
         if std::time::Instant::now() > deadline {
             let _ = child.kill();
             let _ = child.wait();
-            return Err(Failure(format!("the tests did not finish within {} s", limits.seconds)));
+            return Err(Failure(format!("{what} did not finish within {} s", limits.seconds)));
         }
         std::thread::sleep(std::time::Duration::from_millis(20));
     };
@@ -471,7 +471,7 @@ pub fn test_report(
         writeln!(input, "{}", Value::Array(listed)).map_err(|e| Failure(format!("cannot reach Python: {e}")))?;
     }
     let output = match limits {
-        Some(limits) => wait_limited(child, limits)?,
+        Some(limits) => wait_limited(child, limits, "the tests")?,
         None => child.wait_with_output().map_err(|e| Failure(format!("cannot run Python: {e}")))?,
     };
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -518,9 +518,13 @@ fn report_rows(rows: Vec<Value>, as_json: bool, python: Option<Value>) -> (u8, S
     (u8::from(rows.iter().any(|r| r["outcome"] != "pass")), report)
 }
 
+/// How long `lotml bind` gives Python to read one stub, which is hostile input (adr:0032).
+const BIND_SECONDS: u64 = 60;
+
 /// `lotml bind`: the interface of a Python module, read from its stub by Python's own parser
 /// and written to `out/py.<module>.lotmli`, the name a program imports it by (adr:0012,
-/// adr:0029); the module may be given with its `py.` or without.
+/// adr:0029); the module may be given with its `py.` or without. With no stub given, typeshed's is
+/// read, and without one the project's packages are, in PEP 561's order (plans/bind-sources.md 1.1).
 pub fn bind(module: &str, stub: Option<&Path>, out: &Path, offline: bool) -> Result<bool, Failure> {
     let module = module.strip_prefix("py.").unwrap_or(module);
     // The name becomes a file name: identifiers and dots only, so it cannot leave `out`.
@@ -547,17 +551,21 @@ pub fn bind(module: &str, stub: Option<&Path>, out: &Path, offline: bool) -> Res
         )));
     }
     let python = python(Use::Bind, None, !offline)?;
+    let limits = Limits { seconds: BIND_SECONDS, output: 64 << 20 };
     let binder = |stub: Option<&Path>, said: &str| {
-        interpreter(&python, lotml_py::BIND)
+        let child = interpreter(&python, lotml_py::BIND)
             .arg(module)
             .arg(stub.map(|s| s.as_os_str().to_owned()).unwrap_or_default())
             .arg(said)
-            .output()
-            .map_err(|e| Failure(format!("cannot run Python: {e}")))
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| Failure(format!("cannot run Python: {e}")))?;
+        wait_limited(child, &limits, "reading the stub")
     };
     let mut output = binder(stub, "")?;
-    // 3: typeshed has no stub, so the project's packages are looked in (plans/bind-sources.md 1.1).
-    if stub.is_none() && output.status.code() == Some(3) {
+    if stub.is_none() && output.status.code() == Some(lotml_py::NO_TYPESHED_STUB) {
         let var = |name: &str| std::env::var_os(name);
         let here = std::env::current_dir().ok();
         let venv = lotml_py::resolve::environment(&var, here.as_deref().and_then(project_of).as_deref());

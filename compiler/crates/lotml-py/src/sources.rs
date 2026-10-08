@@ -16,8 +16,15 @@ pub struct Source {
 }
 
 /// The `site-packages` directories of the virtual environment `venv`: `Lib/site-packages` on
-/// Windows, `lib/python3.*/site-packages` elsewhere.
+/// Windows, `lib/python3.*/site-packages` elsewhere; each canonical, and only those inside `venv`
+/// once links are followed.
 pub fn site_packages(venv: &Path) -> Vec<PathBuf> {
+    let Ok(home) = venv.canonicalize() else { return Vec::new() };
+    candidates(&home).into_iter().filter_map(|p| p.canonicalize().ok()).filter(|p| p.starts_with(&home)).collect()
+}
+
+/// Where a virtual environment keeps `site-packages`, before links are followed.
+fn candidates(venv: &Path) -> Vec<PathBuf> {
     let mut found = Vec::new();
     let windows = venv.join("Lib").join("site-packages");
     if cfg!(windows) && windows.is_dir() {
@@ -38,6 +45,8 @@ pub fn site_packages(venv: &Path) -> Vec<PathBuf> {
 
 /// The first source of `module`, a dotted name of identifiers, under `roots` in PEP 561's order;
 /// a file whose links lead out of its root is passed over, and one past [`LARGEST`] is an error.
+/// A source is named by the path built from the module's identifiers, never by what a link leads
+/// to, so no file name reaches the interface.
 pub fn find(module: &str, roots: &[PathBuf]) -> Result<Option<Source>, String> {
     let parts: Vec<&str> = module.split('.').collect();
     let (top, rest) = parts.split_first().ok_or("no module named")?;
@@ -60,7 +69,8 @@ pub fn find(module: &str, roots: &[PathBuf]) -> Result<Option<Source>, String> {
         for (candidates, said) in candidates.into_iter().chain(annotated) {
             for candidate in candidates {
                 if let Some(path) = inside(&root, &candidate)? {
-                    let shown = path.strip_prefix(&root).unwrap_or(&path).display().to_string().replace('\\', "/");
+                    let shown =
+                        candidate.strip_prefix(&root).unwrap_or(&candidate).display().to_string().replace('\\', "/");
                     return Ok(Some(Source { path, said: format!("{shown}, {said}") }));
                 }
             }
@@ -193,6 +203,17 @@ mod tests {
             std::fs::create_dir_all(&windows).unwrap();
             expected.insert(0, windows);
         }
+        let expected: Vec<PathBuf> = expected.iter().map(|p| p.canonicalize().unwrap()).collect();
         assert_eq!(site_packages(&venv), expected);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn site_packages_a_link_leads_out_of_the_environment_are_not_read() {
+        let outside = scratch("elsewhere", &["pkg/__init__.pyi"]);
+        let venv = scratch("venv-linked", &[]);
+        std::fs::create_dir_all(venv.join("lib").join("python3.14")).unwrap();
+        std::os::unix::fs::symlink(&outside, venv.join("lib").join("python3.14").join("site-packages")).unwrap();
+        assert_eq!(site_packages(&venv), Vec::<PathBuf>::new());
     }
 }
