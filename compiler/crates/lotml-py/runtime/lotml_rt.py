@@ -14,6 +14,7 @@ import copy as _copy
 import dataclasses
 import functools
 import heapq
+import itertools
 import json
 import linecache
 import math as _math
@@ -177,13 +178,22 @@ def check(value, low, high):
 
 
 def power(base, exponent):
-    """`base ** exponent`: an `int` result too wide for i64 traps before it is computed."""
+    """`base ** exponent`: an `int` result too wide for i64 traps before it is computed, and a
+    negative float to a fractional power fails as on the native target, rather than giving the
+    complex number CPython would, which no lotml type holds."""
     if type(base) is int and type(exponent) is int:
         if exponent < 0:
             raise ValueError("a negative exponent of an int")
         if abs(base) > 1 and (abs(base).bit_length() - 1) * exponent > 64:
             overflow(f"{base} ** {exponent}")
         return i64(base**exponent)
+    if (
+        base < 0
+        and _math.isfinite(base)
+        and _math.isfinite(exponent)
+        and not float(exponent).is_integer()
+    ):
+        raise ValueError("a negative number to a fractional power")
     return base**exponent
 
 
@@ -653,6 +663,14 @@ class Heap:
 
 
 def _sum(items, start=0):
+    """`sum(items)`: of integers, each partial sum is checked against i64 as `+` checks it, so a sum
+    traps where the same additions written out would, as on the native target."""
+    items = items if isinstance(items, list) else list(items)
+    if type(start) is int and all(type(item) is int for item in items):
+        partial = list(itertools.accumulate(items, initial=start))
+        if min(partial) < I64_MIN or max(partial) > I64_MAX:
+            overflow(next(t for t in partial if not I64_MIN <= t <= I64_MAX))
+        return partial[-1]
     total = builtins.sum(items, start)
     return i64(total) if type(total) is int else total
 

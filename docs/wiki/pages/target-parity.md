@@ -67,6 +67,18 @@ For lotml, the oracle is the Python target. Typed programs come from templates a
 one `main` per program rather than one call each. Native builds also run with cell counting and
 `LOTML_SANITIZE`, which catch reference-counting bugs CPython cannot show.
 
+That fuzzer is built: `python -m lotml_harness.experiments.differential` runs templated programs,
+forty cases each, and corpus mutants on both targets, compares output, exit and the kind of a
+panic, continues a batch past a panic both share, minimizes a difference by deleting chunks and
+writes it to `harness/results/parity/fuzz/`. `LOTML_COUNT_CELLS` asks the native build to report
+its live cells. Its first runs found two real differences, both in the Python target's runtime:
+`(-1.5) ** 0.1` gave CPython's complex number, where the native target raises `ValueError`; and
+`sum` of integers checked only its result, so `sum([3, 9223372036854775807, -7])` printed where
+the same additions written out trap, as they do natively. Both now behave as natively
+(plans/target-parity-assurance.md 2.4, 2.5). A panic is compared by its kind: the native target's
+`lotml test` trace names only the panicking frame (n-0101), and the Python target's output on a
+piped Windows console is in the ANSI code page (n-0100), so the fuzzer runs it in UTF-8.
+
 The same fuzzer pointed only at the frontend — arbitrary text into the parser, the checker and
 the lowering — looks for panics. Those matter because the language and MCP servers feed the
 compiler whatever an editor or agent sends. That one is built: `compiler/fuzz/`, cargo-fuzz over

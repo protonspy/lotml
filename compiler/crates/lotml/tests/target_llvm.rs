@@ -127,3 +127,22 @@ fn build_shared_writes_a_library_and_its_header_warning_for_what_it_leaves_out()
     assert_eq!(python.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&python.stderr).contains("--target llvm"));
 }
+
+#[test]
+fn lotml_count_cells_makes_a_native_program_report_its_live_cells() {
+    if !has_clang() {
+        return;
+    }
+    let dir = scratch("count-cells", &[("add.lot", "fn main():\n    xs = [1, 2, 3]\n    print(sum(xs))\n")]);
+    let counted = Command::new(env!("CARGO_BIN_EXE_lotml"))
+        .current_dir(&dir)
+        .args(["run", "--target", "llvm", "add.lot"])
+        .env("LOTML_COUNT_CELLS", "1")
+        .output()
+        .expect("the binary runs");
+    let said = String::from_utf8_lossy(&counted.stderr);
+    assert_eq!(counted.status.code(), Some(0), "{said}");
+    assert!(said.contains("lotml: 0 cells live at exit"), "{said}");
+    let plain = lotml(&["run", "--target", "llvm", "add.lot"], &dir);
+    assert!(!String::from_utf8_lossy(&plain.stderr).contains("cells live"), "counting is asked for");
+}

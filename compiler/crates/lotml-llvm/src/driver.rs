@@ -275,13 +275,15 @@ pub struct Build {
 impl Build {
     /// The flags of `clang` for the runtime's compile, with `runtime`, or for compiling the
     /// program and linking. With `LOTML_SANITIZE` set, as CI sets it, a program, not a library, is
-    /// built under AddressSanitizer and UndefinedBehaviorSanitizer.
+    /// built under AddressSanitizer and UndefinedBehaviorSanitizer; with `LOTML_COUNT_CELLS` set,
+    /// as the harness's differential fuzzer sets it, a program reports its live cells at exit.
     fn flags(self, runtime: bool) -> Vec<&'static str> {
         let mut flags = vec![if self.level == Level::Release { "-O2" } else { "-O0" }];
         if self.level == Level::Debug {
             flags.push("-g");
         }
-        if runtime && self.counting {
+        let counting = self.counting || (!self.shared && std::env::var_os("LOTML_COUNT_CELLS").is_some());
+        if runtime && counting {
             flags.push("-DLT_COUNT_CELLS");
         }
         if self.shared {
@@ -613,7 +615,12 @@ mod tests {
             clang.runtime_key(sources, Build { counting: true, ..debug }, none),
             clang.runtime_key(sources, debug, headers),
         ];
+        // With `LOTML_COUNT_CELLS` set around the tests, every build counts and the two agree.
+        let ambient = std::env::var_os("LOTML_COUNT_CELLS").is_some();
         for (k, key) in differing.iter().enumerate() {
+            if k == 4 && ambient {
+                continue;
+            }
             assert_ne!(*key, base, "input {k} changes the key");
         }
     }
