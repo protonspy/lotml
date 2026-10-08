@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 4a635710a429261cb92fcfc1bf8c3d7760efd2d4823dd3b0f265484a079b8168
+checksum: df43bb28a11e3db47075745bb46999f6a9b5171f7780a67cd6d1622a9ae39f7b
 ---
 
 # Harness guide
@@ -121,6 +121,11 @@ deepagents and in a second harness — on held-out tasks, and the wiki records w
   _Depends 1.1, 1.3_
   _Priority 1_
   _Reason 45093e6 rewrapped 2.1 and cut it after 'the runtime it is served from', losing the runtime candidate and where training runs that ebebb6d added; specs/guide-tool/design.md and Done when still rely on them_
+- [ ] 2.6 (Unit) Land the training pipeline from `feat/training-pipeline`: renumber its
+      ADRs 0019 and 0020, which main gave to the phase 4 gate and the shared IR, to the
+      next free numbers along with every citation of them in its code and specs, rebase
+      on main and open its PR
+  _Reason review of 2026-10-08: the branch builds 2.2 to 2.4's pipeline, 5124 lines with no PR, and its ADR numbers collide with main's_
 
 ## Done when
 

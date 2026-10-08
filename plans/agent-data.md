@@ -15,7 +15,9 @@ The agent benchmark exercises the harness but cannot settle anything: a 10-point
 between its arms needs 168 paired tasks (docs/wiki/pages/evaluation-harness.md). HumanEval was
 written for Python, which lotml's syntax follows, and its original release is MIT-licensed, so its
 tasks can be both measured and trained on — unlike the task set's copy, which comes through
-MultiPL-E and may not be trained on. The same runs are the data the wiki says a compiler-embedded
+MultiPL-E and may not be trained on. `harness/results/agent-humaneval.md` keeps 157 of its 164
+problems, holding 1272 cases: 11 short of 168, so a 10-point difference stays just out of reach
+and MBPP's 859 kept tasks (`harness/results/agent-mbpp.md`) are the reserve. The same runs are the data the wiki says a compiler-embedded
 model needs — refused answers, the checker as critic, repairs that check
 (docs/wiki/pages/compiler-embedded-model.md). Done when every HumanEval task kept
 has run in both arms with its report committed, and a dataset has been exported from it holding
@@ -53,10 +55,12 @@ only sources and models whose terms allow training, each with its evidence.
 ## Tasks
 
 - [ ] 1.1 (Unit) Record in the registry whether Z.ai's and the serving providers' terms allow training on `z-ai/glm-5.3-flash`'s outputs, with the link to each
-- [ ] 1.2 (Unit) Record in this plan's `## Why` how many HumanEval tasks were kept and how many cases they hold, as `harness/results/agent-humaneval.md` reports it
+- [x] 1.2 (Unit) Record in this plan's `## Why` how many HumanEval tasks were kept and how many cases they hold, as `harness/results/agent-humaneval.md` reports it
 - [ ] 2.1 (Unit) Run every kept HumanEval task in both arms on `z-ai/glm-5.3-flash`, with traces carrying the check snapshots, and commit the rows and the report
   _Depends 1.2_
-- [ ] 2.2 (Unit) Run the agent benchmark again in both arms, so its traces carry the check snapshots, the system message and the compiler version the export needs
+- [ ] 2.2 (Unit) Run the agent benchmark in both arms on `z-ai/glm-5.3-flash` once, as
+      the agent-harness spec's task 3.3, with traces carrying the check snapshots, the
+      system message and the compiler version the export needs, and tick both
 - [ ] 2.3 (Unit) Export the dataset from the HumanEval and benchmark runs with the exporter, and record in the manifest how many trajectories and repairs each source gave
   _Depends 1.1, 2.1, 2.2_
 
