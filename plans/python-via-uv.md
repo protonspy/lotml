@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: b5c1f569494e026e3d2f9631312636ea89282c795488928384213606afbfd3f0
+checksum: af045c4973f8da8276aa9e35ad81f8bb97a3694c4a78029715e744a318a0bfd1
 ---
 
 # Python via uv
@@ -72,7 +72,7 @@ directory's uv configuration must change nothing, and the docs must describe the
 
   Update the "install Python 3.11 or later" message.
   _Depends 1.1, 1.4_
-- [ ] 1.6 (Unit) Add the offline switch to `run`, `test` and `bind` (a flag and `LOTML_OFFLINE`, which can only turn offline on). Make the MCP server, the grader and the harness offline in code, so their resolver cannot reach the download step, with a test that they make no network request
+- [x] 1.6 (Unit) Add the offline switch to `run`, `test` and `bind` (a flag and `LOTML_OFFLINE`, which can only turn offline on). Make the MCP server, the grader and the harness offline in code, so their resolver cannot reach the download step, with a test that they make no network request
   _Depends 1.5_
 - [ ] 1.7 (Unit) Record in the JSON of `lotml run` and `lotml test`, and in every harness row that runs the Python target, the interpreter's path and exact version and uv's version
   _Depends 1.5_

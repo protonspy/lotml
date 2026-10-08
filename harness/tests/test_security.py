@@ -3,6 +3,7 @@
 import base64
 import json
 import pickle
+import sys
 import time
 import zlib
 
@@ -142,6 +143,14 @@ def test_the_child_sees_only_the_environment_it_needs(monkeypatch):
     environment = execute.child_environment()
     assert "LOTML_SECRET_FOR_TEST" not in environment
     assert "PYTHONPATH" in environment
+
+
+def test_the_compiler_a_child_runs_never_downloads_a_python(monkeypatch):
+    monkeypatch.delenv("LOTML_PYTHON", raising=False)
+    monkeypatch.setenv("LOTML_OFFLINE", "")
+    environment = execute.child_environment()
+    assert environment["LOTML_OFFLINE"] == "1", "an empty LOTML_OFFLINE does not turn it off"
+    assert environment["LOTML_PYTHON"] == sys.executable
 
 
 def test_an_exit_from_a_test_is_a_failure_not_a_clean_exit():

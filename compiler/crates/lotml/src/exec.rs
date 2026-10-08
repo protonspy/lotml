@@ -243,7 +243,13 @@ pub fn build(paths: &[PathBuf], out: &Path, target: Target, shared: bool) -> Res
 
 /// `lotml run`: the program's `fn main()`, with Python's exit status: 1 when it returned an
 /// error, 101 when it panicked; the LLVM target's program exits as Python's does.
-pub fn run(path: &Path, target: Target) -> Result<u8, Failure> {
+/// Whether a command is offline: by its flag, or by `LOTML_OFFLINE` set to anything but empty, which
+/// can only turn offline on (adr:0026).
+pub fn offline(flag: bool) -> bool {
+    flag || std::env::var_os("LOTML_OFFLINE").is_some_and(|v| !v.is_empty())
+}
+
+pub fn run(path: &Path, target: Target, offline: bool) -> Result<u8, Failure> {
     let scratch = Scratch::new()?;
     if target == Target::Llvm {
         let Some(exe) = llvm_executable(path, &scratch.0, false, Level::Debug)? else { return Ok(1) };
@@ -252,7 +258,7 @@ pub fn run(path: &Path, target: Target) -> Result<u8, Failure> {
     }
     let Some(modules) = compile_or_report(&[path.to_path_buf()], &scratch.0)? else { return Ok(1) };
     let name = &modules[0].name;
-    let python = python(Use::Run, project_of(path).as_deref(), true)?;
+    let python = python(Use::Run, project_of(path).as_deref(), !offline)?;
     let script = format!(
         "{}import lotml_rt\nsys.exit(lotml_rt.main({name}))",
         search_path(&scratch.0),
@@ -280,9 +286,9 @@ fn exit_status(status: std::process::ExitStatus) -> u8 {
 }
 
 /// `lotml test`: every `test` block, with the values a failed comparison saw.
-pub fn test(paths: &[PathBuf], as_json: bool, target: Target) -> Result<u8, Failure> {
+pub fn test(paths: &[PathBuf], as_json: bool, target: Target, offline: bool) -> Result<u8, Failure> {
     let (status, report) = match target {
-        Target::Python => test_report(paths, as_json, None, true)?,
+        Target::Python => test_report(paths, as_json, None, !offline)?,
         Target::Llvm => native_test_report(paths, as_json)?,
     };
     print!("{report}");
@@ -485,7 +491,7 @@ fn report_rows(rows: Vec<Value>, as_json: bool) -> (u8, String) {
 /// `lotml bind`: the interface of a Python module, read from its stub by Python's own parser
 /// and written to `out/py.<module>.lotmli`, the name a program imports it by (adr:0012,
 /// adr:0029); the module may be given with its `py.` or without.
-pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failure> {
+pub fn bind(module: &str, stub: Option<&Path>, out: &Path, offline: bool) -> Result<bool, Failure> {
     let module = module.strip_prefix("py.").unwrap_or(module);
     // The name becomes a file name: identifiers and dots only, so it cannot leave `out`.
     let valid = module.split('.').all(|part| {
@@ -510,7 +516,7 @@ pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failu
             "`{module}` names a C library, whose interface is written by hand: bindings/{module}.lotmli (adr:0013)"
         )));
     }
-    let python = python(Use::Bind, None, true)?;
+    let python = python(Use::Bind, None, !offline)?;
     let output = interpreter(&python, lotml_py::BIND)
         .arg(module)
         .arg(stub.map(|s| s.as_os_str().to_owned()).unwrap_or_default())

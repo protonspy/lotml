@@ -104,6 +104,10 @@ enum Command {
         /// What to compile to and run.
         #[arg(long, value_enum, default_value = "python")]
         target: Target,
+        /// Download nothing: a missing CPython is an error naming it. `LOTML_OFFLINE` set turns it
+        /// on as well, and nothing turns it off (adr:0026).
+        #[arg(long)]
+        offline: bool,
     },
     /// Run the `test` blocks, reporting the values a failed comparison saw.
     Test {
@@ -116,6 +120,10 @@ enum Command {
         /// What to compile to and run.
         #[arg(long, value_enum, default_value = "python")]
         target: Target,
+        /// Download nothing: a missing CPython is an error naming it. `LOTML_OFFLINE` set turns it
+        /// on as well, and nothing turns it off (adr:0026).
+        #[arg(long)]
+        offline: bool,
     },
     /// Write the interface LotML imports a Python module through, `py.<module>`, from its stub.
     Bind {
@@ -127,6 +135,10 @@ enum Command {
         /// Where to write `py.<module>.lotmli`.
         #[arg(long, default_value = "bindings")]
         out: PathBuf,
+        /// Download nothing: a missing CPython is an error naming it. `LOTML_OFFLINE` set turns it
+        /// on as well, and nothing turns it off (adr:0026).
+        #[arg(long)]
+        offline: bool,
     },
     /// Set a project up for coding agents: AGENTS.md, the guide, and the MCP server in each harness.
     Init {
@@ -252,9 +264,13 @@ fn run() -> ExitCode {
             true
         }),
         Command::Build { paths, out, target, shared } => return status(exec::build(&paths, &out, target, shared)),
-        Command::Run { path, target } => return status(exec::run(&path, target)),
-        Command::Test { paths, json, target } => return status(exec::test(&paths, json, target)),
-        Command::Bind { module, stub, out } => exec::bind(&module, stub.as_deref(), &out),
+        Command::Run { path, target, offline } => return status(exec::run(&path, target, exec::offline(offline))),
+        Command::Test { paths, json, target, offline } => {
+            return status(exec::test(&paths, json, target, exec::offline(offline)));
+        }
+        Command::Bind { module, stub, out, offline } => {
+            exec::bind(&module, stub.as_deref(), &out, exec::offline(offline))
+        }
         Command::Init { dir, harness, yes } => return status(init::run(&dir, harness.as_deref(), yes)),
         Command::Lsp => return status(lsp::serve()),
         Command::Mcp { root } => return status(mcp::serve(&root)),
