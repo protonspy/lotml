@@ -130,3 +130,20 @@ fn a_python_host_that_imports_a_compiled_module_keeps_its_own_limit() {
     );
     assert_eq!(text(&out.stdout), "1000 0\n", "{}", text(&out.stderr));
 }
+
+#[test]
+fn a_panic_a_python_host_catches_gives_the_count_back() {
+    let source = format!(
+        "{DOWN}fn shallow(n: int) -> int:\n    if n == 0:\n        xs = [1]\n        return xs[5]\n    return shallow(n - 1) + 1\n"
+    );
+    let script = "import sys, lotml_rt, prog\nsys.setrecursionlimit(20000)\nseen = []\n\
+for f, n in [(prog.down, 2000), (prog.shallow, 5), (prog.shallow, 5)]:\n    try:\n        f(n)\n    except Exception as error:\n        seen.append((type(error).__name__, lotml_rt.depth()))\n\
+print(seen, prog.down(999))";
+    let out = run_script("host-catches", &source, script);
+    assert_eq!(
+        text(&out.stdout),
+        "[('RecursionError', 0), ('IndexError', 0), ('IndexError', 0)] 999\n",
+        "{}",
+        text(&out.stderr)
+    );
+}
