@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 3f8484b9736a2594b6b10699647e3ad0eda0102464aba876e0c7ddd845ebb92f
+checksum: c785ac791afe3364ac8dd9a3558819e6f14c86db71598967d6e80357ca0eb069
 ---
 
 # Bind sources
@@ -45,14 +45,16 @@ Done when bind reads package stubs and annotations, the venv is used, and the AD
 
 ## Tasks
 
-- [ ] 1.1 (Unit) When typeshed has no stub for a module, read the package's own `.pyi`, then its annotated `.py`, statically and never by importing it, and say in the interface which source it came from
+- [x] 1.1 (Unit) When typeshed has no stub for a module, read the package's own `.pyi`, then its annotated `.py`, statically and never by importing it, and say in the interface which source it came from
 - [ ] 1.2 (Unit) Prefer the interpreter of the project's virtual environment for `lotml
       run` and `lotml test`, after `LOTML_PYTHON`: `VIRTUAL_ENV`, then a `.venv/` that
       resolves inside the project root without a link out of it; `lotml bind`, the MCP
       tools and the grader keep the interpreter they find today
   _Status removed_
   _Reason folded into plans/python-via-uv.md 1.3, which resolves the venv as one step of the interpreter order adr:0026 decides_
-- [ ] 2.1 (Unit) Write a proposed ADR on reading stubs without Python — `ruff_python_parser` and an embedded typeshed taken from typeshed under its own license — amending adr:0012, for the owner to decide
+- [ ] 2.1 (Unit) Write a proposed ADR on reading stubs without Python
+  _Status removed_
+  _Reason adr:0032 is this record: it decides reading stubs without Python, ruff_python_parser and an embedded typeshed, and was accepted_
 
 ## Done when
 

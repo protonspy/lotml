@@ -73,20 +73,26 @@ pub fn resolve(
         .ok_or_else(|| format!("uv installed CPython {VERSION}, and then could not find it"))
 }
 
-/// The interpreter of the virtual environment `VIRTUAL_ENV` names, or of the project's `.venv/`:
-/// one holding `pyvenv.cfg`, inside the project once its links are followed, in a project root
-/// that is no drive's root and that nobody else may write to, and owned by whoever owns the root —
-/// so a `.venv` another user left above the project is never run.
+/// The interpreter of the virtual environment [`environment`] finds.
 fn virtual_environment(var: &dyn Fn(&str) -> Option<OsString>, project: Option<&Path>) -> Option<PathBuf> {
-    let interpreter = |venv: &Path| {
-        let python =
-            if cfg!(windows) { venv.join("Scripts").join("python.exe") } else { venv.join("bin").join("python") };
-        python.is_file().then_some(python)
-    };
+    interpreter(&environment(var, project)?)
+}
+
+/// The interpreter a virtual environment holds.
+fn interpreter(venv: &Path) -> Option<PathBuf> {
+    let python = if cfg!(windows) { venv.join("Scripts").join("python.exe") } else { venv.join("bin").join("python") };
+    python.is_file().then_some(python)
+}
+
+/// The virtual environment `VIRTUAL_ENV` names, or the project's `.venv/`: one holding
+/// `pyvenv.cfg` and an interpreter, inside the project once its links are followed, in a project
+/// root that is no drive's root and that nobody else may write to, and owned by whoever owns the
+/// root — so a `.venv` another user left above the project is never run, nor read by `bind`.
+pub fn environment(var: &dyn Fn(&str) -> Option<OsString>, project: Option<&Path>) -> Option<PathBuf> {
     if let Some(active) = var("VIRTUAL_ENV").map(PathBuf::from).filter(|p| p.is_absolute())
-        && let Some(python) = interpreter(&active)
+        && interpreter(&active).is_some()
     {
-        return Some(python);
+        return Some(active);
     }
     let root = project?.canonicalize().ok()?;
     let venv = root.join(".venv").canonicalize().ok()?;
@@ -101,7 +107,8 @@ fn virtual_environment(var: &dyn Fn(&str) -> Option<OsString>, project: Option<&
             return None;
         }
     }
-    interpreter(&venv)
+    interpreter(&venv)?;
+    Some(venv)
 }
 
 /// uv's managed interpreters, from its confined calls (adr:0026), saying what it downloads.

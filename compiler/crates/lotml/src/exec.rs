@@ -547,11 +547,32 @@ pub fn bind(module: &str, stub: Option<&Path>, out: &Path, offline: bool) -> Res
         )));
     }
     let python = python(Use::Bind, None, !offline)?;
-    let output = interpreter(&python, lotml_py::BIND)
-        .arg(module)
-        .arg(stub.map(|s| s.as_os_str().to_owned()).unwrap_or_default())
-        .output()
-        .map_err(|e| Failure(format!("cannot run Python: {e}")))?;
+    let binder = |stub: Option<&Path>, said: &str| {
+        interpreter(&python, lotml_py::BIND)
+            .arg(module)
+            .arg(stub.map(|s| s.as_os_str().to_owned()).unwrap_or_default())
+            .arg(said)
+            .output()
+            .map_err(|e| Failure(format!("cannot run Python: {e}")))
+    };
+    let mut output = binder(stub, "")?;
+    // 3: typeshed has no stub, so the project's packages are looked in (plans/bind-sources.md 1.1).
+    if stub.is_none() && output.status.code() == Some(3) {
+        let var = |name: &str| std::env::var_os(name);
+        let here = std::env::current_dir().ok();
+        let venv = lotml_py::resolve::environment(&var, here.as_deref().and_then(project_of).as_deref());
+        let roots = venv.as_deref().map(lotml_py::sources::site_packages).unwrap_or_default();
+        let Some(source) = lotml_py::sources::find(module, &roots).map_err(Failure)? else {
+            let looked = match &venv {
+                Some(venv) => format!("nor does any package in {}", venv.display()),
+                None => "and no virtual environment of the project was found to look in".into(),
+            };
+            return Err(Failure(format!(
+                "no stub for `{module}`: typeshed has none, {looked}; give one with --stub <file.pyi>"
+            )));
+        };
+        output = binder(Some(&source.path), &source.said)?;
+    }
     if !output.status.success() {
         return Err(Failure(String::from_utf8_lossy(&output.stderr).trim().to_string()));
     }
