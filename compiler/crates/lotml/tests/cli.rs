@@ -590,6 +590,31 @@ fn a_project_with_a_uv_lock_runs_in_the_environment_lotml_makes_from_it() {
 }
 
 #[test]
+fn run_and_test_make_a_lock_s_environment_before_they_compile() {
+    let Ok(Some(_)) = lotml_py::uv::find(&lotml_py::uv::Places::here()) else { return };
+    let Some(python) = lotml_py::python() else { return };
+    let broken = "fn main():
+    print(nothing)
+";
+    for (command, name) in [("run", "lock-first-run"), ("test", "lock-first-test")] {
+        let dir =
+            scratch(name, &[(".git", ""), ("pyproject.toml", APP_PYPROJECT), ("uv.lock", APP_LOCK), ("p.lot", broken)]);
+        let cache = dir.join("cache");
+        let out = isolated(env!("CARGO_BIN_EXE_lotml"), &dir)
+            .args([command, "p.lot"])
+            .env("LOTML_CACHE_DIR", &cache)
+            .env("LOTML_PYTHON", &python[0])
+            .env_remove("VIRTUAL_ENV")
+            .env_remove("LOTML_OFFLINE")
+            .output()
+            .expect("the binary runs");
+        assert_eq!(out.status.code(), Some(1), "{command}: the program does not compile: {}", stdout(&out));
+        let made = std::fs::read_dir(cache.join("python-environments")).map_or(0, |d| d.count());
+        assert!(made > 0, "{command}: the environment was made first: {}", String::from_utf8_lossy(&out.stderr));
+    }
+}
+
+#[test]
 fn offline_a_lock_with_no_environment_made_installs_nothing_and_says_so() {
     let pyproject = APP_PYPROJECT.replace("version = \"0.1.0\"", "version = \"0.1.1\"");
     let lock = APP_LOCK.replace("version = \"0.1.0\"", "version = \"0.1.1\"");

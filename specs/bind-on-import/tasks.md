@@ -7,7 +7,7 @@
   _Depends 1.1_
 - [x] 1.3 (Unit) Generate, in `files::interfaces_for`, the interface of each `py.` module a file imports that no bindings file covers, and key `InterfaceCache` by the imports too, so `check`, `run`, `test`, the language server and the MCP server all bind on import — R1.1
   _Depends 1.2_
-- [ ] 1.4 (Unit) Make the lock's environment in `run` and `test` before their interfaces are collected — R1.3
+- [x] 1.4 (Unit) Make the lock's environment in `run` and `test` before their interfaces are collected — R1.3
   _Depends 1.3_
 - [ ] 1.5 (Unit) Report a `py.` import bound from no stub, or from a stub that binds nothing, with the reason and "`lotml bind <module>` tells why" — R1.4
   _Depends 1.3_

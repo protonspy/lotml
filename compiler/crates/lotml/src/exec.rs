@@ -85,6 +85,13 @@ fn write(path: &Path, text: &str) -> Result<(), Failure> {
     std::fs::write(path, text).map_err(|e| Failure(format!("cannot write {}: {e}", path.display())))
 }
 
+/// Whether the project at `project` holds a `uv.lock`: then `run` and `test` make its environment
+/// before they compile, so its packages' stubs are there to bind (specs/bind-on-import/ R1.3);
+/// without one, Python is resolved after, and a program that does not compile needs none.
+fn locks(project: Option<&Path>) -> bool {
+    project.is_some_and(|p| p.join("uv.lock").is_file())
+}
+
 /// The CPython to run, resolved in adr:0026's order (lotml_py::resolve): `uses` says whether the
 /// project's virtual environment may run it, `project` where that is, and `downloads` whether a
 /// missing CPython may be fetched, or a project's dependencies installed, through uv. A project
@@ -326,9 +333,14 @@ pub fn run(path: &Path, target: Target, offline: bool, as_json: bool) -> Result<
         }
         return Ok(status);
     }
+    let project = project_of(path);
+    let early = locks(project.as_deref()).then(|| python(Use::Run, project.as_deref(), !offline)).transpose()?;
     let Some(modules) = compile_or_report(&[path.to_path_buf()], &scratch.0)? else { return Ok(1) };
     let name = &modules[0].name;
-    let python = python(Use::Run, project_of(path).as_deref(), !offline)?;
+    let python = match early {
+        Some(python) => python,
+        None => python(Use::Run, project.as_deref(), !offline)?,
+    };
     let script = format!(
         "{}import lotml_rt\nsys.exit(lotml_rt.main({name}))",
         search_path(&scratch.0),
@@ -498,12 +510,16 @@ pub fn test_report(
     record: bool,
 ) -> Result<(u8, String), Failure> {
     let scratch = Scratch::new()?;
+    let project = paths.first().and_then(|p| project_of(p));
+    let early = locks(project.as_deref()).then(|| python(Use::Run, project.as_deref(), downloads)).transpose()?;
     let modules = match compile(paths, &scratch.0)? {
         Ok(modules) => modules,
         Err(report) => return Ok((1, report)),
     };
-    let project = paths.first().and_then(|p| project_of(p));
-    let python = python(Use::Run, project.as_deref(), downloads)?;
+    let python = match early {
+        Some(python) => python,
+        None => python(Use::Run, project.as_deref(), downloads)?,
+    };
     let listed: Vec<Value> = modules.iter().map(|m| json!([m.name, m.source.display().to_string()])).collect();
     // The modules go in on standard input: a command line holding hundreds of paths passes
     // Windows' limit of 32,767 characters.
