@@ -131,3 +131,34 @@ fn todo_and_a_failed_assert_stop_the_program() {
         "main",
     );
 }
+
+#[test]
+fn a_negative_float_to_a_fractional_power_stops_the_program_on_both_targets() {
+    // Found by the harness's differential fuzzer (plans/target-parity-assurance.md 2.4): CPython
+    // gives a complex number, which no lotml type holds.
+    panics(
+        "negative-power",
+        "fn main():\n    x = -1.5\n    print(x ** 2.0)\n    print(x ** 0.1)\n",
+        "2.25\n",
+        "ValueError: a negative number to a fractional power",
+        4,
+        "main",
+    );
+}
+
+#[test]
+fn a_sum_of_ints_traps_where_its_additions_written_out_would() {
+    // Found by the harness's differential fuzzer (plans/target-parity-assurance.md 2.5): the
+    // Python target summed exactly and checked only the result.
+    let Some(runs) = common::parity(
+        "sum-partial",
+        "fn main():\n    xs = [3, 9223372036854775807, -7]\n    print(len(xs))\n    print(sum(xs))\n",
+    ) else {
+        return;
+    };
+    for run in &runs {
+        assert_eq!((run.stdout.as_str(), run.code), ("3\n", Some(101)), "{}", run.stderr);
+        assert!(run.stderr.contains("panic: Overflow"), "{}", run.stderr);
+    }
+    common::parity("sum-fits", "fn main():\n    print(sum([9223372036854775807, -7, 3]))\n");
+}

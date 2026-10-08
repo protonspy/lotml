@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: e04bd01c60d16d53e7f144c68c2d9b2cd8960ddb902f16d46b3a99b51d527b59
+checksum: 6e0872f46c994c7d50eac6831e93a4ed25dac3e5310f6093eedbcf58ac9e9b9a
 ---
 
 # Target parity assurance
@@ -55,15 +55,23 @@ targets. See `docs/wiki/pages/target-parity.md`.
   _Depends 1.1_
 - [x] 1.3 (Unit) Group the suite's `refused` and `not compiled` programs by message into a committed JSON beside the report
 - [x] 1.4 (Unit) Run the parity suite's built executables with a minimal environment, so no variable reaches a program by accident, while the build keeps what finds `clang` (`PATH`, `LOTML_CLANG`, `SystemRoot` on Windows)
-- [ ] 2.1 (Unit) Build a two-target differential fuzzer in the harness: typed programs from templates and from `lotml dev mutate`, many cases batched into one `main`, the Python target as oracle, verdicts compared by error kind rather than by bytes; each case gets a wall-clock timeout and a throw-away working directory, and the templates generate no imports and no file access
-- [ ] 2.2 (Unit) Minimize a failing fuzzer case by deleting chunks greedily while it still differs, and write it out as a parity program
+- [x] 2.1 (Unit) Build a two-target differential fuzzer in the harness: typed programs from templates and from `lotml dev mutate`, many cases batched into one `main`, the Python target as oracle, verdicts compared by error kind rather than by bytes; each case gets a wall-clock timeout and a throw-away working directory, and the templates generate no imports and no file access
+- [x] 2.2 (Unit) Minimize a failing fuzzer case by deleting chunks greedily while it still differs, and write it out as a parity program
   _Depends 2.1_
-- [ ] 2.3 (Unit) Build the fuzzer's native programs with `LOTML_SANITIZE` and check `lt_live_cells` at exit, so a counting bug shows even when the output agrees
+- [x] 2.3 (Unit) Build the fuzzer's native programs with `LOTML_SANITIZE` and check `lt_live_cells` at exit, so a counting bug shows even when the output agrees
   _Depends 2.1_
 - [ ] 3.1 (Unit) Run the LLVM tests of `compiler/crates/lotml-llvm/tests/` on a Windows runner in CI, triggered on `push` and `pull_request` and never on `pull_request_target`
 - [ ] 3.2 (Unit) Read built executables and libraries with a dependency-free PE and ELF reader in tests: a native program imports no libpython (adr:0025), and a `--shared` library exports exactly its C ABI set; the readers bound every read and return an error on a truncated file
 - [ ] 3.3 (Unit) Derive a conformance matrix from a manifest in which each parity program declares the language rules it proves and the ones it leaves out
 - [ ] 4.1 (Unit) Specify, as a new spec named recursion-depth, one recursion limit both targets enforce with the same error, and the stack size native programs reserve for it
+- [x] 2.4 (Unit) Make the Python target's `**` of a negative finite base to a finite
+      fractional exponent panic with `ValueError`, as the LLVM target does, instead of
+      returning a complex number an `f64` cannot hold
+  _Reason found by the differential fuzzer of 2.1 (seed 7): `(-1.5) ** 0.1` printed a complex on the Python target and panicked on the LLVM target_
+- [x] 2.5 (Unit) Make the Python target's `sum` of integers check each partial sum
+      against i64 as `+` does, so it traps where the native target and the same
+      additions written out trap, instead of checking only the result
+  _Reason found by the differential fuzzer of 2.1 (seeds 2, 3, 4, 6): `sum([3, 9223372036854775807, -7])` printed on the Python target and trapped on the LLVM target_
 
 ## Done when
 

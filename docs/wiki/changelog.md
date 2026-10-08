@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-07 — the differential fuzzer built: [[target-parity]] says what it compares and the two differences it found
 - 2026-10-07 — the parity floor built: [[target-parity]] says what CI holds the suite to and what a program needs to leave it
 - 2026-10-07 — the frontend fuzzed: [[target-parity]] says the frontend fuzzer is built (adr:0027) and what its first run found
 - 2026-10-07 — the runtime's object cached per user: [[transpilation-strategy]] says it is compiled once per toolchain and flags (adr:0025), [[compiler-performance]] gives the build before and after
