@@ -8,7 +8,7 @@ from pathlib import Path
 
 from lotml_harness.experiments import binding_coverage as bc
 
-BINDER = bc.load_binder(bc.BINDER)
+COMPILER = bc.COMPILER
 
 
 def write(path: Path, text: str = "") -> Path:
@@ -100,7 +100,7 @@ def test_a_module_counts_the_public_names_lotml_bind_binds_and_one_without_a_stu
         "class R:\n    def roll(self, n: int) -> int: ...\n_inst: R\nroll = _inst.roll\n"
         "def pick(xs: object) -> int: ...\ndef seed(n: int) -> None: ...\n",
     )
-    measured = bc.measure(bc.Module("rand", "pypi", "types-rand"), BINDER, None, purelib)
+    measured = bc.measure(bc.Module("rand", "pypi", "types-rand"), COMPILER, None, purelib)
     assert (measured.stub, measured.public, measured.bound) == (
         "rand-stubs/__init__.pyi",
         4,
@@ -109,7 +109,7 @@ def test_a_module_counts_the_public_names_lotml_bind_binds_and_one_without_a_stu
     assert measured.share == 0.5
     assert measured.reachable == ["pick"], "`object` is bound as a `PyObject`: reachable, not typed"
     assert measured.reached == 0.75
-    missing = bc.measure(bc.Module("absent", "pypi", "absent"), BINDER, None, purelib)
+    missing = bc.measure(bc.Module("absent", "pypi", "absent"), COMPILER, None, purelib)
     assert (missing.stub, missing.public, missing.share) == (None, 0, 0.0)
 
 
