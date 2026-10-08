@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-08 — the per-item check built and measured: [[compiler-performance]] says a body edit takes 38% of a check from an empty database
 - 2026-10-08 — the per-item check specified: [[compiler-performance]] points at `specs/incremental-check/`
 - 2026-10-08 — interfaces read once per change: [[compiler-performance]] says what a one-line edit costs before and after
 - 2026-10-07 — recursion depth specified: [[target-parity]] points at `specs/recursion-depth/`

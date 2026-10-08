@@ -41,21 +41,28 @@ operation. adr:0021-compiler-in-rust-with-llvm-as-its-native-code-generator stan
 
 ## Checking: salsa at the right grain
 
-`lotml-db` has two coarse spots:
+`lotml-db` had two coarse spots:
 
-- the `checked` query checks a whole file, and its results carry absolute spans, so one keystroke
-  re-checks every function;
+- the `checked` query checked a whole file, and its results carried absolute spans, so one
+  keystroke re-checked every function;
 - `interfaces()` was a plain function rather than a tracked query, so every `.lotmli` was parsed
   again on each check.
 
-The second is fixed (plans/build-and-check-speed.md): `interfaces()` is a tracked query, and a
-file's interfaces are an input of high durability, so an edit to the text reads them no more. In
-a generated file of 2254 lines importing from 800 Python signatures, a one-line body edit went
-from 6.58 ms to 5.39 ms to re-check, against 6.61 ms from an empty database
-(`harness/results/check-speed.md`). The first stands: the rest of the edit is the whole file
-parsed and checked again. `specs/incremental-check/` specifies the split: one check per item
-against signatures whose spans are relative to their item, assembled into the file's report and
-held equal to the whole-file check.
+Both are fixed. `interfaces()` is a tracked query, and a file's interfaces are an input of high
+durability, so an edit to the text reads them no more (plans/build-and-check-speed.md). In a
+generated file of 2254 lines importing from 800 Python signatures, that took a one-line body edit
+from 6.58 ms to 5.39 ms to re-check, against 6.61 ms from an empty database.
+
+Then `specs/incremental-check/` split the check: each function, method, record and test is an
+item checked in a query of its own against the file's signatures, every span relative to the
+item, and the file's report is assembled from the items moved to their places. The whole file is
+still parsed on each edit, and its declarations collected again; a signature's spans relative to
+its function keep the signatures equal across a body edit, so only the edited item is checked
+again. The same edit now takes 2.91 ms, 38% of the 7.66 ms from an empty database: within the
+half R3.1 asks. The check from an empty database is 16% slower than the 6.61 ms it replaces, for
+the items split out and the assembly, within the 25% R3.2 allows; the whole-file check the
+backends call went from 4.40 ms to 4.63 ms (`harness/results/check-speed.md`, label `items`). Of
+the 2.91 ms, parsing the whole file is 2.02: parsing a piece at a time is what is left.
 
 ty runs on the same salsa 0.28 at a finer grain. It has a type query per scope and per definition,
 and a query whose result comes out unchanged does not re-run the queries that depend on it
@@ -64,8 +71,8 @@ are assumed not to change (`ruff_db/src/files.rs`). mun splits a function's sign
 body, so editing a body leaves every caller's check untouched.
 
 lotml has an advantage over both: signatures are fully annotated, so a function can be checked
-without its callers' bodies. The split is per-function check queries with spans relative to their
-item, and interfaces as tracked inputs with high durability.
+without its callers' bodies. That is the split built: per-item check queries with spans relative
+to their item, and interfaces as tracked inputs with high durability.
 
 ## Native hot paths
 

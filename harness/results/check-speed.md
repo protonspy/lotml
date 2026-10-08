@@ -41,3 +41,19 @@ Reading the interfaces alone takes 22% as long as the edit.
 After the edit the check takes 82% of one from an empty database, within the 100 ms budget.
 
 Reading the interfaces alone takes 27% as long as the edit.
+
+## items
+
+2254 lines in 250 functions, importing from 4 modules declaring 800 functions, on Windows AMD64.
+
+| step | ms |
+| --- | ---: |
+| parse | 2.02 |
+| interfaces | 1.38 |
+| check | 4.63 |
+| cold | 7.66 |
+| edit | 2.91 |
+
+After the edit the check takes 38% of one from an empty database, within the 100 ms budget.
+
+Reading the interfaces alone takes 47% as long as the edit.
