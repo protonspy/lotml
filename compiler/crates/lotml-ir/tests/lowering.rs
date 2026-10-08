@@ -77,9 +77,9 @@ fn a_span_names_the_line_it_starts_on_counting_from_one() {
 }
 
 fn textwrap() -> Interfaces {
-    let (found, problems) = interface_of("textwrap", "fn dedent(text: str) -> str ! PyError\n");
+    let (found, problems) = interface_of("py.textwrap", "fn dedent(text: str) -> str ! PyError\n");
     assert!(problems.is_empty(), "{:?}", problems.iter().map(|d| &d.message).collect::<Vec<_>>());
-    Interfaces::from([("textwrap".to_string(), found)])
+    Interfaces::from([("py.textwrap".to_string(), found)])
 }
 
 fn python_calls(lowered: &Lowered) -> Vec<(String, String, Ty)> {
@@ -99,13 +99,13 @@ fn a_call_into_a_python_module_is_a_python_call_whichever_way_it_was_imported() 
     let py_error = Ty::Adt("PyError".into(), vec![]);
     let returns = Ty::Result(Box::new(Ty::Str), Box::new(py_error));
     for source in [
-        "from textwrap import dedent\n\nfn f(s: str) -> str ! PyError:\n    return dedent(s)?\n",
-        "import textwrap\n\nfn f(s: str) -> str ! PyError:\n    return textwrap.dedent(s)?\n",
+        "from py.textwrap import dedent\n\nfn f(s: str) -> str ! PyError:\n    return dedent(s)?\n",
+        "import py.textwrap\n\nfn f(s: str) -> str ! PyError:\n    return py.textwrap.dedent(s)?\n",
     ] {
         let lowered = lowered_with(source, &textwrap());
         assert_eq!(
             python_calls(&lowered),
-            [("textwrap".to_string(), "dedent".to_string(), returns.clone())],
+            [("py.textwrap".to_string(), "dedent".to_string(), returns.clone())],
             "{source}"
         );
     }
@@ -113,13 +113,13 @@ fn a_call_into_a_python_module_is_a_python_call_whichever_way_it_was_imported() 
 
 #[test]
 fn each_python_import_is_kept_with_its_span_for_a_target_without_python() {
-    let source = "from math import sqrt\nfrom textwrap import dedent\n\nfn f(s: str) -> str ! PyError:\n    print(sqrt(2.0))\n    return dedent(s)?\n";
+    let source = "from math import sqrt\nfrom py.textwrap import dedent\n\nfn f(s: str) -> str ! PyError:\n    print(sqrt(2.0))\n    return dedent(s)?\n";
     let lowered = lowered_with(source, &textwrap());
     let [(module, span)] = lowered.python_imports.as_slice() else {
-        panic!("only textwrap is Python, math is the language's: {:?}", lowered.python_imports)
+        panic!("only py.textwrap is Python, math is the language's: {:?}", lowered.python_imports)
     };
-    assert_eq!(module, "textwrap");
-    assert!(source[span.start as usize..span.end as usize].starts_with("from textwrap import dedent"));
+    assert_eq!(module, "py.textwrap");
+    assert!(source[span.start as usize..span.end as usize].starts_with("from py.textwrap import dedent"));
 }
 
 #[test]

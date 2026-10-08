@@ -190,10 +190,15 @@ Phase 2 built both directions of R14 and R27 on one checked boundary
   and `lotml test` still see the program unwrapped.
 - **lotml calling Python.** `lotml bind <module> --stub <file.pyi>` reads a stub with Python's own
   parser — typeshed's, from an installed mypy or jedi, when no stub is given — and writes
-  `bindings/<module>.lotmli`, an interface of bodyless signatures each returning `T ! PyError`.
+  `bindings/py.<module>.lotmli`, an interface of bodyless signatures each returning `T ! PyError`;
+  names typeshed writes as methods of a module-level instance, `randint = _inst.randint`, are
+  bound from those methods.
   Unions other than `X | None`, `Any`, callables, overloads and classes are listed in comments
   with the reason rather than half-bound; an optional parameter whose default is not a literal is
-  written `= todo()`. `import m` finds the nearest `bindings/m.lotmli` up the directory tree. At
+  written `= todo()`. A program imports the module by its origin, `import py.m` or `from py.m
+  import f` (adr:0029-foreign-modules-are-imported-by-origin-and-their-interfaces-generated),
+  which finds the nearest `bindings/py.m.lotmli` up the directory tree; a bare `import m` names a
+  LotML module only. At
   run time any exception, and any returned value that does not match the declared type, is
   `Err(PyError(kind, message))`.
 - **lotml calling C** (R17, adr:0013-c-libraries-through-interfaces-named-c). An interface named

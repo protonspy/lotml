@@ -354,10 +354,12 @@ steps = math.floor(d)
 - `Heap[T]`: `Heap(items)`, `push(v)`, `pop_min() -> T?`, `peek() -> T?`, `len(h)`.
 - `math`: `sqrt`, `floor`, `ceil`, `pow`, `log`, `exp`, `sin`, `cos`, `pi`, `inf`, `gcd`,
   `isqrt`.
-- A Python module is imported once `lotml bind <module>` has written its interface from the
-  module's stub: `from textwrap import dedent`, then `text = dedent(raw)?`. Each of its functions
-  returns `T ! PyError`, since any call into Python can fail; `PyError(kind, message)` is in the
-  prelude.
+- A Python module is imported by its origin, `py.`, once `lotml bind <module>` has written its
+  interface from the module's stub, `bindings/py.<module>.lotmli`: `from py.textwrap import
+  dedent`, then `text = dedent(raw)?`; or `import py.textwrap`, then
+  `py.textwrap.dedent(raw)?`. A bare `import textwrap` names a LotML module only. Each of its
+  functions returns `T ! PyError`, since any call into Python can fail; `PyError(kind, message)`
+  is in the prelude.
 - A C library is imported from its interface, written by hand in `bindings/c.<library>.lotmli`:
   `from c.m import cos`. Its functions take and return numbers, `bool` and (taken only) `str`,
   and cannot fail.

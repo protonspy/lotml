@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 036c326256e1b17e3f88651f5bba005bff4d090d0b5e59e86751210ff385da2f
+checksum: e8ed796b8a64678d2fb05886d0cba2ebcc1cbadfce3b3786946bca59f1b69578
 ---
 
 # Python compatibility
@@ -69,7 +69,7 @@ the typed share each spec added.
 - [x] 1.2 (Unit) Write and build the spec binding-coverage: a fixed corpus of the standard library
   and the most downloaded PyPI packages, the share of public names bound typed per module, and
   the report the harness writes
-- [ ] 1.3 (Unit) Write and build the spec origin-imports: `import py.<module>` and `from
+- [x] 1.3 (Unit) Write and build the spec origin-imports: `import py.<module>` and `from
   py.<module> import`, a bare import of a Python module an error suggesting `py.<name>`, and the
   tests, guide and reference moved to it
   (adr:0029-foreign-modules-are-imported-by-origin-and-their-interfaces-generated)

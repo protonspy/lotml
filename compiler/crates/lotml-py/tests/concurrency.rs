@@ -22,7 +22,7 @@ fn run(name: &str, source: &str) -> Output {
     let path = dir.join("prog.lotml");
     std::fs::write(&path, source).unwrap();
     let time = interface("fn sleep(secs: f64) -> None ! PyError\nfn monotonic() -> f64 ! PyError\n").0;
-    let interfaces = Interfaces::from([("time".to_string(), time)]);
+    let interfaces = Interfaces::from([("py.time".to_string(), time)]);
     let compiled = compile_with(source, &path, &interfaces).unwrap_or_else(|d| panic!("{source}\n{d:#?}"));
     std::fs::write(dir.join("prog.py"), compiled.module).unwrap();
     std::fs::write(dir.join("lotml_rt.py"), RUNTIME).unwrap();
@@ -68,10 +68,10 @@ fn a_task_that_blocks_holds_up_only_itself() {
     // Four tasks that each sleep 0.4 s finish in about 0.4 s, not 1.6 s.
     let out = run(
         "blocking",
-        "import time\n\nfn nap() -> int ! PyError:\n    time.sleep(0.4)?\n    return 1\n\n\
-         fn main() -> None ! PyError:\n    start = time.monotonic()?\n\
+        "import py.time\n\nfn nap() -> int ! PyError:\n    py.time.sleep(0.4)?\n    return 1\n\n\
+         fn main() -> None ! PyError:\n    start = py.time.monotonic()?\n\
          \x20   results = parallel([lambda: nap(), lambda: nap(), lambda: nap(), lambda: nap()])\n\
-         \x20   elapsed = time.monotonic()? - start\n    var done = 0\n    for r in results:\n        done += r?\n\
+         \x20   elapsed = py.time.monotonic()? - start\n    var done = 0\n    for r in results:\n        done += r?\n\
          \x20   print(done)\n    print(elapsed < 1.2)\n",
     );
     assert_eq!(stdout(&out), "4\nTrue\n", "{}", String::from_utf8_lossy(&out.stderr));

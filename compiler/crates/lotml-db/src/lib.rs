@@ -291,7 +291,7 @@ mod tests {
         file.set_text(&mut db).to(signature);
         assert!(diagnostics(&db, file).is_empty());
         assert_eq!(db.item_checks(), all, "a signature changed, and every item is checked against it");
-        file.set_interfaces(&mut db).to(vec![("textwrap".into(), "fn dedent(text: str) -> str ! PyError\n".into())]);
+        file.set_interfaces(&mut db).to(vec![("py.textwrap".into(), "fn dedent(text: str) -> str ! PyError\n".into())]);
         assert!(diagnostics(&db, file).is_empty());
         assert_eq!(db.item_checks(), all, "the interfaces changed");
     }
@@ -308,10 +308,10 @@ mod tests {
     #[test]
     fn diagnostics_follow_the_interfaces() {
         let mut db = Database::default();
-        let text = "from textwrap import dedent\n\nfn f(s: str) -> str ! PyError:\n    return dedent(s)?\n";
+        let text = "from py.textwrap import dedent\n\nfn f(s: str) -> str ! PyError:\n    return dedent(s)?\n";
         let file = SourceFile::create(&db, "f.lotml".into(), text.into(), vec![]);
         assert_eq!(diagnostics(&db, file)[0].code, "E0216", "no module to import");
-        let textwrap = ("textwrap".to_string(), "fn dedent(text: str) -> str ! PyError\n".to_string());
+        let textwrap = ("py.textwrap".to_string(), "fn dedent(text: str) -> str ! PyError\n".to_string());
         file.set_interfaces(&mut db).to(vec![textwrap]);
         assert!(diagnostics(&db, file).is_empty());
     }
@@ -319,13 +319,13 @@ mod tests {
     #[test]
     fn an_edit_to_the_text_reads_the_interfaces_no_more() {
         let mut db = Database::default();
-        let text = "from textwrap import dedent
+        let text = "from py.textwrap import dedent
 
 fn f(s: str) -> str ! PyError:
     return dedent(s)?
 ";
         let textwrap = (
-            "textwrap".to_string(),
+            "py.textwrap".to_string(),
             "fn dedent(text: str) -> str ! PyError
 "
             .to_string(),
@@ -491,10 +491,10 @@ test \"the origin\":
         let (before, after) = signatures_around(PARTS, &PARTS.replace("from math import sqrt\n", ""), vec![]);
         assert_ne!(before, after, "an import was removed");
         let mut db = Database::default();
-        let text = "from textwrap import dedent\n\nfn f(s: str) -> str ! PyError:\n    return dedent(s)?\n";
+        let text = "from py.textwrap import dedent\n\nfn f(s: str) -> str ! PyError:\n    return dedent(s)?\n";
         let file = SourceFile::create(&db, "f.lot".into(), text.into(), vec![]);
         let before = signatures(&db, file).clone();
-        file.set_interfaces(&mut db).to(vec![("textwrap".into(), "fn dedent(text: str) -> str ! PyError\n".into())]);
+        file.set_interfaces(&mut db).to(vec![("py.textwrap".into(), "fn dedent(text: str) -> str ! PyError\n".into())]);
         assert_ne!(&before, signatures(&db, file), "the interfaces changed");
     }
 

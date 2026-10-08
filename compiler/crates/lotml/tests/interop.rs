@@ -62,7 +62,7 @@ fn bind_writes_an_interface_from_a_stub() {
     let out = lotml(&["bind", "textwrap", "--stub", "stubs/textwrap.pyi"], &dir);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     assert!(stdout(&out).contains("4 functions bound, 2 not"), "{}", stdout(&out));
-    let interface = std::fs::read_to_string(dir.join("bindings").join("textwrap.lotmli")).unwrap();
+    let interface = std::fs::read_to_string(dir.join("bindings").join("py.textwrap.lotmli")).unwrap();
     assert!(interface.contains(
         "fn wrap(text: str, width: int = 70, max_lines: int? = None, placeholder: str = \" [...]\") -> [str] ! PyError\n"
     ));
@@ -107,7 +107,7 @@ fn bind_binds_the_names_a_stub_writes_as_methods_of_an_instance() {
     let dir = scratch("bind-aliases", &[("stubs/rand.pyi", ALIASES_PYI)]);
     let out = lotml(&["bind", "rand", "--stub", "stubs/rand.pyi"], &dir);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    let interface = std::fs::read_to_string(dir.join("bindings").join("rand.lotmli")).unwrap();
+    let interface = std::fs::read_to_string(dir.join("bindings").join("py.rand.lotmli")).unwrap();
     for bound in [
         "fn randint(a: int, b: int) -> int ! PyError\n",
         "fn binomialvariate(n: int = 1, p: f64 = 0.5) -> int ! PyError\n",
@@ -138,18 +138,18 @@ const LIAR_PYI: &str = "def count() -> int: ...\ndef boom(n: int) -> int: ...\n"
 #[test]
 fn a_lotml_program_calls_python_through_its_interface() {
     let program = "\
-from textwrap import dedent, wrap
-import liar
+from py.textwrap import dedent, wrap
+import py.liar
 
 fn main() -> None ! PyError:
     for line in wrap(dedent(\"    one two three four\")?, width=8)?:
         print(line)
-    match liar.count():
+    match py.liar.count():
         case Ok(n):
             print(n)
         case Err(e):
             print(e.kind)
-    match liar.boom(3):
+    match py.liar.boom(3):
         case Ok(n):
             print(n)
         case Err(e):
