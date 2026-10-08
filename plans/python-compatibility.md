@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 9272749ffeca3b409ac9af6351d9ff55f2323ea45eadaace1bb38fff5a2b4b88
+checksum: 9ecf40683bb812640b18df5aedf45937a5697269e3b1b60f5c867dbd262d64be
 ---
 
 # Python compatibility
@@ -96,7 +96,7 @@ the typed share each spec added.
   _Depends 3.1_
 - [ ] 4.1 (Unit) Write the wiki page on calling Python from LotML through `py.<module>`
   _Depends 2.4_
-- [ ] 2.6 (Unit) Write and build the spec rust-binder: `lotml bind` reads a stub with
+- [x] 2.6 (Unit) Write and build the spec rust-binder: `lotml bind` reads a stub with
       `ruff_python_parser` in Rust and needs no Python, with typeshed's `stdlib`
       vendored as text at a pinned commit and embedded in lotml, writing the interfaces
       the Python binder writes
