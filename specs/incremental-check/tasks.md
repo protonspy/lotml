@@ -7,7 +7,7 @@
   _Depends 1.1_
 - [x] 1.3 (Unit) Keep the file's declarations with their spans in the file, and its signatures with spans relative to the declaring item, equal across an edit inside a body — R1.3, R1.5
   _Depends 1.2_
-- [ ] 1.4 (TDD) Check each item in a query of its own against the signatures, shown first by a failing test that an edit inside one body runs one item check and an edit to a signature runs all — R1.1, R1.4, R1.5
+- [x] 1.4 (TDD) Check each item in a query of its own against the signatures, shown first by a failing test that an edit inside one body runs one item check and an edit to a signature runs all — R1.1, R1.4, R1.5
   _Depends 1.3_
 
 ## 2 · The file's report, and what it costs

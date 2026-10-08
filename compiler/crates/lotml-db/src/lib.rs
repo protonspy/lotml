@@ -1,7 +1,7 @@
 //! The compiler as queries over source files: each file is a Salsa input, and parsing and
 //! checking are tracked functions, so a query whose inputs did not change answers from memory.
 
-use lotml_check::{Checked, Declarations, Part, PartChecked, PartKind};
+use lotml_check::{Assembly, Checked, Declarations, Part, PartChecked, PartKind};
 use lotml_diag::Diagnostic;
 use lotml_syntax::Parsed;
 use lotml_syntax::ast::{self, FnDef, RecordDef, TestDef};
@@ -179,11 +179,16 @@ pub fn checked(db: &dyn salsa::Database, file: SourceFile) -> Checked {
     lotml_check::check_resolved_with(&parse(db, file).module, file.text(db), interfaces(db, file))
 }
 
-/// Every diagnostic of a file, in source order: syntax errors, then type errors.
+/// Every diagnostic of a file, in source order: syntax errors, then type errors, each item's
+/// moved to where the item is.
 #[salsa::tracked(returns(ref))]
 pub fn diagnostics(db: &dyn salsa::Database, file: SourceFile) -> Vec<Diagnostic> {
     let mut found: Vec<Diagnostic> = parse(db, file).errors.iter().map(lotml_check::syntax).collect();
-    found.extend(checked(db, file).diagnostics.iter().cloned());
+    let mut assembly = Assembly::new(declarations(db, file), false);
+    for &item in items(db, file) {
+        assembly.absorb(check_item(db, item), item.start(db));
+    }
+    found.extend(assembly.diagnostics());
     found.sort_by_key(|d| d.span.start);
     found
 }
