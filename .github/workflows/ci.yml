@@ -41,6 +41,30 @@ jobs:
           ASAN_OPTIONS: detect_leaks=0
         run: cargo test --manifest-path compiler/Cargo.toml --locked
 
+  llvm-windows:
+    # The LLVM target's tests on Windows, where the calling convention, the linker and the C
+    # library differ from Linux (plans/target-parity-assurance.md 3.1). The runner's LLVM is where
+    # its installer puts it, and Python is on PATH for the parity tests' oracle.
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+      - name: Clang
+        run: |
+          "/c/Program Files/LLVM/bin/clang.exe" --version
+          ls "/c/Program Files/LLVM/bin/llvm-objdump.exe"
+          python --version
+      - name: Test
+        run: cargo test --manifest-path compiler/Cargo.toml --locked -p lotml-llvm
+
   harness:
     runs-on: ubuntu-latest
     steps:

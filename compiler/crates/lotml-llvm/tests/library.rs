@@ -231,28 +231,19 @@ fn a_library_named_like_the_runtime_is_refused() {
     assert!(errors[0].message.contains("lt_init"), "{}", errors[0].message);
 }
 
-/// The symbols the library exports, as the platform's tool lists them: `llvm-readobj` beside
-/// `clang` on Windows, `nm` elsewhere; `None` when the tool is not there.
-fn exported(clang: &Clang, library: &Path) -> Option<Vec<String>> {
-    let out = if cfg!(windows) {
-        let tool = clang.program.parent()?.join("llvm-readobj.exe");
-        Command::new(tool).arg("--coff-exports").arg(library).output().ok()?
-    } else {
-        Command::new("nm").args(["-D", "--defined-only"]).arg(library).output().ok()?
-    };
-    let text = String::from_utf8_lossy(&out.stdout);
-    let names = if cfg!(windows) {
-        text.lines().filter_map(|l| l.trim().strip_prefix("Name: ")).map(str::to_string).collect()
-    } else {
-        // `T` is a function in the text section; the rest is what the linker defines itself.
-        text.lines()
-            .filter_map(|l| match l.split_whitespace().collect::<Vec<_>>()[..] {
-                [_, "T", name] if !name.starts_with('_') => Some(name.to_string()),
-                _ => None,
-            })
-            .collect()
-    };
-    Some(names)
+/// The functions the library exports, read from its bytes (plans/target-parity-assurance.md 3.2);
+/// on ELF, without the names starting `_` that the C runtime's start files define. `None` on a
+/// platform whose format the reader does not read, Mach-O.
+fn exported(library: &Path) -> Option<Vec<String>> {
+    let bytes = std::fs::read(library).expect("the library");
+    match common::objects::linkage(&bytes) {
+        Ok(linkage) => Some(linkage.exports.into_iter().filter(|n| !n.starts_with('_')).collect()),
+        Err(e) if cfg!(target_os = "macos") => {
+            eprintln!("skipped: {e}");
+            None
+        }
+        Err(e) => panic!("{}: {e}", library.display()),
+    }
 }
 
 #[test]
@@ -260,10 +251,7 @@ fn a_library_exports_its_functions_and_nothing_of_the_runtime() {
     let Some(clang) = clang() else { return };
     let exe = built(&clang, "symbols");
     let library = exe.parent().unwrap().join(library_file("geo"));
-    let Some(mut names) = exported(&clang, &library) else {
-        assert!(std::env::var_os("CI").is_none(), "CI has no tool listing a library's symbols");
-        return;
-    };
+    let Some(mut names) = exported(&library) else { return };
     names.sort();
     let wanted = ["geo_add", "geo_big", "geo_half", "geo_hello", "geo_pick", "geo_shout", "geo_small"];
     assert_eq!(names, wanted);

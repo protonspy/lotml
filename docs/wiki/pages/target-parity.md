@@ -94,6 +94,12 @@ what it proves and what it leaves out, as a core gap or as out of scope, and eac
 computed from those declarations, not written by hand. For lotml, each row is a language rule —
 overflow, `/` on integers, `match`, errors as values — and its status on each target.
 
+lotml's is built: `compiler/crates/lotml-llvm/tests/conformance.json` declares the rules and, for
+each of the 71 parity programs, the rules it proves and the ones it leaves out with why;
+`python -m lotml_harness.experiments.conformance` checks the manifest against the programs the tests
+run and writes `harness/results/parity/conformance.md`. It shows 26 of 28 rules proved, and no
+parity program yet proving optionals or `test` blocks.
+
 ## Rules both targets must enforce the same way
 
 Some behavior lives outside the IR and differs today:
@@ -103,8 +109,10 @@ Some behavior lives outside the IR and differs today:
   limit. Monty counts depth per call and charges its limits every 255 steps at about 2% cost.
   Edge-python charges an operation budget only on taken back-edges, calls and builtins that cost
   in proportion to size.
-- **Windows.** CI tests on Ubuntu, and the Windows release job only runs `--version`. Plix
+- **Windows.** CI tested on Ubuntu, and the Windows release job only runs `--version`. Plix
   shipped native code with the Unix calling convention against a runtime using the Windows one,
-  because its Windows CI ran only `--version`.
+  because its Windows CI ran only `--version`. CI now runs the LLVM target's tests on a Windows
+  runner too, and the tests read what a program imports and a library exports from the bytes,
+  with their own PE and ELF reader: a native program loads no libpython.
 
 The work is in `plans/target-parity-assurance.md`.

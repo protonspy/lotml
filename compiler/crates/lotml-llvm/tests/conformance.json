@@ -1,0 +1,518 @@
+{
+ "rules": {
+  "functions": "Functions and locals: definitions, calls, `var`, recursion (reference/lotml.md, Functions and locals)",
+  "numbers.int": "`int` arithmetic, Python's floor division and modulo, comparisons (Numbers)",
+  "numbers.overflow": "an integer result outside its type stops the program (Numbers)",
+  "numbers.float": "`f64` and `f32` arithmetic and Python's `repr` of a float (Numbers)",
+  "numbers.sized": "`i8` to `u64`, their ranges and conversions (Numbers)",
+  "numbers.division": "`/` of integers returns `f64` (adr:0007)",
+  "strings": "`str` literals, indexing and slicing by character, concatenation (Strings)",
+  "strings.methods": "the methods of `str`: split, join, find, strip and the rest (Strings)",
+  "strings.format": "f-strings and the format mini-language (Strings)",
+  "print": "`print` and `repr` of every kind of value, as Python prints them (Strings, Collections)",
+  "collections.lists": "lists, their literals, comprehensions, indexing, slicing and methods (Collections)",
+  "collections.dicts": "dicts in insertion order, their methods and comprehensions (Collections)",
+  "collections.sets": "sets and their operations (Collections)",
+  "collections.tuples": "tuples, unpacking, `enumerate` and `zip` (Collections)",
+  "records": "records: construction, fields, value semantics on assignment (Records)",
+  "sum-types": "sum types and `match` over their variants (Sum types and `match`)",
+  "optionals": "`T?`, `None`, `??` and narrowing (Optionals)",
+  "errors": "errors as values: `T ! E`, `fail`, `?`, an error out of `main` (Errors as values)",
+  "unfinished": "`todo()` and `assert` stopping the program (Unfinished code)",
+  "parameters": "parameters read, `inout` and `sink` (Parameters)",
+  "methods-traits": "methods in `impl` and traits with defaults (Methods and traits)",
+  "generics": "generic functions and types, and recursive types (Generics)",
+  "control-flow": "`if`, `elif`, `while`, `for` over ranges and collections, `break`, `continue` (Control flow)",
+  "lambdas": "lambdas and functions as values (Functions and locals)",
+  "concurrency": "`parallel` and a panic inside it (Concurrency)",
+  "prelude": "the prelude's functions: math, `sorted`, `min`, `max`, `sum` and the rest (Modules and the prelude)",
+  "tests": "`test` blocks and what `lotml test` reports of them (Tests)",
+  "memory": "every cell a program allocates is freed by its end, natively (adr:0003)"
+ },
+ "programs": {
+  "add": {
+   "proves": [
+    "functions",
+    "numbers.float"
+   ],
+   "leaves_out": {}
+  },
+  "adt": {
+   "proves": [
+    "records",
+    "sum-types",
+    "errors",
+    "print"
+   ],
+   "leaves_out": {}
+  },
+  "adt-free": {
+   "proves": [
+    "memory",
+    "records",
+    "sum-types"
+   ],
+   "leaves_out": {}
+  },
+  "assert": {
+   "proves": [
+    "unfinished"
+   ],
+   "leaves_out": {}
+  },
+  "by-value-and-inout": {
+   "proves": [
+    "parameters"
+   ],
+   "leaves_out": {}
+  },
+  "by-value-and-inout-free": {
+   "proves": [
+    "memory",
+    "parameters"
+   ],
+   "leaves_out": {}
+  },
+  "collatz": {
+   "proves": [
+    "functions",
+    "control-flow",
+    "numbers.int"
+   ],
+   "leaves_out": {}
+  },
+  "compare": {
+   "proves": [
+    "numbers.int",
+    "numbers.sized"
+   ],
+   "leaves_out": {}
+  },
+  "convert": {
+   "proves": [
+    "numbers.overflow",
+    "numbers.sized"
+   ],
+   "leaves_out": {}
+  },
+  "corpus": {
+   "proves": [
+    "functions",
+    "collections.lists",
+    "control-flow"
+   ],
+   "leaves_out": {}
+  },
+  "corpus-free": {
+   "proves": [
+    "memory"
+   ],
+   "leaves_out": {}
+  },
+  "dicts": {
+   "proves": [
+    "collections.dicts",
+    "collections.sets"
+   ],
+   "leaves_out": {}
+  },
+  "dicts-free": {
+   "proves": [
+    "memory",
+    "collections.dicts"
+   ],
+   "leaves_out": {}
+  },
+  "elif-chain": {
+   "proves": [
+    "control-flow"
+   ],
+   "leaves_out": {
+    "control-flow": "a chain past 256 branches is refused by the parser, not run"
+   }
+  },
+  "f-strings": {
+   "proves": [
+    "strings.format"
+   ],
+   "leaves_out": {
+    "strings.format": "a field nested in a spec (`{x:>{w}}`) is refused at check time, E0223"
+   }
+  },
+  "fib": {
+   "proves": [
+    "functions",
+    "numbers.int"
+   ],
+   "leaves_out": {}
+  },
+  "floats": {
+   "proves": [
+    "numbers.float"
+   ],
+   "leaves_out": {}
+  },
+  "flow": {
+   "proves": [
+    "control-flow",
+    "functions"
+   ],
+   "leaves_out": {}
+  },
+  "free-nested": {
+   "proves": [
+    "memory",
+    "collections.lists"
+   ],
+   "leaves_out": {}
+  },
+  "free-strings": {
+   "proves": [
+    "memory",
+    "strings"
+   ],
+   "leaves_out": {}
+  },
+  "free-values": {
+   "proves": [
+    "memory",
+    "collections.lists"
+   ],
+   "leaves_out": {}
+  },
+  "generics": {
+   "proves": [
+    "generics"
+   ],
+   "leaves_out": {}
+  },
+  "generics-free": {
+   "proves": [
+    "memory",
+    "generics"
+   ],
+   "leaves_out": {}
+  },
+  "hoist": {
+   "proves": [
+    "collections.lists",
+    "memory"
+   ],
+   "leaves_out": {}
+  },
+  "hoist-free": {
+   "proves": [
+    "memory"
+   ],
+   "leaves_out": {}
+  },
+  "i8": {
+   "proves": [
+    "numbers.overflow",
+    "numbers.sized"
+   ],
+   "leaves_out": {}
+  },
+  "index-place": {
+   "proves": [
+    "collections.lists"
+   ],
+   "leaves_out": {}
+  },
+  "ints": {
+   "proves": [
+    "numbers.int",
+    "numbers.division"
+   ],
+   "leaves_out": {
+    "numbers.overflow": "the panics `overflow`, `neg` and `u64` prove it"
+   }
+  },
+  "key-place": {
+   "proves": [
+    "collections.dicts"
+   ],
+   "leaves_out": {}
+  },
+  "lambdas": {
+   "proves": [
+    "lambdas"
+   ],
+   "leaves_out": {}
+  },
+  "lambdas-free": {
+   "proves": [
+    "memory",
+    "lambdas"
+   ],
+   "leaves_out": {}
+  },
+  "list-methods": {
+   "proves": [
+    "collections.lists"
+   ],
+   "leaves_out": {}
+  },
+  "lists": {
+   "proves": [
+    "collections.lists",
+    "prelude"
+   ],
+   "leaves_out": {}
+  },
+  "loop-changes-its-list": {
+   "proves": [
+    "collections.lists",
+    "control-flow"
+   ],
+   "leaves_out": {}
+  },
+  "loop-changes-its-list-free": {
+   "proves": [
+    "memory"
+   ],
+   "leaves_out": {}
+  },
+  "main-error": {
+   "proves": [
+    "errors"
+   ],
+   "leaves_out": {}
+  },
+  "mandelbrot": {
+   "proves": [
+    "functions",
+    "control-flow",
+    "numbers.float"
+   ],
+   "leaves_out": {}
+  },
+  "methods": {
+   "proves": [
+    "methods-traits",
+    "records"
+   ],
+   "leaves_out": {}
+  },
+  "methods-free": {
+   "proves": [
+    "memory",
+    "methods-traits"
+   ],
+   "leaves_out": {}
+  },
+  "neg": {
+   "proves": [
+    "numbers.overflow"
+   ],
+   "leaves_out": {}
+  },
+  "negative-power": {
+   "proves": [
+    "numbers.float"
+   ],
+   "leaves_out": {}
+  },
+  "nested": {
+   "proves": [
+    "control-flow"
+   ],
+   "leaves_out": {}
+  },
+  "overflow": {
+   "proves": [
+    "numbers.overflow"
+   ],
+   "leaves_out": {}
+  },
+  "parallel": {
+   "proves": [
+    "concurrency"
+   ],
+   "leaves_out": {}
+  },
+  "parallel-free": {
+   "proves": [
+    "memory",
+    "concurrency"
+   ],
+   "leaves_out": {}
+  },
+  "parallel-panic": {
+   "proves": [
+    "concurrency"
+   ],
+   "leaves_out": {
+    "memory": "a program that panics is not counted: only a normal exit reports its cells"
+   }
+  },
+  "prelude": {
+   "proves": [
+    "prelude"
+   ],
+   "leaves_out": {}
+  },
+  "prelude-free": {
+   "proves": [
+    "memory",
+    "prelude"
+   ],
+   "leaves_out": {}
+  },
+  "print": {
+   "proves": [
+    "print"
+   ],
+   "leaves_out": {}
+  },
+  "range-edge": {
+   "proves": [
+    "control-flow",
+    "numbers.overflow"
+   ],
+   "leaves_out": {}
+  },
+  "range-zero": {
+   "proves": [
+    "control-flow"
+   ],
+   "leaves_out": {}
+  },
+  "record-fields": {
+   "proves": [
+    "records"
+   ],
+   "leaves_out": {}
+  },
+  "regular-recursive-types": {
+   "proves": [
+    "generics",
+    "sum-types"
+   ],
+   "leaves_out": {}
+  },
+  "regular-recursive-types-free": {
+   "proves": [
+    "memory",
+    "generics"
+   ],
+   "leaves_out": {}
+  },
+  "repr": {
+   "proves": [
+    "print",
+    "numbers.float"
+   ],
+   "leaves_out": {}
+  },
+  "reuse": {
+   "proves": [
+    "records",
+    "memory"
+   ],
+   "leaves_out": {}
+  },
+  "set-length": {
+   "proves": [
+    "collections.sets",
+    "collections.dicts"
+   ],
+   "leaves_out": {}
+  },
+  "sized": {
+   "proves": [
+    "numbers.sized"
+   ],
+   "leaves_out": {
+    "numbers.overflow": "the panics `i8`, `u8` and `convert` prove it"
+   }
+  },
+  "split-join": {
+   "proves": [
+    "strings.methods",
+    "collections.lists",
+    "prelude"
+   ],
+   "leaves_out": {}
+  },
+  "str-basics": {
+   "proves": [
+    "strings"
+   ],
+   "leaves_out": {}
+  },
+  "str-methods": {
+   "proves": [
+    "strings.methods"
+   ],
+   "leaves_out": {}
+  },
+  "str-repr": {
+   "proves": [
+    "strings",
+    "print"
+   ],
+   "leaves_out": {}
+  },
+  "str-walk": {
+   "proves": [
+    "strings",
+    "control-flow"
+   ],
+   "leaves_out": {}
+  },
+  "sum-fits": {
+   "proves": [
+    "prelude"
+   ],
+   "leaves_out": {}
+  },
+  "sum-partial": {
+   "proves": [
+    "numbers.overflow",
+    "prelude"
+   ],
+   "leaves_out": {}
+  },
+  "todo": {
+   "proves": [
+    "unfinished"
+   ],
+   "leaves_out": {}
+  },
+  "tuples": {
+   "proves": [
+    "collections.tuples"
+   ],
+   "leaves_out": {}
+  },
+  "u64": {
+   "proves": [
+    "numbers.overflow",
+    "numbers.sized"
+   ],
+   "leaves_out": {}
+  },
+  "u8": {
+   "proves": [
+    "numbers.overflow",
+    "numbers.sized"
+   ],
+   "leaves_out": {}
+  },
+  "values": {
+   "proves": [
+    "collections.lists",
+    "records"
+   ],
+   "leaves_out": {}
+  },
+  "widths": {
+   "proves": [
+    "print",
+    "numbers.sized"
+   ],
+   "leaves_out": {}
+  }
+ }
+}
