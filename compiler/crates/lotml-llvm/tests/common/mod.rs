@@ -3,6 +3,8 @@
 
 #![allow(dead_code)]
 
+pub mod objects;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 6e0872f46c994c7d50eac6831e93a4ed25dac3e5310f6093eedbcf58ac9e9b9a
+checksum: 548a392dff9f2be2c1d9d3990ecc75853ac9d26ed12dea276ca590a5af998a03
 ---
 
 # Target parity assurance
@@ -60,9 +60,9 @@ targets. See `docs/wiki/pages/target-parity.md`.
   _Depends 2.1_
 - [x] 2.3 (Unit) Build the fuzzer's native programs with `LOTML_SANITIZE` and check `lt_live_cells` at exit, so a counting bug shows even when the output agrees
   _Depends 2.1_
-- [ ] 3.1 (Unit) Run the LLVM tests of `compiler/crates/lotml-llvm/tests/` on a Windows runner in CI, triggered on `push` and `pull_request` and never on `pull_request_target`
-- [ ] 3.2 (Unit) Read built executables and libraries with a dependency-free PE and ELF reader in tests: a native program imports no libpython (adr:0025), and a `--shared` library exports exactly its C ABI set; the readers bound every read and return an error on a truncated file
-- [ ] 3.3 (Unit) Derive a conformance matrix from a manifest in which each parity program declares the language rules it proves and the ones it leaves out
+- [x] 3.1 (Unit) Run the LLVM tests of `compiler/crates/lotml-llvm/tests/` on a Windows runner in CI, triggered on `push` and `pull_request` and never on `pull_request_target`
+- [x] 3.2 (Unit) Read built executables and libraries with a dependency-free PE and ELF reader in tests: a native program imports no libpython (adr:0025), and a `--shared` library exports exactly its C ABI set; the readers bound every read and return an error on a truncated file
+- [x] 3.3 (Unit) Derive a conformance matrix from a manifest in which each parity program declares the language rules it proves and the ones it leaves out
 - [ ] 4.1 (Unit) Specify, as a new spec named recursion-depth, one recursion limit both targets enforce with the same error, and the stack size native programs reserve for it
 - [x] 2.4 (Unit) Make the Python target's `**` of a negative finite base to a finite
       fractional exponent panic with `ValueError`, as the LLVM target does, instead of
