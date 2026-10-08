@@ -478,6 +478,7 @@ name = "lotml"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "lotml-bind",
  "lotml-check",
  "lotml-db",
  "lotml-diag",

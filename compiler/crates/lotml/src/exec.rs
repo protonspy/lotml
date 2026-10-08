@@ -518,14 +518,12 @@ fn report_rows(rows: Vec<Value>, as_json: bool, python: Option<Value>) -> (u8, S
     (u8::from(rows.iter().any(|r| r["outcome"] != "pass")), report)
 }
 
-/// How long `lotml bind` gives Python to read one stub, which is hostile input (adr:0032).
-const BIND_SECONDS: u64 = 60;
-
-/// `lotml bind`: the interface of a Python module, read from its stub by Python's own parser
-/// and written to `out/py.<module>.lotmli`, the name a program imports it by (adr:0012,
-/// adr:0029); the module may be given with its `py.` or without. With no stub given, typeshed's is
-/// read, and without one the project's packages are, in PEP 561's order (plans/bind-sources.md 1.1).
-pub fn bind(module: &str, stub: Option<&Path>, out: &Path, offline: bool) -> Result<bool, Failure> {
+/// `lotml bind`: the interface of a Python module, read from its stub by the binder lotml carries,
+/// which runs no Python (specs/rust-binder), and written to `out/py.<module>.lotmli`, the name a
+/// program imports it by (adr:0012, adr:0029); the module may be given with its `py.` or without.
+/// With no stub given, a standard-library module's is typeshed's, embedded in lotml, and any other
+/// module's is found in the project's packages, in PEP 561's order (plans/bind-sources.md 1.1).
+pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failure> {
     let module = module.strip_prefix("py.").unwrap_or(module);
     // The name becomes a file name: identifiers and dots only, so it cannot leave `out`.
     let valid = module.split('.').all(|part| {
@@ -550,43 +548,47 @@ pub fn bind(module: &str, stub: Option<&Path>, out: &Path, offline: bool) -> Res
             "`{module}` names a C library, whose interface is written by hand: bindings/{module}.lotmli (adr:0013)"
         )));
     }
-    let python = python(Use::Bind, None, !offline)?;
-    let limits = Limits { seconds: BIND_SECONDS, output: 64 << 20 };
-    let binder = |stub: Option<&Path>, said: &str| {
-        let child = interpreter(&python, lotml_py::BIND)
-            .arg(module)
-            .arg(stub.map(|s| s.as_os_str().to_owned()).unwrap_or_default())
-            .arg(said)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| Failure(format!("cannot run Python: {e}")))?;
-        wait_limited(child, &limits, "reading the stub")
+    let (source, said) = match stub {
+        Some(given) => {
+            let name = given.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            (read_stub(given)?, format!("{name}, the stub given"))
+        }
+        None => match lotml_bind::typeshed::find(module) {
+            lotml_bind::typeshed::Found::Stub { path, text } => {
+                let commit = lotml_bind::typeshed::COMMIT.trim();
+                (text.to_string(), format!("typeshed's stdlib/{path}, at commit {}", &commit[..commit.len().min(12)]))
+            }
+            lotml_bind::typeshed::Found::Absent { range } => {
+                let (major, minor) = lotml_bind::typeshed::PYTHON;
+                return Err(Failure(format!(
+                    "`{module}` is not in CPython {major}.{minor}'s standard library: typeshed gives it {range}"
+                )));
+            }
+            lotml_bind::typeshed::Found::Missing if lotml_bind::typeshed::is_standard_library(module) => {
+                return Err(Failure(format!(
+                    "typeshed has no stub for the standard library's `{module}`, and a package of the project never stands in for one; give one with --stub <file.pyi>"
+                )));
+            }
+            lotml_bind::typeshed::Found::Missing => {
+                let var = |name: &str| std::env::var_os(name);
+                let here = std::env::current_dir().ok();
+                let venv = lotml_py::resolve::environment(&var, here.as_deref().and_then(project_of).as_deref());
+                let roots = venv.as_deref().map(lotml_py::sources::site_packages).unwrap_or_default();
+                let Some(found) = lotml_py::sources::find(module, &roots).map_err(Failure)? else {
+                    let looked = match &venv {
+                        Some(venv) => format!("nor does any package in {}", venv.display()),
+                        None => "and no virtual environment of the project was found to look in".into(),
+                    };
+                    return Err(Failure(format!(
+                        "no stub for `{module}`: typeshed has none, {looked}; give one with --stub <file.pyi>"
+                    )));
+                };
+                (read_stub(&found.path)?, found.said)
+            }
+        },
     };
-    let mut output = binder(stub, "")?;
-    if stub.is_none() && output.status.code() == Some(lotml_py::NO_TYPESHED_STUB) {
-        let var = |name: &str| std::env::var_os(name);
-        let here = std::env::current_dir().ok();
-        let venv = lotml_py::resolve::environment(&var, here.as_deref().and_then(project_of).as_deref());
-        let roots = venv.as_deref().map(lotml_py::sources::site_packages).unwrap_or_default();
-        let Some(source) = lotml_py::sources::find(module, &roots).map_err(Failure)? else {
-            let looked = match &venv {
-                Some(venv) => format!("nor does any package in {}", venv.display()),
-                None => "and no virtual environment of the project was found to look in".into(),
-            };
-            return Err(Failure(format!(
-                "no stub for `{module}`: typeshed has none, {looked}; give one with --stub <file.pyi>"
-            )));
-        };
-        output = binder(Some(&source.path), &source.said)?;
-    }
-    if !output.status.success() {
-        return Err(Failure(String::from_utf8_lossy(&output.stderr).trim().to_string()));
-    }
-    // Python's text-mode stdout ends lines with `\r\n` on Windows; the file is written one way.
-    let text =
-        String::from_utf8(output.stdout).map_err(|_| Failure("the binding is not UTF-8".into()))?.replace("\r\n", "\n");
+    let text = lotml_bind::binder::interface(module, &source, &said)
+        .map_err(|lotml_bind::binder::Refused(why)| Failure(format!("cannot bind `{module}`: {why}")))?;
     let (interface, problems) = lotml_check::interface(&text);
     if let Some(problem) = problems.first() {
         return Err(Failure(format!("the binding of `{module}` does not check: {} {}", problem.code, problem.message)));
@@ -603,6 +605,19 @@ pub fn bind(module: &str, stub: Option<&Path>, out: &Path, offline: bool) -> Res
         if skipped == 0 { String::new() } else { format!(", {skipped} not (the file's comments say why)") }
     );
     Ok(true)
+}
+
+/// A stub's text, refused unread when it is past what the binder reads.
+fn read_stub(path: &Path) -> Result<String, Failure> {
+    let size = std::fs::metadata(path).map_err(|e| Failure(format!("cannot read {}: {e}", path.display())))?.len();
+    if size > lotml_bind::binder::LARGEST as u64 {
+        return Err(Failure(format!(
+            "cannot bind {}: it is {size} bytes, past the {} lotml reads",
+            path.display(),
+            lotml_bind::binder::LARGEST
+        )));
+    }
+    std::fs::read_to_string(path).map_err(|e| Failure(format!("cannot read {}: {e}", path.display())))
 }
 
 fn text(rows: &[Value]) -> String {

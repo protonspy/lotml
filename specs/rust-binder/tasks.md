@@ -16,7 +16,7 @@
 
 ## 3 · `lotml bind` without Python
 
-- [ ] 3.1 (Unit) Have `lotml bind` run the Rust binder in-process: a given stub, else typeshed's, else the project's packages for a name that is not the standard library's; drop its `--offline` flag, `lotml_bind.py` and `lotml_py::BIND` — R1.1, R2.2, R2.3, R2.4
+- [x] 3.1 (Unit) Have `lotml bind` run the Rust binder in-process: a given stub, else typeshed's, else the project's packages for a name that is not the standard library's; drop its `--offline` flag, `lotml_bind.py` and `lotml_py::BIND` — R1.1, R2.2, R2.3, R2.4
   _Depends 2.3_
 - [ ] 3.2 (Unit) Have the binding coverage report bind through `lotml bind`, and record a measurement under a new label beside the last — R3.1
   _Depends 3.1_

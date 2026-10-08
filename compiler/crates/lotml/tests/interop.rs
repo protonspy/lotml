@@ -476,3 +476,61 @@ fn bind_says_where_it_looked_when_no_source_has_the_module() {
     assert!(said.contains("typeshed has none") && said.contains(".venv") && said.contains("--stub"), "{said}");
     assert!(!dir.join("bindings").exists());
 }
+
+/// `lotml bind <args>` in `dir` with no Python to be found: none named, none on the path.
+fn bind_without_python(dir: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_lotml"))
+        .arg("bind")
+        .args(args)
+        .current_dir(dir)
+        .env_remove("VIRTUAL_ENV")
+        .env("LOTML_PYTHON", dir.join("no-python"))
+        .env("PATH", dir.join("no-path"))
+        .env("LOTML_UV", dir.join("no-uv"))
+        .output()
+        .expect("the binary runs")
+}
+
+#[test]
+fn bind_reads_the_standard_library_from_the_typeshed_lotml_carries_running_no_python() {
+    let dir = scratch("bind-typeshed", &[]);
+    let out = bind_without_python(&dir, &["textwrap"]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let interface = std::fs::read_to_string(dir.join("bindings").join("py.textwrap.lotmli")).unwrap();
+    assert!(interface.contains("from typeshed's stdlib/textwrap.pyi, at commit "), "{interface}");
+    assert!(interface.contains("fn dedent(text: str) -> str ! PyError\n"), "{interface}");
+    let given = scratch("bind-given", &[("stubs/textwrap.pyi", TEXTWRAP_PYI)]);
+    let out = bind_without_python(&given, &["textwrap", "--stub", "stubs/textwrap.pyi"]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let interface = std::fs::read_to_string(given.join("bindings").join("py.textwrap.lotmli")).unwrap();
+    assert!(interface.contains("from textwrap.pyi, the stub given."), "{interface}");
+}
+
+#[test]
+fn bind_says_a_module_cpython_3_14_dropped_is_not_there() {
+    let dir = scratch("bind-absent", &[]);
+    let out = bind_without_python(&dir, &["distutils"]);
+    assert_eq!(out.status.code(), Some(2));
+    let said = String::from_utf8_lossy(&out.stderr);
+    assert!(said.contains("not in CPython 3.14's standard library") && said.contains("3.0-3.11"), "{said}");
+    assert!(!dir.join("bindings").exists());
+}
+
+#[test]
+fn bind_never_takes_a_standard_library_name_from_the_project_s_packages() {
+    let dir = project_with_packages("bind-shadow", &[("json/shadow.pyi", "def f() -> int: ...\n")]);
+    let out = bind_without_python(&dir, &["json.shadow"]);
+    assert_eq!(out.status.code(), Some(2));
+    let said = String::from_utf8_lossy(&out.stderr);
+    assert!(said.contains("standard library's `json.shadow`"), "{said}");
+    assert!(!dir.join("bindings").exists());
+}
+
+#[test]
+fn bind_refuses_a_stub_it_cannot_parse_saying_where() {
+    let dir = scratch("bind-broken", &[("broken.pyi", "def f() -> int: ...\ndef g(:\n")]);
+    let out = bind_without_python(&dir, &["broken", "--stub", "broken.pyi"]);
+    assert_eq!(out.status.code(), Some(2));
+    let said = String::from_utf8_lossy(&out.stderr);
+    assert!(said.contains("does not parse, at line 2"), "{said}");
+}
