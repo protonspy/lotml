@@ -75,7 +75,7 @@ fn a_function_or_module_without_an_interface_is_reported() {
     let found = check_resolved_with(&parse(source).module, source, &interfaces()).diagnostics;
     assert_eq!(found[0].code, "E0216");
     assert!(
-        found[0].notes.iter().any(|n| n.contains("`py.json`") && n.contains("lotml bind json")),
+        found[0].notes.iter().any(|n| n.contains("`py.json`") && n.contains("generated on import")),
         "{:?}",
         found[0].notes
     );

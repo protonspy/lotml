@@ -238,6 +238,35 @@ fn main():
     assert!(why.contains("no stub for `nowhere`") && why.contains("no uv.lock"), "{why}");
 }
 
+#[test]
+fn a_bare_import_of_a_module_typeshed_covers_is_fixed_to_its_origin() {
+    let program = "import shlex
+import typing
+
+fn main() -> None ! PyError:
+    print(py.shlex.quote(\"a b\")?)
+";
+    let dir = scratch("bare-import", &[(".git", ""), ("main.lotml", program)]);
+    let checked = lotml(&["check", "main.lotml"], &dir);
+    assert_eq!(checked.status.code(), Some(1));
+    assert!(stdout(&checked).contains("write `py.shlex`"), "{}", stdout(&checked));
+    lotml(&["check", "--fix", "main.lotml"], &dir);
+    let fixed = std::fs::read_to_string(dir.join("main.lotml")).unwrap();
+    assert!(
+        fixed.starts_with(
+            "import py.shlex
+"
+        ),
+        "{fixed}"
+    );
+    assert!(
+        !fixed.contains("py.typing") && !fixed.contains("import typing"),
+        "typing is removed, not given an origin: {fixed}"
+    );
+    let checked = lotml(&["check", "main.lotml"], &dir);
+    assert!(checked.status.success(), "{}", stdout(&checked));
+}
+
 /// A Python module whose values no stub types: an object, a dataclass, and functions that change
 /// what they are given.
 const OBJS_PY: &str = "\

@@ -130,13 +130,28 @@ fn with_generated(mut bindings: Vec<Binding>, path: &Path, text: &str) -> Vec<Bi
     bindings
 }
 
-/// The `py.` modules `text` imports, named as their interfaces are (`py.textwrap`), each once.
+/// The Python interfaces `text`'s imports may use, named as they are (`py.textwrap`), each once:
+/// each `py.` module it imports, and for a bare `import <name>` that is no LotML module and that
+/// the typeshed lotml carries covers, `py.<name>`, so the checker can offer to write the origin
+/// (specs/bind-on-import/ R1.5).
 pub fn python_imports(text: &str) -> Vec<String> {
     let mut found: Vec<String> = Vec::new();
     for item in &lotml_syntax::parse(text).module.items {
         if let lotml_syntax::ast::Item::Import(import) = item {
-            let name = import.module.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(".");
-            if name.strip_prefix("py.").is_some_and(|m| !m.is_empty()) && !found.contains(&name) {
+            let path = import.module.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(".");
+            let name = if path.strip_prefix("py.").is_some_and(|m| !m.is_empty()) {
+                path
+            } else if !path.is_empty()
+                && !path.starts_with("py.")
+                && !lotml_check::is_c_library(&path)
+                && !lotml_check::MODULES.contains(&path.as_str())
+                && matches!(lotml_bind::typeshed::find(&path), lotml_bind::typeshed::Found::Stub { .. })
+            {
+                format!("py.{path}")
+            } else {
+                continue;
+            };
+            if !found.contains(&name) {
                 found.push(name);
             }
         }
@@ -267,7 +282,13 @@ import c.m
 import math
 from py import x
 ";
-        assert_eq!(python_imports(text), vec!["py.textwrap", "py.os.path"]);
+        assert_eq!(python_imports(text), vec!["py.textwrap", "py.os.path"], "math is LotML's");
+        let bare = "import shlex
+from random import choice
+import nowhere
+import distutils
+";
+        assert_eq!(python_imports(bare), vec!["py.shlex", "py.random"], "only what typeshed covers");
     }
 
     #[test]

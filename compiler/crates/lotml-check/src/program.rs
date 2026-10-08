@@ -262,14 +262,14 @@ impl Program {
             let mut d = Diagnostic::error("E0216", span, format!("there is no module `{path}` to import from"))
                 .alternatives(known)
                 .note("the common names are in the prelude and need no import")
-                .note(format!(
-                    "a Python module is imported as `py.{path}`, its interface written by `lotml bind {path}`"
-                ));
+                .note(format!("a Python module is imported as `py.{path}`, its interface generated on import"));
             let origin = format!("py.{path}");
-            if self.available.contains_key(&origin) {
+            let own_syntax =
+                matches!(path.as_str(), "typing" | "__future__" | "dataclasses" | "enum" | "collections.abc");
+            if self.available.contains_key(&origin) && !own_syntax {
                 d = d.fix(format!("write `{origin}`"), Applicability::MachineApplicable, vec![(span, origin)]);
             }
-            if matches!(path.as_str(), "typing" | "__future__" | "dataclasses" | "enum" | "collections.abc") {
+            if own_syntax {
                 d = d.fix(
                     "remove the import: lotml writes these in its own syntax",
                     Applicability::MachineApplicable,
