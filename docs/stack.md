@@ -78,8 +78,10 @@ writing its module from the generic IR, and its runtime), `lotml-llvm` (the LLVM
 library export and its `clang` driver,
 adr:0025-two-targets-python-for-run-llvm-for-build), `lotml-runtime` (the C runtime native programs
 run on, adr:0016-c-target-as-monomorphic-c-over-a-counting-runtime), `lotml-ide` (what each name
-refers to, and the workspace an editor or agent queries), `lotml` (the command, with its language
-and MCP servers — JSON-RPC written over `serde_json`, with no protocol library).
+refers to, and the workspace an editor or agent queries), `lotml-bind` (a Python stub read as an
+interface, and the typeshed stubs lotml carries,
+adr:0032-a-python-module-is-bound-at-check-time-from-stubs-read-in-rust), `lotml` (the command,
+with its language and MCP servers — JSON-RPC written over `serde_json`, with no protocol library).
 
 - **salsa** 0.28 — incremental queries over source files, the property the under-100 ms check
   rests on ([[transpilation-strategy]]); chosen over a hand-rolled cache because rust-analyzer
@@ -96,8 +98,15 @@ and MCP servers — JSON-RPC written over `serde_json`, with no protocol library
   (adr:0028-fuzz-the-frontend-with-cargo-fuzz-on-nightly); libFuzzer does not link with MSVC, so on
   Windows it runs under WSL.
 - **typeshed** (read, not linked) — the stubs `lotml bind` writes interfaces from
-  (adr:0012-python-interop-through-checked-boundaries-and-interface-files); found in an installed
-  mypy or jedi when no `--stub` is given, never installed by lotml.
+  (adr:0012-python-interop-through-checked-boundaries-and-interface-files): its `stdlib` vendored
+  as text at the commit `compiler/crates/lotml-bind/typeshed/COMMIT` pins, with its licence, and
+  embedded in lotml (adr:0032); `release/typeshed.py <commit>` moves the pin.
+- **ruff_python_parser** and **ruff_python_ast** 0.0.16, pinned exactly — the Python parser
+  `lotml-bind` reads a stub with, so binding runs no Python (adr:0032). MIT. Costs: Ruff publishes
+  them as internal crates with no stable API, so a version bump is a change of its own.
+- **miniz_oxide** — deflates the vendored stubs at build time and inflates them on first use, about
+  0.5 MB in the binary for 4.6 MB of text (adr:0032); pure Rust, the deflate Rust's own toolchain
+  uses.
 - **CPython** 3.11 or later — runs what the Python backend writes (`lotml run`, `lotml test`);
   found as `LOTML_PYTHON`, `python3`, `python` or `py -3`. Not a library the compiler links.
 - **uv** (shipped beside the binary, pinned) — provisions CPython 3.14, the default, and runs

@@ -2,7 +2,7 @@
 
 ## 1 · The stubs lotml carries
 
-- [ ] 1.1 (Unit) Vendor typeshed's `stdlib`, `LICENSE` and the pinned commit under `compiler/crates/lotml-bind/typeshed/`, with `scripts/typeshed.py` to replace them, and record typeshed and `miniz_oxide` in `docs/stack.md` — R2.1
+- [x] 1.1 (Unit) Vendor typeshed's `stdlib`, `LICENSE` and the pinned commit under `compiler/crates/lotml-bind/typeshed/`, with `release/typeshed.py` to replace them, and record typeshed and `miniz_oxide` in `docs/stack.md` — R2.1
 - [ ] 1.2 (Unit) Embed the vendored stubs deflated in the `lotml-bind` crate, and look a module up by name, gated by `VERSIONS` for CPython 3.14 — R2.1, R2.3
   _Depends 1.1_
 

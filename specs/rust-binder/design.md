@@ -35,7 +35,7 @@ read Python, and so the spec bind-on-import can call it from `lotml check` as `l
 The vendored stubs live at `compiler/crates/lotml-bind/typeshed/`: `stdlib/` as typeshed has it,
 `LICENSE`, and `COMMIT`, the full SHA of the typeshed commit they were copied from. They are plain
 text so that moving the pin is a pull request whose diff shows which stubs changed, which the
-owner chose on 2026-10-08. `scripts/typeshed.py <commit>` replaces them with that commit's.
+owner chose on 2026-10-08. `release/typeshed.py <commit>` replaces them with that commit's.
 
 At build time `build.rs` packs `stdlib/` into one blob — each file's path and text, in path order —
 and deflates it with `miniz_oxide`; the binary holds the compressed blob, about 0.5 MB for 4.6 MB
