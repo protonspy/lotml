@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # 0033 · lotml run installs a project's Python dependencies from its uv.lock

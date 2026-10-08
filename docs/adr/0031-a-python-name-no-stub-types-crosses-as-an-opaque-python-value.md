@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # 0031 · A Python name no stub types crosses as an opaque Python value
@@ -19,7 +19,8 @@ is what to do with the remainder, which today is nothing: a program cannot call 
 
 ## Decision
 
-A type a stub writes that lotml has no type for is bound as `PyObject`, an opaque handle to a
+The owner accepted this on 2026-10-08. A type a stub writes that lotml has no type for is bound
+as `PyObject`, an opaque handle to a
 Python value, and the function is bound instead of left out. Plans/python-compatibility.md 2.2
 specifies it as `specs/python-object/`.
 

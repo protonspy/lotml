@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # 0032 · A Python module is bound at check time, from stubs read in Rust
