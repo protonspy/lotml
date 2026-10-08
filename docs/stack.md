@@ -98,6 +98,10 @@ and MCP servers — JSON-RPC written over `serde_json`, with no protocol library
   found as `LOTML_CLANG`, `clang` on `PATH`, then where the LLVM installer for Windows puts it.
   Not a library the compiler links; textual IR keeps the compiler's own build free of LLVM's
   libraries. On Windows it links with Visual Studio's linker and libraries.
+- **llvm-mingw** (Windows), **clang** and **lld** (Linux), **clang** with Apple's `ld` (macOS),
+  provisioned on the first native build from this repository's toolchain release, pinned by hash
+  (adr:0027-lotml-provisions-a-pinned-llvm-toolchain-on-first-build). Decided, and built by
+  `plans/native-toolchain.md`; until then the clang entry above describes the code.
 - **llvm-dwarfdump**, **llvm-objdump**, **llvm-readobj** and **nm** (development only) — what the
   LLVM target's tests read a line table and a library's exported symbols with, found beside
   `clang` or on `PATH`; CI checks it has `llvm-dwarfdump`.
