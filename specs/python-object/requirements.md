@@ -2,7 +2,8 @@
 autonomy: auto
 ci: wait
 branch: docs/python-compat-group-2
-delivery: in-progress
+delivery: in-review
+pr: 52
 ---
 
 # Python object — requirements
