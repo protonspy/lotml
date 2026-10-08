@@ -13,8 +13,8 @@ pr: 18
 The agent's real repairs will be few: a capable model writes code that checks the first time, and
 the trace dataset's own risks say so (specs/trace-dataset/). The study behind the harness guide
 found where more come from — programs that compile, mutated the ways programs break: DrRepair
-pre-trained on mutants of 310K compiling programs, with corruptions weighted by compiler-error
-statistics repairing 62.5% of DeepFix against 49.4% for random dropout, and HDLdebugger built its
+pre-trained on mutants of 310K compiling programs, its error-shaped corruptions, sampled by error
+frequency, repairing 62.5% of DeepFix against 49.4% for random dropout, and HDLdebugger built its
 triples the same way (docs/wiki/pages/compiler-embedded-model.md). It also found what they cannot
 do: a model that learned only mutants learned the mutator, and seeded bugs train a detector, not a
 reviewer. So this makes failures to train on — lotml programs that check and pass, mutated, each

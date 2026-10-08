@@ -121,9 +121,14 @@ test runner has little to gain from them as the score.
 2. **Repair:** the same grader, 0 when a test block changed — the guide tool's gate already refuses
    that fix (`specs/guide-tool/design.md`) — and similarity to the known fix only as a tie-breaker
    among unsolved samples.
-3. **The harness guide** answers where to change and what kind of change, so its reward is
-   SoRFT-shaped: F-beta over the declarations it names against the seeded ones, zero for a
-   declaration absent from the file, and no reward for merely including the right one.
+3. **The harness guide** answers where to change and what kind of change, in one to three ranked
+   locations; the tool thresholds the first and the evaluation scores top-1
+   (`specs/guide-tool/`, `specs/guide-evaluation/`). Take from SoRFT the zero for a declaration
+   absent from the file and the refusal of a hit reward, not its beta: SoRFT set beta to 3 because
+   "recall has a greater influence on the final outcome" of a localization stage that feeds later
+   ones, and an order-blind recall-weighted score pays a guide for hedging — one right declaration
+   and two wrong ones still score 0.83. Score F1 over the declarations named, plus credit for a
+   correct first location.
 4. **Penalties for malformed output** stay small next to the success reward; the guide's answers are
    already constrained to a JSON schema (adr:0017-a-half-billion-coder-model-tuned-locally-and-served-by-llama-server).
 

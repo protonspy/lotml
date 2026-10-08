@@ -102,8 +102,9 @@ failure reports the `.x` line ([[transpilation-strategy]]).
 1. **The original study's risk moves.** With the spec in the prompt and the language named,
    Claude models did not mix in Python syntax. The literature points the same way, though less
    cleanly than first reported: [Moumoula et al.](https://arxiv.org/abs/2503.13620) saw adherence
-   above 99% for nearly all models (the lowest at 93.07%) on a benchmark that names the language,
-   against 74.33–97.60% on one that does not — two datasets, not a controlled ablation.
+   above 99% for nearly all models (the lowest at 93.07%) on HumanEval-XL, whose prompts carry
+   explicit language keywords, against 74.33–97.60% on BabelCode, run with explicit English
+   instructions but without those keywords — two datasets, not a controlled ablation.
    What leaks is semantics — "everything is mutable" and "arguments are references" — and the
    parser cannot catch that; only the [[semantic-compiler]] can.
 2. **Variant A and variant B tied on parsing** at this sample size (28 of 30 each), but execution
@@ -118,8 +119,10 @@ failure reports the `.x` line ([[transpilation-strategy]]).
 
 ## Limitations
 
-- **One model family.** Claude only; smaller open models should leak more, as
-  [[training-prior]] shows.
+- **One model family.** Claude only. Smaller open models leak more, as [[training-prior]]
+  predicted and the phase 1 gate measured: Qwen 2.5 Coder 7B and Llama 3.1 8B wrote syntax lotml
+  does not have, and `lotml check` refused 91 and 143 of their 200 first answers
+  (adr:0011-proceed-to-phase-2-past-the-failed-phase-1-gate).
 - **Small sample:** ten short tasks per cell, one sample per task, no temperature control.
   Differences of one or two failures are not signal.
 - **Execution covers the models' own tests only.** The research transpiler erases types, so type

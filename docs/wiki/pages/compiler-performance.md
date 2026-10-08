@@ -7,19 +7,22 @@ against hand-written C (adr:0025-two-targets-python-for-run-llvm-for-build).
 
 ## Building: the runtime dominates
 
-`lotml build` hands `clang` the program's `.ll` and the runtime's `lotml.c` together, on every
-build and in every LLVM test (`compiler/crates/lotml-llvm/src/driver.rs`). The study timed
-`clang` on lotml's runtime on one Windows machine:
+Before its object was cached, `lotml build` handed `clang` the program's `.ll` and the runtime's
+`lotml.c` together, on every build and in every LLVM test
+(`compiler/crates/lotml-llvm/src/driver.rs`). Measured on `fib.lotml`, clang 23 on Windows, the
+fastest of five runs (`harness/results/build-speed.md`, `before`):
 
-| step | `-O0 -g` | `-O2` |
+| step | `-O0` | `-O2` |
 |---|---|---|
-| compiling `lotml.c` | ~250 ms | ~915 ms |
-| a small program's `.ll` | 55–80 ms | |
-| linking | ~95 ms | |
+| compiling `lotml.c` | 0.215 s | 0.846 s |
+| the program's `.ll` | 0.022 s | 0.023 s |
+| linking | 0.129 s | 0.062 s |
+| the whole build | 0.369 s | 0.923 s |
 
-The runtime is therefore about 60% of a small debug build and 80% of a release build. mun builds
-its runtime once, and a library it generates contains only user code. plix keys its object cache
-on a fingerprint of the toolchain (`build.rs`).
+The runtime was 58% of a small debug build and 92% of a release build. The study's own rough
+timings, taken earlier by hand, had put it at about 60% and 80%; the measured figures are the
+ones to cite. mun builds its runtime once, and a library it generates contains only user code.
+plix keys its object cache on a fingerprint of the toolchain (`build.rs`).
 
 Program and runtime are already separate translation units, so caching the runtime's object
 loses no inlining. The cache key must cover:
@@ -79,8 +82,10 @@ to their item, and interfaces as tracked inputs with high durability.
 - **Reference counting is an out-of-line call.** `lt_inc` is inline in `lotml.h`, but the emitted
   IR calls the extern copy in `lotml.c`, and the two units are not optimized together. pon's
   lesson is the same: one helper call per operation is what its code pays. The fix is to emit the
-  fast path in the IR itself. Link-time optimization would also do it, but needs `lld`, which
-  touches adr:0021.
+  fast path in the IR itself. Link-time optimization would also do it. It needs `lld`, which
+  adr:0027-lotml-provisions-a-pinned-llvm-toolchain-on-first-build now ships in the provisioned
+  toolchain, but it would move the runtime's optimization back into every link, the cost the
+  cache above took out.
 - **Constant collection literals allocate every time.** A list literal is `lt_list_new` plus one
   push per element. The runtime already has static string cells with a count of 0, and it copies
   such a cell before its first write. An all-constant list or dict literal can be one of those
@@ -110,12 +115,14 @@ set literals, to fix their slot order) and no inlining.
 - **Starlark's recipe is the safe one.** It folds inside smart constructors using the runtime's
   own evaluator, and folds only results that cannot fail. It inlines `return <expr>` bodies under
   a size cap, keeping the callee's source position, and it marks which builtins are pure.
-- **The prior art shows what goes wrong without that care.** SPy and LPython both moved errors
-  from run time to compile time by folding: SPy turned a division by zero into a compile error in
-  two of its three modes. LPython's `round(-2.7)` folds to −3 at compile time and returns −1 at
-  run time.
-- **For lotml,** folding must leave overflow and division by zero as run-time errors, and the
-  parity suite runs with folding on and with it off.
+- **The prior art shows two ways it goes wrong.** SPy moved an error from run time to compile
+  time: a constant `1 // 0` raises during redshift in two of its three modes and at run time in
+  the third (`spy.md`). LPython moved no error but computed a different value: its folder rounds
+  `round(-2.7)` to −3, while the runtime's body returns −1 (`lpython.md`), because the folder is a
+  second implementation of the builtin.
+- **For lotml,** folding must leave overflow and division by zero as run-time errors, must fold
+  only operations whose meaning has one definition, and the parity suite runs with folding on and
+  with it off.
 
 Two costs sit outside the IR:
 

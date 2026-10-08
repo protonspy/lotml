@@ -15,8 +15,8 @@ The harness guide learns from pairs of a failing state and the change that got o
 `check`, or failing a test in code that checks (specs/trace-dataset/) — and the seeded failures hold
 mutants with their known fix (specs/seeded-failures/). This turns both into guidance records: the
 state the guide's tool will show the model, and the location, kind of change and edit it should
-answer with, in the shape a trainer reads. The study behind it found the line a compiler reports is
-often not the one to fix (DrRepair, docs/wiki/pages/compiler-embedded-model.md), so the target is
+answer with, in the shape a trainer reads. DrRepair, in the study behind it, predicts the line to fix
+itself rather than trusting the reported one (docs/wiki/pages/compiler-embedded-model.md), so the target is
 taken from the fix, never from the diagnostic.
 
 ## R1 · Where a change falls

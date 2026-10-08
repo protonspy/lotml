@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 6e7915e40d38fc85a35f04d9c9b0c38a08cd64d85bda25d678883d5c5c007602
+checksum: 0695f0756c82ed59311033ce22c383a971c09e983957f45e7cee55662cf41920
 ---
 
 # Agent harness arms
@@ -70,16 +70,51 @@ spending cap the owner set. See `docs/wiki/pages/agent-harness-design.md`.
 - [ ] 2.6 (Unit) Add check-on-edit report modes to the MCP server, selected per run: no report, every current error, or the errors an edit introduced (today's)
 - [ ] 2.7 (Unit) Add three harness middlewares, each behind its own flag: a check and the tests must pass before the agent may finish; a nudge after the same diagnostic code or edits of the same symbol repeat N times; the `digest` in the first message
 - [ ] 2.8 (Unit) Add best-of-n: k attempts per task, the selected one being the first that passes `lotml check` and the visible `test` blocks
-- [ ] 3.1 (Unit) Measure the harness as arms on the same tasks, model and provider: deepagents against the minimal arm, paired per task, with pass@1, pass^k and cost
-  _Depends 1.1, 1.2, 1.3_
+- [ ] 3.1 (Unit) Measure the harness as arms on the same tasks, model and provider:
+      deepagents against the minimal arm, paired per task, with pass@1, pass^k and cost
+  _Depends 1.1, 1.2, 1.3, 1.4, 1.5, 1.6_
 - [ ] 3.2 (Unit) Measure the three check-on-edit report modes as arms, recording failed edits, recovery after a failed edit and rounds to green
   _Depends 2.6, 3.1_
 - [ ] 3.3 (Unit) Measure the edit tools exposed as arms (symbol edits only, text edits only, both), recording failed applications and well-formed edits per model
   _Depends 2.1, 3.1_
 - [ ] 3.4 (Unit) Measure each of the three middlewares as its own arm against none
-  _Depends 2.7, 3.1_
+  _Depends 2.7, 2.9, 3.1_
 - [ ] 3.5 (Unit) Measure best-of-n: how often some attempt passed the hidden tests against how often the selected one did, with and without the selector
   _Depends 2.8, 3.1_
+- [ ] 1.4 (Unit) Add 2601.11868, 2511.13646, 2609.05779, 2602.00933 and 2602.14878 to
+      `research/literature/` with verified claims mapped to
+      `docs/wiki/pages/agent-harness-design.md`, whose numbers this plan's Why rests on
+  _Reason review of the literature on 2026-10-08: agent-harness-design.md has no machine-checked claims behind it_
+- [ ] 1.5 (Unit) Record the OpenRouter cap in dollars, a budget per arm of group 3, and
+      each arm's detectable effect computed by evaluation-rigor 1.2 at its runs per
+      task, before any arm runs; an arm whose effect is below what it can detect is
+      reported as a direction
+  _Reason review of the literature on 2026-10-08: about ten arms x 157 tasks x 5 runs comes to 5-45 at the one measured run's cost, and SWE-agent's 3-point lint effect is invisible at that scale_
+- [ ] 2.9 (Unit) Fire 2.7's nudge after the same diagnostic code at the same symbol
+      repeats twice, configurable, and send a failed assertion to resampling rather than
+      to repair
+  _Depends 2.7_
+  _Reason review of the literature on 2026-10-08: in 2604.10508 two repair rounds captured 76-95% of the gain, and docs/wiki/pages/semantic-compiler.md requires the two-round budget and the routing_
+- [ ] 2.10 (Unit) Add `explain` to the lean MCP profile
+  _Depends 2.4_
+  _Reason review of the literature on 2026-10-08: in 2602.06976 removing documentation lookup cost as much as removing verification (73.55% to 53.55%)_
+- [ ] 2.11 (Unit) Write 2.5's language-server configuration only under `lotml init
+      --lsp`, never by default
+  _Depends 2.5_
+  _Reason review of the literature on 2026-10-08: in 2608.13568 the language server raised localization token spend 6-118% for Opus and Sonnet, and it reports every current diagnostic after each edit, the mode 3.2 tests, with no control_
+- [ ] 3.6 (Unit) Measure the language-server configuration as an arm against none, on
+      the same tasks, model and provider
+  _Depends 3.1, 2.11_
+  _Reason review of the literature on 2026-10-08: the configuration 2.5 writes ships unmeasured_
+- [ ] 3.7 (Unit) Measure streamed `check --prefix` with restart against `check` after
+      generation on one closed and one open model, paired, recording restarts, compile
+      rate, pass@1 and tokens
+  _Depends 3.1_
+  _Reason review of the literature on 2026-10-08: prefix checking was measured line by line on three open models only, and in 2607.13921 weaker models regenerated the same erroneous prefix_
+- [ ] 1.6 (Unit) Enforce 1.5's cap: set it on the OpenRouter key itself, and have the
+      harness stop a run when its arm's budget is spent, the key read from the
+      environment only
+  _Reason security review of 2026-10-08: a cap recorded in a plan bounds nothing if a run loops_
 
 ## Done when
 

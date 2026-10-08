@@ -87,9 +87,11 @@ documentation and model cards are cited by link, without numbers.
   incorrect ones covering harder questions (OpenCodeReasoning). Verification helped OpenThoughts' 32B student and hurt its 7B one. Where the
   model wrote the data itself, execution mattered: responses passing their tests scored 65.2,
   random ones 61.6, failing ones 57.9 ([SelfCodeAlign](https://arxiv.org/abs/2410.24198)).
-- **More answers per problem count.** On rStar-Coder's 37.7K seed problems, going from 1 to 16
-  solutions each took a 7B model from 40.8 to 54.7 on LiveCodeBench; the full diverse set added 2.6
-  more (57.3).
+- **More problems beat more answers per problem.** On rStar-Coder's 37.7K seed problems, going
+  from 1 to 16 solutions each took a 7B model from 40.8 to 54.7 on LiveCodeBench (603K examples);
+  the full set, 480K distinct problems in 580K examples, scored 57.3 with fewer examples — "expanding
+  problem diversity is more effective and efficient than only increasing the number of solutions
+  per problem".
 
 ## A language no teacher knows
 
@@ -150,8 +152,9 @@ documentation and model cards are cited by link, without numbers.
    same recipe run on openai/human-eval (MIT) and MBPP's original release (CC BY 4.0) gives a seed
    that can be trained on — MultiPL-T's recipe at a hundredth of its size. In PyLang, going from half to all of 2,250
    examples still added 4.3 points at 4B and 1.8 at 8B, and nothing larger was tried; MultiPL-T's
-   sets hold 37,592 to 48,194 items. Growth comes from more Python sources, more solutions per
-   problem and deduplication, every item checked by `lotml check` and `lotml test`.
+   sets hold 37,592 to 48,194 items. Growth comes first from more distinct Python sources, then
+   from more solutions per problem, with deduplication, every item checked by `lotml check` and
+   `lotml test`.
 4. **The teacher has to learn lotml first.** No teacher knows it, an API gives text, and in the one
    study of it a top-K of log-probabilities short of 25 tokens did worse than none — in
    pre-training, at 300M. Token-level distillation would need a
@@ -161,7 +164,10 @@ documentation and model cards are cited by link, without numbers.
    distilled model; at 0.5B the evidence is repair behind a checker ([[repair-training]]).
 6. **Measure the shipped artifact.** The guide ships quantized to Q4_K_M; drift toward Python, or
    any other language, is measured on that file.
-7. **RL at this size needs a non-zero start, built on purpose.** Qwen2.5-Coder-0.5B under GRPO
+7. **RL at this size needs a non-zero start, built on purpose.** The Prolog, Q, Lean and Verilog
+   numbers in this item come from `research/llm-landscape/evaluation-and-adaptation.md`, not from
+   `sources.json`: they are not machine-checked ([[source-verification]]); Agnostics' is.
+   Qwen2.5-Coder-0.5B under GRPO
    learned nothing on Prolog zero-shot (0.00), and reached 0.13 with one example in the prompt as a
    syntax anchor ([arXiv 2506.11027](https://arxiv.org/abs/2506.11027)). On Q, a language the base
    models scored 0.0% on from 1.5B to 7B, GRPO at 1.5B made pass rates decline, and solutions and

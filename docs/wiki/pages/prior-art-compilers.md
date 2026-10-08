@@ -41,7 +41,7 @@ choices hold up better:
   pon and plix have no working Windows path at all.
   adr:0021-compiler-in-rust-with-llvm-as-its-native-code-generator and
   adr:0025-two-targets-python-for-run-llvm-for-build avoid all of it with textual IR and a
-  `clang` found at run time.
+  `clang` found or provisioned at build time (adr:0027).
 - **One IR.** Projects whose backends share only a parser drift apart:
   - plix disagrees with itself on overflow, scoping and `Result`;
   - interpreter-rs's compiler stalled behind its evaluator;
@@ -67,8 +67,8 @@ What the projects do offer lies around the core:
 | Cranelift as a fast debug backend, or a JIT for `run` | pon, plix, RustPython | adr:0021, adr:0025 — and the runtime, not code generation, dominates build time ([[compiler-performance]]) |
 | Linking LLVM or LLD into the compiler | pycc, mun | adr:0021 |
 | A tracing collector | pon, mun | adr:0003, adr:0008 |
-| An interpreter for `run`, in Rust or Starlark style | monty, starlark-rust, RustPython | adr:0025: a third copy of every builtin. Even monty runs code out of process, because a stack overflow kills its host. |
-| Emitting CPython bytecode | erg | adr:0025: one opcode table per CPython version, and erg is stuck at 3.7–3.11 |
+| An interpreter for `run`, in Rust or Starlark style | monty, starlark-rust, RustPython | a third copy of every builtin beside the Python runtime and the native one (adr:0025 keeps two targets). Even monty runs code out of process, because a stack overflow kills its host. |
+| Emitting CPython bytecode | erg | one opcode table per CPython version, outside adr:0025's two targets, and erg is stuck at 3.7–3.11 |
 | Compile-time "blue" evaluation, and generics checked only when instantiated | SPy | adr:0004-python-syntax-where-semantics-match and lotml's generics checked at definition: type errors would surface late |
 | Records passed to C as counted handles | mun | adr:0024-c-abi-exports-chosen-by-signature-without-new-syntax, which rejected it |
 | Replacing `lotml-syntax` with ruff's parser | pycc, monty, RustPython | the languages differ at the token level (`fn`, `var`, `fail`, `T ! E`, `??`). Ruff's AST is generated and declared unstable. A fork would mean about 50,000 lines to keep in place of 3,400, and even RustPython forks it and adds 2,600 lines. The recovery techniques are borrowed instead ([[semantic-compiler]]). |

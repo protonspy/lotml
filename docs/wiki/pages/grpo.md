@@ -32,9 +32,9 @@ from a paper in `research/literature/sources.json` is quoted in `claims.json` th
 - **Dr. GRPO** ([arXiv 2503.20783](https://arxiv.org/abs/2503.20783)) found two biases. Dividing each
   answer's loss by its length punishes long wrong answers less than short ones, so wrong answers grow;
   dividing by the group's standard deviation over-weights prompts that are almost always solved or
-  almost never. It removes both and divides by a constant. At the time every open implementation the
-  authors examined, trl and verl among them, normalized by response length: which loss a framework
-  computes has to be checked.
+  almost never. It removes both and divides by a constant. Every open PPO implementation the authors
+  examined normalized by length — OpenRLHF by each response's, trl and verl by the batch's token
+  count — so which loss a framework computes has to be checked.
 - **The variant matters less than it seems.** On one 7B math run, PPO, GRPO, Reinforce++, RLOO,
   ReMax and DAPO left similar gaps to the base model's large-k pass rate, from 43.9 for GRPO to 42.6
   for RLOO; DAPO's dynamic sampling needed about 3–6× more samples per batch
@@ -101,7 +101,10 @@ Sources: [Seed-Coder](https://arxiv.org/abs/2506.03524), [AceCoder](https://arxi
 ## What it means for lotml
 
 1. **Start on-policy and plain:** one update per batch of samples, no KL or a very small one, an
-   upper clip between 0.25 and 0.28, temperature near 1.0, FP16, and a loss that does not divide by
+   upper clip between 0.25 and 0.28, temperature near 1.0, FP16 where samples come from a separate
+   inference engine such as vLLM — the mismatch it removes is between that engine and the trainer,
+   so a run that generates inside the trainer has little of it to remove, and logs the mismatch
+   instead — and a loss that does not divide by
    answer length — checked in the pinned trl 1.0.0
    (adr:0017-a-half-billion-coder-model-tuned-locally-and-served-by-llama-server), since Dr. GRPO
    found trl dividing by length when it was written.

@@ -28,15 +28,16 @@ follows is in [[lotml-syntax]]. Every number taken from a paper in `research/lit
 - **A full spec does not stop forbidden constructs.** In [PyLang](https://arxiv.org/abs/2605.15607),
   a minimal language absent from pretraining, frontier models given the complete spec and an explicit
   list of constraints still wrote `for` loops, chained indexing and built-ins the language lacks.
-  With idiom snippets Sonnet 4.5 solved 58% against 88% in Python; when it failed in PyLang after
-  solving in Python, it had chosen the same algorithm 77% of the time — the gap is implementation
+  With idiom snippets and one explicit rule Sonnet 4.5 solved 58% against 88% in Python; when it
+  failed in PyLang after solving in Python, it had chosen the same algorithm 77% of the time — the gap is implementation
   fidelity, not reasoning. Fine-tuning drove syntax errors below 5% and left a gap that is not
   syntactic.
 - **Familiar syntax with a new meaning is worse than new syntax.** Models predicting what programs
   do under supplied rules lost 40–70 points when familiar operators carried new meanings, much more
   than with novel symbols for the same rules, and chain-of-thought did not help
-  ([arXiv 2510.03415](https://arxiv.org/abs/2510.03415)). It measures reading, not writing, but it is
-  the closest measurement of lotml's case: Python's `=` and argument passing with copy semantics.
+  ([arXiv 2510.03415](https://arxiv.org/abs/2510.03415)). It used a featherweight C, adversarial swaps such as `+` evaluated as subtraction, and final-state
+  prediction: it measures reading, not writing, and the rule at its extreme, but it is the closest
+  measurement of lotml's case: Python's `=` and argument passing with copy semantics.
 - **Paradigm priors persist.** Asked for Haskell, OCaml and Scala, GPT-5 wrote mutable variables,
   loops and in-place updates in 80–94% of outputs, and error rates were significantly higher in the
   purely functional languages ([FPEval](https://arxiv.org/abs/2601.02060)). lotml's immutability by
@@ -48,8 +49,9 @@ follows is in [[lotml-syntax]]. Every number taken from a paper in `research/lit
 - **Language confusion is real but not only toward Python.** In
   [Moumoula et al.](https://arxiv.org/abs/2503.13620) adherence ranged from 74.33% to 97.60% across ten
   models, and models drifted mostly to Python for only five of them (others to Java or JavaScript);
-  the near-universal Python default was measured where no language was named. On a benchmark that
-  names the language, nearly all models were above 99% — two datasets, not a controlled ablation.
+  the near-universal Python default was measured where no language was named. On HumanEval-XL,
+  whose prompts carry explicit language keywords, nearly all models were above 99%, against
+  BabelCode's explicit English instructions without them — two datasets, not a controlled ablation.
 
 ## What lotml's own measurements showed
 
@@ -59,14 +61,24 @@ found the semantics a Python reader would get wrong — variant A's `or` and `if
 test that passes only under reference semantics. In the [[editing-robustness]] pilot, a braces form
 of lotml drew the C family's `else if`. Every neighbour's prior leaks where lotml resembles it.
 
+The phase 1 gate (adr:0011-proceed-to-phase-2-past-the-failed-phase-1-gate) measured the open
+models the pilot left out. With the reference in the prompt, `lotml check` refused 91 of Qwen 2.5
+Coder 7B's 200 first answers and 143 of Llama 3.1 8B's, which also wrote syntax lotml does not have
+and mostly did not recover; pass@1 was 45.5% against 83.5% and 19.0% against 65.5% in typed Python.
+Claude Haiku and Sonnet were refused 20 and 4 times, mostly for mutability and unknown names. For
+7–8B models, the syntax risk has not moved.
+
 ## Ways around it, in order of evidence
 
 1. **A short syntax reference in the prompt.** On Cangjie, a 2,146-token grammar reference raised
    every model by 22–46 points over direct generation — GPT-5 from 4.8% to 50.4% — and beat retrieval
    over the language's public corpus, which left more than half of failures as foreign syntax
-   ([CangjieBench](https://arxiv.org/abs/2603.14501)). Idiom snippets beat stated rules: in PyLang
-   they added 24 points, and rules without snippets lowered one model's score. lotml's spec is already
-   short (the pilot's is about 1,830 tokens); it should be made of examples.
+   ([CangjieBench](https://arxiv.org/abs/2603.14501)). Idiom snippets carry the most, but a targeted
+   rule helps too: for Sonnet 4.5 in PyLang, snippets took the spec-only 16.5% to 40.3%, one rule
+   about chained indexing alone to 37.4%, and both to 58.0%; for Sonnet 4, a list of rules without
+   snippets lowered the score (8.2% against 12.5%). lotml's spec is already short (the pilot's is
+   about 1,830 tokens); it should be made of examples, plus an explicit rule for each construct
+   models are seen to violate — at phase 1, mutability and unknown names.
 2. **Documentation and a compiler in the loop — for strong models.** [Shen et al.](https://arxiv.org/abs/2602.06976)
    took Cangjie from 3.23% / 7.74% / 45.16% zero-shot to 63.23% / 73.55% / 81.94% with an agent that
    navigates documentation, searches, looks up types, executes code and runs public tests; one-time
@@ -115,11 +127,15 @@ Sources: `research/llm-landscape/evaluation-and-adaptation.md`.
 
 ## Consequences for the project
 
-- The risk did not disappear when the syntax stopped leaking; it moved to implementation fidelity
-  and semantics. Where lotml diverges from Python — immutability, value semantics, `T ! E` — the model
-  will follow its prior unless the syntax marks the difference and the compiler catches it.
-- Do not put Python in the prompt next to the lotml task: adding the Python solution to GPT-5's
-  prompt cut Cangjie pass@1 from 64.0% to 44.5%, though agents with more turns recovered.
+- For frontier models the risk did not disappear when the syntax stopped leaking; it moved to
+  implementation fidelity and semantics; for 7–8B models syntax still leaks (phase 1). Where lotml
+  diverges from Python — immutability, value semantics, `T ! E` — the model will follow its prior
+  unless the syntax marks the difference and the compiler catches it.
+- A Python solution beside the task is not a rule either way. With only the syntax reference, it
+  pulled GPT-5 toward foreign idioms and cut Cangjie pass@1 from 64.0% to 44.5%; averaged over
+  models and methods it "neither reliably helps nor hurts", and three of four agent setups gained
+  3–10 points from it. lotml's corpus pipeline gave Claude Sonnet the Python and got 197 of 199 on
+  the first answer.
 - After a syntax reference, Cangjie's failures shifted to API misuse (34–42%) and type or mutability
   errors (about 16%): the standard library's shape and the mutability diagnostics are the next lever.
 - The Python→lotml translator is the main lever for open models; for closed models, the short,

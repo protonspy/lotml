@@ -56,8 +56,14 @@ provider per model, records it, and fails a run served by another.
   pass^k — all k attempts succeed — beside pass@k.
 - **Sample size limits what can be seen.** At about 200 paired tasks, one sample per task can
   show a difference of about 13 points, and ten samples about 7.5
-  ([[evaluation-harness]]). The harness effects above are visible at that scale. A 3-point
-  effect like SWE-agent's lint gate is not.
+  ([[evaluation-harness]]). The largest harness effects above (13 points or more) are visible at
+  that scale; 5–8-point ones need about ten samples per task, and a 3-point one like SWE-agent's
+  lint gate is not visible.
+- **Temperature 0 is not deterministic across sessions either.** Re-running the same 164
+  HumanEval problems at temperature 0 through one API, Llama 3.3 70B's first-attempt pass@1 came
+  out 84.1%, 82.9% and 81.1%, and its pass@1 after two repairs ranged from 87.8% to 96.3%
+  ([arXiv 2604.10508](https://arxiv.org/abs/2604.10508), Table VI and §IV; the paper is in
+  `research/literature/`, these numbers not yet among its claims).
 
 ## Edits: precise, addressed, and still a choice per model
 

@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 59c8af8331c1282060f90135b189f5a4d8990e8aeff0c0fabb65a5c4ec50aacf
+checksum: fc5303fa5ecff176350ae9df613c1ff76d2f07c32deaa14d6b99418a67e268d7
 ---
 
 # Runtime hot paths
@@ -70,6 +70,13 @@ benchmark that did not move. See `docs/wiki/pages/compiler-performance.md`.
   _Depends 1.1_
 - [ ] 2.1 (Unit) Cache the compiled code object of a module in `lotml_rt.py`, in process memory only and never read from disk, keyed by its payload, instead of rebuilding it through `ast` and `compile()` on every load
 - [ ] 2.2 (Unit) Specify, as a new spec named python-worker-pool, a pool of started CPython workers behind `lotml run`, `lotml test`, the MCP `test` tool and the grader, with its limits and its isolation: each program gets a fresh interpreter state, working directory and environment, a deadline and a memory cap, and a crash replaces the worker (adr:0025)
+- [ ] 1.8 (TDD) Compare the `repr` of rounding-tie doubles, RustPython's `float.rs`
+      cases among them, with CPython's before 1.5's Ryu printing is merged
+  _Reason review of the literature on 2026-10-08: research/prior-art/studies/RustPython.md warns a Ryu-style replacement inherits the tie problem, and the branch's commit c992098 has no tie test_
+- [ ] 1.9 (Unit) Count the reference-count operations each benchmark runs, and if they
+      dominate, specify borrow inference for read-only parameters as a shared-ir delta,
+      held to reuse not regressing (adr:0008)
+  _Reason review of the literature on 2026-10-08: the IR report recommends removing Inc and Dec in IR passes, 1.2 only makes them cheaper, and counting.lotml now measures them_
 
 ## Done when
 

@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 16cac6fd834cb42acf665b34eb111b5a721e686f7a9306f35cedd817387bdb70
+checksum: ae39f1f99aa3dcf54d5e8e66d1c976fd966616f8ac294f5ddf4207a0253f631e
 ---
 
 # Evaluation rigor
@@ -63,10 +63,42 @@ through the harness's confined runner (`limits.py`, `confine.py`, `execute.py`).
 - [ ] 2.1 (Unit) Check the 18 HumanEval tasks EvalPlus lists as having defective ground truth (arXiv 2305.01210) against the humaneval-original oracle, recording each task id, whether its oracle was wrong and what replaced it
 - [ ] 2.2 (Unit) Report three numbers for each agent and phase run: the first answer, the answer after feedback, and whether the output was well formed
 - [ ] 2.3 (Unit) Build an output-prediction probe from lotml programs, where the model predicts what a program prints and the confined runner executes it, measuring reading apart from writing
-- [ ] 3.1 (Unit) Pose VeraBench's 60 problems in lotml from a pinned commit of `aallan/vera-bench`, keeping its MIT notice, registered in `licences.toml` as an evaluation set never trained on, and run them paired against Python on the phase 1 gate's models
-- [ ] 3.2 (Unit) Split phase 1's recorded results into tasks that return an error and tasks that cannot, and report lotml's errors as values against Python's exceptions on each
-- [ ] 3.3 (Unit) Measure Python with and without type annotations under the same harness, on the phase 1 gate's models, so the cost of annotating is measured rather than assumed
+- [ ] 3.1 (Unit) Pose VeraBench's 60 problems in lotml from a pinned commit of
+      `aallan/vera-bench`, keeping its MIT notice, registered in `licences.toml` as an
+      evaluation set never trained on, and run them paired against Python on the phase 1
+      gate's models
+  _Depends 1.2_
+- [ ] 3.2 (Unit) Split phase 1's recorded results into tasks that return an error and
+      tasks that cannot, and report lotml's errors as values against Python's exceptions
+      on each
+  _Status removed_
+  _Reason review of the literature on 2026-10-08: phase 1's tasks take MultiPL-E's signatures and none returns an error, so the side of the split that can fail is empty; replaced by 3.4_
+- [ ] 3.3 (Unit) Measure Python with and without type annotations under the same
+      harness, on the phase 1 gate's models, so the cost of annotating is measured
+      rather than assumed
+  _Status removed_
+  _Reason review of the literature on 2026-10-08: annotation cost was already measured (MultiPL-E, p = 0.23; mame, 1.6-1.7x time), and phase 1's typed-Python rows ran on another interpreter than the harness now provisions; replaced by 3.5_
 - [ ] 4.1 (Unit) Write a proposed ADR on isolating graded runs on Windows with an AppContainer profile (no network, writes confined to the scratch directory) on top of the Job Objects `limits.py` uses, for the owner to decide
+- [ ] 1.4 (TDD) Compare two arms with more than one run per task by the per-task
+      difference of pass fractions, with a paired standard error and a sign-flip
+      permutation p-value, keeping exact McNemar for one run per task
+  _Reason review of the literature on 2026-10-08: agent-harness-arms 1.2 asks for five runs per task and its group 3 for paired results, and 1.1 builds only a one-arm interval_
+- [ ] 3.4 (Unit) Pose paired tasks whose specification states error cases — parse,
+      validate, look up — and compare lotml's errors as values against Python's
+      exceptions, with hidden tests on the error paths and the detectable effect
+      computed before the run
+  _Depends 1.2_
+  _Reason review of the literature on 2026-10-08: replaces 3.2, whose split of phase 1 is empty_
+- [ ] 3.5 (Unit) Measure Python with and without type annotations, both arms run fresh
+      on the same recorded interpreter and the phase 1 gate's models, reporting pass@1,
+      tokens, time and rounds against MultiPL-E's and mame's earlier measurements
+  _Depends 1.2_
+  _Reason review of the literature on 2026-10-08: replaces 3.3_
+- [ ] 2.4 (Unit) Feed every stored model answer that `lotml check` accepts through the
+      llguidance and GBNF dialects, report the share each rejects by cause, and widen a
+      dialect for any cause above 1% — its indentation of four spaces only and its depth
+      bound of eight among them
+  _Reason review of the literature on 2026-10-08: 2606.21619 found a single changed lexeme cut a model from 62.5% to 1.9%, and the dialects are tested on canonical programs only (docs/wiki/pages/constrained-decoding.md)_
 
 ## Done when
 

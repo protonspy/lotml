@@ -79,8 +79,9 @@ docstring in the file. A program whose problem `split.py` holds out stops the ru
 
 - Mutating text with regular expressions in Python: misses the structure the operators need and
   makes mutants that fail to parse for the wrong reason.
-- Uniform weights: DrRepair's 62.5 against 49.4 is the measured cost of ignoring what errors are
-  frequent.
+- Uniform weights: unmeasured either way. DrRepair's 62.5 against 49.4 sets its error-shaped
+  modules, sampled by error frequency and stacked one to five per program, against random token
+  dropout; it never ablates the weights. Weighting follows its practice, not a measured gain.
 - Seeding the corpus's 509 programs: several times the programs, all from content that may not be
   trained on.
 

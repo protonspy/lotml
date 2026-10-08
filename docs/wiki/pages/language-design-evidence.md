@@ -84,8 +84,10 @@ were built for (adr:0009-significant-indentation-with-symbol-addressed-edits).
   ([arXiv 2510.12047](https://arxiv.org/abs/2510.12047)).
 
 adr:0002-errors-as-values makes the error path part of the signature, which is where that
-evidence says it must live. Splitting lotml's phase 1 results into fallible and infallible tasks
-would give the first published comparison.
+evidence says it must live. Phase 1's results cannot give the comparison: its 200 tasks take their
+signatures from MultiPL-E, none returns an error, and no more than one first answer per model
+declares `T ! E`, so a split into fallible and infallible tasks leaves the fallible side empty.
+The first comparison needs paired tasks whose specification states the error cases.
 
 ## Verbosity
 
@@ -102,8 +104,11 @@ This agrees with [[token-cost]].
 
 ## The model writes something familiar, a compiler lowers it
 
-- **Quasar.** A restricted Python subset, transpiled and repaired from static errors, reached
-  89.2% execution on AgentDojo. Unrestricted Python reached 76.3%
+- **Quasar.** A restricted Python subset, transpiled to Quasar, kept accuracy level with
+  unrestricted Python: 71.4% against 71.8% on GQA, and 63.4% against 64.5% on AgentDojo's 93
+  tasks. With multi-turn feedback on errors, 89.2% of AgentDojo programs ran without error against
+  76.3% for single-shot Python, but accuracy rose only to 67.7% against 64.5%. The authors: the
+  subset "does not significantly change accuracy"
   ([arXiv 2506.12202](https://arxiv.org/abs/2506.12202) v2).
 - **LLMLift.** Python as an intermediate form, with a checker, lowered to four DSLs almost
   without failure ([arXiv 2406.03003](https://arxiv.org/abs/2406.03003)).
@@ -111,8 +116,8 @@ This agrees with [[token-cost]].
   HumanEval, against 86% for writing Python directly
   ([arXiv 2501.06283](https://arxiv.org/abs/2501.06283)).
 
-A checked language with Python's shape is lotml's thesis. Quasar is the closest measured case of
-it.
+A checked language with Python's shape is lotml's thesis. Quasar shows the shape costs no
+accuracy; the gain it measured came from the feedback loop, which its Python baseline did not get.
 
 ## If contracts are ever added
 

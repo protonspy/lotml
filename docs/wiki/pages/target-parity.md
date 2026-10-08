@@ -102,15 +102,17 @@ parity program yet proving optionals or `test` blocks.
 
 ## Rules both targets must enforce the same way
 
-Some behavior lives outside the IR and differs today:
+Some behavior lives outside the IR and had to be made to agree:
 
-- **Recursion depth.** The Python target stops at CPython's 1,000 frames. A native program stops
-  when the operating system's stack runs out, which is 1 MiB on Windows. Neither side sets a
-  limit. Monty counts depth per call and charges its limits every 255 steps at about 2% cost.
+- **Recursion depth.** Both targets now stop at 1,000 calls of the functions that can recurse,
+  counted by the program on each thread (`LIMIT` in `lotml-ir/src/depth.rs`, `DEPTH_LIMIT` in
+  `lotml_rt.py`), with a `RecursionError` past it (`specs/recursion-depth/`). Native threads reserve
+  64 MiB of stack (`LT_STACK` in `lotml.c`); the Python target runs on a 64 MiB thread with
+  CPython's own limit raised to 20,000, so the program's check always fires first. Before it, the
+  Python target stopped at CPython's 1,000 frames and a native program when the operating system's
+  stack ran out, 1 MiB on Windows. Monty counts depth per call and charges its limits every 255 steps at about 2% cost.
   Edge-python charges an operation budget only on taken back-edges, calls and builtins that cost
-  in proportion to size. `specs/recursion-depth/` specifies one limit for both: 1,000 calls of the
-  functions that can recurse, counted by the program itself on each thread, a `RecursionError`
-  past it, and native threads reserving the stack the limit needs.
+  in proportion to size.
 - **Windows.** CI tested on Ubuntu, and the Windows release job only runs `--version`. Plix
   shipped native code with the Unix calling convention against a runtime using the Windows one,
   because its Windows CI ran only `--version`. CI now runs the LLVM target's tests on a Windows
