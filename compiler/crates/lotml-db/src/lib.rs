@@ -246,6 +246,20 @@ mod tests {
     }
 
     #[test]
+    fn the_checked_file_is_assembled_from_the_same_item_checks_as_its_diagnostics() {
+        let mut db = Counting::default();
+        let file = SourceFile::create(&db, "f.lot".into(), PARTS.into(), vec![]);
+        let all = items(&db, file).len();
+        assert!(!checked(&db, file).types.is_empty());
+        assert_eq!(db.item_checks(), all, "from an empty database, every item is checked");
+        assert!(diagnostics(&db, file).is_empty());
+        assert_eq!(db.item_checks(), 0, "the diagnostics reuse those checks");
+        file.set_text(&mut db).to(PARTS.replace("    return 0\n", "    return 1\n"));
+        assert!(!checked(&db, file).types.is_empty());
+        assert_eq!(db.item_checks(), 1, "after an edit inside a body, that body");
+    }
+
+    #[test]
     fn an_edit_inside_one_body_checks_that_item_again_and_an_edit_to_a_signature_checks_all() {
         let mut db = Counting::default();
         let file = SourceFile::create(&db, "f.lot".into(), PARTS.into(), vec![]);
