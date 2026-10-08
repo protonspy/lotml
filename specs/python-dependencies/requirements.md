@@ -2,7 +2,8 @@
 autonomy: auto
 ci: wait
 branch: feat/python-dependencies
-delivery: in-progress
+delivery: in-review
+pr: 56
 ---
 
 # Python dependencies — requirements
