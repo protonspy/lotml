@@ -47,3 +47,19 @@ def test_a_numeric_program_not_compiled_yet_fails_the_criterion_and_says_why():
     report = benchmarks.markdown("clang 23", [result("fib", 1.0, 1.0)], [("sieve", "a list")])
     assert "## Not compiled yet" in report and "`sieve`: a list" in report
     assert "`sieve` is not compiled yet" in report
+
+
+def test_against_a_baseline_each_program_says_how_much_longer_it_takes_now():
+    before = [result("fib", 0.1, 1.0), result("sieve", 0.1, 2.0), result("cow", 0.1, 1.0)]
+    now = [result("fib", 0.1, 1.04), result("sieve", 0.1, 1.9)]
+    section = benchmarks.against(before, now, "main")
+    assert section.startswith("## Against main")
+    assert "| fib | 1.000 | 1.040 | +4.0% |" in section
+    assert "| sieve | 2.000 | 1.900 | -5.0% |" in section
+    assert "cow" not in section, "a program only one side compiled is left out"
+    assert "No program takes more than 5% longer than before." in section
+
+
+def test_a_program_more_than_5_percent_longer_than_the_baseline_is_named():
+    section = benchmarks.against([result("fib", 0.1, 1.0)], [result("fib", 0.1, 1.06)], "main")
+    assert "Past 5% longer than before: `fib` takes 6.0% longer." in section

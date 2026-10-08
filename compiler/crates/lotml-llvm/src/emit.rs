@@ -87,6 +87,7 @@ pub fn program(lowered: &Lowered, file: &str, entry: Entry, lines: bool) -> Resu
             span: f.span,
             results: &mut results,
             scope,
+            depth: None,
         };
         match writer.function() {
             Ok(text) => bodies.push_str(&text),
@@ -444,6 +445,8 @@ struct Writer<'a, 't> {
     results: &'t mut Vec<Ty>,
     /// The function's `DISubprogram`, when the module carries line tables.
     scope: Option<usize>,
+    /// The count of calls in progress `Enter` read, which every `Leave` puts back.
+    depth: Option<String>,
 }
 
 impl Writer<'_, '_> {
@@ -1860,14 +1863,21 @@ impl Writer<'_, '_> {
         self.label(&within);
         let more = self.value(format!("add i32 {depth}, 1"));
         self.emit(format!("store i32 {more}, ptr @lt_depth"));
+        self.depth = Some(depth);
     }
 
-    /// The call `enter` counted ends (R1.3).
+    /// The call `enter` counted ends (R1.3): the count it read is put back, every call made since
+    /// having put back its own. `Enter` begins the body, so what it read is in reach of every exit.
     fn leave(&mut self) {
         self.module.declare(DEPTH);
-        let depth = self.value("load i32, ptr @lt_depth");
-        let less = self.value(format!("sub i32 {depth}, 1"));
-        self.emit(format!("store i32 {less}, ptr @lt_depth"));
+        let depth = match self.depth.clone() {
+            Some(depth) => depth,
+            None => {
+                let depth = self.value("load i32, ptr @lt_depth");
+                self.value(format!("sub i32 {depth}, 1"))
+            }
+        };
+        self.emit(format!("store i32 {depth}, ptr @lt_depth"));
     }
 
     fn panic(&mut self, panic: &Panic) {

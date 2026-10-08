@@ -10,13 +10,20 @@ is expected to lose to a hand-managed heap. A program the LLVM backend does not 
 named with why.
 
     python -m lotml_harness.experiments.benchmarks
+    python -m lotml_harness.experiments.benchmarks --baseline <checkout>/compiler --label "main"
+
+With `--baseline`, the LotML programs are also built by the compiler of another checkout, and the
+report says how much longer each one takes now than there: what a change to the compiler costs
+(specs/recursion-depth R3.1).
 """
 
+import argparse
 import json
 import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 from lotml_harness import ROOT
 from lotml_harness.experiments.phase1 import RESULTS
@@ -27,6 +34,9 @@ RUNS = 7
 """Runs of each program; the fastest is kept, the one least disturbed by the rest of the machine."""
 LIMIT = 2.0
 """The most a numeric program may take, as a multiple of its C version."""
+CHANGE = 0.05
+"""The most longer a program may take than with the baseline's compiler (specs/recursion-depth
+R3.1)."""
 KINDS = {
     "mandelbrot": "numeric",
     "sieve": "numeric",
@@ -85,8 +95,11 @@ def parse(lines: list[str]) -> tuple[str, list[Result], list[tuple[str, str]]]:
     return compiler, results, refused
 
 
-def run(runs: int = RUNS) -> tuple[str, list[Result], list[tuple[str, str]]]:
-    """Every benchmark built and run by the LLVM backend's runner, `cargo run --example bench`."""
+def run(
+    runs: int = RUNS, compiler: Path = ROOT / "compiler"
+) -> tuple[str, list[Result], list[tuple[str, str]]]:
+    """Every benchmark built and run by the LLVM backend's runner, `cargo run --example bench`, of
+    the compiler in the directory `compiler`."""
     cargo = shutil.which("cargo")
     if cargo is None:
         raise SystemExit(
@@ -106,7 +119,7 @@ def run(runs: int = RUNS) -> tuple[str, list[Result], list[tuple[str, str]]]:
             str(BENCHMARKS),
             str(runs),
         ],
-        cwd=ROOT / "compiler",
+        cwd=compiler,
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -158,9 +171,46 @@ def markdown(
     return "\n".join(lines)
 
 
-def main() -> None:
+def against(baseline: list[Result], results: list[Result], label: str) -> str:
+    """How much longer each LotML program takes now than built by the compiler `label` names,
+    the programs both compiled, each its fastest run."""
+    before = {r.name: r.lotml for r in baseline}
+    rows = [(r.name, before[r.name], r.lotml) for r in results if r.name in before]
+    lines = [
+        f"## Against {label}",
+        "",
+        f"Each LotML program built by the compiler of {label} as well, at `-O2`, its fastest of",
+        f"{RUNS} runs.",
+        "",
+        "| program | before (s) | now (s) | change |",
+        "| --- | ---: | ---: | ---: |",
+    ]
+    for name, was, now in rows:
+        lines.append(f"| {name} | {was:.3f} | {now:.3f} | {now / was - 1:+.1%} |")
+    lines.append("")
+    over = [
+        f"`{name}` takes {now / was - 1:.1%} longer"
+        for name, was, now in rows
+        if now > was * (1 + CHANGE)
+    ]
+    if over:
+        lines.append(f"Past {CHANGE:.0%} longer than before: {'; '.join(over)}.")
+    else:
+        lines.append(f"No program takes more than {CHANGE:.0%} longer than before.")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--baseline", type=Path, help="another checkout's compiler directory")
+    parser.add_argument("--label", default="the baseline", help="what the baseline is called")
+    args = parser.parse_args(argv)
     compiler, results, refused = run()
     report = markdown(compiler, results, refused)
+    if args.baseline is not None:
+        _, baseline, _ = run(compiler=args.baseline)
+        report += "\n" + against(baseline, results, args.label)
     REPORT.write_text(report, encoding="utf-8", newline="\n")
     sys.stdout.buffer.write(report.encode("utf-8"))
 
