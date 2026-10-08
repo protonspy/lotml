@@ -102,14 +102,12 @@ fn python(uses: Use, project: Option<&Path>, downloads: bool) -> Result<Vec<Stri
     resolve(&options, &var, managed.as_ref().map(|m| m as &dyn Managed), &lotml_py::python).map_err(Failure)
 }
 
-/// The project a file belongs to: the nearest directory above it holding `.git` or a
-/// `pyproject.toml`, or else its own directory.
+/// The project a file or directory belongs to: the nearest directory holding `.git` or a
+/// `pyproject.toml`, from a directory itself or from a file's own; none without one.
 fn project_of(path: &Path) -> Option<PathBuf> {
-    let dir = std::path::absolute(path).ok()?.parent()?.to_path_buf();
-    dir.ancestors()
-        .find(|d| d.join(".git").exists() || d.join("pyproject.toml").is_file())
-        .map(Path::to_path_buf)
-        .or(Some(dir))
+    let path = std::path::absolute(path).ok()?;
+    let dir = if path.is_dir() { path } else { path.parent()?.to_path_buf() };
+    dir.ancestors().find(|d| d.join(".git").exists() || d.join("pyproject.toml").is_file()).map(Path::to_path_buf)
 }
 
 /// Python, started for one of the compiler's scripts. `-P` keeps the working directory out
@@ -613,6 +611,21 @@ mod tests {
 
     fn scratch() -> Scratch {
         Scratch::new().unwrap_or_else(|Failure(why)| panic!("{why}"))
+    }
+
+    #[test]
+    fn a_project_is_found_from_a_directory_itself_and_never_made_up() {
+        let place = scratch();
+        let project = place.0.join("project");
+        std::fs::create_dir_all(project.join("src")).unwrap();
+        std::fs::write(project.join("pyproject.toml"), "").unwrap();
+        std::fs::write(project.join("src").join("p.lot"), "").unwrap();
+        assert_eq!(project_of(&project), Some(project.clone()), "a directory given is searched first");
+        assert_eq!(project_of(&project.join("src").join("p.lot")), Some(project.clone()));
+        let loose = place.0.join("loose.lot");
+        std::fs::write(&loose, "").unwrap();
+        let found = project_of(&loose);
+        assert!(found.as_deref() != Some(place.0.as_path()), "a file's own directory is no project by itself");
     }
 
     #[test]

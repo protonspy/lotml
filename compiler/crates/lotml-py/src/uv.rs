@@ -128,7 +128,7 @@ impl Uv {
     /// `uv python find` of the managed `version`, which downloads nothing.
     pub fn find_python(&self, version: &str, var: &dyn Fn(&str) -> Option<OsString>) -> Command {
         let mut command = self.command(var);
-        command.args(["python", "find", "--managed-python", "--no-python-downloads", version]);
+        command.args(["python", "find", "--managed-python", "--no-python-downloads", "--no-project", version]);
         command
     }
 
@@ -303,7 +303,7 @@ mod confined_tests {
         }
         assert!(!env.contains_key("UV_PYTHON_PREFERENCE") && !env.contains_key("PYTHONPATH"), "only the listed pass");
         let args: Vec<_> = command.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
-        assert_eq!(args, ["python", "find", "--managed-python", "--no-python-downloads", "3.14"]);
+        assert_eq!(args, ["python", "find", "--managed-python", "--no-python-downloads", "--no-project", "3.14"]);
     }
 
     #[test]

@@ -2,7 +2,9 @@
 
 import base64
 import json
+import os
 import pickle
+import subprocess
 import sys
 import time
 import zlib
@@ -11,6 +13,7 @@ import pytest
 
 from lotml_harness import execute
 from lotml_harness.execute import isolated, run
+from lotml_harness.experiments.phase1 import COMPILER
 from lotml_harness.tasks.livecodebench import decode_private
 
 
@@ -151,6 +154,33 @@ def test_the_compiler_a_child_runs_never_downloads_a_python(monkeypatch):
     environment = execute.child_environment()
     assert environment["LOTML_OFFLINE"] == "1", "an empty LOTML_OFFLINE does not turn it off"
     assert environment["LOTML_PYTHON"] == sys.executable
+
+
+def test_the_grader_s_lotml_test_reaches_no_download(tmp_path):
+    """The grader's `lotml test`, in the environment every child gets, with no CPython given and
+    a uv that cannot run, given a cache home so it would use that uv: an error naming what is
+    missing, never a download."""
+    (tmp_path / "pyproject.toml").write_text("", encoding="utf-8")
+    (tmp_path / "t.lot").write_text('test "t":\n    assert 1 == 1\n', encoding="utf-8")
+    uv = tmp_path / "uv.exe"
+    uv.write_text("not a program", encoding="utf-8")
+    environment = execute.child_environment()
+    del environment["LOTML_PYTHON"]
+    home = {
+        k: v
+        for k, v in os.environ.items()
+        if k in ("HOME", "USERPROFILE", "LOCALAPPDATA", "XDG_CACHE_HOME")
+    }
+    ran = subprocess.run(  # noqa: S603
+        [str(COMPILER), "test", "--json", "t.lot"],
+        cwd=tmp_path,
+        env=environment | home | {"LOTML_UV": str(uv)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert ran.returncode != 0
+    assert "downloads nothing" in ran.stderr, ran.stderr
 
 
 def test_an_exit_from_a_test_is_a_failure_not_a_clean_exit():

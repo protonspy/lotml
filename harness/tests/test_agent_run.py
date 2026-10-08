@@ -273,6 +273,7 @@ def test_the_trace_keeps_the_files_around_every_check_and_test_and_the_context(t
     assert trace["compiler"].startswith("lotml ") and row["compiler"] == trace["compiler"]
     assert row["python"]["version"].startswith("3."), "the row records the CPython it graded on"
     assert row["python"]["path"] and "uv" in row["python"]
+    assert str(Path.home()) not in row["python"]["path"], "the committed row names no home"
     assert runner.SYSTEM in trace["system"]
     assert {t["function"]["name"] for t in trace["tools"]} >= {"check", "test", "replace"}
 

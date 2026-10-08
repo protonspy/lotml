@@ -73,8 +73,10 @@ pub fn resolve(
         .ok_or_else(|| format!("uv installed CPython {VERSION}, and then could not find it"))
 }
 
-/// The interpreter of the virtual environment `VIRTUAL_ENV` names, or of the project's `.venv/`,
-/// which must lie inside the project once its links are followed.
+/// The interpreter of the virtual environment `VIRTUAL_ENV` names, or of the project's `.venv/`:
+/// one holding `pyvenv.cfg`, inside the project once its links are followed, in a project root
+/// that is no drive's root and that nobody else may write to, and owned by whoever owns the root —
+/// so a `.venv` another user left above the project is never run.
 fn virtual_environment(var: &dyn Fn(&str) -> Option<OsString>, project: Option<&Path>) -> Option<PathBuf> {
     let interpreter = |venv: &Path| {
         let python =
@@ -88,8 +90,16 @@ fn virtual_environment(var: &dyn Fn(&str) -> Option<OsString>, project: Option<&
     }
     let root = project?.canonicalize().ok()?;
     let venv = root.join(".venv").canonicalize().ok()?;
-    if !venv.starts_with(&root) {
+    if !venv.starts_with(&root) || root.parent().is_none() || !venv.join("pyvenv.cfg").is_file() {
         return None;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let (owner, made) = (root.metadata().ok()?, venv.metadata().ok()?);
+        if owner.mode() & 0o002 != 0 || made.uid() != owner.uid() {
+            return None;
+        }
     }
     interpreter(&venv)
 }
@@ -173,6 +183,7 @@ mod tests {
         };
         std::fs::create_dir_all(python.parent().unwrap()).unwrap();
         std::fs::write(&python, b"").unwrap();
+        std::fs::write(root.join(".venv").join("pyvenv.cfg"), b"home = x\n").unwrap();
         python
     }
 
@@ -194,6 +205,30 @@ mod tests {
         assert_eq!(PathBuf::from(&ran[0]).canonicalize().unwrap(), python.canonicalize().unwrap());
         let bound = resolve(&options(Use::Bind, Some(&root), true), &none, Some(&uv), &|| None).unwrap();
         assert_eq!(bound, vec!["managed".to_string()], "bind never uses the project's environment");
+    }
+
+    #[test]
+    fn a_directory_that_is_no_virtual_environment_is_never_run() {
+        let root = scratch("no-pyvenv");
+        venv_in(&root);
+        std::fs::remove_file(root.join(".venv").join("pyvenv.cfg")).unwrap();
+        let none = |_: &str| None;
+        let uv = fake(Some("managed"), None);
+        let ran = resolve(&options(Use::Run, Some(&root), true), &none, Some(&uv), &|| None);
+        assert_eq!(ran, Ok(vec!["managed".into()]), "a `.venv` without `pyvenv.cfg` is not one");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_project_root_anyone_may_write_runs_no_virtual_environment() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = scratch("shared-root");
+        venv_in(&root);
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o1777)).unwrap();
+        let none = |_: &str| None;
+        let uv = fake(Some("managed"), None);
+        let ran = resolve(&options(Use::Run, Some(&root), true), &none, Some(&uv), &|| None);
+        assert_eq!(ran, Ok(vec!["managed".into()]), "a `.venv` in a shared directory is anyone's");
     }
 
     #[test]

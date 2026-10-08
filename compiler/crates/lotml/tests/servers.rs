@@ -43,9 +43,16 @@ struct Client {
 
 impl Client {
     fn start(args: &[&str], headers: bool) -> Client {
+        Client::start_with(args, headers, |_| {})
+    }
+
+    /// The server started with `setup` applied to its command first.
+    fn start_with(args: &[&str], headers: bool, setup: impl FnOnce(&mut Command)) -> Client {
         // A guide this machine has configured would add a tool; these tests serve without one.
         let no_guide = Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-harness-guide.toml");
-        let mut child = Command::new(env!("CARGO_BIN_EXE_lotml"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_lotml"));
+        setup(&mut command);
+        let mut child = command
             .args(args)
             .env("LOTML_HARNESS_GUIDE", no_guide)
             .stdin(Stdio::piped())
@@ -450,4 +457,34 @@ fn the_language_server_renames_every_reference() {
     keyword["newName"] = json!("match");
     let (refused, _) = lsp.request(4, "textDocument/rename", keyword);
     assert_eq!(refused["error"]["code"], -32803);
+}
+
+#[test]
+fn the_mcp_test_tool_never_downloads_a_python() {
+    let dir = scratch(
+        "mcp-offline",
+        &[
+            ("pyproject.toml", ""),
+            (
+                "t.lotml",
+                "test \"t\":
+    assert 1 == 1
+",
+            ),
+            ("uv.exe", "not a program"),
+        ],
+    );
+    let uv = dir.join("uv.exe");
+    let mut mcp = Client::start_with(&["mcp", "--root", dir.to_str().unwrap()], false, |command| {
+        command.env("LOTML_UV", &uv).env_remove("LOTML_PYTHON").env_remove("LOTML_OFFLINE").env_remove("VIRTUAL_ENV");
+    });
+    mcp.request(
+        1,
+        "initialize",
+        json!({"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}),
+    );
+    mcp.notify("notifications/initialized", json!({}));
+    let (said, failed) = call(&mut mcp, 2, "test", json!({"paths": ["t.lotml"]}));
+    assert!(failed, "no Python, no tests: {said}");
+    assert!(said.contains("downloads nothing"), "the download step is never reached, offline or not: {said}");
 }
