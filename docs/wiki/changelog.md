@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-07 — recursion depth specified: [[target-parity]] points at `specs/recursion-depth/`
 - 2026-10-07 — the conformance matrix and the Windows job built: [[target-parity]] says what each covers
 - 2026-10-07 — the differential fuzzer built: [[target-parity]] says what it compares and the two differences it found
 - 2026-10-07 — the parity floor built: [[target-parity]] says what CI holds the suite to and what a program needs to leave it
