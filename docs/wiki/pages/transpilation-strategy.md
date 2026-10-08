@@ -193,7 +193,7 @@ Phase 2 built both directions of R14 and R27 on one checked boundary
   adr:0033-lotml-run-installs-a-project-s-python-dependencies-from-its-uv-lock). `lotml run` and
   `lotml test` check the lock names PyPI alone — every package from its registry, every file from
   its host with a hash — and run the program in an environment made from the lock in lotml's cache,
-  keyed by the lock, the manifest and the interpreter, by one `uv sync --locked` of wheels only. A
+  keyed by the lock, the manifest and the interpreter, by one `uv sync --frozen` of wheels only. A
   made environment is used offline; offline, and for the MCP server, the grader and the harness,
   nothing is installed. A manifest declaring dependencies with no lock is reported with `uv lock`.
 - **lotml calling Python.** `lotml bind <module> --stub <file.pyi>` reads a stub with the Python

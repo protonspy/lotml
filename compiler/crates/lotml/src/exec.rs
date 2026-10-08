@@ -111,7 +111,7 @@ fn python(uses: Use, project: Option<&Path>, downloads: bool) -> Result<Vec<Stri
     let base =
         resolve(&options, &var, managed.as_ref().map(|m| m as &dyn Managed), &lotml_py::python).map_err(Failure)?;
     let Some(locked) = locked else { return Ok(base) };
-    let executable = executable_of(&base)?;
+    let (executable, version) = executable_of(&base)?;
     let root = lotml_llvm::cache::user_root()
         .map(|root| root.join("python-environments"))
         .filter(|root| lotml_llvm::cache::private_directory(root).is_ok())
@@ -128,21 +128,26 @@ fn python(uses: Use, project: Option<&Path>, downloads: bool) -> Result<Vec<Stri
         if status.success() { Ok(()) } else { Err("uv could not install the project's uv.lock".into()) }
     };
     let make: Option<crate::dependencies::Make<'_>> = if downloads { Some(&make) } else { None };
-    let python = crate::dependencies::environment(&root, &locked, &executable, make).map_err(Failure)?;
+    let base = format!("{executable}\n{version}");
+    let python = crate::dependencies::environment(&root, &locked, &base, make).map_err(Failure)?;
     Ok(vec![python.display().to_string()])
 }
 
-/// The path of the executable `python` runs, as the interpreter itself reports it: a command such
-/// as `py -3` names one only once it runs.
-fn executable_of(python: &[String]) -> Result<String, Failure> {
-    let output = interpreter(python, "import sys\nprint(sys.executable)")
+/// The path of the executable `python` runs and its full version, as the interpreter itself reports
+/// them: a command such as `py -3` names one only once it runs, and an interpreter upgraded in place
+/// keeps its path.
+fn executable_of(python: &[String]) -> Result<(String, String), Failure> {
+    let output = interpreter(python, "import sys\nprint(sys.executable)\nprint(sys.version)")
         .output()
         .map_err(|e| Failure(format!("cannot run Python: {e}")))?;
-    let executable = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if !output.status.success() || executable.is_empty() {
-        return Err(Failure(format!("{} did not say where its executable is", python.join(" "))));
+    let said = String::from_utf8_lossy(&output.stdout);
+    let mut lines = said.lines().map(str::trim);
+    match (output.status.success(), lines.next(), lines.next()) {
+        (true, Some(executable), Some(version)) if !executable.is_empty() => {
+            Ok((executable.to_string(), version.to_string()))
+        }
+        _ => Err(Failure(format!("{} did not say where its executable is", python.join(" ")))),
     }
-    Ok(executable)
 }
 
 /// The project a file or directory belongs to: the nearest directory holding `.git` or a

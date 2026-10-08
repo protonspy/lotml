@@ -153,8 +153,9 @@ impl Uv {
     }
 
     /// `uv sync` of the project copied to `project` into `environment` over the interpreter
-    /// `python` (adr:0033): the lock as it stands, wheels only, the project itself and its sources
-    /// left out, any interpreter `python` names taken, managed or not. Refused as
+    /// `python` (adr:0033): the lock as it stands, never resolved again, so uv reaches no address
+    /// the manifest names, nor its sources; wheels only; the project itself left out; any
+    /// interpreter `python` names taken, managed or not. Refused as
     /// [`Uv::install_python`] is while a variable of [`REFUSED`] is set.
     pub fn sync(
         &self,
@@ -172,7 +173,7 @@ impl Uv {
         command
             .env_remove("UV_MANAGED_PYTHON")
             .env("UV_PROJECT_ENVIRONMENT", environment)
-            .args(["sync", "--locked", "--no-build", "--no-install-project", "--no-sources", "--python", python])
+            .args(["sync", "--frozen", "--no-build", "--no-install-project", "--python", python])
             .arg("--project")
             .arg(project);
         Ok(command)
@@ -358,17 +359,7 @@ mod confined_tests {
         let args: Vec<_> = command.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
         assert_eq!(
             args,
-            [
-                "sync",
-                "--locked",
-                "--no-build",
-                "--no-install-project",
-                "--no-sources",
-                "--python",
-                "/py",
-                "--project",
-                "work"
-            ]
+            ["sync", "--frozen", "--no-build", "--no-install-project", "--python", "/py", "--project", "work"]
         );
         for name in REFUSED {
             let var = |n: &str| (n == *name).then(|| OsString::from("https://example.invalid"));

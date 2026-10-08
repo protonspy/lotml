@@ -2,6 +2,7 @@
 //! adr:0033-lotml-run-installs-a-project-s-python-dependencies-from-its-uv-lock): its `uv.lock`,
 //! checked to name PyPI alone, and the environment `lotml run` and `lotml test` make from it.
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use toml::{Table, Value};
@@ -19,23 +20,20 @@ pub struct Locked {
 }
 
 /// The lock of the project at `root`, checked: `None` when it has no `uv.lock` and declares no
-/// dependency; an error for a lock lotml does not install from, and for dependencies declared
-/// with no lock to install them from.
+/// dependency, or when its root is one another user could have put a lock in, which is ignored and
+/// said; an error for a lock lotml does not install from, and for dependencies declared with no
+/// lock to install them from.
 pub fn locked(root: &Path) -> Result<Option<Locked>, String> {
-    let read = |name: &str| -> Result<Option<String>, String> {
-        let path = root.join(name);
-        match std::fs::metadata(&path) {
-            Err(_) => Ok(None),
-            Ok(meta) if meta.len() > LARGEST => {
-                Err(format!("{} is past the {LARGEST} bytes lotml reads", path.display()))
-            }
-            Ok(_) => {
-                std::fs::read_to_string(&path).map(Some).map_err(|e| format!("cannot read {}: {e}", path.display()))
-            }
-        }
-    };
-    let pyproject = read("pyproject.toml")?;
-    let Some(lock) = read("uv.lock")? else {
+    let lock_path = root.join("uv.lock");
+    if !trusted(root, &lock_path) {
+        eprintln!(
+            "lotml: ignoring the project files in {}: another user may write that directory, or it is a drive's root",
+            root.display()
+        );
+        return Ok(None);
+    }
+    let pyproject = read_bounded(&root.join("pyproject.toml"))?;
+    let Some(lock) = read_bounded(&lock_path)? else {
         if pyproject.as_deref().is_some_and(declares_dependencies) {
             return Err(format!(
                 "{} declares dependencies and holds no uv.lock to install them from; write it with `uv lock`",
@@ -47,8 +45,55 @@ pub fn locked(root: &Path) -> Result<Option<Locked>, String> {
     let Some(pyproject) = pyproject else {
         return Err(format!("{} holds a uv.lock and no pyproject.toml", root.display()));
     };
-    check_lock(&lock)?;
+    check_lock(&lock, project_name(&pyproject).as_deref())?;
     Ok(Some(Locked { lock, pyproject }))
+}
+
+/// Whether the project files at `root` are the user's to install from: `root` no drive's root and,
+/// on Unix, a directory nobody else may write, its `uv.lock`, when there is one, owned by `root`'s
+/// owner — so a lock another user left in a shared directory above a program is never installed.
+fn trusted(root: &Path, lock: &Path) -> bool {
+    let Ok(root) = root.canonicalize() else { return false };
+    if root.parent().is_none() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let Ok(owner) = root.metadata() else { return false };
+        if owner.mode() & 0o002 != 0 {
+            return false;
+        }
+        if let Ok(made) = lock.metadata()
+            && made.uid() != owner.uid()
+        {
+            return false;
+        }
+    }
+    let _ = lock;
+    true
+}
+
+/// The text of the regular file at `path`, read no further than [`LARGEST`]; `None` when there is
+/// no file there.
+fn read_bounded(path: &Path) -> Result<Option<String>, String> {
+    let cannot = |e: std::io::Error| format!("cannot read {}: {e}", path.display());
+    match std::fs::metadata(path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(cannot(e)),
+        Ok(meta) if !meta.is_file() => return Err(format!("{} is not a regular file", path.display())),
+        Ok(_) => {}
+    }
+    let file = std::fs::File::open(path).map_err(cannot)?;
+    if !file.metadata().map_err(cannot)?.is_file() {
+        return Err(format!("{} is not a regular file", path.display()));
+    }
+    let mut text = String::new();
+    file.take(LARGEST + 1).read_to_string(&mut text).map_err(cannot)?;
+    if text.len() as u64 > LARGEST {
+        return Err(format!("{} is past the {LARGEST} bytes lotml reads", path.display()));
+    }
+    Ok(Some(text))
 }
 
 /// The environment's name: the SHA-256 of the lock, the manifest and the interpreter it is made
@@ -69,11 +114,12 @@ pub type Make<'a> = &'a dyn Fn(&Path, &Path) -> Result<(), String>;
 /// The interpreter of the environment of `locked` over `base`, under `root`: the one already made
 /// whole there, else one `make` makes from copies of the two files; without `make` — offline, or
 /// for the MCP server, the grader and the harness — a missing environment is an error saying how
-/// to make it. A directory `make` left unfinished is removed and made again.
+/// to make it. An environment is made in a directory of its own and moved into place whole, so two
+/// runs never make one in the same place and a stopped run leaves none half made in use.
 pub fn environment(root: &Path, locked: &Locked, base: &str, make: Option<Make<'_>>) -> Result<PathBuf, String> {
-    let dir = root.join(key(locked, base));
-    let environment = dir.join("environment");
-    let python = interpreter(&environment);
+    let name = key(locked, base);
+    let dir = root.join(&name);
+    let python = interpreter(&dir.join("environment"));
     if dir.join(COMPLETE).is_file() && python.is_file() {
         return Ok(python);
     }
@@ -83,21 +129,39 @@ pub fn environment(root: &Path, locked: &Locked, base: &str, make: Option<Make<'
                 .into(),
         );
     };
-    let failed = |e: std::io::Error| format!("cannot make {}: {e}", dir.display());
-    if dir.exists() {
-        std::fs::remove_dir_all(&dir).map_err(failed)?;
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    let building = root.join(format!("{name}.{}.{nanos}", std::process::id()));
+    let made = build(&building, locked, make);
+    if let Err(why) = made {
+        let _ = std::fs::remove_dir_all(&building);
+        return Err(why);
     }
-    lotml_llvm::cache::private_directory(&dir).map_err(failed)?;
+    if std::fs::rename(&building, &dir).is_err() {
+        if dir.join(COMPLETE).is_file() && python.is_file() {
+            let _ = std::fs::remove_dir_all(&building);
+            return Ok(python);
+        }
+        let failed = |e: std::io::Error| format!("cannot put the environment in {}: {e}", dir.display());
+        std::fs::remove_dir_all(&dir).map_err(failed)?;
+        std::fs::rename(&building, &dir).map_err(failed)?;
+    }
+    Ok(python)
+}
+
+/// An environment made whole in `dir`: the two files copied, `make` run, the mark written last.
+fn build(dir: &Path, locked: &Locked, make: Make<'_>) -> Result<(), String> {
+    let failed = |e: std::io::Error| format!("cannot make {}: {e}", dir.display());
+    lotml_llvm::cache::private_directory(dir).map_err(failed)?;
     let project = dir.join("project");
     std::fs::create_dir(&project).map_err(failed)?;
     std::fs::write(project.join("pyproject.toml"), &locked.pyproject).map_err(failed)?;
     std::fs::write(project.join("uv.lock"), &locked.lock).map_err(failed)?;
+    let environment = dir.join("environment");
     make(&project, &environment)?;
-    if !python.is_file() {
+    if !interpreter(&environment).is_file() {
         return Err(format!("uv made no interpreter in {}", environment.display()));
     }
-    std::fs::write(dir.join(COMPLETE), "").map_err(failed)?;
-    Ok(python)
+    std::fs::write(dir.join(COMPLETE), "").map_err(failed)
 }
 
 /// The interpreter a virtual environment holds.
@@ -112,10 +176,13 @@ pub const REGISTRY: &str = "https://pypi.org/simple";
 pub const FILES: &str = "https://files.pythonhosted.org/";
 
 /// Whether the text of `uv.lock` names only what lotml installs: every package from PyPI's
-/// registry, save the project's own entry, and every artifact a file on PyPI's host with a hash;
-/// else why not, naming the package.
-pub fn check_lock(text: &str) -> Result<(), String> {
-    let lock: Table = text.parse().map_err(|e| format!("uv.lock does not parse: {e}"))?;
+/// registry, every artifact a file on PyPI's host with a hash, and the project itself, named
+/// `project`, as its own source with no file of its own; else why not, naming the package.
+pub fn check_lock(text: &str, project: Option<&str>) -> Result<(), String> {
+    let lock: Table = text.parse().map_err(|e: toml::de::Error| {
+        let line = e.span().map_or(0, |span| text[..span.start.min(text.len())].matches('\n').count() + 1);
+        format!("uv.lock does not parse, at line {line}")
+    })?;
     let packages = lock.get("package").and_then(Value::as_array).ok_or("uv.lock lists no [[package]]")?;
     for package in packages {
         let name = package.get("name").and_then(Value::as_str).unwrap_or("a package without a name");
@@ -129,7 +196,14 @@ pub fn check_lock(text: &str) -> Result<(), String> {
         };
         match (kind.as_str(), value.as_str()) {
             ("registry", Some(REGISTRY)) => {}
-            ("virtual" | "editable", Some(".")) => continue,
+            ("virtual" | "editable", Some(".")) => {
+                let own = project.is_some_and(|p| normalized(p) == normalized(name));
+                let files = ["sdist", "wheels", "url", "path"].iter().any(|k| package.get(k).is_some());
+                if !own || files {
+                    return refuse("comes from the project's own directory and is not the project".into());
+                }
+                continue;
+            }
             (kind, _) => return refuse(format!("comes from the {kind} {value}")),
         }
         let sdist = package.get("sdist").into_iter();
@@ -148,6 +222,26 @@ pub fn check_lock(text: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// A distribution's name as PEP 503 compares it: lower case, each run of `-`, `_` and `.` one `-`.
+fn normalized(name: &str) -> String {
+    let mut out = String::new();
+    for c in name.chars() {
+        if matches!(c, '-' | '_' | '.') {
+            if !out.ends_with('-') {
+                out.push('-');
+            }
+        } else {
+            out.extend(c.to_lowercase());
+        }
+    }
+    out
+}
+
+/// The `[project] name` of a `pyproject.toml`.
+fn project_name(pyproject: &str) -> Option<String> {
+    pyproject.parse::<Table>().ok()?.get("project")?.get("name")?.as_str().map(str::to_string)
+}
+
 /// Whether a `pyproject.toml` declares dependencies, which need a `uv.lock` to be installed.
 pub fn declares_dependencies(pyproject: &str) -> bool {
     pyproject
@@ -161,6 +255,10 @@ pub fn declares_dependencies(pyproject: &str) -> bool {
 mod tests {
     use super::*;
 
+    fn check(text: &str) -> Result<(), String> {
+        check_lock(text, Some("app"))
+    }
+
     const PROJECT: &str = "[[package]]\nname = \"app\"\nversion = \"0.1.0\"\nsource = { virtual = \".\" }\n";
 
     fn package(source: &str, artifacts: &str) -> String {
@@ -173,9 +271,9 @@ mod tests {
 
     #[test]
     fn a_lock_of_pypi_packages_and_the_project_itself_is_installed() {
-        assert_eq!(check_lock(&package(&format!("{{ registry = \"{REGISTRY}\" }}"), WHEEL)), Ok(()));
+        assert_eq!(check(&package(&format!("{{ registry = \"{REGISTRY}\" }}"), WHEEL)), Ok(()));
         let editable = PROJECT.replace("virtual", "editable");
-        assert_eq!(check_lock(&format!("version = 1\n{editable}")), Ok(()));
+        assert_eq!(check(&format!("version = 1\n{editable}")), Ok(()));
     }
 
     #[test]
@@ -189,34 +287,34 @@ mod tests {
             "{ editable = \"vendor/six\" }",
             "{ virtual = \"../elsewhere\" }",
         ] {
-            let why = check_lock(&package(source, WHEEL)).unwrap_err();
+            let why = check(&package(source, WHEEL)).unwrap_err();
             assert!(why.contains("\"six\" comes from the"), "{source}: {why}");
         }
         let two = package(&format!("{{ registry = \"{REGISTRY}\", git = \"x\" }}"), WHEEL);
-        assert!(check_lock(&two).unwrap_err().contains("source lotml does not read"));
+        assert!(check(&two).unwrap_err().contains("source lotml does not read"));
     }
 
     #[test]
     fn a_file_off_pypi_s_host_or_without_a_hash_is_refused() {
         let registry = format!("{{ registry = \"{REGISTRY}\" }}");
         let elsewhere = WHEEL.replace("https://files.pythonhosted.org/", "https://evil.example/");
-        assert!(check_lock(&package(&registry, &elsewhere)).unwrap_err().contains("not on PyPI's host"));
+        assert!(check(&package(&registry, &elsewhere)).unwrap_err().contains("not on PyPI's host"));
         let unhashed = "sdist = { url = \"https://files.pythonhosted.org/packages/six-1.17.0.tar.gz\" }";
-        assert!(check_lock(&package(&registry, unhashed)).unwrap_err().contains("without a hash"));
+        assert!(check(&package(&registry, unhashed)).unwrap_err().contains("without a hash"));
     }
 
     #[test]
     fn a_lock_that_is_not_one_is_refused() {
-        assert!(check_lock("version = [").unwrap_err().contains("does not parse"));
-        assert!(check_lock("version = 1\n").unwrap_err().contains("no [[package]]"));
+        assert!(check("version = [").unwrap_err().contains("does not parse"));
+        assert!(check("version = 1\n").unwrap_err().contains("no [[package]]"));
         let sourceless = "version = 1\n[[package]]\nname = \"six\"\n";
-        assert!(check_lock(sourceless).unwrap_err().contains("names no source"));
+        assert!(check(sourceless).unwrap_err().contains("names no source"));
     }
 
     #[test]
     fn a_name_with_a_control_character_is_shown_escaped() {
         let lock = "version = 1\n[[package]]\nname = \"six\\u001b[2J\"\nsource = { git = \"x\" }\n";
-        let why = check_lock(lock).unwrap_err();
+        let why = check(lock).unwrap_err();
         assert!(!why.contains('\u{1b}'), "{why:?}");
     }
 
@@ -303,6 +401,55 @@ mod tests {
         let calls = std::cell::Cell::new(0);
         assert!(environment(&root, &locked, "/py", Some(&fake_make(&calls))).is_ok());
         assert_eq!(calls.get(), 1);
+    }
+
+    #[test]
+    fn only_the_project_itself_may_come_from_its_own_directory_and_with_no_file() {
+        let other = package("{ editable = \".\" }", "");
+        assert!(check(&other).unwrap_err().contains("\"six\" comes from the project's own directory"));
+        let with_files = format!("version = 1\n{PROJECT}{WHEEL}\n");
+        assert!(check(&with_files).unwrap_err().contains("\"app\" comes from the project's own directory"));
+        let renamed = "version = 1\n[[package]]\nname = \"my-app\"\nsource = { virtual = \".\" }\n";
+        assert_eq!(check_lock(renamed, Some("My_App")), Ok(()), "names compare as PEP 503 has them");
+        assert!(check_lock(renamed, None).is_err(), "no project name, no project entry");
+    }
+
+    #[test]
+    fn a_lock_that_does_not_parse_says_where_and_quotes_none_of_it() {
+        let why = check("version = 1\nsecret = \"sk-abcdef\n").unwrap_err();
+        assert!(why.contains("line 2") && !why.contains("sk-abcdef"), "{why}");
+    }
+
+    #[test]
+    fn a_lock_that_is_not_a_regular_file_is_not_read() {
+        let root = scratch("not-a-file");
+        std::fs::write(root.join("pyproject.toml"), "[project]\nname = \"app\"\n").unwrap();
+        std::fs::create_dir(root.join("uv.lock")).unwrap();
+        assert!(locked(&root).err().unwrap().contains("not a regular file"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_lock_in_a_directory_anyone_may_write_is_ignored() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = scratch("shared");
+        std::fs::write(root.join("pyproject.toml"), "[project]\nname = \"app\"\n").unwrap();
+        std::fs::write(root.join("uv.lock"), lock_of_six()).unwrap();
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o1777)).unwrap();
+        assert!(locked(&root).unwrap().is_none());
+    }
+
+    #[test]
+    fn an_environment_is_put_in_place_whole_and_a_failed_one_leaves_nothing() {
+        let root = scratch("whole");
+        let locked = Locked { lock: lock_of_six(), pyproject: String::new() };
+        let failing = |_: &Path, _: &Path| -> Result<(), String> { Err("uv could not install".into()) };
+        assert!(environment(&root, &locked, "/py", Some(&failing)).is_err());
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0, "nothing half made is left");
+        let calls = std::cell::Cell::new(0);
+        let python = environment(&root, &locked, "/py", Some(&fake_make(&calls))).unwrap();
+        assert!(python.starts_with(root.join(key(&locked, "/py"))));
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
     }
 
     #[test]

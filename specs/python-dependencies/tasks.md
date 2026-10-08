@@ -3,6 +3,7 @@
 ## 1 · The lock
 
 - [x] 1.1 (Unit) Read a project's `uv.lock` with the `toml` crate and refuse a source other than PyPI's registry, save the project's own entry, and an artifact off PyPI's file host or without a hash, naming the package; record `toml` in `docs/stack.md` — R2.1, R2.2
+- [x] 1.3 (Unit) Ignore, saying so, the `uv.lock` of a project root that is a drive's root or a directory another user may write — R2.3
 - [x] 1.2 (Unit) Report a `pyproject.toml` that declares dependencies with no `uv.lock`, naming `uv lock` — R1.4
 
 ## 2 · The environment
