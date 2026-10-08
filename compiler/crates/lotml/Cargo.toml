@@ -22,6 +22,7 @@ lotml-bind = { path = "../lotml-bind" }
 lotml-llvm = { path = "../lotml-llvm" }
 lotml-runtime = { path = "../lotml-runtime" }
 lotml-ide = { path = "../lotml-ide" }
+toml = "1.1"
 
 [lints]
 workspace = true

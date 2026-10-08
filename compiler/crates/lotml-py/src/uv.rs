@@ -151,6 +151,33 @@ impl Uv {
         ]);
         Ok(command)
     }
+
+    /// `uv sync` of the project copied to `project` into `environment` over the interpreter
+    /// `python` (adr:0033): the lock as it stands, never resolved again, so uv reaches no address
+    /// the manifest names, nor its sources; wheels only; the project itself left out; any
+    /// interpreter `python` names taken, managed or not. Refused as
+    /// [`Uv::install_python`] is while a variable of [`REFUSED`] is set.
+    pub fn sync(
+        &self,
+        project: &Path,
+        environment: &Path,
+        python: &str,
+        var: &dyn Fn(&str) -> Option<OsString>,
+    ) -> Result<Command, String> {
+        if let Some(name) = REFUSED.iter().find(|name| var(name).is_some()) {
+            return Err(format!(
+                "{name} is set, which changes where uv downloads from or whether it verifies: lotml installs nothing while it is"
+            ));
+        }
+        let mut command = self.command(var);
+        command
+            .env_remove("UV_MANAGED_PYTHON")
+            .env("UV_PROJECT_ENVIRONMENT", environment)
+            .args(["sync", "--frozen", "--no-build", "--no-install-project", "--python", python])
+            .arg("--project")
+            .arg(project);
+        Ok(command)
+    }
 }
 
 /// What `uv --version` says, `uv 0.11.29 (…)`, or `None` when it does not run.
@@ -314,6 +341,30 @@ mod confined_tests {
         assert_eq!(env_of(&command).get("UV_PYTHON_DOWNLOADS"), Some(&Some("manual".to_string())));
         let args: Vec<_> = command.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
         assert!(args.contains(&"--no-bin".to_string()) && args.contains(&"--no-registry".to_string()), "{args:?}");
+    }
+
+    #[test]
+    fn a_sync_installs_the_lock_as_it_stands_wheels_only_into_the_environment_named() {
+        let uv = Uv { path: PathBuf::from("uv"), home: PathBuf::from("cache-home") };
+        let none = |_: &str| None;
+        let command = uv.sync(Path::new("work"), Path::new("env"), "/py", &none).expect("a sync");
+        let env = env_of(&command);
+        assert_eq!(env.get("UV_PROJECT_ENVIRONMENT"), Some(&Some("env".to_string())));
+        assert!(
+            env.get("UV_MANAGED_PYTHON").cloned().flatten().is_none(),
+            "the interpreter given is taken, managed or not"
+        );
+        assert_eq!(env.get("UV_NO_CONFIG"), Some(&Some("1".to_string())));
+        assert_eq!(command.get_current_dir(), Some(Path::new("cache-home")));
+        let args: Vec<_> = command.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        assert_eq!(
+            args,
+            ["sync", "--frozen", "--no-build", "--no-install-project", "--python", "/py", "--project", "work"]
+        );
+        for name in REFUSED {
+            let var = |n: &str| (n == *name).then(|| OsString::from("https://example.invalid"));
+            assert!(uv.sync(Path::new("work"), Path::new("env"), "/py", &var).is_err(), "{name}");
+        }
     }
 
     #[test]

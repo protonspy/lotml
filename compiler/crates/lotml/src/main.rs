@@ -4,6 +4,7 @@
 //! the command could not run.
 
 mod check;
+mod dependencies;
 mod dev;
 mod exec;
 mod files;

@@ -7,7 +7,7 @@ pub mod driver;
 mod emit;
 pub mod export;
 mod module;
-mod sha256;
+pub mod sha256;
 mod types;
 
 #[cfg(test)]

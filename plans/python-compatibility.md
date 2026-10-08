@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 9ecf40683bb812640b18df5aedf45937a5697269e3b1b60f5c867dbd262d64be
+checksum: e6af8a780634590d771ba0b115e94000893d30c0242e7eabf2512204713b8843
 ---
 
 # Python compatibility
@@ -102,7 +102,7 @@ the typed share each spec added.
       the Python binder writes
   _Depends 2.3_
   _Reason the owner split 2.4 into three specs on 2026-10-08, one PR each; this is adr:0032's parser and embedded typeshed_
-- [ ] 2.7 (Unit) Write and build the spec python-dependencies: `lotml run` and `lotml
+- [x] 2.7 (Unit) Write and build the spec python-dependencies: `lotml run` and `lotml
       test` install a project's Python dependencies from its `uv.lock` as adr:0033 has
       it, so 2.4 runs the binding-coverage corpus's PyPI modules
   _Depends 2.5_

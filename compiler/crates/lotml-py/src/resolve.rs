@@ -12,11 +12,12 @@ use crate::uv::Uv;
 pub const VERSION: &str = "3.14";
 
 /// What the interpreter is for: `run` and `test` run the project's code, so its virtual environment
-/// adds no trust; `bind` reads a stub and never uses it.
+/// adds no trust; a base for an environment lotml makes from a project's `uv.lock` never takes it
+/// (specs/python-dependencies).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Use {
     Run,
-    Bind,
+    Base,
 }
 
 /// What a resolution may do beyond looking.
@@ -199,7 +200,7 @@ mod tests {
         let vars = HashMap::from([("LOTML_PYTHON", OsString::from("/my/python"))]);
         let var = |n: &str| vars.get(n).cloned();
         let uv = fake(Some("managed"), None);
-        assert_eq!(resolve(&options(Use::Bind, None, true), &var, Some(&uv), &|| None), Ok(vec!["/my/python".into()]));
+        assert_eq!(resolve(&options(Use::Base, None, true), &var, Some(&uv), &|| None), Ok(vec!["/my/python".into()]));
     }
 
     #[test]
@@ -210,8 +211,8 @@ mod tests {
         let uv = fake(Some("managed"), None);
         let ran = resolve(&options(Use::Run, Some(&root), true), &none, Some(&uv), &|| None).unwrap();
         assert_eq!(PathBuf::from(&ran[0]).canonicalize().unwrap(), python.canonicalize().unwrap());
-        let bound = resolve(&options(Use::Bind, Some(&root), true), &none, Some(&uv), &|| None).unwrap();
-        assert_eq!(bound, vec!["managed".to_string()], "bind never uses the project's environment");
+        let bound = resolve(&options(Use::Base, Some(&root), true), &none, Some(&uv), &|| None).unwrap();
+        assert_eq!(bound, vec!["managed".to_string()], "a base never is the project's environment");
     }
 
     #[test]
