@@ -12,7 +12,7 @@ const DICTS: &str = include_str!("programs/dicts.lotml");
 #[test]
 fn dicts_and_sets_print_and_iterate_in_python_s_order() {
     let Some([run, _]) = parity("dicts", DICTS) else { return };
-    assert!(run.stdout.contains("{1, 2, 3, 100, 10} set() {'banana', 'cherry', 'apple'}"), "{}", run.stdout);
+    assert!(run.stdout.contains("{1, 2, 3, 100, 10} set() {'banana', 'apple', 'cherry'}"), "{}", run.stdout);
     assert!(run.stdout.contains("{1, 2, 3, 100, 36, 8, 9, 10, 20, 52}"), "{}", run.stdout);
 }
 

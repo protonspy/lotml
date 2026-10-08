@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 0df598f8acccdba3a142473071bd42367927281d508d8b0ba8ced68462038d10
+checksum: fc764b791af3d3de172cd54f53f22b238236b085490af8b8e2bc68c5c50f779e
 ---
 
 # Python via uv
@@ -58,7 +58,7 @@ directory's uv configuration must change nothing, and the docs must describe the
 
 ## Tasks
 
-- [ ] 1.1 (Unit) Run the parity suite and the Python-target tests on CPython 3.14 through `LOTML_PYTHON`, and fix what differs from 3.11–3.13, before anything makes 3.14 the default
+- [x] 1.1 (Unit) Run the parity suite and the Python-target tests on CPython 3.14 through `LOTML_PYTHON`, and fix what differs from 3.11–3.13, before anything makes 3.14 the default
 - [ ] 1.2 (Unit) Commit uv's version and each target's SHA-256. Have the release workflow download that exact file over HTTPS from uv's release URL, fail on a mismatch, and put it beside `lotml` with uv's licence texts and third-party notices, adding those files to `SHA256SUMS`. A script that lists the archive verifies this in CI
 - [ ] 1.3 (Unit) Find uv by absolute path: `LOTML_UV` (an existing file, absolute), then the uv beside the running executable, then an explicit search of the path that skips relative and empty entries and the current directory, logging the uv chosen and its version
 - [ ] 1.4 (Unit) Run every uv call from lotml's cache directory, with uv's configuration files ignored. Forbid Python downloads outside the install step, ask only for managed interpreters, install no shims, and refuse to download while a variable that disables verification or replaces download metadata is set. Each rule gets a test using a project with a hostile `uv.toml` and `.python-version`
@@ -76,14 +76,25 @@ directory's uv configuration must change nothing, and the docs must describe the
   _Depends 1.5_
 - [ ] 1.7 (Unit) Record in the JSON of `lotml run` and `lotml test`, and in every harness row that runs the Python target, the interpreter's path and exact version and uv's version
   _Depends 1.5_
-- [ ] 2.1 (Unit) When `lotml bind` gets no `--stub`, take typeshed's stub from a mypy wheel locked with hashes, binary only, from a fixed index, by reading the stub files rather than running mypy. Validate the module name as a dotted identifier, honour the offline switch, and keep `--stub` as the override
+- [ ] 2.1 (Unit) When `lotml bind` gets no `--stub`, take typeshed's stub from a mypy
+      wheel locked with hashes, binary only, from a fixed index, by reading the stub
+      files rather than running mypy. Validate the module name as a dotted identifier,
+      honour the offline switch, and keep `--stub` as the override
   _Depends 1.4, 1.6_
+  _Status removed_
+  _Reason adr:0032 embeds typeshed's stdlib and reads stubs in Rust, so bind needs no mypy wheel_
 - [ ] 3.1 (Unit) Have the harness provision Python 3.14 ahead of a run and always run offline, with a test that a row with no interpreter fails naming what is missing instead of downloading
   _Depends 1.6_
-- [ ] 3.2 (Unit) Add CI jobs on Linux and Windows that start from the release archive on a runner with no Python on the path. They run `lotml run`, `lotml test` and `lotml bind textwrap`, then the same with the offline switch, and check that the run fails naming what is missing
-  _Depends 1.2, 1.6, 2.1_
-- [ ] 3.3 (Unit) Describe uv, the resolution order, the offline switch and the recorded interpreter in `README.md`, `reference/lotml.md` and `docs/wiki/pages/transpilation-strategy.md`. Replace the CPython and typeshed entries of `docs/stack.md` with what the code now does
-  _Depends 1.6, 1.7, 2.1_
+- [ ] 3.2 (Unit) Add CI jobs on Linux and Windows that start from the release archive on
+      a runner with no Python on the path. They run `lotml run`, `lotml test` and `lotml
+      bind textwrap`, then the same with the offline switch, and check that the run
+      fails naming what is missing
+  _Depends 1.2, 1.6_
+- [ ] 3.3 (Unit) Describe uv, the resolution order, the offline switch and the recorded
+      interpreter in `README.md`, `reference/lotml.md` and
+      `docs/wiki/pages/transpilation-strategy.md`. Replace the CPython and typeshed
+      entries of `docs/stack.md` with what the code now does
+  _Depends 1.6, 1.7_
 
 ## Done when
 

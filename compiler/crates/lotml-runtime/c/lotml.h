@@ -734,7 +734,6 @@ bool lt_set_pop(lt_set **slot, void *out);
 bool lt_set_contains(const lt_set *s, const void *key);
 lt_list *lt_set_list(const lt_set *s);
 lt_set *lt_set_from_list(const lt_type *type, const lt_list *items);
-lt_set *lt_set_folded(lt_set *built);
 lt_set *lt_set_union(const lt_set *a, const lt_set *b);
 lt_set *lt_set_intersection(const lt_set *a, const lt_set *b);
 lt_set *lt_set_difference(const lt_set *a, const lt_set *b);

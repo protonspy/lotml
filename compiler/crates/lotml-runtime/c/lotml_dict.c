@@ -725,25 +725,6 @@ lt_set *lt_set_from_list(const lt_type *type, const lt_list *items) {
     return s;
 }
 
-/* A set display of three or more constants as CPython 3.12 and 3.13 build it, which CI and the
- * harness run: the compiler folds the items into a frozenset (`built`, the items added in order),
- * rebuilds that frozenset from its own iteration order when it merges constants, and the code
- * merges it into a new empty set. CPython 3.14 adds the items in order. Takes `built` over. */
-lt_set *lt_set_folded(lt_set *built) {
-    lt_set *again = lt_set_new(built->type);
-    for (int64_t i = 0; i <= built->mask; i++) {
-        char *e = lt_set_slot(built, (uint64_t)i);
-        if (LT_SLOT_STATE(e) != LT_SET_ACTIVE) continue;
-        if (built->type->inc != NULL) built->type->inc(LT_SLOT_KEY(e));
-        lt_set_add_hashed(again, LT_SLOT_KEY(e), LT_SLOT_HASH(e));
-    }
-    lt_set *result = lt_set_new(built->type);
-    lt_set_merge(result, again);
-    lt_set_drop(again);
-    lt_set_drop(built);
-    return result;
-}
-
 /* `a | b`: a copy of `a` with `b` merged in. */
 lt_set *lt_set_union(const lt_set *a, const lt_set *b) {
     lt_set *c = lt_set_copy(a);
