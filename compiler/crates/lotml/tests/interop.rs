@@ -319,6 +319,40 @@ fn check_warns_at_an_import_whose_stub_differs_from_the_lock_and_binds_it_all_th
     assert!(stdout(&checked).contains("E0225"), "{}", stdout(&checked));
 }
 
+#[test]
+fn check_locked_fails_on_a_missing_lock_an_unrecorded_import_and_a_differing_stub() {
+    let program = "from py.textwrap import dedent\n\nfn f() -> str ! PyError:\n    return dedent(\"  x\")?\n";
+    let dir = scratch("check-locked", &[(".git", ""), ("main.lotml", program)]);
+    let locked = |dir: &Path| {
+        let out = lotml(&["check", "--locked", "main.lotml"], dir);
+        (out.status.code(), String::from_utf8_lossy(&out.stderr).into_owned())
+    };
+    let (code, said) = locked(&dir);
+    assert_eq!(code, Some(1));
+    assert!(said.contains("has no lotml.lock") && said.contains("lotml bind --lock"), "{said}");
+
+    assert!(lotml(&["bind", "--lock"], &dir).status.success());
+    assert_eq!(locked(&dir), (Some(0), String::new()), "the lock holds");
+
+    std::fs::write(dir.join("main.lotml"), format!("import py.shlex\n{program}")).unwrap();
+    let (code, said) = locked(&dir);
+    assert_eq!(code, Some(1));
+    assert!(said.contains("`py.shlex` is imported, and lotml.lock does not record it"), "{said}");
+
+    assert!(lotml(&["bind", "--lock"], &dir).status.success());
+    let lock = std::fs::read_to_string(dir.join("lotml.lock")).unwrap();
+    let wrong: String = lock
+        .lines()
+        .map(|l| {
+            if l.starts_with("stub = ") { format!("stub = \"sha256:{}\"\n", "0".repeat(64)) } else { format!("{l}\n") }
+        })
+        .collect();
+    std::fs::write(dir.join("lotml.lock"), wrong).unwrap();
+    let (code, said) = locked(&dir);
+    assert_eq!(code, Some(1));
+    assert!(said.contains("differs from the one lotml.lock records"), "{said}");
+}
+
 /// A Python module whose values no stub types: an object, a dataclass, and functions that change
 /// what they are given.
 const OBJS_PY: &str = "\

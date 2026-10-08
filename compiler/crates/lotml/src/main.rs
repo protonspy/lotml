@@ -54,6 +54,10 @@ enum Command {
         /// Treat each file as a prefix still being written: completable, error, or unknown.
         #[arg(long)]
         prefix: bool,
+        /// Fail when lotml.lock is missing, lacks a module a program imports, or names a stub that
+        /// differs from the one found: for CI.
+        #[arg(long)]
+        locked: bool,
     },
     /// Explain an error code: `lotml explain E0204`.
     Explain {
@@ -261,9 +265,9 @@ fn main() -> ExitCode {
 fn run() -> ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
-        Command::Check { paths, format, json, all, fix, since, prefix } => {
+        Command::Check { paths, format, json, all, fix, since, prefix, locked } => {
             let format = if json { Format::Json } else { format };
-            check::run(&check::Options { paths, format, all, fix, since, prefix })
+            check::run(&check::Options { paths, format, all, fix, since, prefix, locked })
         }
         Command::Explain { code } => explain(&code),
         Command::Fmt { paths, check } => fmt(&paths, check),

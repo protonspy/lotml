@@ -24,7 +24,7 @@
   _Depends 1.1_
 - [x] 2.3 (Unit) Warn at an import whose stub's hash differs from the lock's, binding from the stub found, and use a cached interface for a module the lock names only when its hash is the lock's — R2.2, R3.1
   _Depends 2.1, 2.2_
-- [ ] 2.4 (Unit) Add `lotml check --locked`, failing on a missing lock, a differing stub or an import the lock lacks — R2.3
+- [x] 2.4 (Unit) Add `lotml check --locked`, failing on a missing lock, a differing stub or an import the lock lacks — R2.3
   _Depends 2.3_
 
 ## 3 · The corpus

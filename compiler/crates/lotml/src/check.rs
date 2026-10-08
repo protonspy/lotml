@@ -17,6 +17,8 @@ pub struct Options {
     pub fix: bool,
     pub since: Option<String>,
     pub prefix: bool,
+    /// Fail where `lotml.lock` does not hold (specs/bind-on-import/ R2.3).
+    pub locked: bool,
 }
 
 /// How many rounds of fixes to apply: a fix can expose another, but not forever.
@@ -102,7 +104,11 @@ pub fn run(options: &Options) -> Result<bool, Failure> {
         }
         Format::Sarif => println!("{}", lotml_diag::sarif(&reports)),
     }
-    Ok(reports.iter().all(|r| r.diagnostics.iter().all(|d| d.severity != Severity::Error)))
+    let problems = if options.locked { crate::lockfile::verify(&paths) } else { Vec::new() };
+    for problem in &problems {
+        eprintln!("lotml: --locked: {problem}");
+    }
+    Ok(problems.is_empty() && reports.iter().all(|r| r.diagnostics.iter().all(|d| d.severity != Severity::Error)))
 }
 
 fn prefix(db: &Database, sources: &[SourceFile], format: Format) -> Result<bool, Failure> {

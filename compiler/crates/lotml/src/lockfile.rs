@@ -66,6 +66,54 @@ pub fn entry(root: &Path, name: &str) -> Option<Entry> {
     read(root).ok().flatten()?.into_iter().find(|e| e.name == name)
 }
 
+/// What `lotml check --locked` fails on for the files at `paths` (specs/bind-on-import/ R2.3): a
+/// project without a lock, a `py.` import bound on import that its lock does not record, and a
+/// stub that differs from the one it records. Empty when the locks hold.
+pub fn verify(paths: &[PathBuf]) -> Vec<String> {
+    let mut problems = Vec::new();
+    let mut imported: std::collections::BTreeMap<PathBuf, BTreeSet<String>> = std::collections::BTreeMap::new();
+    for path in paths {
+        let Some(root) = crate::exec::project_of(path) else {
+            problems.push(format!("{}: no project to hold lotml.lock", path.display()));
+            continue;
+        };
+        let Ok(text) = files::read(path) else { continue };
+        let covered: Vec<String> = files::bindings_for(path).into_iter().map(|b| b.module).collect();
+        imported
+            .entry(root)
+            .or_default()
+            .extend(files::python_imports(&text).into_iter().filter(|m| !covered.contains(m)));
+    }
+    for (root, names) in imported {
+        let lock = match read(&root) {
+            Ok(Some(lock)) => lock,
+            Ok(None) => {
+                problems.push(format!("{} has no {NAME}; `lotml bind --lock` writes it", root.display()));
+                continue;
+            }
+            Err(why) => {
+                problems.push(why);
+                continue;
+            }
+        };
+        for name in names {
+            let Some(entry) = lock.iter().find(|e| e.name == name) else {
+                problems.push(format!("`{name}` is imported, and {NAME} does not record it; `lotml bind --lock` does"));
+                continue;
+            };
+            let module = name.strip_prefix("py.").unwrap_or(&name);
+            match crate::stubs::find(module, || crate::stubs::environment(Some(&root))) {
+                Ok(stub) if hash(&stub.text) != entry.stub => {
+                    problems.push(format!("the stub of `{name}` differs from the one {NAME} records"));
+                }
+                Ok(_) => {}
+                Err(why) => problems.push(format!("`{name}`: {why}")),
+            }
+        }
+    }
+    problems
+}
+
 /// The `py.` modules the programs under `root` import that no bindings file covers, each bound
 /// now; an error naming every one no stub binds.
 pub fn entries(root: &Path) -> Result<Vec<Entry>, String> {
