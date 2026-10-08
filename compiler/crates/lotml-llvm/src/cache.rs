@@ -110,7 +110,7 @@ impl Cache {
         names.into_iter().find_map(|name| {
             let path = self.dir.join(&name);
             if verified(&path, &name) {
-                let used = std::fs::File::options().write(true).open(&path);
+                let used = touching().open(&path);
                 let _ = used.and_then(|file| file.set_modified(SystemTime::now()));
                 return Some(path);
             }
@@ -186,6 +186,13 @@ impl Cache {
             let _ = std::fs::remove_file(path);
         }
     }
+}
+
+/// How an entry is opened to mark it used.
+fn touching() -> std::fs::OpenOptions {
+    let mut options = std::fs::File::options();
+    options.write(true);
+    options
 }
 
 fn nanos() -> u128 {
@@ -484,5 +491,21 @@ mod tests {
         assert!(Cache::at(&root).is_none());
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o1777)).unwrap();
         assert!(Cache::at(&root).is_some(), "the sticky bit keeps others from renaming it away");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn marking_an_entry_used_leaves_a_linker_free_to_open_it() {
+        use std::os::windows::fs::OpenOptionsExt;
+        /// `FILE_SHARE_READ`: what `link.exe` lets others do with a file it reads.
+        const SHARE_READ: u32 = 1;
+        let dir = scratch("touch");
+        std::fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("entry.o");
+        std::fs::write(&entry, b"object").unwrap();
+        let marking = touching().open(&entry).expect("the entry opens to be marked");
+        let linking = std::fs::File::options().read(true).share_mode(SHARE_READ).open(&entry);
+        assert!(linking.is_ok(), "a build linking the entry while another marks it: {linking:?}");
+        marking.set_modified(SystemTime::now()).expect("the mark is set");
     }
 }
