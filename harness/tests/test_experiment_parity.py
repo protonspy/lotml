@@ -212,3 +212,51 @@ def test_the_floor_at_a_revision_before_it_existed_is_empty_and_a_bad_revision_i
     assert parity.floor_at(first) == parity.Floor(0, [])
     with pytest.raises(SystemExit, match="cannot read the floor"):
         parity.floor_at("no-such-revision")
+
+
+def test_a_reason_of_blanks_is_no_reason():
+    with pytest.raises(SystemExit, match="would leave the floor"):
+        parity.updated(parity.Floor(1, ["a"]), [outcome("a", "differs", "a row")], "   ")
+
+
+def test_a_revision_that_looks_like_an_option_is_refused():
+    with pytest.raises(SystemExit, match="not a revision"):
+        parity.floor_at("--output=elsewhere")
+
+
+def test_the_native_build_runs_in_its_own_environment_and_python_in_the_harness_s(
+    monkeypatch, tmp_path
+):
+    calls = []
+
+    def fake(args, directory, timeout=0, env=None):
+        calls.append((args, env))
+        return ran(report(PASS))
+
+    monkeypatch.setattr(parity, "compiler", fake)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "a secret")
+    assert parity.run_both({"task": "t/1", "lotml": RIGHT}, tmp_path).verdict == "same"
+    (python_args, python_env), (native_args, native_env) = calls
+    assert "--target" not in python_args and python_env is None
+    assert native_args[-3:-1] == ["--target", "llvm"]
+    assert native_env == parity.native_environment() and "OPENROUTER_API_KEY" not in native_env
+
+
+def test_a_filtered_check_holds_only_the_filtered_programs_of_the_floor(monkeypatch, tmp_path):
+    path = tmp_path / "floor.json"
+    path.write_text(parity.dump_floor(parity.Floor(2, ["humaneval/1", "mbpp/1"])), encoding="utf-8")
+    monkeypatch.setattr(parity, "FLOOR", path)
+    monkeypatch.setattr(parity, "entries", lambda only: [])
+    monkeypatch.setattr(parity, "suite", lambda entries: [outcome("humaneval/1")])
+    assert parity.main(["floor", "check", "--only", "humaneval/"]) == 0
+    assert parity.main(["floor", "check"]) == 1
+
+
+def test_a_floor_whose_count_is_not_its_programs_is_refused(monkeypatch, tmp_path):
+    path = tmp_path / "floor.json"
+    path.write_text(parity.dump_floor(parity.Floor(3, ["a"])), encoding="utf-8")
+    monkeypatch.setattr(parity, "FLOOR", path)
+    monkeypatch.setattr(parity, "entries", lambda only: [])
+    monkeypatch.setattr(parity, "suite", lambda entries: [outcome("a")])
+    with pytest.raises(SystemExit, match="counts 3 programs and names 1"):
+        parity.main(["floor", "check"])

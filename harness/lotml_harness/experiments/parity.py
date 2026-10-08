@@ -58,15 +58,27 @@ NATIVE_BUILD = (
     "TEMP",
     "TMP",
     "TMPDIR",
+    "COMSPEC",
+    "PATHEXT",
+    "PROGRAMFILES",
+    "PROGRAMFILES(X86)",
+    "PROGRAMDATA",
+    "INCLUDE",
+    "LIB",
+    "LIBPATH",
+    "VCINSTALLDIR",
+    "VSINSTALLDIR",
+    "WINDOWSSDKDIR",
     "LOTML_CLANG",
     "LOTML_CACHE_DIR",
     "LOCALAPPDATA",
+    "USERPROFILE",
     "HOME",
     "XDG_CACHE_HOME",
 )
-"""All a native build and the program it runs get from the environment: what finds `clang` and its
-temporary files, and the per-user cache of the runtime's object. No other variable reaches the
-program by accident."""
+"""All a native build and the program it runs get from the environment: what finds `clang`, its
+temporary files and, on Windows, Visual Studio's linker and the SDK, and the per-user cache of the
+runtime's object. No other variable reaches the program by accident."""
 
 
 @dataclass
@@ -156,7 +168,7 @@ def updated(old: Floor, outcomes: list[Outcome], reason: str | None) -> Floor:
             "give the reason with --reason, or fix them"
         )
     left = {t: why for t, why in old.left.items() if t not in new.same}
-    left |= {t: reason.strip() for t in lost if reason}
+    left |= {t: reason.strip() for t in lost if reason is not None}
     return Floor(new.count, new.same, dict(sorted(left.items())))
 
 
@@ -204,23 +216,23 @@ def load_floor(text: str) -> Floor:
 
 def floor_at(ref: str) -> Floor:
     """The floor as committed at the git revision `ref`; an empty one before the floor existed."""
-    path = FLOOR.relative_to(ROOT).as_posix()
+    if ref.startswith("-"):
+        raise SystemExit(f"`{ref}` is not a revision")
     git = shutil.which("git")
     if git is None:
         raise SystemExit("git is not on PATH: --since reads the floor at a revision")
-    shown = subprocess.run(  # noqa: S603 - git, on this repository
-        [git, "show", f"{ref}:{path}"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-    )
-    if shown.returncode == 0:
-        return load_floor(shown.stdout)
-    if "exists on disk, but not in" in shown.stderr or "does not exist in" in shown.stderr:
+
+    def run(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(  # noqa: S603 - git, on this repository
+            [git, *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=False
+        )
+
+    if run("rev-parse", "--verify", "--quiet", "--end-of-options", f"{ref}^{{commit}}").returncode:
+        raise SystemExit(f"cannot read the floor at {ref}: no such revision")
+    blob = f"{ref}:{FLOOR.relative_to(ROOT).as_posix()}"
+    if run("cat-file", "-e", blob).returncode:
         return Floor(0, [])
-    raise SystemExit(f"cannot read the floor at {ref}: {shown.stderr.strip()}")
+    return load_floor(run("show", blob).stdout)
 
 
 def unsupported(outcomes: list[Outcome]) -> dict[str, dict[str, list[str]]]:
@@ -311,6 +323,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"the floor holds {floor.count} programs")
         return 0
     floor = load_floor(FLOOR.read_text(encoding="utf-8"))
+    if floor.count != len(floor.same):
+        raise SystemExit(f"the floor counts {floor.count} programs and names {len(floor.same)}")
     unrecorded = unexplained(floor_at(args.since), floor) if args.since else []
     if args.only is not None:
         floor = Floor(floor.count, [t for t in floor.same if t.startswith(args.only)])
