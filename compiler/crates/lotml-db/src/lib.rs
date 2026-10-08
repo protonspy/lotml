@@ -142,12 +142,20 @@ pub fn items(db: &dyn salsa::Database, file: SourceFile) -> Vec<Item<'_>> {
             let span = part.span();
             let before = &text[..(span.start as usize).min(text.len())];
             let at = before.rfind('\n').map_or(0, |i| i + 1);
-            let next = starts.iter().find(|&&s| s > span.start).map_or(text.len(), |&s| s as usize);
+            let next = starts.get(starts.partition_point(|&s| s <= span.start)).map_or(text.len(), |&s| s as usize);
             let end = next.max(span.end as usize).min(text.len()).max(at);
             let at = u32::try_from(at).unwrap_or(u32::MAX);
             let mut syntax = Syntax::of(part);
             syntax.shift(at, 0);
-            Item::new(db, file, part.kind(), part.name(), syntax, text[at as usize..end].to_string(), at)
+            Item::new(
+                db,
+                file,
+                part.kind(),
+                part.name(),
+                syntax,
+                text.get(at as usize..end).unwrap_or("").to_string(),
+                at,
+            )
         })
         .collect()
 }
