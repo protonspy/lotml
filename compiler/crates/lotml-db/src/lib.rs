@@ -1,7 +1,7 @@
 //! The compiler as queries over source files: each file is a Salsa input, and parsing and
 //! checking are tracked functions, so a query whose inputs did not change answers from memory.
 
-use lotml_check::{Checked, Declarations, Part, PartKind};
+use lotml_check::{Checked, Declarations, Part, PartChecked, PartKind};
 use lotml_diag::Diagnostic;
 use lotml_syntax::Parsed;
 use lotml_syntax::ast::{self, FnDef, RecordDef, TestDef};
@@ -165,6 +165,13 @@ pub fn signatures(db: &dyn salsa::Database, file: SourceFile) -> Declarations {
     declarations(db, file).signatures()
 }
 
+/// What checking one item found, every span relative to the start of its text. It reads the
+/// item's syntax and text and the file's signatures, and no other item.
+#[salsa::tracked(returns(ref))]
+pub fn check_item<'db>(db: &'db dyn salsa::Database, item: Item<'db>) -> PartChecked {
+    lotml_check::check_part(signatures(db, item.file(db)), item.syntax(db).part(), item.text(db))
+}
+
 /// What the checker found in a file: its type errors, the type of every expression, and what
 /// each local's name refers to.
 #[salsa::tracked(returns(ref))]
@@ -192,10 +199,69 @@ impl salsa::Database for Database {}
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
+
     use salsa::Setter;
     use salsa::plumbing::AsId;
 
     use super::*;
+
+    /// A database that counts the item checks it runs.
+    #[salsa::db]
+    #[derive(Clone)]
+    struct Counting {
+        storage: salsa::Storage<Self>,
+        executed: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl Default for Counting {
+        fn default() -> Counting {
+            let executed = Arc::new(Mutex::new(Vec::new()));
+            let log = Arc::clone(&executed);
+            let storage = salsa::Storage::new(Some(Box::new(move |event: salsa::Event| {
+                if let salsa::EventKind::WillExecute { database_key } = event.kind {
+                    log.lock().expect("the log").push(format!("{database_key:?}"));
+                }
+            })));
+            Counting { storage, executed }
+        }
+    }
+
+    #[salsa::db]
+    impl salsa::Database for Counting {}
+
+    impl Counting {
+        /// How many item checks ran since this was last asked.
+        fn item_checks(&self) -> usize {
+            let mut executed = self.executed.lock().expect("the log");
+            let checks = executed.iter().filter(|e| e.starts_with("check_item(")).count();
+            executed.clear();
+            checks
+        }
+    }
+
+    #[test]
+    fn an_edit_inside_one_body_checks_that_item_again_and_an_edit_to_a_signature_checks_all() {
+        let mut db = Counting::default();
+        let file = SourceFile::create(&db, "f.lot".into(), PARTS.into(), vec![]);
+        let all = items(&db, file).len();
+        assert!(diagnostics(&db, file).is_empty());
+        assert_eq!(db.item_checks(), all, "from an empty database, every item is checked");
+        let body = PARTS.replace("        return \"named\"\n", "        var n = \"named\"\n        return n\n");
+        file.set_text(&mut db).to(body.clone());
+        assert!(diagnostics(&db, file).is_empty());
+        assert_eq!(db.item_checks(), 1, "the edited body, and none of the items it moved");
+        file.set_text(&mut db).to(body.replace("    return 0\n", "    return 1\n"));
+        assert!(diagnostics(&db, file).is_empty());
+        assert_eq!(db.item_checks(), 1, "the last body");
+        let signature = PARTS.replace("fn main() -> int:", "fn main(n: int) -> int:");
+        file.set_text(&mut db).to(signature);
+        assert!(diagnostics(&db, file).is_empty());
+        assert_eq!(db.item_checks(), all, "a signature changed, and every item is checked against it");
+        file.set_interfaces(&mut db).to(vec![("textwrap".into(), "fn dedent(text: str) -> str ! PyError\n".into())]);
+        assert!(diagnostics(&db, file).is_empty());
+        assert_eq!(db.item_checks(), all, "the interfaces changed");
+    }
 
     #[test]
     fn diagnostics_follow_the_text() {
