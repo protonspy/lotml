@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 28c0c0c4a5718b21b79393f20aa87235a5a2de22817ad9821487c95ea394152c
+checksum: 573349f098c21c955478586be322e22818d6dfe30437c21da1d25271e2fe7b8d
 ---
 
 # Frontend robustness
@@ -51,7 +51,7 @@ without a panic. See `docs/wiki/pages/prior-art-compilers.md` and `research/prio
 - [x] 1.3 (Unit) Lower an `elif` chain iteratively in the `if_chain` of `lower.rs`, or bound its length with a diagnostic, so a long chain cannot recurse through the compiler's stack
 - [x] 2.1 (Unit) Check whether any desugared node reuses a source span in the checker's type map; if one does, key expression types by node identity and add the case as a test
 - [x] 2.2 (Unit) Reject an invalid f-string format spec at check time with a diagnostic code, following Python's format-spec mini-language as RustPython's `FormatSpec` parser reads it
-- [ ] 3.1 (Unit) Choose a fuzzing tool for the compiler, recording it in `docs/stack.md` and, as a new dependency, in an ADR, and fuzz text into parse, check and lowering until no input panics
+- [x] 3.1 (Unit) Choose a fuzzing tool for the compiler, recording it in `docs/stack.md` and, as a new dependency, in an ADR, and fuzz text into parse, check and lowering until no input panics
   _Depends 1.1, 1.2_
 
 ## Done when
