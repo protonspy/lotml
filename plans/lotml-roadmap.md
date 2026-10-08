@@ -4,7 +4,7 @@ ci: wait
 status: approved
 pr: per-group
 merge: manual
-checksum: dd7d36fffdf25ad034994fc10adaf335622b310a25d4dbfcb51f7dee2f5071c4
+checksum: 8b4d3885df468b7d7b4fce97baeffd69e2e11ee84b4e42678290eb00c38f7a72
 ---
 
 # lotml roadmap
@@ -134,12 +134,12 @@ Python and C targets within 2× C on numeric code — with phase 4 recorded as t
       marking them changes what models write (R22; docs/wiki/pages/type-system.md)
   _Depends 4.4_
   _Status removed_
-  _Reason moved to plans/language-effects-and-contracts.md 1.2 and 1.3 on 2026-10-08: gates 0 to 3 are recorded (adr:0011, adr:0019) and phase 4 continues in its own plans_
+  _Reason moved to plans/language-effects-and-contracts.md 2.1 and 2.2 on 2026-10-08: gates 0 to 3 are recorded (adr:0011, adr:0019) and phase 4 continues in its own plans_
 - [ ] 5.3 (Unit) Add `where` contracts checked in debug (R23;
       docs/wiki/pages/type-system.md)
   _Depends 4.4_
   _Status removed_
-  _Reason moved to plans/language-effects-and-contracts.md 1.1 on 2026-10-08: gates 0 to 3 are recorded (adr:0011, adr:0019) and phase 4 continues in its own plans_
+  _Reason moved to plans/language-effects-and-contracts.md 1.1 to 1.3 on 2026-10-08: gates 0 to 3 are recorded (adr:0011, adr:0019) and phase 4 continues in its own plans_
 
 ## Done when
 

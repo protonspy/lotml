@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 317c2104c7b7ed19855b6903f6bce8e6b849a0ca48e67e6ecf245e22f881dcde
+checksum: 0695f0756c82ed59311033ce22c383a971c09e983957f45e7cee55662cf41920
 ---
 
 # Agent harness arms
@@ -72,7 +72,7 @@ spending cap the owner set. See `docs/wiki/pages/agent-harness-design.md`.
 - [ ] 2.8 (Unit) Add best-of-n: k attempts per task, the selected one being the first that passes `lotml check` and the visible `test` blocks
 - [ ] 3.1 (Unit) Measure the harness as arms on the same tasks, model and provider:
       deepagents against the minimal arm, paired per task, with pass@1, pass^k and cost
-  _Depends 1.1, 1.2, 1.3, 1.4, 1.5_
+  _Depends 1.1, 1.2, 1.3, 1.4, 1.5, 1.6_
 - [ ] 3.2 (Unit) Measure the three check-on-edit report modes as arms, recording failed edits, recovery after a failed edit and rounds to green
   _Depends 2.6, 3.1_
 - [ ] 3.3 (Unit) Measure the edit tools exposed as arms (symbol edits only, text edits only, both), recording failed applications and well-formed edits per model
@@ -111,6 +111,10 @@ spending cap the owner set. See `docs/wiki/pages/agent-harness-design.md`.
       rate, pass@1 and tokens
   _Depends 3.1_
   _Reason review of the literature on 2026-10-08: prefix checking was measured line by line on three open models only, and in 2607.13921 weaker models regenerated the same erroneous prefix_
+- [ ] 1.6 (Unit) Enforce 1.5's cap: set it on the OpenRouter key itself, and have the
+      harness stop a run when its arm's budget is spent, the key read from the
+      environment only
+  _Reason security review of 2026-10-08: a cap recorded in a plan bounds nothing if a run loops_
 
 ## Done when
 

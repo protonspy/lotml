@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 57bf4eaed0e944ac4e581ffc220d32d3444ae0c03fa409730e19f4033149ddc3
+checksum: ae39f1f99aa3dcf54d5e8e66d1c976fd966616f8ac294f5ddf4207a0253f631e
 ---
 
 # Evaluation rigor
@@ -72,7 +72,7 @@ through the harness's confined runner (`limits.py`, `confine.py`, `execute.py`).
       tasks that cannot, and report lotml's errors as values against Python's exceptions
       on each
   _Status removed_
-  _Reason review of the literature on 2026-10-08: phase 1's tasks are all infallible — 0 or 1 of 200 lotml answers per model write a T ! E signature — so the split is empty; replaced by 3.4_
+  _Reason review of the literature on 2026-10-08: phase 1's tasks take MultiPL-E's signatures and none returns an error, so the side of the split that can fail is empty; replaced by 3.4_
 - [ ] 3.3 (Unit) Measure Python with and without type annotations under the same
       harness, on the phase 1 gate's models, so the cost of annotating is measured
       rather than assumed

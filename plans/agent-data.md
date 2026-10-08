@@ -17,7 +17,8 @@ models showed in phase 1 (docs/wiki/pages/evaluation-harness.md). HumanEval was 
 Python, which lotml's syntax follows, and its original release is MIT-licensed, so its tasks can be
 both measured and trained on — unlike the task set's copy, which comes through MultiPL-E and may
 not be trained on. `harness/results/agent-humaneval.md` keeps 157 of its 164 problems, holding 1272
-cases: 77% power for 10 points at 20% discordance, short of the 80% target. MBPP's kept tasks
+cases. As 157 paired tasks they give 77% power for 10 points at 20% discordance, short of the
+80% target. MBPP's kept tasks
 (`harness/results/agent-mbpp.md`) are held out whole for the guide arms (`plans/harness-guide.md`
 1.1): they can extend a measurement, never the dataset. The same runs are the data the wiki says a
 compiler-embedded model needs — refused answers, the checker as critic, repairs that check
@@ -62,7 +63,8 @@ only sources and models whose terms allow training, each with its evidence.
   _Depends 1.2_
 - [ ] 2.2 (Unit) Run the agent benchmark in both arms on `z-ai/glm-5.3-flash` once, as
       the agent-harness spec's task 3.3, with traces carrying the check snapshots, the
-      system message and the compiler version the export needs, and tick both
+      system message and the compiler version the export needs; tick this task and that
+      spec's 3.3
 - [ ] 2.3 (Unit) Export the dataset from the HumanEval and benchmark runs with the exporter, and record in the manifest how many trajectories and repairs each source gave
   _Depends 1.1, 2.1, 2.2_
 
