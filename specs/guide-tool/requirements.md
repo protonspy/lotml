@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: fix/guide-request
-delivery: in-review
+delivery: merged
 pr: 24
 ---
 

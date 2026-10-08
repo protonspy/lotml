@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/check-interfaces-input
-delivery: in-review
+delivery: merged
 pr: 47
 ---
 

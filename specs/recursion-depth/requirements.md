@@ -1,8 +1,8 @@
 ---
 autonomy: auto
 ci: wait
-branch: docs/recursion-depth-spec
-delivery: in-review
+branch: feat/recursion-depth
+delivery: in-progress
 pr: 46
 ---
 
