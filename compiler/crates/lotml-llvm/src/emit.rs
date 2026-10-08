@@ -1870,13 +1870,7 @@ impl Writer<'_, '_> {
     /// having put back its own. `Enter` begins the body, so what it read is in reach of every exit.
     fn leave(&mut self) {
         self.module.declare(DEPTH);
-        let depth = match self.depth.clone() {
-            Some(depth) => depth,
-            None => {
-                let depth = self.value("load i32, ptr @lt_depth");
-                self.value(format!("sub i32 {depth}, 1"))
-            }
-        };
+        let depth = self.depth.clone().expect("a counted function begins with Enter");
         self.emit(format!("store i32 {depth}, ptr @lt_depth"));
     }
 

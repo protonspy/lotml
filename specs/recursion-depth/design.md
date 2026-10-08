@@ -35,12 +35,16 @@ thread like any other (R2.3).
 
 - **IR.** A marked function's body begins with `Enter` and every return leaves through `Leave`,
   inserted by a pass after lowering, so both backends emit the same points (R1.3).
-- **Python target.** `Enter` and `Leave` become calls of the runtime on a per-thread counter
-  (`threading.local`). Past the limit the runtime raises its own panic of kind `RecursionError`
-  with the exact message, never CPython's builtin, whose message varies.
+- **Python target.** `Enter` becomes a call of the runtime on a per-thread counter
+  (`threading.local`) that returns the count before it, and the rest of the body runs in a
+  `try` whose `finally` puts that count back: a panic a Python host or a callback catches leaves
+  no count behind, as a native panic, which stops the process or is caught where the count is
+  restored, cannot either. `Leave` writes nothing. Past the limit the runtime raises its own panic
+  of kind `RecursionError` with the exact message, never CPython's builtin, whose message varies.
 - **LLVM target.** The counter is a thread-local `int32_t` of the runtime. `Enter` is emitted
-  inline as a compare that calls `lt_recursion_error` at the limit, then an increment, and `Leave`
-  as a decrement; the check comes first, so a caught `RecursionError` leaves no count behind.
+  inline as a load, a compare that calls `lt_recursion_error` at the limit, then an increment, and
+  `Leave` as a store of the count `Enter` read; the check comes first, so a caught
+  `RecursionError` leaves no count behind.
 - **`parallel`.** A task carries its spawner's count, and its worker starts from it (R1.6): a
   thread-local alone would start every task at 0, and a recursion through `parallel` would meet
   no limit, only the system's threads and address space.
@@ -62,8 +66,10 @@ thread like any other (R2.3).
   to that at both levels.
 - **Python.** `threading.stack_size(64 MiB)` and the limit of 20,000 are set by the runtime's
   entry for `lotml run` and `lotml test`, never on importing a module, so a Python host that
-  imports a compiled module keeps its own limit (R2.2). They are set before the runtime starts the
-  thread `main` and the tests run on; the pool `parallel` uses creates its threads after it. With the stack in place,
+  imports a compiled module keeps its own limit (R2.2). The stack size is set for the thread
+  `main` and the tests run on, and put back once it has started: on Windows CPython commits a
+  thread's whole stack rather than reserving it, so the pool `parallel` uses keeps the
+  interpreter's own, which a call between lotml functions does not use on CPython 3.11 on. With the stack in place,
   CPython's limit of 20,000 frames leaves room for twenty frames per lotml call, more than the
   runtime's wrappers take, and C-level recursion — the `repr` of nested data, which 3.11 guards
   with the same limit — cannot reach the end of a 64 MiB stack before the limit.

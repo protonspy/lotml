@@ -171,18 +171,15 @@ def set_depth(count: int):
     _calls.depth = count
 
 
-def enter():
+def enter() -> int:
     """A call of a lotml function that can recurse begins: counted, unless it would pass the
-    limit, which stops the program first (R1.2)."""
+    limit, which stops the program first (R1.2). The count before it is returned, for the
+    function to put back with `set_depth` however it ends (R1.3)."""
     count = getattr(_calls, "depth", 0)
     if count >= DEPTH_LIMIT:
         raise RecursionLimit("maximum recursion depth exceeded")
     _calls.depth = count + 1
-
-
-def leave():
-    """The call `enter` counted ends, with a value or an error (R1.3)."""
-    _calls.depth -= 1
+    return count
 
 
 def overflow(value):
@@ -1134,14 +1131,19 @@ runtime's between them, so the program's own `RecursionError` always comes first
 def on_program_thread(work):
     """`work()`, run on a thread with `STACK` of stack and CPython's limit at `PYTHON_LIMIT`: what
     `lotml run` and `lotml test` do, and never importing a module, so a Python host keeps its own
-    limit. The threads `parallel` starts later get the same stack."""
+    limit. The threads `parallel` starts get the interpreter's own stack: on Windows CPython
+    commits a thread's whole stack rather than reserving it, and 256 workers of 64 MiB would
+    commit 16 GiB, while a call between lotml functions takes no C stack on CPython 3.11 on."""
     import sys
 
     sys.setrecursionlimit(PYTHON_LIMIT)
-    threading.stack_size(STACK)
+    before = threading.stack_size(STACK)
     done = []
     thread = threading.Thread(target=lambda: done.append(work()), name="lotml-main")
-    thread.start()
+    try:
+        thread.start()
+    finally:
+        threading.stack_size(before)
     thread.join()
     return done[0] if done else 101
 
