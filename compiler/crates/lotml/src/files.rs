@@ -73,9 +73,11 @@ pub struct Binding {
     pub text: String,
 }
 
-/// The interfaces a file may import from: each `bindings/<module>.lotmli` in the file's
-/// directory or one above it, the nearest one for each module — up to the repository's root,
-/// the directory holding `.git`, so a `bindings/` outside the project never applies.
+/// The interfaces a file may import from: each `bindings/<name>.lotmli` in the file's
+/// directory or one above it, the nearest one for each name — up to the repository's root,
+/// the directory holding `.git`, so a `bindings/` outside the project never applies. The name is
+/// the file's stem with its origin, `py.textwrap` or `c.m`, which is what an import names; a
+/// file without an origin is still read, so the checker can say to rename it.
 pub fn interfaces_for(path: &Path) -> Vec<Binding> {
     let mut found: Vec<Binding> = Vec::new();
     let mut dir = std::path::absolute(path).ok().and_then(|p| p.parent().map(Path::to_path_buf));

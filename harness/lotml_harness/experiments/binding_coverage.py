@@ -97,11 +97,9 @@ def stub_of(module: Module, typeshed: Path | None, purelib: Path) -> Path | None
         roots = [(purelib / f"{top}-stubs", ".pyi"), (purelib / top, ".pyi")]
         roots += [(purelib / top, ".py")] if typed else []
         parts = rest
-        if not rest:
-            single = [purelib / f"{top}.pyi"]
-            found = next((p for p in single if p.is_file()), None)
-            if found is not None and not (purelib / top).is_dir():
-                return found
+        single = purelib / f"{top}.pyi"
+        if not rest and single.is_file() and not (purelib / top).is_dir():
+            return single
     for root, suffix in roots:
         candidates = [root.joinpath(*parts, f"__init__{suffix}")]
         if parts:
