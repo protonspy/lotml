@@ -2,7 +2,8 @@
 autonomy: auto
 ci: wait
 branch: feat/python-generics
-delivery: in-progress
+delivery: in-review
+pr: 61
 ---
 
 # Python generics — requirements
