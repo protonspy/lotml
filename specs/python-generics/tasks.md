@@ -7,7 +7,7 @@
   _Depends 1.2_
 - [x] 1.4 (Unit) Type a generic Python class's value with its arguments in a program, and its methods and attributes with them substituted — R4.3
   _Depends 1.3_
-- [ ] 1.5 (TDD) Choose among generic overloads, and among a method's overloads by the receiver's type arguments — R4.4
+- [x] 1.5 (TDD) Choose among generic overloads, and among a method's overloads by the receiver's type arguments — R4.4
   _Depends 1.4_
 - [ ] 1.6 (Unit) Lower each Python call by its recorded instantiation, the runtime checking a generic class by its class alone, through to the Python target's run — R5.1, R5.2
   _Depends 1.5_
