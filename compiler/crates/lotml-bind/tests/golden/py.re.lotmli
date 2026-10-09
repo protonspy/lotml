@@ -3,15 +3,16 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
-fn compile(pattern: str, flags: PyObject = 0) -> PyObject ! PyError
-fn compile(pattern: bytes, flags: PyObject = 0) -> PyObject ! PyError
-fn compile(pattern: PyObject, flags: PyObject = 0) -> PyObject ! PyError
-fn search(pattern: PyObject, string: str, flags: PyObject = 0) -> PyObject? ! PyError
-fn search(pattern: PyObject, string: bytes, flags: PyObject = 0) -> PyObject? ! PyError
-fn prefixmatch(pattern: PyObject, string: str, flags: PyObject = 0) -> PyObject? ! PyError
-fn prefixmatch(pattern: PyObject, string: bytes, flags: PyObject = 0) -> PyObject? ! PyError
-fn fullmatch(pattern: PyObject, string: str, flags: PyObject = 0) -> PyObject? ! PyError
-fn fullmatch(pattern: PyObject, string: bytes, flags: PyObject = 0) -> PyObject? ! PyError
+fn compile(pattern: str, flags: PyObject = 0) -> Pattern[str] ! PyError
+fn compile(pattern: bytes, flags: PyObject = 0) -> Pattern[bytes] ! PyError
+fn compile(pattern: Pattern[str], flags: PyObject = 0) -> Pattern[str] ! PyError
+fn compile(pattern: Pattern[bytes], flags: PyObject = 0) -> Pattern[bytes] ! PyError
+fn search(pattern: PyObject, string: str, flags: PyObject = 0) -> Match[str]? ! PyError
+fn search(pattern: PyObject, string: bytes, flags: PyObject = 0) -> Match[bytes]? ! PyError
+fn prefixmatch(pattern: PyObject, string: str, flags: PyObject = 0) -> Match[str]? ! PyError
+fn prefixmatch(pattern: PyObject, string: bytes, flags: PyObject = 0) -> Match[bytes]? ! PyError
+fn fullmatch(pattern: PyObject, string: str, flags: PyObject = 0) -> Match[str]? ! PyError
+fn fullmatch(pattern: PyObject, string: bytes, flags: PyObject = 0) -> Match[bytes]? ! PyError
 fn split(pattern: PyObject, string: str, maxsplit: int = 0, flags: PyObject = 0) -> [PyObject] ! PyError
 fn split(pattern: PyObject, string: bytes, maxsplit: int = 0, flags: PyObject = 0) -> [PyObject] ! PyError
 fn findall(pattern: PyObject, string: str, flags: PyObject = 0) -> [PyObject] ! PyError
@@ -25,8 +26,8 @@ fn subn(pattern: PyObject, repl: PyObject, string: bytes, count: int = 0, flags:
 fn escape(pattern: str) -> str ! PyError
 fn escape(pattern: bytes) -> bytes ! PyError
 fn purge() -> None ! PyError
-fn template(pattern: PyObject, flags: PyObject = 0) -> PyObject ! PyError
-fn template(pattern: PyObject, flags: PyObject = 0) -> PyObject ! PyError
+fn template(pattern: PyObject, flags: PyObject = 0) -> Pattern[str] ! PyError
+fn template(pattern: PyObject, flags: PyObject = 0) -> Pattern[bytes] ! PyError
 
 class error:
     fn error(msg: str, pattern: PyObject? = None, pos: int? = None) -> error ! PyError
@@ -36,10 +37,59 @@ class error:
     lineno: int
     colno: int
 
+class Match[AnyStr]:
+    pos: int
+    endpos: int
+    lastindex: int?
+    lastgroup: str?
+    string: AnyStr
+    re: Pattern[AnyStr]
+    fn expand(self: Match[str], template: str) -> str ! PyError
+    fn expand(self: Match[bytes], template: bytes) -> bytes ! PyError
+    fn expand(self, template: AnyStr) -> AnyStr ! PyError
+    fn group(self, group: PyObject = 0) -> AnyStr ! PyError
+    fn group(self, group: PyObject) -> PyObject ! PyError
+    fn group(self, group1: PyObject, group2: PyObject) -> PyObject ! PyError
+    fn groups(self) -> PyObject ! PyError
+    fn groups[_T](self, default: _T) -> PyObject ! PyError
+    fn groupdict(self) -> {str: PyObject} ! PyError
+    fn groupdict[_T](self, default: _T) -> {str: PyObject} ! PyError
+    fn start(self, group: PyObject = 0) -> int ! PyError
+    fn end(self, group: PyObject = 0) -> int ! PyError
+    fn span(self, group: PyObject = 0) -> (int, int) ! PyError
+    regs: PyObject
+
+class Pattern[AnyStr]:
+    flags: int
+    groupindex: PyObject
+    groups: int
+    pattern: AnyStr
+    fn search(self: Pattern[str], string: str, pos: int = 0, endpos: int = todo()) -> Match[str]? ! PyError
+    fn search(self: Pattern[bytes], string: bytes, pos: int = 0, endpos: int = todo()) -> Match[bytes]? ! PyError
+    fn search(self, string: AnyStr, pos: int = 0, endpos: int = todo()) -> Match[AnyStr]? ! PyError
+    fn fullmatch(self: Pattern[str], string: str, pos: int = 0, endpos: int = todo()) -> Match[str]? ! PyError
+    fn fullmatch(self: Pattern[bytes], string: bytes, pos: int = 0, endpos: int = todo()) -> Match[bytes]? ! PyError
+    fn fullmatch(self, string: AnyStr, pos: int = 0, endpos: int = todo()) -> Match[AnyStr]? ! PyError
+    fn split(self: Pattern[str], string: str, maxsplit: int = 0) -> [PyObject] ! PyError
+    fn split(self: Pattern[bytes], string: bytes, maxsplit: int = 0) -> [PyObject] ! PyError
+    fn split(self, string: AnyStr, maxsplit: int = 0) -> [PyObject] ! PyError
+    fn findall(self: Pattern[str], string: str, pos: int = 0, endpos: int = todo()) -> [PyObject] ! PyError
+    fn findall(self: Pattern[bytes], string: bytes, pos: int = 0, endpos: int = todo()) -> [PyObject] ! PyError
+    fn findall(self, string: AnyStr, pos: int = 0, endpos: int = todo()) -> [AnyStr] ! PyError
+    fn finditer(self: Pattern[str], string: str, pos: int = 0, endpos: int = todo()) -> PyObject ! PyError
+    fn finditer(self: Pattern[bytes], string: bytes, pos: int = 0, endpos: int = todo()) -> PyObject ! PyError
+    fn finditer(self, string: AnyStr, pos: int = 0, endpos: int = todo()) -> PyObject ! PyError
+    fn sub(self: Pattern[str], repl: PyObject, string: str, count: int = 0) -> str ! PyError
+    fn sub(self: Pattern[bytes], repl: PyObject, string: bytes, count: int = 0) -> bytes ! PyError
+    fn sub(self, repl: PyObject, string: AnyStr, count: int = 0) -> AnyStr ! PyError
+    fn subn(self: Pattern[str], repl: PyObject, string: str, count: int = 0) -> (str, int) ! PyError
+    fn subn(self: Pattern[bytes], repl: PyObject, string: bytes, count: int = 0) -> (bytes, int) ! PyError
+    fn subn(self, repl: PyObject, string: AnyStr, count: int = 0) -> (AnyStr, int) ! PyError
+
 class RegexFlag
 
 # Not bound:
-#   Match: it is generic, which specs/python-generics/ binds
-#   Pattern: it is generic, which specs/python-generics/ binds
-#   compile: overload 2 of 2: an earlier one takes the same parameters, so no call is given it
 #   match: overload 1 of 2: `match` is a LotML keyword; it and those after are left out
+#   Match.__getitem__, __copy__, __deepcopy__, __class_getitem__: dunder methods, which operators would call
+#   Pattern.match: overload 1 of 3: `match` is a LotML keyword; it and those after are left out
+#   Pattern.__copy__, __deepcopy__, __eq__, __hash__, __class_getitem__: dunder methods, which operators would call

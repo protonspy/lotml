@@ -21,11 +21,31 @@ class excel_tab(excel)
 
 class unix_dialect(Dialect)
 
+class DictReader[_T]:
+    fn DictReader(f: [str], fieldnames: [_T], restkey: _T? = None, restval: PyObject? = None, dialect: PyObject = "excel", delimiter: str = ",", quotechar: str? = "\"", escapechar: str? = None, doublequote: bool = True, skipinitialspace: bool = False, lineterminator: str = "\x0d\n", quoting: PyObject = 0, strict: bool = False) -> DictReader[_T] ! PyError
+    fn DictReader(f: [str], fieldnames: [str]? = None, restkey: str? = None, restval: str? = None, dialect: PyObject = "excel", delimiter: str = ",", quotechar: str? = "\"", escapechar: str? = None, doublequote: bool = True, skipinitialspace: bool = False, lineterminator: str = "\x0d\n", quoting: PyObject = 0, strict: bool = False) -> DictReader[_T] ! PyError
+    fieldnames: PyObject?
+    restkey: _T?
+    restval: PyObject?
+    reader: PyObject
+    dialect: PyObject
+    line_num: int
+
+class DictWriter[_T]:
+    fn DictWriter(f: PyObject, fieldnames: [_T], restval: PyObject? = "", extrasaction: PyObject = "raise", dialect: PyObject = "excel", delimiter: str = ",", quotechar: str? = "\"", escapechar: str? = None, doublequote: bool = True, skipinitialspace: bool = False, lineterminator: str = "\x0d\n", quoting: PyObject = 0, strict: bool = False) -> DictWriter[_T] ! PyError
+    fieldnames: PyObject
+    restval: PyObject?
+    extrasaction: PyObject
+    writer: PyObject
+    fn writeheader(self) -> PyObject ! PyError
+    fn writerow(self, rowdict: {_T: PyObject}) -> PyObject ! PyError
+    fn writerows(self, rowdicts: [{_T: PyObject}]) -> None ! PyError
+
 class Sniffer:
     preferred: [str]
     fn sniff(self, sample: str, delimiters: str? = None) -> PyObject ! PyError
     fn has_header(self, sample: str) -> bool ! PyError
 
 # Not bound:
-#   DictReader: it is generic, which specs/python-generics/ binds
-#   DictWriter: it is generic, which specs/python-generics/ binds
+#   DictReader.__iter__, __next__, __class_getitem__: dunder methods, which operators would call
+#   DictWriter.__class_getitem__: dunder methods, which operators would call

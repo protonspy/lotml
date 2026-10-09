@@ -257,6 +257,16 @@ class stat_result:
     st_gen: int
     st_flags: int
 
+class DirEntry[AnyStr]:
+    name: AnyStr
+    path: AnyStr
+    fn inode(self) -> int ! PyError
+    fn is_dir(self, follow_symlinks: bool = True) -> bool ! PyError
+    fn is_file(self, follow_symlinks: bool = True) -> bool ! PyError
+    fn is_symlink(self) -> bool ! PyError
+    fn stat(self, follow_symlinks: bool = True) -> stat_result ! PyError
+    fn is_junction(self) -> bool ! PyError
+
 class statvfs_result:
     f_bsize: int
     f_frsize: int
@@ -330,9 +340,9 @@ class sched_param:
     sched_priority: int
 
 # Not bound:
-#   PathLike: it is generic, which specs/python-generics/ binds
-#   DirEntry: it is generic, which specs/python-generics/ binds
+#   PathLike: it is a protocol, a shape rather than a class
 #   fspath: overload 3 of 3: an earlier one takes the same parameters, so no call is given it
 #   fdopen: overload 4 of 7: an earlier one takes the same parameters, so no call is given it
 #   fdopen: overload 5 of 7: an earlier one takes the same parameters, so no call is given it
 #   scandir: overload 3 of 3: an earlier one takes the same parameters, so no call is given it
+#   DirEntry.__fspath__, __class_getitem__: dunder methods, which operators would call

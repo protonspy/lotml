@@ -19,6 +19,21 @@ class Match:
     b: int
     size: int
 
+class SequenceMatcher[_T]:
+    fn SequenceMatcher(isjunk: PyObject?, a: [_T], b: [_T], autojunk: bool = True) -> SequenceMatcher[_T] ! PyError
+    fn SequenceMatcher(a: [_T], b: [_T], autojunk: bool = True) -> SequenceMatcher[_T] ! PyError
+    fn SequenceMatcher(isjunk: PyObject? = None, a: [str] = "", b: [str] = "", autojunk: bool = True) -> SequenceMatcher[_T] ! PyError
+    fn set_seqs(self, a: [_T], b: [_T]) -> None ! PyError
+    fn set_seq1(self, a: [_T]) -> None ! PyError
+    fn set_seq2(self, b: [_T]) -> None ! PyError
+    fn find_longest_match(self, alo: int = 0, ahi: int? = None, blo: int = 0, bhi: int? = None) -> Match ! PyError
+    fn get_matching_blocks(self) -> [Match] ! PyError
+    fn get_opcodes(self) -> [(PyObject, int, int, int, int)] ! PyError
+    fn get_grouped_opcodes(self, n: int = 3) -> PyObject ! PyError
+    fn ratio(self) -> f64 ! PyError
+    fn quick_ratio(self) -> f64 ! PyError
+    fn real_quick_ratio(self) -> f64 ! PyError
+
 class Differ:
     fn Differ(linejunk: PyObject? = None, charjunk: PyObject? = None) -> Differ ! PyError
     fn compare(self, a: [str], b: [str]) -> PyObject ! PyError
@@ -29,4 +44,4 @@ class HtmlDiff:
     fn make_table(self, fromlines: [str], tolines: [str], fromdesc: str = "", todesc: str = "", context: bool = False, numlines: int = 5) -> str ! PyError
 
 # Not bound:
-#   SequenceMatcher: it is generic, which specs/python-generics/ binds
+#   SequenceMatcher.__class_getitem__: dunder methods, which operators would call

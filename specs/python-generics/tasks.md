@@ -15,7 +15,7 @@
   _Depends 1.2_
 - [x] 2.2 (Unit) Expand a constrained type variable into an overload per constraint — R1.2
   _Depends 2.1_
-- [ ] 2.3 (Unit) Bind a generic class with its type parameters, a stub class named with its arguments, and an annotated `self` — R2.1, R2.2, R2.3
+- [x] 2.3 (Unit) Bind a generic class with its type parameters, a stub class named with its arguments, and an annotated `self` — R2.1, R2.2, R2.3
   _Depends 2.1_
 - [ ] 3.1 (Unit) Read a generic name in the coverage report, and measure the corpus as `generics` beside `overloads` — R6.1, R6.2
   _Depends 1.6, 2.2, 2.3_
