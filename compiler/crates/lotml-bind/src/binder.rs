@@ -180,8 +180,12 @@ fn bind(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
 /// its size.
 fn functions(body: &[Stmt], cx: Cx<'_>) -> Vec<(String, Vec<String>, Vec<String>)> {
     let runs = overload_runs(body);
+    // Each name once, the first written winning, so a stub repeating one overload thousands of
+    // times binds it once rather than once per repetition.
+    let mut named: HashSet<String> = HashSet::new();
     let mut found: Vec<(String, Vec<String>, Vec<String>)> = definitions(body)
         .into_iter()
+        .filter(|f| named.insert(f.name.to_string()))
         .map(|f| {
             let name = f.name.as_str();
             let (lines, left_out) = match runs.get(name) {
@@ -200,6 +204,9 @@ fn functions(body: &[Stmt], cx: Cx<'_>) -> Vec<(String, Vec<String>, Vec<String>
         methods.insert(class.name.as_str(), (index, overload_runs(&class.body)));
     }
     for (name, class, method) in aliases(body) {
+        if !named.insert(name.clone()) {
+            continue;
+        }
         let index = methods.get(class.as_str());
         let first = index.and_then(|(index, _)| index.get(method.as_str()));
         let run = index.and_then(|(_, runs)| runs.get(method.as_str()));
@@ -280,7 +287,8 @@ fn overloads(
     let total = run.len();
     for (k, f) in run.iter().enumerate() {
         let which = format!("#   {label}: overload {} of {total}", k + 1);
-        if lines.len() == OVERLOADS {
+        // Counted as declared, repeats included, so no run costs more than the limit to read.
+        if k == OVERLOADS {
             skipped.push(format!("#   {label}: overloads {} to {total}: past the {OVERLOADS} lotml reads", k + 1));
             break;
         }
@@ -1146,6 +1154,18 @@ else:
         let text = bound(&stub);
         assert_eq!(functions(&stub).len(), OVERLOADS);
         assert!(text.contains("#   f: overloads 65 to 70: past the 64 lotml reads"), "{text}");
+    }
+
+    #[test]
+    fn thousands_of_one_overload_repeated_bind_in_time_linear_in_the_stub() {
+        let unit = "@overload\ndef f(x: int) -> int: ...\n";
+        let method = "    @overload\n    def m(self, x: int) -> int: ...\n";
+        let stub =
+            format!("{}class C:\n{}_c: C\n{}", unit.repeat(20_000), method.repeat(20_000), "g = _c.m\n".repeat(5_000));
+        let started = std::time::Instant::now();
+        let text = bound(&stub);
+        assert!(started.elapsed().as_secs() < 5, "took {:?}", started.elapsed());
+        assert_eq!(functions(&stub), ["fn f(x: int) -> int ! PyError", "fn g(x: int) -> int ! PyError"], "{text}");
     }
 
     #[test]

@@ -3280,7 +3280,7 @@ impl<'c, 'a> Builder<'c, 'a> {
     fn python_method(&mut self, call: Span, object: &ast::Expr, method: &str, sig: &FnSig, args: &[AstArg]) -> Value {
         let sig = &self.cx.checked.py_overload(call, sig).clone();
         let target = self.value(object);
-        let (operands, keywords) = self.python_args(&sig.params[1..], args);
+        let (operands, keywords) = self.python_args(sig.params.get(1..).unwrap_or_default(), args);
         let params = sig.params.iter().skip(1).map(|p| p.ty.clone()).collect();
         let ret = call_ret(sig);
         let method = method.to_string();

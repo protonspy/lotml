@@ -188,3 +188,26 @@ fn an_overloaded_function_is_called_never_passed() {
     let checked = lotml_check::check_resolved_with(&parsed.module, source, &interfaces);
     assert!(checked.diagnostics.is_empty(), "a function of one signature is still a value");
 }
+
+#[test]
+fn a_long_lineage_is_walked_once_however_many_overloads_a_call_tries() {
+    let mut text = String::from("class C0\n");
+    for k in 1..3000 {
+        text.push_str(&format!("class C{k}(C{})\n", k - 1));
+    }
+    for k in 0..OVERLOADS - 1 {
+        text.push_str(&format!("class O{k}\nfn f(x: O{k}) -> int ! PyError\n"));
+    }
+    text.push_str("fn f(x: C0) -> int ! PyError\nfn make() -> C2999 ! PyError\n");
+    let (read, problems) = interface_of("py.m", &text);
+    assert!(problems.is_empty(), "{:?}", messages(&problems));
+    let interfaces = lotml_check::Interfaces::from([("py.m".to_string(), read)]);
+    let calls: String = (0..300).map(|i| format!("    n{i} = f(c)?\n")).collect();
+    let source = format!("from py.m import f, make\n\nfn g() -> None ! PyError:\n    c = make()?\n{calls}");
+    let parsed = lotml_syntax::parse(&source);
+    let started = std::time::Instant::now();
+    let checked = lotml_check::check_resolved_with(&parsed.module, &source, &interfaces);
+    assert!(started.elapsed().as_secs() < 5, "took {:?}", started.elapsed());
+    let found: Vec<&str> = checked.diagnostics.iter().map(|d| d.code).collect();
+    assert!(found.is_empty(), "the last overload, of `C0`, takes a `C2999`: {found:?}");
+}

@@ -936,6 +936,8 @@ class Acc:
         pass
     def add(self, a, b=1, c=2):
         return a + b * 10 + c * 100
+    def tag(self, name, target=0):
+        return name * 10 + target
 ";
     let interface = "\
 fn f(a: int, b: int = todo(), c: int = todo()) -> int ! PyError
@@ -943,18 +945,19 @@ fn f(a: int, b: int = todo(), c: int = todo()) -> int ! PyError
 class Acc:
     fn Acc() -> Acc ! PyError
     fn add(self, a: int, b: int = todo(), c: int = todo()) -> int ! PyError
+    fn tag(self, name: int, target: int = todo()) -> int ! PyError
 ";
     let program = "\
 from py.kw import f, Acc
 
 fn main() -> None ! PyError:
     print(f(1, c=3)?, f(1, c=3, b=2)?)
-    print(Acc()?.add(5, c=7)?)
+    print(Acc()?.add(5, c=7)?, Acc()?.tag(name=4, target=2)?)
 ";
     let dir = scratch(
         "python-keywords",
         &[(".git", ""), ("kw.py", module), ("bindings/py.kw.lotmli", interface), ("main.lot", program)],
     );
     let out = lotml(&["run", "main.lot"], &dir);
-    assert_eq!(stdout(&out), "203 123\n715\n", "{}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(stdout(&out), "203 123\n715 42\n", "{}", String::from_utf8_lossy(&out.stderr));
 }

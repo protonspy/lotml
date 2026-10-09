@@ -1,7 +1,7 @@
 //! Checking one function body, test block or method: expressions with an expected type
 //! where there is one (bidirectional), locals inferred, optionals narrowed by `is not None`.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use lotml_diag::{Applicability, Diagnostic};
 use lotml_syntax::ast::*;
@@ -87,6 +87,9 @@ pub struct Body<'p> {
     locals: Vec<(Span, Span)>,
     /// The overload each overloaded Python call was given, by the call's span (adr:0035).
     overloads: Vec<(Span, usize)>,
+    /// The lineage of each Python class a value was fitted to a base of, walked once: an
+    /// overloaded call fits its arguments to every overload's parameters.
+    lineages: HashMap<String, HashSet<String>>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -128,6 +131,7 @@ impl<'p> Body<'p> {
             full: false,
             locals: Vec::new(),
             overloads: Vec::new(),
+            lineages: HashMap::new(),
             diagnostics: Vec::new(),
         };
         if let Some(sig) = sig {
@@ -1388,7 +1392,7 @@ impl<'p> Body<'p> {
             // A Python class where a base its interface declares is expected (adr:0034), and where
             // any Python object is: it is one.
             (Ty::Adt(sub, _), Ty::Adt(base, _)) if sub != base && self.py_class(&f).is_some() => {
-                self.py_lineage(sub).contains(base)
+                self.descends(sub, base)
             }
             (Ty::Adt(..), Ty::PyObject) if self.py_class(&f).is_some() => true,
             (_, Ty::PyObject) if !matches!(f, Ty::Var(_)) => self.carried(&f),
@@ -3190,6 +3194,15 @@ impl<'p> Body<'p> {
     }
 
     /// `class` and its declared bases, nearest first, each once.
+    /// Whether the Python class `sub` has `base` in its lineage, the lineage walked once a body.
+    fn descends(&mut self, sub: &str, base: &str) -> bool {
+        if !self.lineages.contains_key(sub) {
+            let lineage = self.py_lineage(sub).into_iter().collect();
+            self.lineages.insert(sub.to_string(), lineage);
+        }
+        self.lineages[sub].contains(base)
+    }
+
     fn py_lineage(&self, class: &str) -> Vec<String> {
         crate::interface::py_lineage(class, |c| self.program.py_bases.get(c).map(Vec::as_slice))
     }
