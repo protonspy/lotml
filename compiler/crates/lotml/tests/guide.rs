@@ -34,9 +34,15 @@ fn scratch(name: &str, files: &[(&str, &str)]) -> PathBuf {
 fn lotml(args: &[&str], dir: &Path, vars: &[(&str, &Path)]) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_lotml"));
     command.args(args).current_dir(dir);
-    for name in ["LOTML_HARNESS_GUIDE", "XDG_CONFIG_HOME", "HOME", "APPDATA", "USERPROFILE"] {
+    for name in ["LOTML_HARNESS_GUIDE", "APPDATA", "USERPROFILE"] {
         command.env_remove(name);
     }
+    // An empty configuration directory, which a guide is looked for in before `HOME`: `HOME`
+    // itself stays, since lotml's cache, which uv runs from, is found through it
+    // (plans/uv-cache-fallback.md).
+    let config = Path::new(env!("CARGO_TARGET_TMPDIR")).join("guide-no-config");
+    std::fs::create_dir_all(&config).unwrap();
+    command.env("XDG_CONFIG_HOME", config);
     for (name, value) in vars {
         command.env(name, value);
     }

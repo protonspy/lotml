@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 
 use crate::{Failure, Target, files};
 use lotml_llvm::driver::Level;
-use lotml_py::resolve::{Managed, Options, ThroughUv, Use, resolve};
+use lotml_py::resolve::{Found, Options, ThroughUv, Use, resolve};
 use lotml_py::uv::Uv;
 
 /// A compiled module: the name it is imported by, its source's absolute path, which tracebacks
@@ -97,12 +97,42 @@ fn locks(project: Option<&Path>) -> bool {
 /// missing CPython may be fetched, or a project's dependencies installed, through uv. A project
 /// holding a `uv.lock` runs in the environment made from it, over an interpreter resolved without
 /// the project's own (specs/python-dependencies, adr:0033).
+/// The directory uv runs from, `uv` under the user's cache `root`, or why lotml will not run it
+/// there: a cache that is not this user's own (`private`) is where a project could plant what uv
+/// reads (adr:0026).
+fn uv_home(
+    var: &dyn Fn(&str) -> Option<std::ffi::OsString>,
+    root: Option<PathBuf>,
+    private: &dyn Fn(&Path) -> std::io::Result<()>,
+) -> Result<PathBuf, String> {
+    match root {
+        None if var("LOTML_CACHE_DIR").is_some_and(|v| !v.is_empty()) => Err(
+            "LOTML_CACHE_DIR is not an absolute directory lotml may keep its cache in (on Windows, it must be inside the user's profile)".to_string(),
+        ),
+        None => Err("there is no per-user cache directory (LOCALAPPDATA, XDG_CACHE_HOME or HOME) to run it from".to_string()),
+        Some(root) => {
+            let home = root.join("uv");
+            private(&home).map(|()| home.clone()).map_err(|e| format!("{} is not a directory of this user's own: {e}", home.display()))
+        }
+    }
+}
+
 fn python(uses: Use, project: Option<&Path>, downloads: bool) -> Result<Vec<String>, Failure> {
     let var = |name: &str| std::env::var_os(name);
+    let mut refused = None;
     let uv = lotml_py::uv::find(&lotml_py::uv::Places::here()).map_err(Failure)?;
-    let home = lotml_llvm::cache::user_root()
-        .map(|root| root.join("uv"))
-        .filter(|home| lotml_llvm::cache::private_directory(home).is_ok());
+    let home = uv_home(&var, lotml_llvm::cache::user_root(), &|home| lotml_llvm::cache::private_directory(home));
+    let home = match (&uv, home) {
+        (_, Ok(home)) => Some(home),
+        (Some(path), Err(why)) => {
+            refused = Some(format!(
+                "no Python found: lotml found uv at {} and will not run it, because {why}; set LOTML_CACHE_DIR to a directory of your own, or set LOTML_PYTHON",
+                path.display()
+            ));
+            None
+        }
+        (None, Err(_)) => None,
+    };
     let confined = match (&uv, &home) {
         (Some(path), Some(home)) => Some(Uv { path: path.clone(), home: home.clone() }),
         _ => None,
@@ -115,8 +145,12 @@ fn python(uses: Use, project: Option<&Path>, downloads: bool) -> Result<Vec<Stri
     };
     let uses = if locked.is_some() { Use::Base } else { uses };
     let options = Options { uses, project, downloads };
-    let base =
-        resolve(&options, &var, managed.as_ref().map(|m| m as &dyn Managed), &lotml_py::python).map_err(Failure)?;
+    let found = match (&managed, refused) {
+        (Some(managed), _) => Found::Usable(managed),
+        (None, Some(why)) => Found::Refused(why),
+        (None, None) => Found::None,
+    };
+    let base = resolve(&options, &var, found, &lotml_py::python).map_err(Failure)?;
     let Some(locked) = locked else { return Ok(base) };
     let (executable, version) = executable_of(&base)?;
     let root = crate::dependencies::environments().ok_or_else(|| {
@@ -676,6 +710,22 @@ mod tests {
 
     fn scratch() -> Scratch {
         Scratch::new().unwrap_or_else(|Failure(why)| panic!("{why}"))
+    }
+
+    #[test]
+    fn uv_s_home_is_refused_saying_why_for_each_cache_lotml_will_not_keep() {
+        let set = |_: &str| Some(std::ffi::OsString::from("D:\\elsewhere"));
+        let unset = |_: &str| None;
+        let ok = |_: &Path| Ok(());
+        let given = uv_home(&set, None, &ok).unwrap_err();
+        assert!(given.contains("LOTML_CACHE_DIR is not an absolute directory"), "{given}");
+        let none = uv_home(&unset, None, &ok).unwrap_err();
+        assert!(none.contains("no per-user cache directory"), "{none}");
+        let shared = |_: &Path| Err(std::io::Error::other("owned by another user"));
+        let root = PathBuf::from("cache-root");
+        let foreign = uv_home(&unset, Some(root.clone()), &shared).unwrap_err();
+        assert!(foreign.contains("is not a directory of this user's own: owned by another user"), "{foreign}");
+        assert_eq!(uv_home(&unset, Some(root.clone()), &ok), Ok(root.join("uv")));
     }
 
     #[test]
