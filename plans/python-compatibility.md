@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: f16c8ffeac713699fceed9c40e997e835fa6cbd712181288d42dd9a519309563
+checksum: 941caaab9a2d5c4e6475023b0b9a106a727b4fad822f8255a1c971a994a5a6cb
 ---
 
 # Python compatibility
@@ -111,7 +111,7 @@ the typed share each spec added.
       library through a generated loader that keeps adr:0012's checked, copying
       boundary, or on leaving it out with the reason
   _Reason review of the literature on 2026-10-08: the IR report's --pyext and research/prior-art/studies/lpython.md idea 6 are planned nowhere, and adr:0012 covers the Python target only, so Out of scope's 'adr:0012 already settles' does not reach native libraries_
-- [ ] 3.4 (Unit) Write and build the spec python-reexports: a stub's names re-exported
+- [x] 3.4 (Unit) Write and build the spec python-reexports: a stub's names re-exported
       from its submodules or another module (`from .core import where`, `from posixpath
       import *`) bound as the module's own, the coverage report run before and after
   _Depends 2.4_
