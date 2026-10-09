@@ -24,6 +24,11 @@ struct Cx<'a> {
     this: Option<&'a str>,
     /// The stub's type variables, its own and those it imports (adr:0036).
     vars: &'a Vars,
+    /// The type each constrained variable is given for the overload being written.
+    fixed: &'a [(&'a str, &'a str)],
+    /// The bytes of signatures written so far, so a stub whose bindings outgrow [`LARGEST`] stops
+    /// being written as soon as they do (adr:0032).
+    spent: &'a std::cell::Cell<usize>,
     /// The type parameters of the class a member belongs to.
     own: &'a [String],
     /// The type parameters of each generic class of the stub the interface declares.
@@ -39,8 +44,6 @@ enum Var {
     Constrained(Vec<String>),
     /// A `ParamSpec` or a `TypeVarTuple`, which no LotML type describes.
     Spread,
-    /// A constrained one, given one of its types for the overload being written.
-    Fixed(String),
 }
 
 /// Type variables by the name a stub gives them.
@@ -156,9 +159,15 @@ fn bind(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
     let vars = type_vars(body);
     let (classes, params, refused) = bindable_classes(body, &vars);
     skipped.extend(refused);
-    let cx = Cx { classes: &classes, this: None, vars: &vars, own: &[], params: &params };
+    let spent = std::cell::Cell::new(0);
+    let cx = Cx { classes: &classes, this: None, vars: &vars, fixed: &[], own: &[], params: &params, spent: &spent };
+    let past = || Refused(format!("its interface would be past the {LARGEST} bytes lotml reads"));
     let mut seen = HashSet::new();
-    for (name, lines, left_out) in functions(body, cx) {
+    let functions = functions(body, cx);
+    if spent.get() > LARGEST {
+        return Err(past());
+    }
+    for (name, lines, left_out) in functions {
         if name.starts_with('_') || !seen.insert(name.clone()) {
             continue;
         }
@@ -179,6 +188,9 @@ fn bind(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
         // A class written in two `sys.version_info` branches is bound from the first, as a function is.
         if classes.contains(class.name.as_str()) && written.insert(class.name.as_str()) {
             let (block, left_out) = class_block(class, cx);
+            if spent.get() > LARGEST {
+                return Err(past());
+            }
             lines.push(String::new());
             lines.extend(block);
             skipped.extend(left_out);
@@ -191,7 +203,7 @@ fn bind(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
     }
     let text = lines.join("\n") + "\n";
     if text.len() > LARGEST {
-        return Err(Refused(format!("its interface would be past the {LARGEST} bytes lotml reads")));
+        return Err(past());
     }
     Ok(text)
 }
@@ -419,7 +431,7 @@ fn written(function: &ast::StmtFunctionDef, name: &str, bound_method: bool, cx: 
     let params = params(function, bound_method, cx)?;
     let returns = function.returns.as_deref().map_or_else(|| OBJECT.to_string(), |r| lotml_type(r, false, cx));
     let params = params.join(", ");
-    let generics = generics(&format!("{params} {returns}"), cx);
+    let generics = generics(&format!("{params} {returns}"), cx)?;
     Ok(format!("fn {name}{generics}({params}) -> {returns} ! PyError"))
 }
 
@@ -467,8 +479,11 @@ fn bindable_classes(body: &[Stmt], type_vars: &Vars) -> (HashSet<String>, HashMa
         if name.starts_with('_') || bound.contains(name) {
             continue;
         }
+        let own = class_params(class, type_vars);
         let why = if class.bases().iter().any(|b| name_of(head(b)) == Some("Protocol")) {
             Some("it is a protocol, a shape rather than a class".to_string())
+        } else if own.len() > TYPE_PARAMS {
+            Some(format!("it has more than {TYPE_PARAMS} type parameters"))
         } else if reserved(name) {
             Some(format!("`{name}` is a name LotML keeps"))
         } else if functions.contains(name) {
@@ -480,7 +495,6 @@ fn bindable_classes(body: &[Stmt], type_vars: &Vars) -> (HashSet<String>, HashMa
             Some(why) => refused.push(format!("#   {name}: {why}")),
             None => {
                 bound.insert(name.to_string());
-                let own = class_params(class, type_vars);
                 if !own.is_empty() {
                     params.insert(name.to_string(), own);
                 }
@@ -534,8 +548,8 @@ fn type_vars(body: &[Stmt]) -> Vars {
 /// The type variables `body` declares: `T = TypeVar("T")`, `AnyStr = TypeVar("AnyStr", str,
 /// bytes)`, `P = ParamSpec("P")`. A `Self` one is the class's own, which `Self` already names.
 fn declared_vars(body: &[Stmt]) -> Vars {
-    let (classes, vars, params) = (HashSet::new(), Vars::new(), HashMap::new());
-    let cx = Cx { classes: &classes, this: None, vars: &vars, own: &[], params: &params };
+    let (classes, vars, params, spent) = (HashSet::new(), Vars::new(), HashMap::new(), std::cell::Cell::new(0));
+    let cx = Cx { classes: &classes, this: None, vars: &vars, fixed: &[], own: &[], params: &params, spent: &spent };
     let mut found = Vars::new();
     for statement in module_level(body) {
         if let Stmt::Assign(assigned) = statement
@@ -544,6 +558,9 @@ fn declared_vars(body: &[Stmt]) -> Vars {
             && target.id.as_str() != "Self"
         {
             let var = match name_of(&call.func) {
+                // Past the limit a constrained variable would stand for more overloads than a name
+                // keeps, so it is a `PyObject`, as a `ParamSpec` is.
+                Some("TypeVar") if call.arguments.args.len() > TYPE_PARAMS + 1 => Var::Spread,
                 Some("TypeVar") if call.arguments.args.len() > 1 => {
                     Var::Constrained(call.arguments.args[1..].iter().map(|c| lotml_type(c, false, cx)).collect())
                 }
@@ -609,17 +626,23 @@ fn expanded(
             constrained.push((name, types));
         }
     }
+    let spend = |line: String| {
+        cx.spent.set(cx.spent.get() + line.len() + 1);
+        if cx.spent.get() > LARGEST {
+            Err(format!("the interface is past the {LARGEST} bytes lotml reads"))
+        } else {
+            Ok(line)
+        }
+    };
     if constrained.is_empty() {
-        return write(cx).map(|line| vec![line]);
+        return write(cx).and_then(spend).map(|line| vec![line]);
     }
     let mut lines = Vec::new();
     let mut choice = vec![0; constrained.len()];
     loop {
-        let mut vars = cx.vars.clone();
-        for ((name, types), &i) in constrained.iter().zip(&choice) {
-            vars.insert((*name).to_string(), Var::Fixed(types[i].clone()));
-        }
-        lines.push(write(Cx { vars: &vars, ..cx })?);
+        let fixed: Vec<(&str, &str)> =
+            constrained.iter().zip(&choice).map(|((name, types), &i)| (*name, types[i].as_str())).collect();
+        lines.push(write(Cx { fixed: &fixed, ..cx }).and_then(spend)?);
         if lines.len() == OVERLOADS {
             return Ok(lines);
         }
@@ -656,7 +679,7 @@ fn names_in<'e>(expr: &'e Expr, out: &mut Vec<&'e str>) {
 
 /// The type parameters a signature written as `text` declares: the plain type variables it names
 /// that are not its class's, in the order written, `[T, S]`, or nothing (adr:0036).
-fn generics(text: &str, cx: Cx<'_>) -> String {
+fn generics(text: &str, cx: Cx<'_>) -> Result<String, String> {
     let mut found: Vec<&str> = Vec::new();
     for word in text.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
         if matches!(cx.vars.get(word), Some(Var::Plain))
@@ -664,11 +687,18 @@ fn generics(text: &str, cx: Cx<'_>) -> String {
             && !cx.own.iter().any(|o| o == word)
             && !found.contains(&word)
         {
+            if found.len() == TYPE_PARAMS {
+                return Err(format!("it has more than {TYPE_PARAMS} type parameters"));
+            }
             found.push(word);
         }
     }
-    if found.is_empty() { String::new() } else { format!("[{}]", found.join(", ")) }
+    Ok(if found.is_empty() { String::new() } else { format!("[{}]", found.join(", ")) })
 }
+
+/// The most type parameters a class or a signature is bound with, and the most types a
+/// constrained variable is expanded into (adr:0036).
+const TYPE_PARAMS: usize = 16;
 
 /// The expression a subscript is of: `Generic` of `Generic[T]`, or the expression itself.
 fn head(expr: &Expr) -> &Expr {
@@ -754,13 +784,13 @@ fn class_block(class: &ast::StmtClassDef, cx: Cx<'_>) -> (Vec<String>, Vec<Strin
         }
         let is_method = |f: &ast::StmtFunctionDef| !is_static(f) && !decorated(f, "classmethod");
         let signature = |f: &ast::StmtFunctionDef, cx: Cx<'_>| {
-            params(f, !is_static(f), cx).map(|params| {
+            params(f, !is_static(f), cx).and_then(|params| {
                 let returns = f.returns.as_deref().map_or_else(|| OBJECT.to_string(), |r| lotml_type(r, false, cx));
                 let params =
                     if is_method(f) { std::iter::once(receiver(f, name, cx)).chain(params).collect() } else { params };
                 let params = params.join(", ");
-                let generics = generics(&format!("{params} {returns}"), cx);
-                format!("    fn {member}{generics}({params}) -> {returns} ! PyError")
+                let generics = generics(&format!("{params} {returns}"), cx)?;
+                Ok(format!("    fn {member}{generics}({params}) -> {returns} ! PyError"))
             })
         };
         let label = format!("{name}.{member}");
@@ -782,9 +812,9 @@ fn class_block(class: &ast::StmtClassDef, cx: Cx<'_>) -> (Vec<String>, Vec<Strin
         .or_else(|| defs.iter().find(|f| f.name.as_str() == "__new__"));
     if let Some(init) = own {
         let constructor = |f: &ast::StmtFunctionDef, cx: Cx<'_>| {
-            params(f, true, cx).map(|params| {
+            params(f, true, cx).and_then(|params| {
                 let params = params.join(", ");
-                format!("    fn {name}{}({params}) -> {named} ! PyError", generics(&params, cx))
+                Ok(format!("    fn {name}{}({params}) -> {named} ! PyError", generics(&params, cx)?))
             })
         };
         let label = format!("{name}.{}", init.name.as_str());
@@ -841,12 +871,11 @@ fn lotml_type(expr: &Expr, parameter: bool, cx: Cx<'_>) -> String {
         if cx.own.iter().any(|o| o == name) {
             return name.to_string();
         }
+        if let Some((_, ty)) = cx.fixed.iter().find(|(var, _)| *var == name) {
+            return (*ty).to_string();
+        }
         if let Some(var) = cx.vars.get(name) {
-            return match var {
-                Var::Plain if !reserved(name) => name.to_string(),
-                Var::Fixed(ty) => ty.clone(),
-                _ => OBJECT.to_string(),
-            };
+            return if *var == Var::Plain && !reserved(name) { name.to_string() } else { OBJECT.to_string() };
         }
         return match name {
             "int" => "int",
@@ -1533,6 +1562,36 @@ def pair(a: A, b: B) -> A: ...
         let text = bound(&stub);
         assert_eq!(functions(&stub).len(), OVERLOADS, "{text}");
         assert!(text.contains("#   f: overloads 33 to 40: past the 64 lotml reads"), "{text}");
+    }
+
+    #[test]
+    fn type_parameters_and_constraints_past_their_limit_are_not_bound() {
+        let wide: Vec<String> = (0..=TYPE_PARAMS).map(|i| format!("T{i}")).collect();
+        let declared: String = wide.iter().map(|t| format!("{t} = TypeVar(\"{t}\")\n")).collect();
+        let stub = format!(
+            "{declared}class Wide(Generic[{}]): ...\ndef f({}) -> None: ...\n\
+             C = TypeVar(\"C\", {})\ndef g(x: C) -> C: ...\n",
+            wide.join(", "),
+            wide.iter().map(|t| format!("p{t}: {t}")).collect::<Vec<_>>().join(", "),
+            (0..=TYPE_PARAMS).map(|_| "int").collect::<Vec<_>>().join(", "),
+        );
+        let text = bound(&stub);
+        assert!(text.contains("#   Wide: it has more than 16 type parameters"), "{text}");
+        assert!(text.contains("#   f: it has more than 16 type parameters"), "{text}");
+        assert_eq!(functions(&stub), ["fn g(x: PyObject) -> PyObject ! PyError"], "too many constraints: a `PyObject`");
+    }
+
+    #[test]
+    fn a_stub_whose_expansions_outgrow_the_limit_is_refused_while_written() {
+        let def = "def f{i}(x: AnyStr, y: B, z: C, w: D, v: E, u: F) -> AnyStr: ...\n";
+        let vars: String =
+            ["B", "C", "D", "E", "F"].iter().map(|v| format!("{v} = TypeVar(\"{v}\", int, str)\n")).collect();
+        let defs: String = (0..60_000).map(|i| def.replace("{i}", &i.to_string())).collect();
+        let stub = format!("from typing import AnyStr\n{vars}{defs}");
+        let started = std::time::Instant::now();
+        let refused = interface("m", &stub, "m.pyi").unwrap_err();
+        assert!(refused.0.contains("past the"), "{}", refused.0);
+        assert!(started.elapsed().as_secs() < 10, "took {:?}", started.elapsed());
     }
 
     #[test]

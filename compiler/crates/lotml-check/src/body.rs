@@ -1331,7 +1331,9 @@ impl<'p> Body<'p> {
         &self.locals
     }
 
-    /// Each call into Python as it was typed, by the call's span, its types resolved.
+    /// Each call into Python as it was typed, by the call's span, its types resolved. A type a
+    /// call's parameters or result came to hold that does not cross into Python is reported here,
+    /// once the whole body has fixed it: `xs.append(p)` after `f(xs)` fixes what `f` was given.
     pub fn calls(&mut self) -> Vec<(Span, crate::PyCall)> {
         let calls = std::mem::take(&mut self.calls);
         calls
@@ -1343,9 +1345,33 @@ impl<'p> Body<'p> {
                 }
                 sig.ret = self.infer.resolve(&sig.ret);
                 sig.error = sig.error.as_ref().map(|e| self.infer.resolve(e));
+                let types: Vec<Ty> = sig.params.iter().map(|p| p.ty.clone()).chain([sig.ret.clone()]).collect();
+                if let Some(stranger) = types.iter().find_map(|ty| self.stranger(ty)) {
+                    let name = call.sig.name.clone();
+                    self.report(
+                        Diagnostic::error(
+                            "E0204",
+                            span,
+                            format!("`{stranger}` does not cross into Python, so `{name}` cannot be given one"),
+                        )
+                        .note("Python is given numbers, text, bytes, collections of them, `PyObject`s and its classes' values"),
+                    );
+                }
                 (span, call)
             })
             .collect()
+    }
+
+    /// The first part of `ty` that does not cross into Python, if one does not.
+    fn stranger(&self, ty: &Ty) -> Option<Ty> {
+        match self.resolve(ty) {
+            Ty::Adt(..) if self.py_class(ty).is_some() => None,
+            Ty::List(t) | Ty::Set(t) | Ty::Optional(t) => self.stranger(&t),
+            Ty::Dict(k, v) => self.stranger(&k).or_else(|| self.stranger(&v)),
+            Ty::Tuple(items) => items.iter().find_map(|t| self.stranger(t)),
+            Ty::Error | Ty::Never => None,
+            other => (!self.carried(&other)).then_some(other),
+        }
     }
 
     /// Accept `found` where `expected` is wanted, allowing the coercions lotml has: a value
@@ -2804,7 +2830,7 @@ impl<'p> Body<'p> {
         }
         let ret = sig.ret.substitute(&names, &values);
         if sig.python {
-            self.python_call(sig, &names, &values, &fresh, 0, span);
+            self.python_call(sig, &names, &values, 0, span);
         }
         match &sig.error {
             Some(e) => Ty::Result(Box::new(ret), Box::new(e.substitute(&names, &values))),
@@ -2812,44 +2838,21 @@ impl<'p> Body<'p> {
         }
     }
 
-    /// A call into Python checked against `sig`, its type parameters `names` given `values`: each
-    /// argument inferred for one of `fresh` must cross the boundary, and the call is recorded as
-    /// instantiated, for the lowering (adr:0036).
-    fn python_call(&mut self, sig: &FnSig, names: &[String], values: &[Ty], fresh: &[Ty], overload: usize, span: Span) {
-        for ((name, _), ty) in sig.type_params.iter().zip(fresh) {
-            let ty = self.resolve(ty);
-            if !self.crosses(&ty) {
-                self.report(
-                    Diagnostic::error(
-                        "E0204",
-                        span,
-                        format!("`{ty}` does not cross into Python, so it cannot be `{name}` of `{}`", sig.name),
-                    )
-                    .note("Python is given numbers, text, bytes, collections of them, `PyObject`s and its classes' values"),
-                );
-            }
-        }
+    /// A call into Python checked against `sig`, its type parameters `names` given `values`,
+    /// recorded as instantiated: for the lowering, and for [`Body::calls`] to check that what it
+    /// passes crosses the boundary once the body's types are known (adr:0036).
+    fn python_call(&mut self, sig: &FnSig, names: &[String], values: &[Ty], overload: usize, span: Span) {
         let instantiated = FnSig {
+            name: sig.name.clone(),
+            type_params: Vec::new(),
             params: sig.params.iter().map(|p| ParamSig { ty: p.ty.substitute(names, values), ..p.clone() }).collect(),
             ret: sig.ret.substitute(names, values),
             error: sig.error.as_ref().map(|e| e.substitute(names, values)),
-            type_params: Vec::new(),
+            span: sig.span,
+            python: true,
             overloads: Vec::new(),
-            ..sig.clone()
         };
         self.calls.push((span, crate::PyCall { overload, sig: instantiated }));
-    }
-
-    /// Whether a value of `ty` crosses into Python: what a `PyObject` parameter takes, a Python
-    /// class's value, and collections of them.
-    fn crosses(&self, ty: &Ty) -> bool {
-        match self.resolve(ty) {
-            Ty::Adt(..) if self.py_class(ty).is_some() => true,
-            Ty::List(t) | Ty::Set(t) | Ty::Optional(t) => self.crosses(&t),
-            Ty::Dict(k, v) => self.crosses(&k) && self.crosses(&v),
-            Ty::Tuple(items) => items.iter().all(|t| self.crosses(t)),
-            other => self.carried(&other),
-        }
     }
 
     /// The function `sig` named other than to call it: a value of its type, or, overloaded, no
@@ -2919,8 +2922,7 @@ impl<'p> Body<'p> {
             self.coerce(ty, &want, arg.expr().span);
             self.convention(params[i].convention, arg, &params[i].name, &chosen.name);
         }
-        let fresh = &taken.values[owner.0.len()..];
-        self.python_call(chosen, &taken.names, &taken.values, fresh, overload, span);
+        self.python_call(chosen, &taken.names, &taken.values, overload, span);
         let ret = chosen.ret.substitute(&taken.names, &taken.values);
         match &chosen.error {
             Some(e) => Ty::Result(Box::new(ret), Box::new(e.substitute(&taken.names, &taken.values))),

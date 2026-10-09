@@ -269,6 +269,14 @@ fn python_signature(
         ));
         return None;
     }
+    if f.type_params.len() > TYPE_PARAMS {
+        diagnostics.push(Diagnostic::error(
+            "E0221",
+            f.name.span,
+            format!("`{}` has more than {TYPE_PARAMS} type parameters, which lotml does not infer", f.name.name),
+        ));
+        return None;
+    }
     // A Python type variable's bound is Python's to check, at the call (adr:0036).
     if let Some(bounded) = f.type_params.iter().find(|p| p.bound.is_some()) {
         diagnostics.push(Diagnostic::error(
@@ -304,7 +312,15 @@ fn python_signature(
 /// A class block read: its bases among the interface's classes, its attributes, its constructor
 /// (the function named after it), its methods (taking `self`) and its static methods.
 fn python_class(c: &ClassDef, program: &mut Program, diagnostics: &mut Vec<Diagnostic>) -> PyClass {
-    let params: Vec<String> = c.type_params.iter().map(|p| p.name.name.clone()).collect();
+    let mut params: Vec<String> = c.type_params.iter().map(|p| p.name.name.clone()).collect();
+    if params.len() > TYPE_PARAMS {
+        diagnostics.push(Diagnostic::error(
+            "E0221",
+            c.name.span,
+            format!("`{}` has more than {TYPE_PARAMS} type parameters, which lotml does not infer", c.name.name),
+        ));
+        params.truncate(TYPE_PARAMS);
+    }
     let own = Ty::Adt(program.py_classes[&c.name.name].clone(), params.iter().cloned().map(Ty::Param).collect());
     let mut class = PyClass { params: params.clone(), ..PyClass::default() };
     if let Some(bounded) = c.type_params.iter().find(|p| p.bound.is_some()) {
@@ -394,6 +410,10 @@ fn python_class(c: &ClassDef, program: &mut Program, diagnostics: &mut Vec<Diagn
     }
     class
 }
+
+/// The most type parameters a Python function, member or class takes (adr:0036): as many as the
+/// binder writes, so a hostile interface cannot make each call infer thousands.
+pub const TYPE_PARAMS: usize = 16;
 
 /// The most overloads one name keeps (adr:0035), past the 43 of the largest set the binding
 /// coverage corpus declares, so a stub cannot make every call try thousands.

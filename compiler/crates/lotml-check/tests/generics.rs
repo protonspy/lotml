@@ -231,3 +231,24 @@ fn whether_a_python_value_is_there_is_asked_with_is_none_and_nothing_else_compar
     let found = codes(&check(source));
     assert!(found.len() == 1 && found[0].starts_with("E0204"), "two handles are not compared: {found:?}");
 }
+
+#[test]
+fn a_type_fixed_after_the_call_is_checked_as_crossing_too() {
+    let source = "from py.re import nlargest\n\ntype P(x: int)\n\nfn f() -> None ! PyError:\n    var xs = []\n    top = nlargest(1, xs)?\n    xs.append(P(1))\n";
+    let found = codes(&check(source));
+    assert!(found.len() == 1 && found[0].starts_with("E0204") && found[0].contains("`P`"), "{found:?}");
+}
+
+#[test]
+fn a_python_signature_or_class_takes_at_most_its_limit_of_type_parameters() {
+    let names: Vec<String> = (0..=lotml_check::TYPE_PARAMS).map(|i| format!("T{i}")).collect();
+    let (_, problems) = interface_of("py.m", &format!("fn f[{}](x: T0) -> T0 ! PyError\n", names.join(", ")));
+    assert!(
+        problems.iter().any(|d| d.code == "E0221" && d.message.contains("type parameters")),
+        "{:?}",
+        messages(&problems)
+    );
+    let (read, problems) = interface_of("py.m", &format!("class Wide[{}]\n", names.join(", ")));
+    assert!(problems.iter().any(|d| d.code == "E0221"), "{:?}", messages(&problems));
+    assert_eq!(read.classes().next().unwrap().1.params.len(), lotml_check::TYPE_PARAMS);
+}

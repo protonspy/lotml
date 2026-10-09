@@ -12,8 +12,8 @@ mod program;
 pub mod ty;
 
 pub use interface::{
-    Interface, Interfaces, OVERLOADS, PyClass, c_interface, interface, interface_of, is_c_library, py_constructor,
-    shadowing, unlocked,
+    Interface, Interfaces, OVERLOADS, PyClass, TYPE_PARAMS, c_interface, interface, interface_of, is_c_library,
+    py_constructor, shadowing, unlocked,
 };
 pub use parts::{Assembly, Declarations, Part, PartChecked, PartKind, check_part, declarations, parts};
 pub use prefix::{PrefixCheck, Verdict, check_prefix, check_prefix_with};
