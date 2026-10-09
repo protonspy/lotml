@@ -446,7 +446,8 @@ def accept(value, descriptor, types: dict, classes: dict, where: str):
     A descriptor is a list: `["int", low, high, name]`, `["float"]`, `["bool"]`, `["str"]`,
     `["bytes"]`, `["none"]`, `["list", d]`, `["set", d]`, `["dict", k, v]`, `["tuple", d…]`,
     `["optional", d]`, `["adt", name]` — a record or sum type described in `types` and built
-    from `classes` — `["object"]`, a `PyObject`, kept as the object it is, or `["any"]`."""
+    from `classes` — `["object"]`, a `PyObject`, kept as the object it is, `["class", module,
+    name]`, an instance of that Python class, kept as the object it is (adr:0034), or `["any"]`."""
     kind = descriptor[0]
 
     def wrong(expected: str):
@@ -454,6 +455,15 @@ def accept(value, descriptor, types: dict, classes: dict, where: str):
 
     if kind == "object":
         return value if isinstance(value, PyHandle) else PyHandle(value)
+    if kind == "class":
+        held = value.value if isinstance(value, PyHandle) else value
+        try:
+            cls = _resolve(descriptor[1], descriptor[2])
+        except Exception as error:  # noqa: BLE001 - a class that cannot be found is a wrong value
+            raise TypeError(f"{where}: no class {descriptor[1]}.{descriptor[2]}: {error}") from None
+        if not isinstance(cls, type) or not isinstance(held, cls):
+            raise wrong(f"{descriptor[1]}.{descriptor[2]}")
+        return value if isinstance(value, PyHandle) else PyHandle(held)
     if kind == "any":
         return _copy.deepcopy(value)
     if kind == "int":
@@ -598,9 +608,8 @@ def foreign(module: str, name: str, returns: str):
 
     def call(*args, **kwargs):
         try:
-            import importlib
-
-            function = getattr(importlib.import_module(module), name)
+            # A dotted name is a class's static method, `date.today` (adr:0034).
+            function = _resolve(module, name)
             # LotML's values are copied part by part; a `PyObject` among them reaches Python as
             # the object it is (specs/python-object R1.4).
             value = function(*to_python(copy(args)), **to_python(copy(kwargs)))
@@ -613,6 +622,52 @@ def foreign(module: str, name: str, returns: str):
 
     call.__name__ = call.__qualname__ = name
     return call
+
+
+def _resolve(module: str, name: str):
+    """The attribute `name` of the Python module `module`, a dotted name followed part by part."""
+    import importlib
+
+    found = importlib.import_module(module)
+    for part in name.split("."):
+        found = getattr(found, part)
+    return found
+
+
+@functools.cache
+def _descriptor(text: str):
+    """A descriptor, read once for each place a program calls Python from."""
+    return json.loads(text)
+
+
+def method(target, name: str, returns: str, *args, **kwargs):
+    """A method of a Python class's value a LotML program calls (adr:0034), as `foreign` calls a
+    function: the arguments copied, any exception and any returned value of the wrong type an
+    `Err(PyError)`, the rest `Ok`."""
+    descriptor = _descriptor(returns)
+    try:
+        bound = getattr(to_python(target), name)
+        value = bound(*to_python(copy(args)), **to_python(copy(kwargs)))
+    except Exception as error:  # noqa: BLE001 - the boundary turns every exception into a value
+        return Err(PyError(type(error).__name__, str(error)))
+    try:
+        return Ok(accept(value, descriptor, {}, {}, f"{name}() returned"))
+    except (TypeError, OverflowError) as error:
+        return Err(PyError(type(error).__name__, str(error)))
+
+
+def attribute(target, name: str, returns: str):
+    """An attribute of a Python class's value a LotML program reads (adr:0034): any exception, and
+    any value of the wrong type, an `Err(PyError)`."""
+    descriptor = _descriptor(returns)
+    try:
+        value = getattr(to_python(target), name)
+    except Exception as error:  # noqa: BLE001 - the boundary turns every exception into a value
+        return Err(PyError(type(error).__name__, str(error)))
+    try:
+        return Ok(accept(value, descriptor, {}, {}, f"the attribute {name}"))
+    except (TypeError, OverflowError) as error:
+        return Err(PyError(type(error).__name__, str(error)))
 
 
 class PyHandle:

@@ -97,6 +97,12 @@ pub struct Checked {
     /// The methods of each trait the module declares, by trait and by name; `self` is of the
     /// type `Self`.
     pub traits: BTreeMap<String, BTreeMap<String, Method>>,
+    /// The Python classes imported by name, each with its full name (adr:0034): `date` for
+    /// `py.datetime.date`.
+    pub py_classes: BTreeMap<String, String>,
+    /// The methods and static methods of each Python class an imported module declares, by its
+    /// full name, those of the bases it declares included.
+    pub py_methods: BTreeMap<String, BTreeMap<String, Method>>,
 }
 
 /// The most type nodes a module keeps for its expressions, in all: a long-lived editor or MCP
