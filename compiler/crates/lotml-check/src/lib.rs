@@ -109,6 +109,9 @@ pub struct Checked {
     /// The constructor each of those classes has of its own; [`Checked::py_constructor`] finds an
     /// inherited one.
     pub py_constructors: BTreeMap<String, FnSig>,
+    /// The overload each call of an overloaded Python function, constructor or method was given,
+    /// by the call's span: 0 its first signature, `i` its `overloads[i - 1]` (adr:0035).
+    pub py_overloads: BTreeMap<Span, usize>,
 }
 
 impl Checked {

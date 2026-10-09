@@ -259,9 +259,23 @@ pub struct Infer {
     bound: Vec<Option<Ty>>,
     /// Whether a resolution passed [`TYPE_LIMIT`] since [`Infer::take_overflow`] last asked.
     overflowed: Cell<bool>,
+    /// The variables bound since [`Infer::begin_trial`], while a trial runs.
+    trail: Option<Vec<u32>>,
 }
 
 impl Infer {
+    /// Start a trial: what unifies from here can be undone by [`Infer::undo_trial`].
+    pub fn begin_trial(&mut self) {
+        self.trail = Some(Vec::new());
+    }
+
+    /// Unbind every variable the trial bound, and end it.
+    pub fn undo_trial(&mut self) {
+        for v in self.trail.take().unwrap_or_default() {
+            self.bound[v as usize] = None;
+        }
+    }
+
     pub fn fresh(&mut self) -> Ty {
         self.bound.push(None);
         Ty::Var((self.bound.len() - 1) as u32)
@@ -330,6 +344,9 @@ impl Infer {
                     return false;
                 }
                 self.bound[*v as usize] = Some(other.clone());
+                if let Some(trail) = &mut self.trail {
+                    trail.push(*v);
+                }
                 true
             }
             (Ty::List(x), Ty::List(y))

@@ -88,3 +88,88 @@ fn a_constructor_a_subclass_inherits_returns_the_subclass_from_every_overload() 
     assert_eq!(inherited.overloads[0].ret, posix);
     assert_eq!(inherited.overloads[0].name, "PosixPath");
 }
+
+fn checked(body: &str) -> (String, lotml_check::Checked) {
+    let source = format!("from py.os import listdir, Path\n\n{body}");
+    let parsed = lotml_syntax::parse(&source);
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    let (read, problems) = interface_of("py.os", OS);
+    assert!(problems.is_empty());
+    let interfaces = lotml_check::Interfaces::from([("py.os".to_string(), read)]);
+    let checked = lotml_check::check_resolved_with(&parsed.module, &source, &interfaces);
+    (source, checked)
+}
+
+/// The overload the checker gave the call written `call` in `body`, which checks clean.
+fn chosen(body: &str, call: &str) -> usize {
+    let (source, checked) = checked(body);
+    let found: Vec<String> =
+        checked.diagnostics.iter().map(|d| format!("{} {} {}", d.code, d.message, d.notes.join(" "))).collect();
+    assert!(found.is_empty(), "{source}\n{found:?}");
+    let start = source.find(call).unwrap() as u32;
+    let at = lotml_syntax::span::Span { start, end: start + call.len() as u32 };
+    *checked
+        .py_overloads
+        .get(&at)
+        .unwrap_or_else(|| panic!("no overload recorded at `{call}`: {:?}", checked.py_overloads))
+}
+
+fn refused(body: &str) -> Vec<String> {
+    let (_, checked) = checked(body);
+    checked.diagnostics.iter().map(|d| format!("{} {} {}", d.code, d.message, d.notes.join(" "))).collect()
+}
+
+#[test]
+fn a_call_takes_the_first_overload_its_arguments_fit_and_its_result() {
+    assert_eq!(chosen("fn f() -> [str] ! PyError:\n    return listdir(\".\")?\n", "listdir(\".\")"), 0);
+    assert_eq!(chosen("fn f() -> [str] ! PyError:\n    return listdir()?\n", "listdir()"), 0, "a default fills");
+    assert_eq!(chosen("fn f(raw: bytes) -> [bytes] ! PyError:\n    return listdir(raw)?\n", "listdir(raw)"), 1);
+    assert_eq!(chosen("fn f() -> [str] ! PyError:\n    return listdir(path=3)?\n", "listdir(path=3)"), 2, "by keyword");
+}
+
+#[test]
+fn a_value_given_to_a_py_object_parameter_is_the_fit_taken_last() {
+    assert_eq!(
+        chosen("fn f() -> [str] ! PyError:\n    return listdir(3)?\n", "listdir(3)"),
+        2,
+        "`int` fits the third exactly, the second only as a `PyObject`"
+    );
+    assert_eq!(
+        chosen("fn f() -> [bytes] ! PyError:\n    return listdir(2.5)?\n", "listdir(2.5)"),
+        1,
+        "with no exact fit, the first that takes it as a `PyObject`"
+    );
+}
+
+#[test]
+fn a_constructor_a_method_and_through_the_module_path_choose_too() {
+    assert_eq!(chosen("fn f() -> Path ! PyError:\n    return Path([\"a\", \"b\"])?\n", "Path([\"a\", \"b\"])"), 1);
+    let body = "fn f() -> Path ! PyError:\n    p = Path(\"a\")?\n    return p.joined(p)?\n";
+    assert_eq!(chosen(body, "p.joined(p)"), 1);
+    assert_eq!(chosen(body, "Path(\"a\")"), 0);
+    let module = "import py.os\n\nfn f() -> [str] ! PyError:\n    return py.os.listdir(3)?\n";
+    assert_eq!(chosen(module, "py.os.listdir(3)"), 2);
+}
+
+#[test]
+fn a_call_no_overload_takes_lists_them() {
+    let found = refused("fn f() -> None ! PyError:\n    p = Path(\"a\")?\n    q = p.joined(3)?\n");
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].starts_with("E0204"), "{found:?}");
+    assert!(
+        found[0].contains("other: str") && found[0].contains("other: py.os.Path"),
+        "each overload listed: {found:?}"
+    );
+    let found = refused("fn f() -> None ! PyError:\n    xs = listdir(\".\", 2)?\n");
+    assert!(found.len() == 1 && found[0].starts_with("E0204"), "too many arguments for any: {found:?}");
+}
+
+#[test]
+fn a_nest_of_overloaded_calls_checks_each_argument_once() {
+    let nest: String = (0..30).fold("p".to_string(), |inner, _| format!("p.joined({inner})?"));
+    let started = std::time::Instant::now();
+    let body = format!("fn f() -> Path ! PyError:\n    p = Path(\"a\")?\n    return {nest}\n");
+    let found = refused(&body);
+    assert!(found.is_empty(), "{found:?}");
+    assert!(started.elapsed().as_secs() < 5, "thirty nested overloaded calls took {:?}", started.elapsed());
+}

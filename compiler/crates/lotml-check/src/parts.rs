@@ -145,12 +145,15 @@ pub struct PartChecked {
     pub types: Vec<(Span, Ty)>,
     /// Each name that resolved to a local, with the span of its declaration.
     pub locals: Vec<(Span, Span)>,
+    /// The overload each overloaded Python call was given, by the call's span (adr:0035).
+    pub overloads: Vec<(Span, usize)>,
 }
 
 impl PartChecked {
     fn of(mut body: Body) -> PartChecked {
         let types = body.types();
-        PartChecked { types, locals: body.locals().to_vec(), diagnostics: body.diagnostics }
+        let overloads = body.overloads().to_vec();
+        PartChecked { types, locals: body.locals().to_vec(), overloads, diagnostics: body.diagnostics }
     }
 }
 
@@ -268,6 +271,7 @@ impl Assembly {
         if self.keep {
             checked.locals.extend(part.locals.iter().map(|(name, local)| (name.shifted(0, at), local.shifted(0, at))));
         }
+        checked.py_overloads.extend(part.overloads.iter().map(|(call, chosen)| (call.shifted(0, at), *chosen)));
         checked.diagnostics.extend(part.diagnostics.iter().map(|d| {
             let mut d = d.clone();
             d.shift(0, at);
