@@ -37,6 +37,8 @@ enum Var {
     Constrained(Vec<String>),
     /// A `ParamSpec` or a `TypeVarTuple`, which no LotML type describes.
     Spread,
+    /// A constrained one, given one of its types for the overload being written.
+    Fixed(String),
 }
 
 /// Type variables by the name a stub gives them.
@@ -208,8 +210,10 @@ fn functions(body: &[Stmt], cx: Cx<'_>) -> Vec<(String, Vec<String>, Vec<String>
         .map(|f| {
             let name = f.name.as_str();
             let (lines, left_out) = match runs.get(name) {
-                Some(run) if is_overload(f) => overloads(run, name, |o| written(o, name, false, cx), |_| false),
-                _ => one(name, written(f, name, false, cx)),
+                Some(run) if is_overload(f) => {
+                    overloads(run, name, |o| expanded(o, cx, |cx| written(o, name, false, cx)), |_| false)
+                }
+                _ => one(name, expanded(f, cx, |cx| written(f, name, false, cx))),
             };
             (name.to_string(), lines, left_out)
         })
@@ -232,9 +236,10 @@ fn functions(body: &[Stmt], cx: Cx<'_>) -> Vec<(String, Vec<String>, Vec<String>
         let (lines, left_out) = match (first, run) {
             (None, _) => one(&name, Err(format!("`{class}` holds no `{method}` in this stub"))),
             (Some(m), Some(run)) if is_overload(m) => {
-                overloads(run, &name, |o| written(o, &name, !is_static(o), cx), |o| !is_static(o))
+                let write = |o: &ast::StmtFunctionDef| expanded(o, cx, |cx| written(o, &name, !is_static(o), cx));
+                overloads(run, &name, write, |o| !is_static(o))
             }
-            (Some(m), _) => one(&name, written(m, &name, !is_static(m), cx)),
+            (Some(m), _) => one(&name, expanded(m, cx, |cx| written(m, &name, !is_static(m), cx))),
         };
         found.push((name, lines, left_out));
     }
@@ -242,9 +247,9 @@ fn functions(body: &[Stmt], cx: Cx<'_>) -> Vec<(String, Vec<String>, Vec<String>
 }
 
 /// A name's one signature as lines of the interface, or the comment saying why it is left out.
-fn one(name: &str, written: Result<String, String>) -> (Vec<String>, Vec<String>) {
+fn one(name: &str, written: Result<Vec<String>, String>) -> (Vec<String>, Vec<String>) {
     match written {
-        Ok(line) => (vec![line], Vec::new()),
+        Ok(lines) => (lines, Vec::new()),
         Err(why) => (Vec::new(), vec![format!("#   {name}: {why}")]),
     }
 }
@@ -297,17 +302,19 @@ fn overload_runs(body: &[Stmt]) -> Runs<'_> {
 fn overloads(
     run: &[&ast::StmtFunctionDef],
     label: &str,
-    write: impl Fn(&ast::StmtFunctionDef) -> Result<String, String>,
+    write: impl Fn(&ast::StmtFunctionDef) -> Result<Vec<String>, String>,
     receiver: impl Fn(&ast::StmtFunctionDef) -> bool,
 ) -> (Vec<String>, Vec<String>) {
     let mut lines: Vec<String> = Vec::new();
     let mut taken = HashSet::new();
     let mut skipped = Vec::new();
     let total = run.len();
+    // Counted as read, repeats and a constrained variable's expansions included, so no run costs
+    // more than the limit to write.
+    let mut read = 0;
     for (k, f) in run.iter().enumerate() {
         let which = format!("#   {label}: overload {} of {total}", k + 1);
-        // Counted as declared, repeats included, so no run costs more than the limit to read.
-        if k == OVERLOADS {
+        if read >= OVERLOADS {
             skipped.push(format!("#   {label}: overloads {} to {total}: past the {OVERLOADS} lotml reads", k + 1));
             break;
         }
@@ -316,12 +323,16 @@ fn overloads(
             break;
         }
         match write(f) {
-            Ok(line) => {
-                let parameters = line.split(" -> ").next().unwrap_or(&line).to_string();
-                if taken.insert(parameters) {
-                    lines.push(line);
-                } else {
-                    skipped.push(format!("{which}: an earlier one takes the same parameters, so no call is given it"));
+            Ok(written) => {
+                for line in written.into_iter().take(OVERLOADS - read) {
+                    read += 1;
+                    let parameters = line.split(" -> ").next().unwrap_or(&line).to_string();
+                    if taken.insert(parameters) {
+                        lines.push(line);
+                    } else {
+                        skipped
+                            .push(format!("{which}: an earlier one takes the same parameters, so no call is given it"));
+                    }
                 }
             }
             Err(why) => {
@@ -540,6 +551,81 @@ fn shared_vars(module: &str) -> Option<&'static Vars> {
     shared.get(module)
 }
 
+/// `function` written by `write` once, or, where it names constrained type variables that are not
+/// its class's, once for each choice of their types, the first varying fastest, at most
+/// [`OVERLOADS`]: the overloads a constrained variable stands for (adr:0036).
+fn expanded(
+    function: &ast::StmtFunctionDef,
+    cx: Cx<'_>,
+    write: impl Fn(Cx<'_>) -> Result<String, String>,
+) -> Result<Vec<String>, String> {
+    let mut named = Vec::new();
+    let parameters = &function.parameters;
+    let annotations = parameters
+        .posonlyargs
+        .iter()
+        .chain(&parameters.args)
+        .chain(&parameters.kwonlyargs)
+        .filter_map(|p| p.parameter.annotation.as_deref())
+        .chain(function.returns.as_deref());
+    for annotation in annotations {
+        names_in(annotation, &mut named);
+    }
+    let mut constrained: Vec<(&str, &[String])> = Vec::new();
+    for name in named {
+        if let Some(Var::Constrained(types)) = cx.vars.get(name)
+            && !cx.own.iter().any(|o| o == name)
+            && !constrained.iter().any(|(seen, _)| *seen == name)
+            && !types.is_empty()
+        {
+            constrained.push((name, types));
+        }
+    }
+    if constrained.is_empty() {
+        return write(cx).map(|line| vec![line]);
+    }
+    let mut lines = Vec::new();
+    let mut choice = vec![0; constrained.len()];
+    loop {
+        let mut vars = cx.vars.clone();
+        for ((name, types), &i) in constrained.iter().zip(&choice) {
+            vars.insert((*name).to_string(), Var::Fixed(types[i].clone()));
+        }
+        lines.push(write(Cx { vars: &vars, ..cx })?);
+        if lines.len() == OVERLOADS {
+            return Ok(lines);
+        }
+        let mut at = 0;
+        loop {
+            let Some(i) = choice.get_mut(at) else { return Ok(lines) };
+            *i += 1;
+            if *i < constrained[at].1.len() {
+                break;
+            }
+            *i = 0;
+            at += 1;
+        }
+    }
+}
+
+/// Every name `expr` mentions, in the order written.
+fn names_in<'e>(expr: &'e Expr, out: &mut Vec<&'e str>) {
+    match expr {
+        Expr::Name(name) => out.push(name.id.as_str()),
+        Expr::Subscript(subscript) => {
+            names_in(&subscript.value, out);
+            names_in(&subscript.slice, out);
+        }
+        Expr::Tuple(tuple) => tuple.elts.iter().for_each(|e| names_in(e, out)),
+        Expr::List(list) => list.elts.iter().for_each(|e| names_in(e, out)),
+        Expr::BinOp(op) => {
+            names_in(&op.left, out);
+            names_in(&op.right, out);
+        }
+        _ => {}
+    }
+}
+
 /// The type parameters a signature written as `text` declares: the plain type variables it names
 /// that are not its class's, in the order written, `[T, S]`, or nothing (adr:0036).
 fn generics(text: &str, cx: Cx<'_>) -> String {
@@ -644,7 +730,7 @@ fn class_block(class: &ast::StmtClassDef, classes: &HashSet<String>, vars: &Vars
             continue;
         }
         let is_method = |f: &ast::StmtFunctionDef| !is_static(f) && !decorated(f, "classmethod");
-        let signature = |f: &ast::StmtFunctionDef| {
+        let signature = |f: &ast::StmtFunctionDef, cx: Cx<'_>| {
             params(f, !is_static(f), cx).map(|params| {
                 let returns = f.returns.as_deref().map_or_else(|| OBJECT.to_string(), |r| lotml_type(r, false, cx));
                 let params =
@@ -656,8 +742,10 @@ fn class_block(class: &ast::StmtClassDef, classes: &HashSet<String>, vars: &Vars
         };
         let label = format!("{name}.{member}");
         let (written, left_out) = match runs.get(member) {
-            Some(run) if is_overload(f) => overloads(run, &label, signature, is_method),
-            _ => one(&label, signature(f)),
+            Some(run) if is_overload(f) => {
+                overloads(run, &label, |o| expanded(o, cx, |cx| signature(o, cx)), is_method)
+            }
+            _ => one(&label, expanded(f, cx, |cx| signature(f, cx))),
         };
         lines.extend(written);
         skipped.extend(left_out);
@@ -670,7 +758,7 @@ fn class_block(class: &ast::StmtClassDef, classes: &HashSet<String>, vars: &Vars
         .find(|f| f.name.as_str() == "__init__")
         .or_else(|| defs.iter().find(|f| f.name.as_str() == "__new__"));
     if let Some(init) = own {
-        let constructor = |f: &ast::StmtFunctionDef| {
+        let constructor = |f: &ast::StmtFunctionDef, cx: Cx<'_>| {
             params(f, true, cx).map(|params| {
                 let params = params.join(", ");
                 format!("    fn {name}{}({params}) -> {name} ! PyError", generics(&params, cx))
@@ -678,8 +766,10 @@ fn class_block(class: &ast::StmtClassDef, classes: &HashSet<String>, vars: &Vars
         };
         let label = format!("{name}.{}", init.name.as_str());
         let (written, left_out) = match runs.get(init.name.as_str()) {
-            Some(run) if is_overload(init) => overloads(run, &label, constructor, |_| false),
-            _ => one(&label, constructor(init)),
+            Some(run) if is_overload(init) => {
+                overloads(run, &label, |o| expanded(o, cx, |cx| constructor(o, cx)), |_| false)
+            }
+            _ => one(&label, expanded(init, cx, |cx| constructor(init, cx))),
         };
         for (k, line) in written.into_iter().enumerate() {
             lines.insert(1 + k, line);
@@ -728,7 +818,11 @@ fn lotml_type(expr: &Expr, parameter: bool, cx: Cx<'_>) -> String {
             return name.to_string();
         }
         if let Some(var) = cx.vars.get(name) {
-            return if *var == Var::Plain && !reserved(name) { name.to_string() } else { OBJECT.to_string() };
+            return match var {
+                Var::Plain if !reserved(name) => name.to_string(),
+                Var::Fixed(ty) => ty.clone(),
+                _ => OBJECT.to_string(),
+            };
         }
         return match name {
             "int" => "int",
@@ -1300,6 +1394,39 @@ def nlargest(n: int, iterable: Iterable[_T]) -> list[_T]: ...
         let vars = type_vars(&ruff_python_parser::parse_unchecked_source(stub, PySourceType::Stub).syntax().body);
         assert_eq!(vars["AnyStr"], Var::Constrained(vec!["str".into(), "bytes".into()]));
         assert_eq!(vars["_T"], Var::Plain);
+    }
+
+    #[test]
+    fn a_constrained_type_variable_is_an_overload_per_type() {
+        let stub = "\
+from typing import AnyStr
+A = TypeVar(\"A\", int, str)
+B = TypeVar(\"B\", bytes, float)
+def escape(pattern: AnyStr, flags: int = 0) -> AnyStr: ...
+def pair(a: A, b: B) -> A: ...
+";
+        assert_eq!(
+            functions(stub),
+            [
+                "fn escape(pattern: str, flags: int = 0) -> str ! PyError",
+                "fn escape(pattern: bytes, flags: int = 0) -> bytes ! PyError",
+                "fn pair(a: int, b: bytes) -> int ! PyError",
+                "fn pair(a: str, b: bytes) -> str ! PyError",
+                "fn pair(a: int, b: f64) -> int ! PyError",
+                "fn pair(a: str, b: f64) -> str ! PyError",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_constrained_overload_set_expands_within_the_limit() {
+        let stub: String = (0..40)
+            .map(|i| format!("@overload\ndef f(x: AnyStr, n{i}: int) -> AnyStr: ...\n"))
+            .collect::<String>()
+            .replace("@overload\ndef f(x: AnyStr, n0", "from typing import AnyStr\n@overload\ndef f(x: AnyStr, n0");
+        let text = bound(&stub);
+        assert_eq!(functions(&stub).len(), OVERLOADS, "{text}");
+        assert!(text.contains("#   f: overloads 33 to 40: past the 64 lotml reads"), "{text}");
     }
 
     #[test]

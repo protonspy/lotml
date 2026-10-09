@@ -11,7 +11,7 @@ fn fsencode(filename: str) -> bytes ! PyError
 fn fsdecode(filename: str) -> str ! PyError
 fn fspath(path: str) -> str ! PyError
 fn fspath(path: bytes) -> bytes ! PyError
-fn fspath(path: PyObject) -> PyObject ! PyError
+fn fspath(path: PyObject) -> str ! PyError
 fn get_exec_path(env: {str: str}? = None) -> [str] ! PyError
 fn getlogin() -> str ! PyError
 fn getpid() -> int ! PyError
@@ -120,7 +120,8 @@ fn major(device: int) -> int ! PyError
 fn minor(device: int) -> int ! PyError
 fn makedev(major: int, minor: int) -> int ! PyError
 fn pathconf(path: PyObject, name: PyObject) -> int ! PyError
-fn readlink(path: PyObject, dir_fd: int? = None) -> PyObject ! PyError
+fn readlink(path: PyObject, dir_fd: int? = None) -> str ! PyError
+fn readlink(path: PyObject, dir_fd: int? = None) -> bytes ! PyError
 fn remove(path: str, dir_fd: int? = None) -> None ! PyError
 fn removedirs(name: str) -> None ! PyError
 fn rename(src: str, dst: str, src_dir_fd: int? = None, dst_dir_fd: int? = None) -> None ! PyError
@@ -138,6 +139,7 @@ fn sync() -> None ! PyError
 fn truncate(path: PyObject, length: int) -> None ! PyError
 fn unlink(path: str, dir_fd: int? = None) -> None ! PyError
 fn utime(path: PyObject, times: PyObject? = None, ns: (int, int) = todo(), dir_fd: int? = None, follow_symlinks: bool = True) -> None ! PyError
+fn walk(top: PyObject, topdown: bool = True, onerror: PyObject? = None, followlinks: bool = False) -> PyObject ! PyError
 fn walk(top: PyObject, topdown: bool = True, onerror: PyObject? = None, followlinks: bool = False) -> PyObject ! PyError
 fn fwalk(top: str = ".", topdown: bool = True, onerror: PyObject? = None, follow_symlinks: bool = False, dir_fd: int? = None) -> PyObject ! PyError
 fn fwalk(top: PyObject, topdown: bool = True, onerror: PyObject? = None, follow_symlinks: bool = False, dir_fd: int? = None) -> PyObject ! PyError
@@ -330,5 +332,7 @@ class sched_param:
 # Not bound:
 #   PathLike: it is generic, which specs/python-generics/ binds
 #   DirEntry: it is generic, which specs/python-generics/ binds
+#   fspath: overload 3 of 3: an earlier one takes the same parameters, so no call is given it
 #   fdopen: overload 4 of 7: an earlier one takes the same parameters, so no call is given it
 #   fdopen: overload 5 of 7: an earlier one takes the same parameters, so no call is given it
+#   scandir: overload 3 of 3: an earlier one takes the same parameters, so no call is given it

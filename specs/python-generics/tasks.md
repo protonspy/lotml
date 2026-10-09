@@ -13,7 +13,7 @@
   _Depends 1.5_
 - [x] 2.1 (Unit) Bind a stub's plain and bounded type variables as type parameters, imported ones read from the embedded typeshed, a `ParamSpec` or `TypeVarTuple` as `PyObject` — R1.1, R1.3, R1.4, R1.5
   _Depends 1.2_
-- [ ] 2.2 (Unit) Expand a constrained type variable into an overload per constraint — R1.2
+- [x] 2.2 (Unit) Expand a constrained type variable into an overload per constraint — R1.2
   _Depends 2.1_
 - [ ] 2.3 (Unit) Bind a generic class with its type parameters, a stub class named with its arguments, and an annotated `self` — R2.1, R2.2, R2.3
   _Depends 2.1_

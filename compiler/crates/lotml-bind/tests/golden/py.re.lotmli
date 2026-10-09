@@ -3,6 +3,8 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn compile(pattern: str, flags: PyObject = 0) -> PyObject ! PyError
+fn compile(pattern: bytes, flags: PyObject = 0) -> PyObject ! PyError
 fn compile(pattern: PyObject, flags: PyObject = 0) -> PyObject ! PyError
 fn search(pattern: PyObject, string: str, flags: PyObject = 0) -> PyObject? ! PyError
 fn search(pattern: PyObject, string: bytes, flags: PyObject = 0) -> PyObject? ! PyError
@@ -20,8 +22,10 @@ fn sub(pattern: PyObject, repl: PyObject, string: str, count: int = 0, flags: Py
 fn sub(pattern: PyObject, repl: PyObject, string: bytes, count: int = 0, flags: PyObject = 0) -> bytes ! PyError
 fn subn(pattern: PyObject, repl: PyObject, string: str, count: int = 0, flags: PyObject = 0) -> (str, int) ! PyError
 fn subn(pattern: PyObject, repl: PyObject, string: bytes, count: int = 0, flags: PyObject = 0) -> (bytes, int) ! PyError
-fn escape(pattern: PyObject) -> PyObject ! PyError
+fn escape(pattern: str) -> str ! PyError
+fn escape(pattern: bytes) -> bytes ! PyError
 fn purge() -> None ! PyError
+fn template(pattern: PyObject, flags: PyObject = 0) -> PyObject ! PyError
 fn template(pattern: PyObject, flags: PyObject = 0) -> PyObject ! PyError
 
 class error:
