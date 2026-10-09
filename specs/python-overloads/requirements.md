@@ -2,7 +2,8 @@
 autonomy: auto
 ci: wait
 branch: feat/python-overloads
-delivery: in-progress
+delivery: in-review
+pr: 60
 ---
 
 # Python overloads — requirements
