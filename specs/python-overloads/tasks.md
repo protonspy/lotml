@@ -9,7 +9,7 @@
   _Depends 1.2_
 - [x] 2.1 (Unit) Bind a stub's overload runs in order, cut at the first that cannot be bound, without repeats, the first branch's, at most 64 — R1.1, R1.2, R1.3, R1.4, R1.5
   _Depends 1.1_
-- [ ] 3.1 (Unit) Count an overloaded name typed when one overload is, and measure the corpus as `overloads` beside `classes` — R4.1, R4.2
+- [x] 3.1 (Unit) Count an overloaded name typed when one overload is, and measure the corpus as `overloads` beside `classes` — R4.1, R4.2
   _Depends 2.1_
 - [ ] 3.2 (Unit) Write overloads into the language reference, the guide, the E0221 and E0226 explanations and the wiki — R2.1, R3.1, R3.3
   _Depends 1.4, 2.1_

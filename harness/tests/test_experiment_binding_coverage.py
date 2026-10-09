@@ -109,6 +109,16 @@ def test_a_module_counts_the_public_names_lotml_bind_binds_and_one_without_a_stu
     assert measured.share == 0.75
     assert measured.reachable == ["pick"], "`object` is bound as a `PyObject`: reachable, not typed"
     assert measured.reached == 1.0
+    write(
+        purelib / "over-stubs" / "__init__.pyi",
+        "from typing import overload\n"
+        "@overload\ndef get(key: str) -> str: ...\n@overload\ndef get(key: str, default: object) -> object: ...\n"
+        "@overload\ndef raw(x: object) -> object: ...\n@overload\ndef raw(x: list[object]) -> object: ...\n",
+    )
+    over = bc.measure(bc.Module("over", "pypi", "types-over"), COMPILER, None, purelib)
+    assert (over.bound, over.reachable) == (["get"], ["raw"]), (
+        "an overloaded name is typed when one overload is (specs/python-overloads R4.1)"
+    )
     missing = bc.measure(bc.Module("absent", "pypi", "absent"), COMPILER, None, purelib)
     assert (missing.stub, missing.public, missing.share) == (None, 0, 0.0)
 
