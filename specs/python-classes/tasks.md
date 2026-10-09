@@ -10,7 +10,7 @@
 
 - [x] 2.1 (Unit) Make an imported class's name a type, `py.<module>.<Class>`, and type a call to it as its constructor, `C ! PyError` — R2.1
   _Depends 1.2_
-- [ ] 2.2 (Unit) Type method calls, static method calls and attribute reads through the class and its declared bases as `T ! PyError`, and refuse assigning an attribute — R2.2, R2.3
+- [x] 2.2 (Unit) Type method calls, static method calls and attribute reads through the class and its declared bases as `T ! PyError`, and refuse assigning an attribute — R2.2, R2.3
   _Depends 2.1_
 - [ ] 2.3 (Unit) Accept a class where a declared base is expected, and refuse it where any other type is — R2.4
   _Depends 2.1_

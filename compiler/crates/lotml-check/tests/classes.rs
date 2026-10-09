@@ -90,7 +90,7 @@ fn messages(source: &str) -> Vec<String> {
     lotml_check::check_resolved_with(&parsed.module, source, &interfaces())
         .diagnostics
         .iter()
-        .map(|d| d.message.clone())
+        .map(|d| format!("{} {}", d.message, d.notes.join(" ")))
         .collect()
 }
 
@@ -118,4 +118,48 @@ fn a_class_is_reached_by_its_module_s_path_too() {
 fn a_class_imported_beside_a_record_of_its_name_is_declared_twice() {
     let source = "from py.datetime import date\n\ntype date(year: int)\n";
     assert!(codes(source).contains(&"E0210"), "{:?}", messages(source));
+}
+
+const USES: &str = "from py.datetime import date, datetime\n\n";
+
+fn clean(body: &str) {
+    let source = format!("{USES}{body}");
+    assert_eq!(codes(&source), Vec::<&str>::new(), "{source}\n{:?}", messages(&source));
+}
+
+fn refused(body: &str, says: &str) {
+    let source = format!("{USES}{body}");
+    let found = messages(&source);
+    assert!(found.iter().any(|m| m.contains(says)), "{source}\n{found:?}");
+}
+
+#[test]
+fn a_method_a_static_method_and_an_attribute_are_typed_and_can_fail() {
+    clean("fn f() -> str ! PyError:\n    d = date(2026, 1, 8)?\n    return d.isoformat()?\n");
+    clean("fn f() -> date ! PyError:\n    return date.today()?\n");
+    clean("fn f() -> int ! PyError:\n    d = date.today()?\n    return d.year?\n");
+    refused("fn f() -> str ! PyError:\n    d = date.today()?\n    return d.isoformat()\n", "str ! PyError");
+    refused("fn f() -> int ! PyError:\n    d = date.today()?\n    return d.year\n", "int ! PyError");
+}
+
+#[test]
+fn a_subclass_reaches_the_members_of_the_bases_it_declares() {
+    clean("fn f() -> str ! PyError:\n    now = datetime.now()?\n    return now.isoformat()?\n");
+    clean("fn f() -> int ! PyError:\n    now = datetime.now()?\n    return now.year?\n");
+    clean("fn f() -> date ! PyError:\n    return datetime.today()?\n");
+}
+
+#[test]
+fn a_member_is_used_as_the_interface_declares_it() {
+    refused("fn f() -> None ! PyError:\n    d = date.today()?\n    d.nope()?\n", "has no method `nope`");
+    refused("fn f() -> None ! PyError:\n    d = date.today()?\n    x = d.year()?\n", "is an attribute");
+    refused("fn f() -> None ! PyError:\n    d = date.today()?\n    x = d.isoformat?\n", "is a method");
+    refused("fn f() -> None ! PyError:\n    d = date.today()?\n    x = d.today()?\n", "takes no `self`");
+    refused("fn f() -> None ! PyError:\n    x = date.isoformat()?\n", "is a method: call it on a `date` value");
+    refused("fn f() -> None ! PyError:\n    x = date.nope()?\n", "has no function `nope`");
+}
+
+#[test]
+fn an_attribute_of_a_python_object_is_never_assigned() {
+    refused("fn f() -> None ! PyError:\n    var d = date.today()?\n    d.year = 2027\n", "read, never assigned");
 }

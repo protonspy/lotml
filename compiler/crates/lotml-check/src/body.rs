@@ -986,6 +986,22 @@ impl<'p> Body<'p> {
                     self.forget(&path);
                 }
                 let current = self.expr(target, None);
+                if let ExprKind::Attr { object, name } = &target.kind
+                    && let Some(class) = self.seen.get(&object.span).cloned().and_then(|t| self.py_class(&t))
+                {
+                    self.report(
+                        Diagnostic::error(
+                            "E0205",
+                            name.span,
+                            format!(
+                                "`{}` is an attribute of a `{class}`, a Python object: it is read, never assigned",
+                                name.name
+                            ),
+                        )
+                        .note("a method of the class that changes it, if its interface declares one, is the way"),
+                    );
+                    return;
+                }
                 if !self.fits(&ty, &current) && !ty.is_poison() {
                     let (want, got) = (self.resolve(&current), self.resolve(&ty));
                     self.report(Diagnostic::error(
@@ -2113,6 +2129,19 @@ impl<'p> Body<'p> {
             self.opaque("E0205", name.span, format!("a `PyObject` has no attribute `{}`", name.name));
             return Ty::Error;
         }
+        if let Some(class) = self.py_class(&ty) {
+            if let Some(attribute) = self.py_attribute(&class, &name.name) {
+                return Ty::Result(Box::new(attribute), Box::new(Ty::Adt("PyError".into(), vec![])));
+            }
+            let names = self.py_members(&class);
+            let mut d = Diagnostic::error("E0205", name.span, format!("`{class}` has no attribute `{}`", name.name))
+                .alternatives(closest(&name.name, &names));
+            if self.py_method(&class, &name.name).is_some() {
+                d = d.note(format!("`{}` is a method: call it, `{}(…)`", name.name, name.name));
+            }
+            self.report(d);
+            return Ty::Error;
+        }
         match &ty {
             Ty::Adt(type_name, args) => match self.program.types.get(type_name) {
                 Some(TypeDef::Record { params, fields }) => {
@@ -2756,6 +2785,32 @@ impl<'p> Body<'p> {
     }
 
     fn method_call(&mut self, object: &Expr, name: &Ident, args: &[Arg], span: Span, expected: Option<&Ty>) -> Ty {
+        if let ExprKind::Name(class) = &object.kind
+            && self.lookup(class).is_none()
+            && let Some(qualified) = self.program.py_classes.get(class).cloned()
+        {
+            return match self.py_method(&qualified, &name.name) {
+                Some(m) if m.receiver.is_none() => self.call_signature(&m.sig, &[], &[], args, span, None),
+                Some(_) => {
+                    self.arg_types(args, &[]);
+                    self.report(Diagnostic::error(
+                        "E0205",
+                        name.span,
+                        format!("`{}` is a method: call it on a `{class}` value", name.name),
+                    ));
+                    Ty::Error
+                }
+                None => {
+                    self.arg_types(args, &[]);
+                    let names = self.py_members(&qualified);
+                    self.report(
+                        Diagnostic::error("E0205", name.span, format!("`{class}` has no function `{}`", name.name))
+                            .alternatives(closest(&name.name, &names)),
+                    );
+                    Ty::Error
+                }
+            };
+        }
         let receiver = self.expr(object, None);
         let receiver = self.result_value(receiver, object.span);
         let receiver = self.present(receiver, object.span);
@@ -2826,6 +2881,26 @@ impl<'p> Body<'p> {
                                         .collect::<Vec<_>>(),
                                 )),
                         );
+                        Ty::Error
+                    }
+                }
+            }
+            Ty::Adt(type_name, _) if self.program.py_attributes.contains_key(&type_name) => {
+                match self.py_method(&type_name, &name.name) {
+                    Some(m) => self.user_method(&m, object, &[], args, span, name),
+                    None => {
+                        self.arg_types(args, &[]);
+                        let names = self.py_members(&type_name);
+                        let mut d = Diagnostic::error(
+                            "E0205",
+                            name.span,
+                            format!("`{type_name}` has no method `{}`", name.name),
+                        )
+                        .alternatives(closest(&name.name, &names));
+                        if self.py_attribute(&type_name, &name.name).is_some() {
+                            d = d.note(format!("`{}` is an attribute: read it without parentheses", name.name));
+                        }
+                        self.report(d);
                         Ty::Error
                     }
                 }
@@ -2922,6 +2997,49 @@ impl<'p> Body<'p> {
                 }
             }
         }
+    }
+
+    /// The full name of the Python class `ty` is a value of, if it is one (adr:0034).
+    fn py_class(&self, ty: &Ty) -> Option<String> {
+        match self.resolve(ty) {
+            Ty::Adt(name, _) if self.program.py_attributes.contains_key(&name) => Some(name),
+            _ => None,
+        }
+    }
+
+    /// `class` and its declared bases, nearest first, each once.
+    fn py_lineage(&self, class: &str) -> Vec<String> {
+        let mut found = vec![class.to_string()];
+        let mut at = 0;
+        while at < found.len() {
+            for base in self.program.py_bases.get(&found[at]).into_iter().flatten() {
+                if !found.contains(base) {
+                    found.push(base.clone());
+                }
+            }
+            at += 1;
+        }
+        found
+    }
+
+    /// The method or static method `name` of the Python class `class` or of a base it declares.
+    fn py_method(&self, class: &str, name: &str) -> Option<Method> {
+        self.py_lineage(class).iter().find_map(|c| self.program.methods.get(c).and_then(|m| m.get(name)).cloned())
+    }
+
+    /// The type of the attribute `name` of the Python class `class` or of a base it declares.
+    fn py_attribute(&self, class: &str, name: &str) -> Option<Ty> {
+        self.py_lineage(class).iter().find_map(|c| self.program.py_attributes.get(c).and_then(|a| a.get(name)).cloned())
+    }
+
+    /// Every member name of the Python class `class` and its bases, for an alternative.
+    fn py_members(&self, class: &str) -> Vec<String> {
+        let mut names = Vec::new();
+        for c in self.py_lineage(class) {
+            names.extend(self.program.methods.get(&c).into_iter().flat_map(|m| m.keys().cloned()));
+            names.extend(self.program.py_attributes.get(&c).into_iter().flat_map(|a| a.keys().cloned()));
+        }
+        names
     }
 
     fn user_method(
