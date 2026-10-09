@@ -1231,6 +1231,7 @@ impl<'p> Body<'p> {
             types: self.program.types.clone(),
             traits: self.program.traits.clone(),
             py_classes: self.program.py_classes.clone(),
+            py_params: self.program.py_params.clone(),
             ..Program::default()
         };
         let ty = scratch.lower(t, &scope);

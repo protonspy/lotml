@@ -39,7 +39,8 @@ fn an_interface_holds_nothing_else() {
     let code = |text: &str| interface(text).1.iter().map(|d| d.code).collect::<Vec<_>>();
     assert_eq!(code("fn f(x: int) -> int\n"), vec!["E0221"], "a function that cannot fail");
     assert_eq!(code("fn f(x: int) -> int ! PyError:\n    return x\n"), vec!["E0221"], "a body");
-    assert_eq!(code("fn f[T](x: T) -> T ! PyError\n"), vec!["E0221"], "type parameters");
+    assert_eq!(code("fn f[T: Ord](x: T) -> T ! PyError\n"), vec!["E0221"], "a bounded type parameter");
+    assert!(code("fn f[T](x: T) -> T ! PyError\n").is_empty(), "a type parameter (specs/python-generics R3.1)");
     assert_eq!(code("type P(x: int)\n"), vec!["E0221"]);
     assert_eq!(code("fn f(x: Widget) -> int ! PyError\n"), vec!["E0202"], "a type nobody declared");
     let (kept, problems) = interface("fn f(x: Widget) -> int ! PyError\nfn g() -> int ! PyError\n");

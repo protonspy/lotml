@@ -58,7 +58,7 @@ fn a_class_holds_only_what_python_can_check() {
         ("class date:\n    fn isoformat(self) -> str\n", "must return `T ! PyError`"),
         ("class date:\n    fn date(self, year: int) -> date ! PyError\n", "takes no `self`"),
         ("class date:\n    fn date(year: int) -> int ! PyError\n", "takes no `self` and returns `date`"),
-        ("class date:\n    fn f[T](self, x: T) -> T ! PyError\n", "type parameters"),
+        ("class date:\n    fn f[T: Ord](self, x: T) -> T ! PyError\n", "has a bound"),
         ("class date:\n    year: int\n\nclass date:\n    month: int\n", "declared twice"),
     ];
     for (text, says) in cases {

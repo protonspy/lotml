@@ -201,6 +201,7 @@ fn quiet_signature(program: &Program, f: &FnDef, outer: &[String], self_ty: Opti
         types: program.types.clone(),
         traits: program.traits.clone(),
         py_classes: program.py_classes.clone(),
+        py_params: program.py_params.clone(),
         ..Program::default()
     };
     scratch.signature(f, outer, self_ty)

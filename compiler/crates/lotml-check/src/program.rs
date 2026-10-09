@@ -33,6 +33,9 @@ pub struct FnSig {
     pub ret: Ty,
     pub error: Option<Ty>,
     pub span: Span,
+    /// Whether it is a Python function's, constructor's or member's, which a call records and
+    /// whose type arguments must cross the boundary (adr:0036).
+    pub python: bool,
     /// A Python function's overloads after this one, in the order its interface declares them
     /// (adr:0035); empty for any other function.
     pub overloads: Vec<FnSig>,
@@ -96,6 +99,8 @@ pub struct Program {
     /// The Python classes a name means, each by its full name (adr:0034): `date` for
     /// `py.datetime.date` once imported, and in an interface its own classes.
     pub py_classes: HashMap<String, String>,
+    /// The type parameters of each generic Python class, by its full name (adr:0036).
+    pub py_params: HashMap<String, Vec<String>>,
     /// The classes of each Python module there is an interface for, by the name the module
     /// gives them.
     pub available_classes: HashMap<String, BTreeMap<String, crate::interface::PyClass>>,
@@ -169,8 +174,12 @@ impl Program {
                 Item::Import(import) => {
                     let path = import.module.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(".");
                     for name in &import.names {
-                        if program.available_classes.get(&path).is_some_and(|c| c.contains_key(&name.name)) {
-                            program.py_classes.insert(name.name.clone(), format!("{path}.{}", name.name));
+                        if let Some(class) = program.available_classes.get(&path).and_then(|c| c.get(&name.name)) {
+                            let qualified = format!("{path}.{}", name.name);
+                            if !class.params.is_empty() {
+                                program.py_params.insert(qualified.clone(), class.params.clone());
+                            }
+                            program.py_classes.insert(name.name.clone(), qualified);
                         }
                     }
                 }
@@ -379,6 +388,9 @@ impl Program {
                 self.methods.insert(qualified.clone(), class.methods.clone());
                 self.py_attributes.insert(qualified.clone(), class.attributes.clone());
                 self.py_bases.insert(qualified.clone(), class.bases.clone());
+                if !class.params.is_empty() {
+                    self.py_params.insert(qualified.clone(), class.params.clone());
+                }
                 if let Some(constructor) = &class.constructor {
                     self.py_constructors.insert(qualified, constructor.clone());
                 }
@@ -566,6 +578,7 @@ impl Program {
             ret,
             error,
             span: f.span,
+            python: false,
             overloads: Vec::new(),
         }
     }
@@ -604,7 +617,20 @@ impl Program {
                     return Ty::Heap(Box::new(lowered[0].clone()));
                 }
                 if let Some(qualified) = self.py_classes.get(&name.name) {
-                    return Ty::Adt(qualified.clone(), Vec::new());
+                    // A generic Python class takes its arguments, as a record does (adr:0036).
+                    let wanted = self.py_params.get(qualified).map_or(0, Vec::len);
+                    if lowered.len() == wanted {
+                        return Ty::Adt(qualified.clone(), lowered);
+                    }
+                    if lowered.is_empty() {
+                        return Ty::Adt(qualified.clone(), vec![Ty::Error; wanted]);
+                    }
+                    self.diagnostics.push(Diagnostic::error(
+                        "E0202",
+                        t.span,
+                        format!("`{}` takes {wanted} type arguments", name.name),
+                    ));
+                    return Ty::Error;
                 }
                 if let Some(def) = self.types.get(&name.name) {
                     let wanted = def.params().len();

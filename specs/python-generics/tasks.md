@@ -1,7 +1,7 @@
 # Python generics — tasks
 
 - [x] 1.1 (Unit) Parse a class's type parameters in an interface, `class Pattern[AnyStr]:`, through the formatter and the IDE — R3.1
-- [ ] 1.2 (Unit) Read the type parameters of a Python interface's functions, classes and members, a bound refused with E0221, an annotated `self` kept — R3.1, R3.2
+- [x] 1.2 (Unit) Read the type parameters of a Python interface's functions, classes and members, a bound refused with E0221, an annotated `self` kept — R3.1, R3.2
   _Depends 1.1_
 - [ ] 1.3 (TDD) Infer a generic Python call's type arguments, refuse one the boundary does not carry, and record each Python call's instantiated signature by its span — R4.1, R4.2
   _Depends 1.2_
