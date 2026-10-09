@@ -3,6 +3,9 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn reduce(function: PyObject, iterable: [PyObject], initial: PyObject) -> PyObject ! PyError
+fn lru_cache(maxsize: int? = 128, typed: bool = False) -> PyObject ! PyError
+fn lru_cache(maxsize: PyObject, typed: bool = False) -> PyObject ! PyError
 fn update_wrapper(wrapper: PyObject, wrapped: PyObject, assigned: [str] = todo(), updated: [str] = todo()) -> PyObject ! PyError
 fn wraps(wrapped: PyObject, assigned: [str] = todo(), updated: [str] = todo()) -> PyObject ! PyError
 fn total_ordering(cls: PyObject) -> PyObject ! PyError
@@ -15,5 +18,3 @@ fn cache(user_function: PyObject) -> PyObject ! PyError
 #   partialmethod: it is generic, which specs/python-generics/ binds
 #   singledispatchmethod: it is generic, which specs/python-generics/ binds
 #   cached_property: it is generic, which specs/python-generics/ binds
-#   reduce: it is overloaded
-#   lru_cache: it is overloaded

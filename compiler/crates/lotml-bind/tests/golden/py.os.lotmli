@@ -4,8 +4,14 @@
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
 fn reload_environ() -> None ! PyError
+fn listdir(path: str? = None) -> [str] ! PyError
+fn listdir(path: PyObject) -> [bytes] ! PyError
+fn listdir(path: int) -> [str] ! PyError
 fn fsencode(filename: str) -> bytes ! PyError
 fn fsdecode(filename: str) -> str ! PyError
+fn fspath(path: str) -> str ! PyError
+fn fspath(path: bytes) -> bytes ! PyError
+fn fspath(path: PyObject) -> PyObject ! PyError
 fn get_exec_path(env: {str: str}? = None) -> [str] ! PyError
 fn getlogin() -> str ! PyError
 fn getpid() -> int ! PyError
@@ -40,8 +46,17 @@ fn getsid(pid: int) -> int ! PyError
 fn setsid() -> None ! PyError
 fn setuid(uid: int) -> None ! PyError
 fn uname() -> uname_result ! PyError
+fn getenv(key: str) -> str? ! PyError
+fn getenv(key: str, default: PyObject) -> PyObject ! PyError
+fn getenvb(key: bytes) -> bytes? ! PyError
+fn getenvb(key: bytes, default: PyObject) -> PyObject ! PyError
 fn putenv(name: str, value: str) -> None ! PyError
 fn unsetenv(name: str) -> None ! PyError
+fn fdopen(fd: int, mode: PyObject = "r", buffering: int = todo(), encoding: str? = None, errors: str? = None, newline: str? = None, closefd: bool = True, opener: PyObject? = None) -> PyObject ! PyError
+fn fdopen(fd: int, mode: PyObject, buffering: PyObject, encoding: None = None, errors: None = None, newline: None = None, closefd: bool = True, opener: PyObject? = None) -> PyObject ! PyError
+fn fdopen(fd: int, mode: PyObject, buffering: PyObject = todo(), encoding: None = None, errors: None = None, newline: None = None, closefd: bool = True, opener: PyObject? = None) -> PyObject ! PyError
+fn fdopen(fd: int, mode: PyObject, buffering: int = todo(), encoding: None = None, errors: None = None, newline: None = None, closefd: bool = True, opener: PyObject? = None) -> PyObject ! PyError
+fn fdopen(fd: int, mode: str, buffering: int = todo(), encoding: str? = None, errors: str? = None, newline: str? = None, closefd: bool = True, opener: PyObject? = None) -> PyObject ! PyError
 fn close(fd: int) -> None ! PyError
 fn closerange(fd_low: int, fd_high: int) -> None ! PyError
 fn device_encoding(fd: int) -> str? ! PyError
@@ -112,6 +127,9 @@ fn rename(src: str, dst: str, src_dir_fd: int? = None, dst_dir_fd: int? = None) 
 fn renames(old: str, new: str) -> None ! PyError
 fn replace(src: str, dst: str, src_dir_fd: int? = None, dst_dir_fd: int? = None) -> None ! PyError
 fn rmdir(path: str, dir_fd: int? = None) -> None ! PyError
+fn scandir(path: None = None) -> PyObject ! PyError
+fn scandir(path: int) -> PyObject ! PyError
+fn scandir(path: PyObject) -> PyObject ! PyError
 fn stat(path: PyObject, dir_fd: int? = None, follow_symlinks: bool = True) -> stat_result ! PyError
 fn statvfs(path: PyObject) -> statvfs_result ! PyError
 fn statx(path: PyObject, mask: int, flags: int = 0, dir_fd: int? = None, follow_symlinks: bool = True) -> statx_result ! PyError
@@ -121,6 +139,8 @@ fn truncate(path: PyObject, length: int) -> None ! PyError
 fn unlink(path: str, dir_fd: int? = None) -> None ! PyError
 fn utime(path: PyObject, times: PyObject? = None, ns: (int, int) = todo(), dir_fd: int? = None, follow_symlinks: bool = True) -> None ! PyError
 fn walk(top: PyObject, topdown: bool = True, onerror: PyObject? = None, followlinks: bool = False) -> PyObject ! PyError
+fn fwalk(top: str = ".", topdown: bool = True, onerror: PyObject? = None, follow_symlinks: bool = False, dir_fd: int? = None) -> PyObject ! PyError
+fn fwalk(top: PyObject, topdown: bool = True, onerror: PyObject? = None, follow_symlinks: bool = False, dir_fd: int? = None) -> PyObject ! PyError
 fn getxattr(path: PyObject, attribute: str, follow_symlinks: bool = True) -> bytes ! PyError
 fn listxattr(path: PyObject? = None, follow_symlinks: bool = True) -> [str] ! PyError
 fn removexattr(path: PyObject, attribute: str, follow_symlinks: bool = True) -> None ! PyError
@@ -310,10 +330,5 @@ class sched_param:
 # Not bound:
 #   PathLike: it is a protocol, a shape rather than a class
 #   DirEntry: it is generic, which specs/python-generics/ binds
-#   listdir: it is overloaded
-#   fspath: it is overloaded
-#   getenv: it is overloaded
-#   getenvb: it is overloaded
-#   fdopen: it is overloaded
-#   scandir: it is overloaded
-#   fwalk: it is overloaded
+#   fdopen: overload 4 of 7: an earlier one takes the same parameters, so no call is given it
+#   fdopen: overload 5 of 7: an earlier one takes the same parameters, so no call is given it

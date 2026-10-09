@@ -5,12 +5,25 @@
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
 fn parse_qs(qs: PyObject?, keep_blank_values: bool = False, strict_parsing: bool = False, encoding: str = "utf-8", errors: str = "replace", max_num_fields: int? = None, separator: str = "&") -> {PyObject: [PyObject]} ! PyError
 fn parse_qsl(qs: PyObject?, keep_blank_values: bool = False, strict_parsing: bool = False, encoding: str = "utf-8", errors: str = "replace", max_num_fields: int? = None, separator: str = "&") -> [(PyObject, PyObject)] ! PyError
+fn quote(string: str, safe: PyObject = "/", encoding: str? = None, errors: str? = None) -> str ! PyError
+fn quote(string: PyObject, safe: PyObject = "/") -> str ! PyError
 fn quote_from_bytes(bs: PyObject, safe: PyObject = "/") -> str ! PyError
+fn quote_plus(string: str, safe: PyObject = "", encoding: str? = None, errors: str? = None) -> str ! PyError
+fn quote_plus(string: PyObject, safe: PyObject = "") -> str ! PyError
 fn unquote(string: PyObject, encoding: str = "utf-8", errors: str = "replace") -> str ! PyError
 fn unquote_to_bytes(string: PyObject) -> bytes ! PyError
 fn unquote_plus(string: str, encoding: str = "utf-8", errors: str = "replace") -> str ! PyError
+fn urldefrag(url: str) -> DefragResult ! PyError
+fn urldefrag(url: PyObject?) -> DefragResultBytes ! PyError
 fn urlencode(query: PyObject, doseq: bool = False, safe: PyObject = "", encoding: str? = None, errors: str? = None, quote_via: PyObject = todo()) -> str ! PyError
 fn urljoin(base: PyObject, url: PyObject?, allow_fragments: bool = True) -> PyObject ! PyError
+fn urlparse(url: str, scheme: str = "", allow_fragments: bool = True) -> ParseResult ! PyError
+fn urlparse(url: PyObject?, scheme: PyObject? = "", allow_fragments: bool = True) -> ParseResultBytes ! PyError
+fn urlsplit(url: str, scheme: str = "", allow_fragments: bool = True) -> SplitResult ! PyError
+fn urlunparse(components: [None], keep_empty: bool = todo()) -> PyObject ! PyError
+fn urlunparse(components: [PyObject?], keep_empty: bool = todo()) -> PyObject ! PyError
+fn urlunsplit(components: [None], keep_empty: bool = todo()) -> PyObject ! PyError
+fn urlunsplit(components: [PyObject?], keep_empty: bool = todo()) -> PyObject ! PyError
 fn unwrap(url: str) -> str ! PyError
 
 class DefragResult
@@ -32,10 +45,3 @@ class ParseResultBytes
 #   DefragResultBytes: it is generic, which specs/python-generics/ binds
 #   SplitResultBytes: it is generic, which specs/python-generics/ binds
 #   ParseResultBytes: it is generic, which specs/python-generics/ binds
-#   quote: it is overloaded
-#   quote_plus: it is overloaded
-#   urldefrag: it is overloaded
-#   urlparse: it is overloaded
-#   urlsplit: it is overloaded
-#   urlunparse: it is overloaded
-#   urlunsplit: it is overloaded

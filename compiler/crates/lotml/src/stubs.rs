@@ -374,7 +374,7 @@ mod tests {
     #[test]
     fn a_stub_that_binds_no_function_or_class_counts_as_none() {
         let stub = |text: &str| Stub { text: text.into(), said: "box.pyi".into(), source: String::new() };
-        let hidden = stub("class _Box:\n    def size(self) -> int: ...\n@overload\ndef f(x: int) -> int: ...\n");
+        let hidden = stub("class _Box:\n    def size(self) -> int: ...\nasync def f(x: int) -> int: ...\n");
         assert!(bound("box", &hidden).unwrap_err().contains("binds no function or class"));
         assert!(bound("box", &stub("def size() -> int: ...\n")).unwrap().contains("fn size() -> int ! PyError"));
         let classes = bound("box", &stub("class Box:\n    def size(self) -> int: ...\n")).unwrap();

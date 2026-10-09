@@ -37,6 +37,7 @@ class Random:
     fn randbytes(self, n: int) -> bytes ! PyError
     fn choice(self, seq: PyObject) -> PyObject ! PyError
     fn choices(self, population: PyObject, weights: [PyObject]? = None, cum_weights: [PyObject]? = None, k: int = 1) -> [PyObject] ! PyError
+    fn shuffle(self, x: [PyObject]) -> None ! PyError
     fn sample(self, population: [PyObject], k: int, counts: [int]? = None) -> [PyObject] ! PyError
     fn uniform(self, a: f64, b: f64) -> f64 ! PyError
     fn triangular(self, low: f64 = 0.0, high: f64 = 1.0, mode: f64? = None) -> f64 ! PyError
@@ -59,4 +60,3 @@ class SystemRandom(Random):
 # Not bound:
 #   random: `Random` holds no `random` in this stub
 #   getrandbits: `Random` holds no `getrandbits` in this stub
-#   Random.shuffle: it is overloaded
