@@ -38,11 +38,19 @@ pub trait Managed {
     fn install(&self, version: &str) -> Result<(), String>;
 }
 
+/// The uv a resolution may ask: none found; one found and confined as adr:0026 sets; or one found
+/// that lotml will not run, with why. Only with none are the path's interpreters a fallback.
+pub enum Found<'a> {
+    None,
+    Usable(&'a dyn Managed),
+    Refused(String),
+}
+
 /// The command of the interpreter to run, or why there is none.
 pub fn resolve(
     options: &Options<'_>,
     var: &dyn Fn(&str) -> Option<OsString>,
-    managed: Option<&dyn Managed>,
+    found: Found<'_>,
     on_path: &dyn Fn() -> Option<Vec<String>>,
 ) -> Result<Vec<String>, String> {
     if let Some(given) = var("LOTML_PYTHON").filter(|v| !v.is_empty()) {
@@ -53,12 +61,18 @@ pub fn resolve(
     {
         return Ok(vec![venv.display().to_string()]);
     }
-    let Some(uv) = managed else {
-        return on_path().ok_or_else(|| {
-            format!(
-                "no Python found: lotml runs CPython {VERSION} through uv, and neither uv nor a Python on the path was found; put the uv lotml ships beside it, set LOTML_UV, or set LOTML_PYTHON"
-            )
-        });
+    let uv = match found {
+        Found::Usable(uv) => uv,
+        // A uv lotml found and will not run is no reason to run whatever the path names instead
+        // (n-0125): the path stands in for uv only where there is none.
+        Found::Refused(why) => return Err(why),
+        Found::None => {
+            return on_path().ok_or_else(|| {
+                format!(
+                    "no Python found: lotml runs CPython {VERSION} through uv, and neither uv nor a Python on the path was found; put the uv lotml ships beside it, set LOTML_UV, or set LOTML_PYTHON"
+                )
+            });
+        }
     };
     if let Some(found) = uv.find(VERSION) {
         return Ok(vec![found.display().to_string()]);
@@ -196,11 +210,30 @@ mod tests {
     }
 
     #[test]
+    fn a_uv_lotml_will_not_run_is_an_error_after_lotml_python_and_the_environment_never_the_path() {
+        let refused = || Found::Refused("lotml found uv at /uv and will not run it".into());
+        let none = |_: &str| None;
+        let path = || Some(vec!["py".to_string(), "-3".to_string()]);
+        let got = resolve(&options(Use::Run, None, true), &none, refused(), &path);
+        assert_eq!(got, Err("lotml found uv at /uv and will not run it".into()), "never the path's `py -3`");
+        let vars = HashMap::from([("LOTML_PYTHON", OsString::from("/my/python"))]);
+        let given = |n: &str| vars.get(n).cloned();
+        assert_eq!(resolve(&options(Use::Run, None, true), &given, refused(), &path), Ok(vec!["/my/python".into()]));
+        let root = scratch("refused-venv");
+        let python = venv_in(&root);
+        let ran = resolve(&options(Use::Run, Some(&root), true), &none, refused(), &path).unwrap();
+        assert_eq!(PathBuf::from(&ran[0]).canonicalize().unwrap(), python.canonicalize().unwrap());
+    }
+
+    #[test]
     fn lotml_python_comes_first() {
         let vars = HashMap::from([("LOTML_PYTHON", OsString::from("/my/python"))]);
         let var = |n: &str| vars.get(n).cloned();
         let uv = fake(Some("managed"), None);
-        assert_eq!(resolve(&options(Use::Base, None, true), &var, Some(&uv), &|| None), Ok(vec!["/my/python".into()]));
+        assert_eq!(
+            resolve(&options(Use::Base, None, true), &var, Found::Usable(&uv), &|| None),
+            Ok(vec!["/my/python".into()])
+        );
     }
 
     #[test]
@@ -209,9 +242,9 @@ mod tests {
         let python = venv_in(&root);
         let none = |_: &str| None;
         let uv = fake(Some("managed"), None);
-        let ran = resolve(&options(Use::Run, Some(&root), true), &none, Some(&uv), &|| None).unwrap();
+        let ran = resolve(&options(Use::Run, Some(&root), true), &none, Found::Usable(&uv), &|| None).unwrap();
         assert_eq!(PathBuf::from(&ran[0]).canonicalize().unwrap(), python.canonicalize().unwrap());
-        let bound = resolve(&options(Use::Base, Some(&root), true), &none, Some(&uv), &|| None).unwrap();
+        let bound = resolve(&options(Use::Base, Some(&root), true), &none, Found::Usable(&uv), &|| None).unwrap();
         assert_eq!(bound, vec!["managed".to_string()], "a base never is the project's environment");
     }
 
@@ -222,7 +255,7 @@ mod tests {
         std::fs::remove_file(root.join(".venv").join("pyvenv.cfg")).unwrap();
         let none = |_: &str| None;
         let uv = fake(Some("managed"), None);
-        let ran = resolve(&options(Use::Run, Some(&root), true), &none, Some(&uv), &|| None);
+        let ran = resolve(&options(Use::Run, Some(&root), true), &none, Found::Usable(&uv), &|| None);
         assert_eq!(ran, Ok(vec!["managed".into()]), "a `.venv` without `pyvenv.cfg` is not one");
     }
 
@@ -235,7 +268,7 @@ mod tests {
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o1777)).unwrap();
         let none = |_: &str| None;
         let uv = fake(Some("managed"), None);
-        let ran = resolve(&options(Use::Run, Some(&root), true), &none, Some(&uv), &|| None);
+        let ran = resolve(&options(Use::Run, Some(&root), true), &none, Found::Usable(&uv), &|| None);
         assert_eq!(ran, Ok(vec!["managed".into()]), "a `.venv` in a shared directory is anyone's");
     }
 
@@ -243,7 +276,10 @@ mod tests {
     fn a_managed_python_uv_has_comes_before_a_download() {
         let none = |_: &str| None;
         let uv = fake(Some("managed"), Some("downloaded"));
-        assert_eq!(resolve(&options(Use::Run, None, true), &none, Some(&uv), &|| None), Ok(vec!["managed".into()]));
+        assert_eq!(
+            resolve(&options(Use::Run, None, true), &none, Found::Usable(&uv), &|| None),
+            Ok(vec!["managed".into()])
+        );
         assert!(uv.installs.borrow().is_empty());
     }
 
@@ -251,10 +287,11 @@ mod tests {
     fn a_missing_python_is_downloaded_only_where_downloads_are_allowed() {
         let none = |_: &str| None;
         let uv = fake(None, Some("downloaded"));
-        let refused = resolve(&options(Use::Run, None, false), &none, Some(&uv), &|| Some(vec!["path".into()]));
+        let refused =
+            resolve(&options(Use::Run, None, false), &none, Found::Usable(&uv), &|| Some(vec!["path".into()]));
         assert!(refused.unwrap_err().contains("downloads nothing"), "offline, the path is not a fallback for uv");
         assert!(uv.installs.borrow().is_empty());
-        let got = resolve(&options(Use::Run, None, true), &none, Some(&uv), &|| None);
+        let got = resolve(&options(Use::Run, None, true), &none, Found::Usable(&uv), &|| None);
         assert_eq!(got, Ok(vec!["downloaded".into()]));
         assert_eq!(*uv.installs.borrow(), vec![VERSION.to_string()]);
     }
@@ -262,9 +299,9 @@ mod tests {
     #[test]
     fn without_uv_the_path_is_searched_as_before() {
         let none = |_: &str| None;
-        let found = resolve(&options(Use::Run, None, true), &none, None, &|| Some(vec!["python3".into()]));
+        let found = resolve(&options(Use::Run, None, true), &none, Found::None, &|| Some(vec!["python3".into()]));
         assert_eq!(found, Ok(vec!["python3".into()]));
-        let missing = resolve(&options(Use::Run, None, true), &none, None, &|| None).unwrap_err();
+        let missing = resolve(&options(Use::Run, None, true), &none, Found::None, &|| None).unwrap_err();
         assert!(missing.contains("LOTML_UV") && missing.contains("LOTML_PYTHON"), "{missing}");
         assert!(!missing.contains("3.11 or later"), "the old message is gone: {missing}");
     }

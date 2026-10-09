@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 
 use crate::{Failure, Target, files};
 use lotml_llvm::driver::Level;
-use lotml_py::resolve::{Managed, Options, ThroughUv, Use, resolve};
+use lotml_py::resolve::{Found, Options, ThroughUv, Use, resolve};
 use lotml_py::uv::Uv;
 
 /// A compiled module: the name it is imported by, its source's absolute path, which tracebacks
@@ -99,10 +99,33 @@ fn locks(project: Option<&Path>) -> bool {
 /// the project's own (specs/python-dependencies, adr:0033).
 fn python(uses: Use, project: Option<&Path>, downloads: bool) -> Result<Vec<String>, Failure> {
     let var = |name: &str| std::env::var_os(name);
+    let mut refused = None;
     let uv = lotml_py::uv::find(&lotml_py::uv::Places::here()).map_err(Failure)?;
-    let home = lotml_llvm::cache::user_root()
-        .map(|root| root.join("uv"))
-        .filter(|home| lotml_llvm::cache::private_directory(home).is_ok());
+    // The directory uv runs from, or why lotml will not run it: a cache that is not this user's
+    // own is where a project could plant what uv reads (adr:0026).
+    let home = match lotml_llvm::cache::user_root() {
+        None if var("LOTML_CACHE_DIR").is_some_and(|v| !v.is_empty()) => Err(
+            "LOTML_CACHE_DIR is not an absolute directory lotml may keep its cache in (on Windows, it must be inside the user's profile)".to_string(),
+        ),
+        None => Err("there is no per-user cache directory (LOCALAPPDATA, XDG_CACHE_HOME or HOME) to run it from".to_string()),
+        Some(root) => {
+            let home = root.join("uv");
+            lotml_llvm::cache::private_directory(&home)
+                .map(|()| home.clone())
+                .map_err(|e| format!("{} is not a directory of this user's own: {e}", home.display()))
+        }
+    };
+    let home = match (&uv, home) {
+        (_, Ok(home)) => Some(home),
+        (Some(path), Err(why)) => {
+            refused = Some(format!(
+                "no Python found: lotml found uv at {} and will not run it, because {why}; set LOTML_CACHE_DIR to a directory of your own, or set LOTML_PYTHON",
+                path.display()
+            ));
+            None
+        }
+        (None, Err(_)) => None,
+    };
     let confined = match (&uv, &home) {
         (Some(path), Some(home)) => Some(Uv { path: path.clone(), home: home.clone() }),
         _ => None,
@@ -115,8 +138,12 @@ fn python(uses: Use, project: Option<&Path>, downloads: bool) -> Result<Vec<Stri
     };
     let uses = if locked.is_some() { Use::Base } else { uses };
     let options = Options { uses, project, downloads };
-    let base =
-        resolve(&options, &var, managed.as_ref().map(|m| m as &dyn Managed), &lotml_py::python).map_err(Failure)?;
+    let found = match (&managed, refused) {
+        (Some(managed), _) => Found::Usable(managed),
+        (None, Some(why)) => Found::Refused(why),
+        (None, None) => Found::None,
+    };
+    let base = resolve(&options, &var, found, &lotml_py::python).map_err(Failure)?;
     let Some(locked) = locked else { return Ok(base) };
     let (executable, version) = executable_of(&base)?;
     let root = crate::dependencies::environments().ok_or_else(|| {
