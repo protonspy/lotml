@@ -61,7 +61,7 @@ fn bind_writes_an_interface_from_a_stub() {
     let dir = scratch("bind", &[("stubs/textwrap.pyi", TEXTWRAP_PYI)]);
     let out = lotml(&["bind", "textwrap", "--stub", "stubs/textwrap.pyi"], &dir);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    assert!(stdout(&out).contains("5 functions and 1 class bound, 1 not"), "{}", stdout(&out));
+    assert!(stdout(&out).contains("6 functions and 1 class bound\n"), "{}", stdout(&out));
     let interface = std::fs::read_to_string(dir.join("bindings").join("py.textwrap.lotmli")).unwrap();
     assert!(interface.contains(
         "fn wrap(text: str, width: int = 70, max_lines: int? = None, placeholder: str = \" [...]\") -> [str] ! PyError\n"
@@ -72,7 +72,10 @@ fn bind_writes_an_interface_from_a_stub() {
         interface.contains("fn indent(text: str, prefix: str, predicate: PyObject? = None) -> str ! PyError"),
         "a callable is a `PyObject`: {interface}"
     );
-    assert!(interface.contains("#   pick: it is overloaded"));
+    assert!(
+        interface.contains("fn pick(x: int) -> int ! PyError\nfn pick(x: str) -> str ! PyError\n"),
+        "an overloaded function is bound once per overload (specs/python-overloads): {interface}"
+    );
     assert!(!interface.contains("_private"));
     assert!(interface.contains("\nclass TextWrapper:\n"), "a class is bound (specs/python-classes): {interface}");
 }
@@ -130,10 +133,10 @@ fn bind_binds_the_names_a_stub_writes_as_methods_of_an_instance() {
     ] {
         assert!(interface.contains(bound), "{bound}in\n{interface}");
     }
-    assert!(interface.contains("#   pick: it is overloaded\n"), "{interface}");
+    assert!(interface.contains("fn pick(x: int) -> int ! PyError\nfn pick(x: str) -> str ! PyError\n"), "{interface}");
     assert!(interface.contains("#   getrandbits: `Random` holds no `getrandbits` in this stub\n"), "{interface}");
     assert!(!interface.contains("_hidden"));
-    assert!(stdout(&out).contains("5 functions and 1 class bound, 4 not"), "{}", stdout(&out));
+    assert!(stdout(&out).contains("6 functions and 1 class bound, 1 not"), "{}", stdout(&out));
 }
 
 #[test]
