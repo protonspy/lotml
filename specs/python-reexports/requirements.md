@@ -2,7 +2,8 @@
 autonomy: auto
 ci: wait
 branch: feat/python-reexports
-delivery: in-progress
+delivery: in-review
+pr: 62
 ---
 
 # Python re-exports — requirements
