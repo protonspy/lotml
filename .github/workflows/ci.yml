@@ -91,6 +91,10 @@ jobs:
         run: |
           uv --directory harness sync --locked
           cargo build --manifest-path compiler/Cargo.toml --locked --release -p lotml
+      - name: Python 3.14
+        # The harness's runs are offline: the CPython they run on is provisioned once, ahead of
+        # them, through the uv lotml finds (plans/python-via-uv.md 3.1).
+        run: uv --directory harness run python -m lotml_harness.python --provision
       - name: Format
         run: |
           uv --directory harness run ruff format --check .

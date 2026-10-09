@@ -5,7 +5,6 @@ import json
 import os
 import pickle
 import subprocess
-import sys
 import time
 import zlib
 
@@ -153,7 +152,9 @@ def test_the_compiler_a_child_runs_never_downloads_a_python(monkeypatch):
     monkeypatch.setenv("LOTML_OFFLINE", "")
     environment = execute.child_environment()
     assert environment["LOTML_OFFLINE"] == "1", "an empty LOTML_OFFLINE does not turn it off"
-    assert environment["LOTML_PYTHON"] == sys.executable
+    assert "LOTML_PYTHON" not in environment, (
+        "lotml resolves the provisioned CPython itself, offline"
+    )
 
 
 def test_the_grader_s_lotml_test_reaches_no_download(tmp_path):
@@ -165,7 +166,7 @@ def test_the_grader_s_lotml_test_reaches_no_download(tmp_path):
     uv = tmp_path / "uv.exe"
     uv.write_text("not a program", encoding="utf-8")
     environment = execute.child_environment()
-    del environment["LOTML_PYTHON"]
+    environment.pop("LOTML_PYTHON", None)
     home = {
         k: v
         for k, v in os.environ.items()

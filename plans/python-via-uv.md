@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: ca40cbc69a92bbb7813efe251d6d7c3e40fc20864aff74cae9fd10c03ac48c2f
+checksum: a3164eff86786bfa4c7f2f13128e70d71b7562a1222a57a1ad97d51a85a363f2
 ---
 
 # Python via uv
@@ -83,7 +83,7 @@ directory's uv configuration must change nothing, and the docs must describe the
   _Depends 1.4, 1.6_
   _Status removed_
   _Reason adr:0032 embeds typeshed's stdlib and reads stubs in Rust, so bind needs no mypy wheel_
-- [ ] 3.1 (Unit) Have the harness provision Python 3.14 ahead of a run and always run offline, with a test that a row with no interpreter fails naming what is missing instead of downloading
+- [x] 3.1 (Unit) Have the harness provision Python 3.14 ahead of a run and always run offline, with a test that a row with no interpreter fails naming what is missing instead of downloading
   _Depends 1.6_
 - [ ] 3.2 (Unit) Add CI jobs on Linux and Windows that start from the release archive on
       a runner with no Python on the path. They run `lotml run`, `lotml test` and `lotml
