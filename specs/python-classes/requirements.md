@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/python-classes
-delivery: in-review
+delivery: merged
 pr: 59
 ---
 
