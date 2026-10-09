@@ -9,7 +9,7 @@ use lotml_syntax::span::Span;
 
 use crate::builtins;
 use crate::closest;
-use crate::program::{FnSig, Method, Program, TypeDef};
+use crate::program::{FnSig, Method, ParamSig, Program, TypeDef};
 use crate::ty::{F64, INT, Infer, IntKind, TYPE_LIMIT, Ty};
 
 /// The most type nodes one body keeps for its expressions, in all: each keeps a whole tree, so
@@ -85,8 +85,9 @@ pub struct Body<'p> {
     /// Each name that resolved to a local, with where that local was declared; a declaration
     /// refers to itself.
     locals: Vec<(Span, Span)>,
-    /// The overload each overloaded Python call was given, by the call's span (adr:0035).
-    overloads: Vec<(Span, usize)>,
+    /// Each call into Python as it was typed, by the call's span, its types not yet resolved
+    /// (adr:0035, adr:0036).
+    calls: Vec<(Span, crate::PyCall)>,
     /// The lineage of each Python class a value was fitted to a base of, walked once: an
     /// overloaded call fits its arguments to every overload's parameters.
     lineages: HashMap<String, HashSet<String>>,
@@ -130,7 +131,7 @@ impl<'p> Body<'p> {
             stored: 0,
             full: false,
             locals: Vec::new(),
-            overloads: Vec::new(),
+            calls: Vec::new(),
             lineages: HashMap::new(),
             diagnostics: Vec::new(),
         };
@@ -1330,9 +1331,21 @@ impl<'p> Body<'p> {
         &self.locals
     }
 
-    /// The overload each overloaded Python call was given, by the call's span.
-    pub fn overloads(&self) -> &[(Span, usize)] {
-        &self.overloads
+    /// Each call into Python as it was typed, by the call's span, its types resolved.
+    pub fn calls(&mut self) -> Vec<(Span, crate::PyCall)> {
+        let calls = std::mem::take(&mut self.calls);
+        calls
+            .into_iter()
+            .map(|(span, mut call)| {
+                let sig = &mut call.sig;
+                for p in &mut sig.params {
+                    p.ty = self.infer.resolve(&p.ty);
+                }
+                sig.ret = self.infer.resolve(&sig.ret);
+                sig.error = sig.error.as_ref().map(|e| self.infer.resolve(e));
+                (span, call)
+            })
+            .collect()
     }
 
     /// Accept `found` where `expected` is wanted, allowing the coercions lotml has: a value
@@ -2780,9 +2793,52 @@ impl<'p> Body<'p> {
             }
         }
         let ret = sig.ret.substitute(&names, &values);
+        if sig.python {
+            self.python_call(sig, &names, &values, &fresh, span);
+        }
         match &sig.error {
             Some(e) => Ty::Result(Box::new(ret), Box::new(e.substitute(&names, &values))),
             None => ret,
+        }
+    }
+
+    /// A call into Python checked against `sig`, its type parameters `names` given `values`: each
+    /// argument inferred for one of `fresh` must cross the boundary, and the call is recorded as
+    /// instantiated, for the lowering (adr:0036).
+    fn python_call(&mut self, sig: &FnSig, names: &[String], values: &[Ty], fresh: &[Ty], span: Span) {
+        for ((name, _), ty) in sig.type_params.iter().zip(fresh) {
+            let ty = self.resolve(ty);
+            if !self.crosses(&ty) {
+                self.report(
+                    Diagnostic::error(
+                        "E0204",
+                        span,
+                        format!("`{ty}` does not cross into Python, so it cannot be `{name}` of `{}`", sig.name),
+                    )
+                    .note("Python is given numbers, text, bytes, collections of them, `PyObject`s and its classes' values"),
+                );
+            }
+        }
+        let instantiated = FnSig {
+            params: sig.params.iter().map(|p| ParamSig { ty: p.ty.substitute(names, values), ..p.clone() }).collect(),
+            ret: sig.ret.substitute(names, values),
+            error: sig.error.as_ref().map(|e| e.substitute(names, values)),
+            type_params: Vec::new(),
+            overloads: Vec::new(),
+            ..sig.clone()
+        };
+        self.calls.push((span, crate::PyCall { overload: 0, sig: instantiated }));
+    }
+
+    /// Whether a value of `ty` crosses into Python: what a `PyObject` parameter takes, a Python
+    /// class's value, and collections of them.
+    fn crosses(&self, ty: &Ty) -> bool {
+        match self.resolve(ty) {
+            Ty::Adt(..) if self.py_class(ty).is_some() => true,
+            Ty::List(t) | Ty::Set(t) | Ty::Optional(t) => self.crosses(&t),
+            Ty::Dict(k, v) => self.crosses(&k) && self.crosses(&v),
+            Ty::Tuple(items) => items.iter().all(|t| self.crosses(t)),
+            other => self.carried(&other),
         }
     }
 
@@ -2836,8 +2892,9 @@ impl<'p> Body<'p> {
             self.report(d);
             return Ty::Error;
         };
-        self.overloads.push((span, chosen));
+        let overload = chosen;
         let chosen = all[chosen];
+        self.calls.push((span, crate::PyCall { overload, sig: FnSig { overloads: Vec::new(), ..chosen.clone() } }));
         let (_, slots) = self.takes(chosen, skip, args, &found).expect("it was taken");
         let params: Vec<_> = chosen.params.iter().skip(skip).collect();
         for ((arg, ty), i) in args.iter().zip(&found).zip(slots) {

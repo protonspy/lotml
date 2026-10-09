@@ -109,19 +109,25 @@ pub struct Checked {
     /// The constructor each of those classes has of its own; [`Checked::py_constructor`] finds an
     /// inherited one.
     pub py_constructors: BTreeMap<String, FnSig>,
-    /// The overload each call of an overloaded Python function, constructor or method was given,
-    /// by the call's span: 0 its first signature, `i` its `overloads[i - 1]` (adr:0035).
-    pub py_overloads: BTreeMap<Span, usize>,
+    /// Each call of a Python function, constructor or member, by the call's span: the signature
+    /// it was checked against, overload chosen and type arguments inferred (adr:0035, adr:0036).
+    pub py_calls: BTreeMap<Span, PyCall>,
+}
+
+/// A call into Python as the checker typed it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PyCall {
+    /// The overload given: 0 the first signature, `i` its `overloads[i - 1]`.
+    pub overload: usize,
+    /// The signature as instantiated for the call, its types resolved.
+    pub sig: FnSig,
 }
 
 impl Checked {
-    /// The overload of `sig` the call at `call` was given (adr:0035): `sig` itself for a function
-    /// with no overloads, or a call the checker gave none.
-    pub fn py_overload<'a>(&self, call: Span, sig: &'a FnSig) -> &'a FnSig {
-        match self.py_overloads.get(&call) {
-            Some(&chosen) if chosen > 0 => sig.overloads.get(chosen - 1).unwrap_or(sig),
-            _ => sig,
-        }
+    /// The signature the call into Python at `call` was checked against, its overload chosen and
+    /// its type arguments inferred (adr:0035, adr:0036); `sig` for a call the checker recorded none.
+    pub fn py_call(&self, call: Span, sig: &FnSig) -> FnSig {
+        self.py_calls.get(&call).map_or_else(|| sig.clone(), |recorded| recorded.sig.clone())
     }
 
     /// The method or static method `name` of the Python class `class`, or of the nearest base it

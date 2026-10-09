@@ -3239,7 +3239,7 @@ impl<'c, 'a> Builder<'c, 'a> {
     /// A call of `function` of the Python module `module` through its interface's `sig` (R1.3).
     fn python_call(&mut self, call: Span, module: String, function: &str, sig: &FnSig, args: &[AstArg]) -> Value {
         // An overloaded function is called through the overload the checker gave the call (adr:0035).
-        let sig = &self.cx.checked.py_overload(call, sig).clone();
+        let sig = &self.cx.checked.py_call(call, sig);
         let (operands, keywords) = self.python_args(&sig.params, args);
         let params = sig.params.iter().map(|p| p.ty.clone()).collect();
         let ret = call_ret(sig);
@@ -3278,7 +3278,7 @@ impl<'c, 'a> Builder<'c, 'a> {
     /// `object.method(args)` of a value of a Python class through the method's `sig`, `self` its
     /// first parameter (adr:0034).
     fn python_method(&mut self, call: Span, object: &ast::Expr, method: &str, sig: &FnSig, args: &[AstArg]) -> Value {
-        let sig = &self.cx.checked.py_overload(call, sig).clone();
+        let sig = &self.cx.checked.py_call(call, sig);
         let target = self.value(object);
         let (operands, keywords) = self.python_args(sig.params.get(1..).unwrap_or_default(), args);
         let params = sig.params.iter().skip(1).map(|p| p.ty.clone()).collect();

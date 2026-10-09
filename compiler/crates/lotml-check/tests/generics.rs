@@ -92,3 +92,50 @@ fn a_generic_base_s_constructor_is_not_inherited() {
     let own = lotml_check::py_constructor("py.m.Base", constructors, bases).unwrap();
     assert_eq!(own.ret, Ty::Adt("py.m.Base".into(), vec![param("T")]), "its own keeps its parameters");
 }
+
+fn check(source: &str) -> lotml_check::Checked {
+    let (read, problems) = interface_of("py.re", RE);
+    assert!(problems.is_empty());
+    let interfaces = lotml_check::Interfaces::from([("py.re".to_string(), read)]);
+    let parsed = lotml_syntax::parse(source);
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    lotml_check::check_resolved_with(&parsed.module, source, &interfaces)
+}
+
+fn codes(checked: &lotml_check::Checked) -> Vec<String> {
+    checked.diagnostics.iter().map(|d| format!("{} {}", d.code, d.message)).collect()
+}
+
+/// The signature recorded for the call written `call` in `source`.
+fn recorded(source: &str, call: &str) -> lotml_check::FnSig {
+    let checked = check(source);
+    assert!(checked.diagnostics.is_empty(), "{source}\n{:?}", codes(&checked));
+    let start = source.find(call).unwrap() as u32;
+    let at = lotml_syntax::span::Span { start, end: start + call.len() as u32 };
+    checked.py_calls.get(&at).unwrap_or_else(|| panic!("nothing recorded at `{call}`")).sig.clone()
+}
+
+#[test]
+fn a_generic_python_call_infers_its_type_arguments_and_records_them() {
+    let source = "from py.re import nlargest\n\nfn f() -> [int] ! PyError:\n    return nlargest(2, [3, 1, 2])?\n";
+    let sig = recorded(source, "nlargest(2, [3, 1, 2])");
+    let int = Ty::primitive("int").unwrap();
+    assert_eq!(sig.params[1].ty, Ty::list(int.clone()), "the parameter as instantiated");
+    assert_eq!(sig.ret, Ty::list(int));
+    let plain = "from py.re import compile\n\nfn f() -> None ! PyError:\n    p = compile(\"a\")?\n";
+    assert_eq!(recorded(plain, "compile(\"a\")").ret, pattern(Ty::Str), "every Python call is recorded");
+}
+
+#[test]
+fn a_type_argument_the_boundary_does_not_carry_is_refused() {
+    let source =
+        "from py.re import nlargest\n\ntype P(x: int)\n\nfn f() -> None ! PyError:\n    top = nlargest(1, [P(1)])?\n";
+    let found = codes(&check(source));
+    assert!(
+        found.len() == 1 && found[0].starts_with("E0204") && found[0].contains("`P`"),
+        "a record does not cross into Python: {found:?}"
+    );
+    let handle =
+        "from py.re import nlargest, compile\n\nfn f() -> None ! PyError:\n    top = nlargest(1, [compile(\"a\")?])?\n";
+    assert!(codes(&check(handle)).is_empty(), "a Python class's value does: {:?}", codes(&check(handle)));
+}
