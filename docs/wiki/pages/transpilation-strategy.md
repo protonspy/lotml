@@ -196,7 +196,7 @@ Phase 2 built both directions of R14 and R27 on one checked boundary
   keyed by the lock, the manifest and the interpreter, by one `uv sync --frozen` of wheels only. A
   made environment is used offline; offline, and for the MCP server, the grader and the harness,
   nothing is installed. A manifest declaring dependencies with no lock is reported with `uv lock`.
-- **lotml calling Python.** `lotml bind <module> --stub <file.pyi>` reads a stub with the Python
+- **lotml calling Python** ([[python-interop]] has it from the program's side). `lotml bind <module> --stub <file.pyi>` reads a stub with the Python
   parser lotml carries, Ruff's, and runs no Python (specs/rust-binder,
   adr:0032-a-python-module-is-bound-at-check-time-from-stubs-read-in-rust). With no stub given, a
   standard-library module's is typeshed's, embedded in lotml at a pinned commit and gated by

@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 941caaab9a2d5c4e6475023b0b9a106a727b4fad822f8255a1c971a994a5a6cb
+checksum: c89fb56d458223a070de8028611ce8db3d519400bd14bcbf4c0eacb209d53094
 ---
 
 # Python compatibility
@@ -94,7 +94,7 @@ the typed share each spec added.
   _Depends 2.4_
 - [x] 3.3 (Unit) Write and build the spec python-generics, the coverage report run before and after
   _Depends 3.1_
-- [ ] 4.1 (Unit) Write the wiki page on calling Python from LotML through `py.<module>`
+- [x] 4.1 (Unit) Write the wiki page on calling Python from LotML through `py.<module>`
   _Depends 2.4_
 - [x] 2.6 (Unit) Write and build the spec rust-binder: `lotml bind` reads a stub with
       `ruff_python_parser` in Rust and needs no Python, with typeshed's `stdlib`
