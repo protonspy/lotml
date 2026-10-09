@@ -162,4 +162,12 @@ fn a_class_of_an_interface_is_written_as_its_block() {
     let empty = "class empty( base )\n";
     let parsed = lotml_syntax::parse_interface(empty);
     assert_eq!(lotml_fmt::item(empty, &parsed.module.items[0]), "class empty(base)\n", "no member, no colon");
+    let generic = "class Pattern[ AnyStr ]( base ):\n    fn search(self: Pattern[str], s:str) -> str ! PyError\n";
+    let parsed = lotml_syntax::parse_interface(generic);
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    assert_eq!(
+        lotml_fmt::item(generic, &parsed.module.items[0]),
+        "class Pattern[AnyStr](base):\n    fn search(self: Pattern[str], s: str) -> str ! PyError\n",
+        "a generic class's parameters (specs/python-generics R3.1)"
+    );
 }

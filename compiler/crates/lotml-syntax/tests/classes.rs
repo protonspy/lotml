@@ -64,3 +64,16 @@ fn a_class_with_no_member_is_its_header_alone() {
     assert!(empty.attributes.is_empty() && empty.methods.is_empty());
     assert_eq!(child.bases[0].name, "empty");
 }
+
+#[test]
+fn a_generic_class_reads_its_type_parameters_and_a_method_its_typed_self() {
+    let text = "class Pattern[AnyStr, T](Base):\n    pattern: AnyStr\n    fn search(self: Pattern[str], s: str) -> str ! PyError\n\nclass Box[T]\n";
+    let parsed = parse_interface(text);
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    let [Item::Class(pattern), Item::Class(boxed)] = parsed.module.items.as_slice() else { panic!() };
+    let params: Vec<&str> = pattern.type_params.iter().map(|p| p.name.name.as_str()).collect();
+    assert_eq!(params, ["AnyStr", "T"]);
+    assert_eq!(pattern.bases[0].name, "Base");
+    assert!(pattern.methods[0].params[0].ty.is_some(), "`self` keeps its annotation");
+    assert_eq!(boxed.type_params[0].name.name, "T");
+}
