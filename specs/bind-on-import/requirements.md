@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/bind-on-import
-delivery: in-review
+delivery: merged
 pr: 58
 ---
 
