@@ -14,7 +14,7 @@
   _Depends 2.1_
 - [x] 2.3 (Unit) Accept a class where a declared base is expected, and refuse it where any other type is — R2.4
   _Depends 2.1_
-- [ ] 2.4 (Unit) Refuse operators, comparison, iteration, `len`, printing, formatting and hashing on a class's value, as on a `PyObject` — R2.5
+- [x] 2.4 (Unit) Refuse operators, comparison, iteration, `len`, printing, formatting and hashing on a class's value, as on a `PyObject` — R2.5
   _Depends 2.1_
 
 ## 3 · The boundary

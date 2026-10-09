@@ -184,3 +184,31 @@ fn a_python_class_goes_where_a_python_object_is_expected() {
     let found = lotml_check::check_resolved_with(&parsed.module, source, &interfaces).diagnostics;
     assert!(found.is_empty(), "{:?}", found.iter().map(|d| &d.message).collect::<Vec<_>>());
 }
+
+#[test]
+fn a_python_class_s_value_has_only_its_declared_members() {
+    let cases = [
+        "    x = d + 1\n",
+        "    same = d == d\n",
+        "    for part in d:\n        pass\n",
+        "    n = len(d)\n",
+        "    print(d)\n",
+        "    print(f\"{d}\")\n",
+        "    s = str(d)\n",
+        "    seen = {d}\n",
+        "    index = {d: 1}\n",
+        "    print([d])\n",
+    ];
+    for case in cases {
+        let source = format!("{USES}fn f() -> None ! PyError:\n    d = date.today()?\n{case}");
+        let parsed = lotml_syntax::parse(&source);
+        let found = lotml_check::check_resolved_with(&parsed.module, &source, &interfaces()).diagnostics;
+        assert!(
+            found
+                .iter()
+                .any(|d| d.code == "E0204" && d.notes.iter().any(|n| n.contains("only the methods and attributes"))),
+            "{case}: {:?}",
+            found.iter().map(|d| (&d.message, &d.notes)).collect::<Vec<_>>()
+        );
+    }
+}

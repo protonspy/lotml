@@ -19,6 +19,9 @@ const BODY_TYPES: usize = 1 << 19;
 /// The note every operation refused on a `PyObject` carries (specs/python-object R1.2).
 const OPAQUE: &str = "a `PyObject` is opaque: take a LotML value out of it with `o.value()`, its type annotated";
 
+/// The note an operation refused on a Python class's value carries (specs/python-classes R2.5).
+const CLASS: &str = "a Python object has only the methods and attributes its interface declares";
+
 #[derive(Clone, Debug)]
 pub struct Local {
     pub ty: Ty,
@@ -204,9 +207,39 @@ impl<'p> Body<'p> {
         self.report(Diagnostic::error(code, span, message).note(OPAQUE));
     }
 
-    /// `d`, with the note on converting a `PyObject` when `ty` is one.
+    /// `d`, with the note on converting a `PyObject` when `ty` is one, or on a Python class's
+    /// members when it is a value of one.
     fn noting(&self, d: Diagnostic, ty: &Ty) -> Diagnostic {
-        if matches!(self.resolve(ty), Ty::PyObject) { d.note(OPAQUE) } else { d }
+        if matches!(self.resolve(ty), Ty::PyObject) {
+            d.note(OPAQUE)
+        } else if self.py_class(ty).is_some() {
+            d.note(CLASS)
+        } else {
+            d
+        }
+    }
+
+    /// Whether `ty` is a Python object: a `PyObject` or a value of a Python class (adr:0034).
+    fn is_python(&self, ty: &Ty) -> bool {
+        matches!(self.resolve(ty), Ty::PyObject) || self.py_class(ty).is_some()
+    }
+
+    /// Report `message` at `span`, an operation the Python object `ty` holds does not have, with
+    /// the note that says what it has.
+    fn refuse_python(&mut self, span: Span, message: String, ty: &Ty) {
+        let note = if self.holds_py_handle(ty) { OPAQUE } else { CLASS };
+        self.report(Diagnostic::error("E0204", span, message).note(note));
+    }
+
+    /// Whether `ty` is or holds a `PyObject` proper, as against only Python classes' values.
+    fn holds_py_handle(&self, ty: &Ty) -> bool {
+        match self.resolve(ty) {
+            Ty::PyObject => true,
+            Ty::List(t) | Ty::Set(t) | Ty::Optional(t) | Ty::Heap(t) => self.holds_py_handle(&t),
+            Ty::Dict(k, v) | Ty::Result(k, v) => self.holds_py_handle(&k) || self.holds_py_handle(&v),
+            Ty::Tuple(items) => items.iter().any(|t| self.holds_py_handle(t)),
+            _ => false,
+        }
     }
 
     /// Whether `found` fits `expected`, a type holding a `PyObject`, part by part: `[int]` where
@@ -245,6 +278,7 @@ impl<'p> Body<'p> {
         fn walk(b: &Body<'_>, ty: &Ty, seen: &mut Vec<String>) -> bool {
             match b.resolve(ty) {
                 Ty::PyObject => true,
+                Ty::Adt(name, _) if b.program.py_attributes.contains_key(&name) => true,
                 Ty::List(t) | Ty::Set(t) | Ty::Optional(t) | Ty::Heap(t) => walk(b, &t, seen),
                 Ty::Dict(k, v) | Ty::Result(k, v) => walk(b, &k, seen) || walk(b, &v, seen),
                 Ty::Tuple(items) => items.iter().any(|t| walk(b, t, seen)),
@@ -1412,7 +1446,7 @@ impl<'p> Body<'p> {
                         if let StrPart::Expr { expr, conversion, spec } = part {
                             let ty = self.expr(expr, None);
                             if self.holds_object(&ty) {
-                                self.opaque("E0204", expr.span, "a `PyObject` cannot be formatted".into());
+                                self.refuse_python(expr.span, "a Python object cannot be formatted".into(), &ty);
                                 continue;
                             }
                             self.format_spec(expr, &ty, *conversion, spec);
@@ -1456,7 +1490,11 @@ impl<'p> Body<'p> {
                     let found = self.expr(e, Some(&item));
                     self.element(&found, &item, e.span);
                     if self.holds_object(&found) {
-                        self.opaque("E0204", e.span, "a set cannot hold a `PyObject`: it would hash it".into());
+                        self.refuse_python(
+                            e.span,
+                            "a set cannot hold a Python object: it would hash it".into(),
+                            &found,
+                        );
                     }
                 }
                 Ty::Set(Box::new(item))
@@ -1470,10 +1508,10 @@ impl<'p> Body<'p> {
                     let found = self.expr(key, Some(&k));
                     self.element(&found, &k, key.span);
                     if self.holds_object(&found) {
-                        self.opaque(
-                            "E0204",
+                        self.refuse_python(
                             key.span,
-                            "a dict's key cannot hold a `PyObject`: it would hash it".into(),
+                            "a dict's key cannot hold a Python object: it would hash it".into(),
+                            &found,
                         );
                     }
                     let found = self.expr(value, Some(&v));
@@ -1921,8 +1959,9 @@ impl<'p> Body<'p> {
 
     fn binary(&mut self, op: BinOp, l: &Ty, r: &Ty, span: Span) -> Ty {
         let (l, r) = (self.resolve(l), self.resolve(r));
-        if matches!(l, Ty::PyObject) || matches!(r, Ty::PyObject) {
-            self.opaque("E0204", span, format!("`{}` has no operands of type `PyObject`", op.text()));
+        if self.is_python(&l) || self.is_python(&r) {
+            let python = if self.is_python(&l) { l.clone() } else { r.clone() };
+            self.refuse_python(span, format!("`{}` has no operands of type `{python}`", op.text()), &python);
             return Ty::Error;
         }
         if matches!(l, Ty::Error) || matches!(r, Ty::Error) {
@@ -2002,7 +2041,12 @@ impl<'p> Body<'p> {
     fn compare(&mut self, op: CmpOp, l: &Ty, r: &Ty, span: Span) {
         let (l, r) = (self.resolve(l), self.resolve(r));
         if self.holds_object(&l) || self.holds_object(&r) {
-            self.opaque("E0204", span, format!("`{}` cannot compare a `PyObject`, nor a value holding one", op.text()));
+            let python = if self.holds_object(&l) { l.clone() } else { r.clone() };
+            self.refuse_python(
+                span,
+                format!("`{}` cannot compare a Python object, nor a value holding one", op.text()),
+                &python,
+            );
             return;
         }
         if l.is_poison() || r.is_poison() {
@@ -2469,9 +2513,12 @@ impl<'p> Body<'p> {
         let opaque = types
             .iter()
             .chain(keywords.iter().map(|(_, t)| t))
-            .any(|t| matches!(self.resolve(t), Ty::PyObject) || (into_python && self.holds_object(t)));
-        if opaque && !matches!(name, "Ok" | "Err") {
-            self.opaque("E0204", span, format!("`{name}` cannot take a `PyObject`"));
+            .find(|t| self.is_python(t) || (into_python && self.holds_object(t)))
+            .cloned();
+        if let Some(python) = opaque
+            && !matches!(name, "Ok" | "Err")
+        {
+            self.refuse_python(span, format!("`{name}` cannot take a Python object"), &python);
             return Ty::Error;
         }
         match builtins::call(name, &types, &keywords, &mut self.infer) {
