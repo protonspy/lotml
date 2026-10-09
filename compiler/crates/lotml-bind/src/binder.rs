@@ -759,7 +759,13 @@ fn params(function: &ast::StmtFunctionDef, drop_first: bool, cx: Cx<'_>) -> Resu
     }
     let mut written = Vec::new();
     for p in positional.into_iter().chain(parameters.kwonlyargs.iter()) {
+        // `__x` is PEP 484's positional-only parameter, which no call names: it is written `x`,
+        // since a name starting with `__` is the compiler's (E0220).
         let name = p.parameter.name.as_str();
+        let name = match name.strip_prefix("__") {
+            Some(bare) if !name.ends_with("__") && !bare.is_empty() => bare,
+            _ => name,
+        };
         if KEYWORDS.contains(&name) {
             return Err(format!("its parameter `{name}` is a LotML keyword"));
         }
@@ -1995,6 +2001,11 @@ def pair(a: A, b: B) -> A: ...
         assert_eq!(absolute("a", 2, Some("c")), None, "past the root");
         assert_eq!(absolute("a", 1, None), None, "`from . import m` imports a module");
         assert_eq!(absolute("", 0, Some("posixpath")).as_deref(), Some("posixpath"));
+    }
+
+    #[test]
+    fn a_positional_only_parameter_written_with_two_underscores_is_written_without() {
+        assert_eq!(one("def f(__type1: int, __x__: str) -> int: ...\n"), "fn f(type1: int, __x__: str) -> int ! PyError");
     }
 
     #[test]

@@ -18,6 +18,7 @@ typed (specs/python-object).
 | classes | 31.0% | 2.7% | 17.9% | 32.0% | the latest corpus and versions |
 | overloads | 31.7% | 2.7% | 18.3% | 34.9% | the latest corpus and versions |
 | generics | 37.7% | 4.6% | 22.4% | 37.9% | the latest corpus and versions |
+| reexports | 40.5% | 19.8% | 30.9% | 66.4% | the latest corpus and versions |
 
 ## functions
 
@@ -346,3 +347,44 @@ typed (specs/python-object).
 | yaml | types-PyYAML | 29 | 2 | 26 | 6.9% |
 | numpy | numpy | 500 | 22 | 1 | 4.4% |
 | pandas | pandas-stubs | 112 | 0 | 0 | 0.0% |
+
+## reexports
+
+| module | from | public names | bound typed | through PyObject | share typed |
+| --- | --- | ---: | ---: | ---: | ---: |
+| math | typeshed 0d9b1926fc75 | 67 | 8 | 54 | 11.9% |
+| random | typeshed 0d9b1926fc75 | 26 | 18 | 6 | 69.2% |
+| string | typeshed 0d9b1926fc75 | 12 | 3 | 0 | 25.0% |
+| textwrap | typeshed 0d9b1926fc75 | 6 | 5 | 1 | 83.3% |
+| json | typeshed 0d9b1926fc75 | 7 | 3 | 4 | 42.9% |
+| re | typeshed 0d9b1926fc75 | 33 | 6 | 10 | 18.2% |
+| os | typeshed 0d9b1926fc75 | 446 | 159 | 61 | 35.7% |
+| os.path | typeshed 0d9b1926fc75 | 0 | 0 | 0 | 0.0% |
+| shutil | typeshed 0d9b1926fc75 | 26 | 11 | 14 | 42.3% |
+| datetime | typeshed 0d9b1926fc75 | 9 | 6 | 0 | 66.7% |
+| time | typeshed 0d9b1926fc75 | 44 | 19 | 8 | 43.2% |
+| collections | typeshed 0d9b1926fc75 | 9 | 8 | 1 | 88.9% |
+| itertools | typeshed 0d9b1926fc75 | 20 | 19 | 1 | 95.0% |
+| functools | typeshed 0d9b1926fc75 | 15 | 4 | 8 | 26.7% |
+| statistics | typeshed 0d9b1926fc75 | 22 | 15 | 7 | 68.2% |
+| fractions | typeshed 0d9b1926fc75 | 1 | 1 | 0 | 100.0% |
+| decimal | typeshed 0d9b1926fc75 | 40 | 20 | 1 | 50.0% |
+| heapq | typeshed 0d9b1926fc75 | 13 | 12 | 1 | 92.3% |
+| bisect | typeshed 0d9b1926fc75 | 2 | 0 | 0 | 0.0% |
+| base64 | typeshed 0d9b1926fc75 | 22 | 11 | 11 | 50.0% |
+| hashlib | typeshed 0d9b1926fc75 | 20 | 4 | 14 | 20.0% |
+| difflib | typeshed 0d9b1926fc75 | 12 | 6 | 6 | 50.0% |
+| csv | typeshed 0d9b1926fc75 | 23 | 12 | 3 | 52.2% |
+| urllib.parse | typeshed 0d9b1926fc75 | 21 | 12 | 9 | 57.1% |
+| uuid | typeshed 0d9b1926fc75 | 21 | 9 | 2 | 42.9% |
+| requests | types-requests | 27 | 16 | 8 | 59.3% |
+| urllib3 | urllib3 | 16 | 11 | 5 | 68.8% |
+| certifi | certifi | 2 | 2 | 0 | 100.0% |
+| idna | idna | 21 | 12 | 7 | 57.1% |
+| charset_normalizer | charset-normalizer | 10 | 3 | 5 | 30.0% |
+| dateutil.parser | types-python-dateutil | 7 | 5 | 2 | 71.4% |
+| packaging.version | packaging | 5 | 4 | 0 | 80.0% |
+| six | types-six | 58 | 9 | 31 | 15.5% |
+| yaml | types-PyYAML | 29 | 2 | 26 | 6.9% |
+| numpy | numpy | 500 | 44 | 253 | 8.8% |
+| pandas | pandas-stubs | 112 | 48 | 45 | 42.9% |
