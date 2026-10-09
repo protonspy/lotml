@@ -271,6 +271,14 @@ pub const ALL: &[Code] = &[
         stubs found; `lotml check --locked` fails on the difference, for CI.",
     },
     Code {
+        code: "E0226",
+        title: "an overloaded Python function used as a value",
+        explanation: "A Python function whose stub declares overloads returns a different type for different \
+        arguments, so a call is typed by the overload its arguments fit, and the function itself has no one \
+        type to give a value. Call it, or wrap the call you mean in a lambda:\n\n    \
+        list_in = lambda path: listdir(path)",
+    },
+    Code {
         code: "E0301",
         title: "an immutable reassigned",
         explanation: "A local declared with `x = …` cannot be assigned again. Declare it `var x = …` if it changes:\n\n\

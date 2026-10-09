@@ -173,3 +173,18 @@ fn a_nest_of_overloaded_calls_checks_each_argument_once() {
     assert!(found.is_empty(), "{found:?}");
     assert!(started.elapsed().as_secs() < 5, "thirty nested overloaded calls took {:?}", started.elapsed());
 }
+
+#[test]
+fn an_overloaded_function_is_called_never_passed() {
+    for body in ["fn f() -> None:\n    g = listdir\n", "import py.os\n\nfn f() -> None:\n    g = py.os.listdir\n"] {
+        let found = refused(body);
+        assert!(found.len() == 1 && found[0].starts_with("E0226"), "{body}\n{found:?}");
+    }
+    assert!(refused("fn f() -> None:\n    g = lambda path: listdir(path)\n").is_empty(), "a lambda calls it");
+    let (read, _) = interface_of("py.m", "fn one(x: int) -> int ! PyError\n");
+    let interfaces = lotml_check::Interfaces::from([("py.m".to_string(), read)]);
+    let source = "from py.m import one\n\nfn f() -> None:\n    g = one\n";
+    let parsed = lotml_syntax::parse(source);
+    let checked = lotml_check::check_resolved_with(&parsed.module, source, &interfaces);
+    assert!(checked.diagnostics.is_empty(), "a function of one signature is still a value");
+}

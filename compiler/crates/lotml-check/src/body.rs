@@ -1849,7 +1849,7 @@ impl<'p> Body<'p> {
             return local.ty;
         }
         if let Some(sig) = self.program.functions.get(name) {
-            return function_value(sig);
+            return self.named_function(sig, span);
         }
         if let Some(owner) = self.program.variant_of.get(name).cloned() {
             return self.variant_value(name, &owner, span);
@@ -2239,7 +2239,7 @@ impl<'p> Body<'p> {
             }
             Ty::Module(module) if self.program.foreign.contains_key(module) => {
                 match self.program.foreign[module].get(&name.name) {
-                    Some(sig) => function_value(sig),
+                    Some(sig) => self.named_function(&sig.clone(), name.span),
                     None => {
                         let names: Vec<String> = self.program.foreign[module].keys().cloned().collect();
                         self.report(
@@ -2779,6 +2779,23 @@ impl<'p> Body<'p> {
             Some(e) => Ty::Result(Box::new(ret), Box::new(e.substitute(&names, &values))),
             None => ret,
         }
+    }
+
+    /// The function `sig` named other than to call it: a value of its type, or, overloaded, no
+    /// value, since it has no one type (adr:0035).
+    fn named_function(&mut self, sig: &FnSig, span: Span) -> Ty {
+        if sig.overloads.is_empty() {
+            return function_value(sig);
+        }
+        self.report(
+            Diagnostic::error(
+                "E0226",
+                span,
+                format!("`{}` is overloaded, so it has no one type: call it, or wrap the call in a lambda", sig.name),
+            )
+            .note(format!("it has {} overloads", sig.overloads.len() + 1)),
+        );
+        Ty::Error
     }
 
     /// A call of an overloaded Python function, constructor or method (adr:0035). Each argument is
