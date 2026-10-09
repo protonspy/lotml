@@ -57,6 +57,9 @@ def grade(task: AgentTask, workspace: Path, lotml: Lotml | None = None) -> Grade
         scrub_interfaces(copy)
         for link in [p for p in copy.rglob("*") if p.is_symlink()]:
             link.unlink()
+        # Nor may the agent choose the interpreter: `lotml test` runs a project's `.venv`, and the
+        # CPython the harness provisioned is the one graded runs use (plans/python-via-uv.md 3.1).
+        shutil.rmtree(copy / ".venv", ignore_errors=True)
         checked = lotml.compiler(["check", "."], scratch)
         checks = checked is not None and checked.returncode == 0
         passed, total, failures, details, python = 0, 0, [], [], None

@@ -367,6 +367,9 @@ steps = math.floor(d)
   A generic one takes its type arguments from the call, `nlargest(2, xs)?` a list of what `xs`
   holds, and a generic class is named with them: `p: Pattern[str] = compile("a+")?`; a value
   read through it is checked as that type, and `m is None` asks whether a value is there.
+- `lotml run` and `lotml test` run on CPython 3.14 through the uv shipped beside `lotml`,
+  downloaded once on the first run; `LOTML_PYTHON` or the project's virtual environment comes
+  first, and `--offline` downloads nothing. The README has the whole order.
 - A C library is imported from its interface, written by hand in `bindings/c.<library>.lotmli`:
   `from c.m import cos`. Its functions take and return numbers, `bool` and (taken only) `str`,
   and cannot fail.

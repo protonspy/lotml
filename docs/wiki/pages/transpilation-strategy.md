@@ -13,6 +13,14 @@ questions below by measurement.
 
 ## Python as the first target
 
+The Python target runs on CPython 3.14, provisioned through the uv shipped beside `lotml`
+(adr:0026-lotml-ships-uv-and-runs-python-3-14-by-default), after `LOTML_PYTHON` and the
+project's virtual environment; the order is in the README. `--offline` downloads nothing. The
+MCP server never downloads, in code; the grader and the harness never do, by the
+`LOTML_OFFLINE` their children get, the harness's one online step being `python -m
+lotml_harness.python --provision`, run ahead of a run. `run --json` and `test --json` record
+the interpreter and uv's version, and so does every harness row that runs the Python target.
+
 **Integers.** Python has arbitrary-precision integers; lotml has `i64` with defined overflow.
 Every Python compiler diverges here: Cython keeps `int` as a Python object because C "can be
 quite different with respect to overflow and division", Codon uses 64 bits, and mypyc leaves

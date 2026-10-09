@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-09 — Python via uv: [[transpilation-strategy]] says the Python target runs CPython 3.14 through the uv beside lotml, in a fixed order, offline where asked
 - 2026-10-09 — added [[python-interop]]: calling Python through `py.<module>` from the program's side, linked from [[transpilation-strategy]]
 - 2026-10-09 — Python re-exports: [[transpilation-strategy]] says a name a stub re-exports is bound as the module's own, from the stub it comes from
 - 2026-10-09 — Python generics: [[transpilation-strategy]] says a type variable binds as a type parameter, a constrained one as overloads, and a generic class as a handle with type arguments

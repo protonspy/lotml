@@ -69,8 +69,17 @@ checker forces you to handle. The full language fits in one example-driven page:
 
 [Releases](https://github.com/protonspy/lotml/releases) hold `lotml` built for Linux (x86_64),
 Windows (x86_64) and macOS (Apple silicon): each archive holds the binary, this README and the
-licence, beside the VS Code extension's `.vsix` and a `SHA256SUMS`. The binary carries its
-runtimes; `run` and `test` need Python 3.11 or later, and a native build `clang` 17 or later.
+licence and the pinned uv with its licences, beside the VS Code extension's `.vsix` and a
+`SHA256SUMS`. The binary carries its runtimes, and a native build needs `clang` 17 or later.
+`run` and `test` need no Python of yours: lotml runs CPython 3.14 through the uv beside it,
+and the first run downloads it once, saying from where. The interpreter is, in order,
+`LOTML_PYTHON`; for `run` and `test`, the project's virtual environment (`VIRTUAL_ENV`, else
+its `.venv`); the CPython 3.14 uv already installed; a download of it through uv; and, with
+no uv, `python3`, `python` or `py -3` on the path. `--offline` (or `LOTML_OFFLINE=1`) never
+downloads, failing instead with what is missing, and `run --json` and `test --json` record
+the interpreter's path and version and uv's version. uv runs from lotml's own cache with its
+configuration files ignored, so a project's `uv.toml` or `.python-version` changes neither
+the interpreter uv gives nor where it comes from.
 
 To build it instead, with Rust 1.97+:
 

@@ -339,17 +339,27 @@ ENVIRONMENT = (
     "TMPDIR",
     "LANG",
     "LOTML_PYTHON",
+    "LOTML_UV",
+    "HOME",
+    "USERPROFILE",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "XDG_CACHE_HOME",
+    "XDG_DATA_HOME",
+    "UV_PYTHON_INSTALL_DIR",
+    "UV_CACHE_DIR",
 )
-"""What a child keeps of the environment; `LOTML_PYTHON` chooses the CPython the Python target runs
-on, so a whole run can be held to one version (plans/python-via-uv.md 1.1)."""
+"""What a child keeps of the environment: `LOTML_PYTHON`, which holds a whole run to one
+interpreter (plans/python-via-uv.md 1.1), `LOTML_UV`, and the user's directories, where uv keeps the
+CPython it installed and lotml its cache."""
 
 
 def child_environment() -> dict[str, str]:
     """What a child needs to start Python and nothing else: no tokens, no keys. The compiler a
-    child runs gets an interpreter already resolved, the harness's own unless `LOTML_PYTHON` names
-    one, and runs offline, so it never reaches the download step (adr:0026)."""
+    child runs resolves its interpreter as `lotml run` does, the CPython 3.14 `python -m
+    lotml_harness.python --provision` installed unless `LOTML_PYTHON` names one, and runs offline,
+    so it never reaches the download step (adr:0026, plans/python-via-uv.md 3.1)."""
     kept = {k: v for k, v in os.environ.items() if k.upper() in ENVIRONMENT}
-    kept.setdefault("LOTML_PYTHON", sys.executable)
     return kept | {
         "LOTML_OFFLINE": "1",
         "PYTHONPATH": str(ROOT / "harness"),
