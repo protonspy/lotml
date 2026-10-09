@@ -1,7 +1,7 @@
 # Python re-exports — tasks
 
-- [ ] 1.1 (Unit) Find the modules a stub re-exports from, breadth first, each once, within depth 4 and 8 MiB — R1.3, R1.6
-- [ ] 1.2 (Unit) Bind a re-exported name as the stub's own: named, starred, renamed, followed through its source, the reason listed when its source has no stub — R1.1, R1.2, R1.3, R1.4, R1.5
+- [x] 1.1 (Unit) Find the modules a stub re-exports from, breadth first, each once, within depth 4 and 8 MiB — R1.3, R1.6
+- [x] 1.2 (Unit) Bind a re-exported name as the stub's own: named, starred, renamed, followed through its source, the reason listed when its source has no stub — R1.1, R1.2, R1.3, R1.4, R1.5
   _Depends 1.1_
 - [ ] 2.1 (Unit) Find a stub's parts as its own is found, and key the cache and the lock by them — R2.1, R2.3
   _Depends 1.2_
