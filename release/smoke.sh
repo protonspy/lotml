@@ -34,6 +34,7 @@ if [ "$part" != offline ]; then
   run UV_PYTHON_INSTALL_DIR="$pythons" "$lotml" test adds.lotml
   again=$(run UV_PYTHON_INSTALL_DIR="$pythons" "$lotml" run hello.lotml 2>&1)
   if grep -q "downloading" <<< "$again"; then echo "::error::a second run downloaded again"; exit 1; fi
+  [ "$(tail -n 1 <<< "$again" | tr -d '\r')" = ran ] || { echo "::error::the second run did not run the program"; exit 1; }
   run "$lotml" bind textwrap --out bindings
   grep -q "^fn dedent(" bindings/py.textwrap.lotmli || { echo "::error::bind wrote no dedent"; exit 1; }
 fi

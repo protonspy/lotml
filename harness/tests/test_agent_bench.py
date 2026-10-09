@@ -63,6 +63,23 @@ def test_grading_runs_no_interface_the_agent_left(tmp_path: Path):
     assert (tmp_path / "bindings" / "os.lotmli").exists(), "the workspace itself is left as it was"
 
 
+def test_grading_runs_on_the_provisioned_python_not_a_venv_the_agent_left(tmp_path: Path):
+    """plans/python-via-uv.md 3.1: a `.venv` in the workspace, which `lotml test` would run,
+    does not choose the interpreter a graded run uses."""
+    task = next(t for t in TASKS if t.id == "median-mode")
+    task.lay(tmp_path, solution=True)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n", encoding="utf-8")
+    venv = tmp_path / ".venv"
+    scripts = venv / ("Scripts" if (Path("C:/") / "Windows").exists() else "bin")
+    scripts.mkdir(parents=True)
+    (venv / "pyvenv.cfg").write_text("home = /nowhere\n", encoding="utf-8")
+    (scripts / "python.exe").write_text("not a program", encoding="utf-8")
+    (scripts / "python").write_text("not a program", encoding="utf-8")
+    result = grade(task, tmp_path)
+    assert result.outcome == "pass", result.failures
+    assert (venv / "pyvenv.cfg").exists(), "the workspace itself is left as it was"
+
+
 def test_a_missing_graded_file_fails_its_tests(tmp_path: Path):
     task = TASKS[0]
     result = grade(task, tmp_path)
