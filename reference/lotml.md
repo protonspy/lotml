@@ -362,6 +362,9 @@ steps = math.floor(d)
   is in the prelude. A class is imported the same way and named as a type: `from py.datetime
   import date`, then `d: date = date(2026, 1, 8)?`, `d.isoformat()?`, `d.year?`,
   `date.today()?`; each call and attribute read can fail, and nothing else works on the object.
+  A function the stub overloads is called as any other, the call taking the first overload its
+  arguments fit: `listdir(".")?` is a `[str]`. It is never a value (E0226): wrap the call in a
+  lambda.
 - A C library is imported from its interface, written by hand in `bindings/c.<library>.lotmli`:
   `from c.m import cos`. Its functions take and return numbers, `bool` and (taken only) `str`,
   and cannot fail.

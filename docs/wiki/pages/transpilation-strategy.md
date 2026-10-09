@@ -220,7 +220,10 @@ Phase 2 built both directions of R14 and R27 on one checked boundary
   `Any`, a callable or a class the stub does not define is bound as `PyObject`, an opaque value a
   program passes back to Python or converts with `o.value()`, the boundary checking it
   (adr:0031-a-python-name-no-stub-types-crosses-as-an-opaque-python-value); an overloaded
-  function is listed in a comment, not bound; an optional parameter whose default is not a literal is
+  function, constructor or method is written once per overload, in the stub's order, and a call
+  is typed by the first overload its arguments fit, a value given to a `PyObject` parameter
+  fitting last (specs/python-overloads,
+  adr:0035-a-python-overload-crosses-as-ordered-signatures-chosen-at-the-call); an optional parameter whose default is not a literal is
   written `= todo()`. A program imports the module by its origin, `import py.m` or `from py.m
   import f` (adr:0029-foreign-modules-are-imported-by-origin-and-their-interfaces-generated),
   which finds the nearest `bindings/py.m.lotmli` up the directory tree; a bare `import m` names a

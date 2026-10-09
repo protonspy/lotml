@@ -231,7 +231,8 @@ pub const ALL: &[Code] = &[
         explanation: "An interface (`bindings/py.<module>.lotmli`) declares the functions of a Python module, as \
         `lotml bind` wrote them: one signature per line, no body, no type parameters, over the types every \
         program has, each returning `T ! PyError` because any call into Python can fail:\n\n    \
-        fn dedent(text: str) -> str ! PyError\n\nRegenerate the file with `lotml bind <module> --stub <file.pyi>` \
+        fn dedent(text: str) -> str ! PyError\n\nA function written again is its next overload, at most 64 \
+        of them, each taking `self` if the first does. Regenerate the file with `lotml bind <module> --stub <file.pyi>` \
         rather than editing it.",
     },
     Code {

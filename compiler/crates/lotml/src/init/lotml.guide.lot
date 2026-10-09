@@ -370,7 +370,8 @@ test "concurrency":
 # Ok Err parallel PyError. A Python module is imported by its origin, `from py.textwrap import
 # dedent` or `import py.textwrap`, its interface generated on import, each of its functions
 # returning `T ! PyError`; a class too, its constructor, methods and attributes each `T ! PyError`
-# (`date(2026, 1, 8)?.isoformat()?`); a C library as `c.<library>`, through
+# (`date(2026, 1, 8)?.isoformat()?`); an overloaded one is called, never passed, the call taking
+# the first overload its arguments fit; a C library as `c.<library>`, through
 # `bindings/c.<library>.lotmli`.
 
 test "modules and the prelude":
