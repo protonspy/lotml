@@ -3416,8 +3416,6 @@ fn positional_values_for(name: &str, values: &[Ty], all: &[Ty]) -> Vec<Ty> {
     if matches!(name, "map" | "filter") { all.to_vec() } else { values.to_vec() }
 }
 
-/// Whether two places, as written, may be the same memory: one is the other or inside it.
-/// `xs[i]` and `xs[j]` are taken to overlap, since `i` may equal `j`.
 /// An overload that takes a call's arguments: whether one is a value given to a `PyObject`
 /// parameter, each argument's parameter, and the type arguments it was given.
 struct Taken {
@@ -3433,6 +3431,8 @@ fn overload_text(sig: &FnSig, skip: usize) -> String {
     format!("{}({}) -> {}", sig.name, params.join(", "), sig.ret)
 }
 
+/// Whether two places, as written, may be the same memory: one is the other or inside it.
+/// `xs[i]` and `xs[j]` are taken to overlap, since `i` may equal `j`.
 fn overlaps(a: &str, b: &str) -> bool {
     let root = |s: &str| s.split(['.', '[']).next().unwrap_or("").to_string();
     if root(a) != root(b) {
