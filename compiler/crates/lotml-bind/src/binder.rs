@@ -2005,7 +2005,10 @@ def pair(a: A, b: B) -> A: ...
 
     #[test]
     fn a_positional_only_parameter_written_with_two_underscores_is_written_without() {
-        assert_eq!(one("def f(__type1: int, __x__: str) -> int: ...\n"), "fn f(type1: int, __x__: str) -> int ! PyError");
+        assert_eq!(
+            one("def f(__type1: int, __x__: str) -> int: ...\n"),
+            "fn f(type1: int, __x__: str) -> int ! PyError"
+        );
     }
 
     #[test]
