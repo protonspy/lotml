@@ -5,3 +5,45 @@
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
 fn new(name: str, data: bytes = todo(), usedforsecurity: bool = True) -> PyObject ! PyError
 fn file_digest(fileobj: PyObject, digest: PyObject, _bufsize: int = 262144) -> PyObject ! PyError
+fn md5(data: bytes = todo(), usedforsecurity: bool = True, string: bytes? = None) -> PyObject ! PyError
+fn sha1(data: bytes = todo(), usedforsecurity: bool = True, string: bytes? = None) -> PyObject ! PyError
+fn sha3_224(data: bytes = todo(), usedforsecurity: bool = True, string: bytes? = None) -> PyObject ! PyError
+fn sha3_256(data: bytes = todo(), usedforsecurity: bool = True, string: bytes? = None) -> PyObject ! PyError
+fn sha3_384(data: bytes = todo(), usedforsecurity: bool = True, string: bytes? = None) -> PyObject ! PyError
+fn sha3_512(data: bytes = todo(), usedforsecurity: bool = True, string: bytes? = None) -> PyObject ! PyError
+fn sha224(data: bytes = todo(), usedforsecurity: bool = True, string: bytes? = None) -> PyObject ! PyError
+fn sha256(data: bytes = todo(), usedforsecurity: bool = True, string: bytes? = None) -> PyObject ! PyError
+fn sha384(data: bytes = todo(), usedforsecurity: bool = True, string: bytes? = None) -> PyObject ! PyError
+fn sha512(data: bytes = todo(), usedforsecurity: bool = True, string: bytes? = None) -> PyObject ! PyError
+fn shake_128(data: bytes = todo(), usedforsecurity: bool = True, string: bytes? = None) -> PyObject ! PyError
+fn shake_256(data: bytes = todo(), usedforsecurity: bool = True, string: bytes? = None) -> PyObject ! PyError
+fn pbkdf2_hmac(hash_name: str, password: bytes, salt: bytes, iterations: int, dklen: int? = None) -> bytes ! PyError
+fn scrypt(password: bytes, salt: bytes, n: int, r: int, p: int, maxmem: int = 0, dklen: int = 64) -> bytes ! PyError
+
+class blake2b:
+    fn blake2b(data: bytes = todo(), digest_size: int = 64, key: bytes = todo(), salt: bytes = todo(), person: bytes = todo(), fanout: int = 1, depth: int = 1, leaf_size: int = 0, node_offset: int = 0, node_depth: int = 0, inner_size: int = 0, last_node: bool = False, usedforsecurity: bool = True, string: bytes? = None) -> blake2b ! PyError
+    MAX_DIGEST_SIZE: int
+    MAX_KEY_SIZE: int
+    PERSON_SIZE: int
+    SALT_SIZE: int
+    block_size: int
+    digest_size: int
+    name: str
+    fn copy(self) -> blake2b ! PyError
+    fn digest(self) -> bytes ! PyError
+    fn hexdigest(self) -> str ! PyError
+    fn update(self, data: bytes) -> None ! PyError
+
+class blake2s:
+    fn blake2s(data: bytes = todo(), digest_size: int = 32, key: bytes = todo(), salt: bytes = todo(), person: bytes = todo(), fanout: int = 1, depth: int = 1, leaf_size: int = 0, node_offset: int = 0, node_depth: int = 0, inner_size: int = 0, last_node: bool = False, usedforsecurity: bool = True, string: bytes? = None) -> blake2s ! PyError
+    MAX_DIGEST_SIZE: int
+    MAX_KEY_SIZE: int
+    PERSON_SIZE: int
+    SALT_SIZE: int
+    block_size: int
+    digest_size: int
+    name: str
+    fn copy(self) -> blake2s ! PyError
+    fn digest(self) -> bytes ! PyError
+    fn hexdigest(self) -> str ! PyError
+    fn update(self, data: bytes) -> None ! PyError

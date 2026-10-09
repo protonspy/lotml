@@ -3,6 +3,10 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn getcontext() -> Context ! PyError
+fn localcontext(ctx: Context? = None, prec: int? = None, rounding: str? = None, Emin: int? = None, Emax: int? = None, capitals: int? = None, clamp: int? = None, traps: {PyObject: bool}? = None, flags: {PyObject: bool}? = None) -> PyObject ! PyError
+fn setcontext(context: Context) -> None ! PyError
+fn IEEEContext(bits: int) -> Context ! PyError
 
 class DecimalTuple:
     sign: int
@@ -176,5 +180,24 @@ class Context:
     fn to_integral(self, x: PyObject) -> Decimal ! PyError
 
 # Not bound:
+#   HAVE_CONTEXTVAR: `_decimal` neither defines nor re-exports it
+#   HAVE_THREADS: `_decimal` neither defines nor re-exports it
+#   MAX_EMAX: `_decimal` neither defines nor re-exports it
+#   MAX_PREC: `_decimal` neither defines nor re-exports it
+#   MIN_EMIN: `_decimal` neither defines nor re-exports it
+#   MIN_ETINY: `_decimal` neither defines nor re-exports it
+#   ROUND_05UP: `_decimal` neither defines nor re-exports it
+#   ROUND_CEILING: `_decimal` neither defines nor re-exports it
+#   ROUND_DOWN: `_decimal` neither defines nor re-exports it
+#   ROUND_FLOOR: `_decimal` neither defines nor re-exports it
+#   ROUND_HALF_DOWN: `_decimal` neither defines nor re-exports it
+#   ROUND_HALF_EVEN: `_decimal` neither defines nor re-exports it
+#   ROUND_HALF_UP: `_decimal` neither defines nor re-exports it
+#   ROUND_UP: `_decimal` neither defines nor re-exports it
+#   BasicContext: `_decimal` neither defines nor re-exports it
+#   DefaultContext: `_decimal` neither defines nor re-exports it
+#   ExtendedContext: `_decimal` neither defines nor re-exports it
+#   IEEE_CONTEXT_MAX_BITS: `_decimal` neither defines nor re-exports it
+#   SPEC_VERSION: `_decimal` neither defines nor re-exports it
 #   Decimal.__bool__, __hash__, __abs__, __add__, __divmod__, __eq__, __floordiv__, __ge__, __gt__, __le__, __lt__, __mod__, __mul__, __neg__, __pos__, __pow__, __radd__, __rdivmod__, __rfloordiv__, __rmod__, __rmul__, __rsub__, __rtruediv__, __sub__, __truediv__, __float__, __int__, __trunc__, __complex__, __round__, __floor__, __ceil__, __rpow__, __reduce__, __copy__, __deepcopy__, __format__: dunder methods, which operators would call
 #   Context.__reduce__, __copy__: dunder methods, which operators would call

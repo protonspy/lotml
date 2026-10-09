@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 1964e0f85bb2ad11afcc331b5a011977bee4574cfbd9a5c1cec3caebaf2583bd
+checksum: f16c8ffeac713699fceed9c40e997e835fa6cbd712181288d42dd9a519309563
 ---
 
 # Python compatibility
@@ -92,7 +92,7 @@ the typed share each spec added.
   _Depends 2.4_
 - [x] 3.2 (Unit) Write and build the spec python-overloads, the coverage report run before and after
   _Depends 2.4_
-- [ ] 3.3 (Unit) Write and build the spec python-generics, the coverage report run before and after
+- [x] 3.3 (Unit) Write and build the spec python-generics, the coverage report run before and after
   _Depends 3.1_
 - [ ] 4.1 (Unit) Write the wiki page on calling Python from LotML through `py.<module>`
   _Depends 2.4_

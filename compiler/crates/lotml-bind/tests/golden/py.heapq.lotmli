@@ -9,3 +9,13 @@ fn nlargest[_S](n: int, iterable: [_S], key: PyObject) -> [_S] ! PyError
 fn nlargest[_T](n: int, iterable: [_T], key: None = None) -> [_T] ! PyError
 fn nsmallest[_S](n: int, iterable: [_S], key: PyObject) -> [_S] ! PyError
 fn nsmallest[_T](n: int, iterable: [_T], key: None = None) -> [_T] ! PyError
+fn heapify[_T](heap: [_T]) -> None ! PyError
+fn heappop[_T](heap: [_T]) -> _T ! PyError
+fn heappush[_T](heap: [_T], item: _T) -> None ! PyError
+fn heappushpop[_T](heap: [_T], item: _T) -> _T ! PyError
+fn heapreplace[_T](heap: [_T], item: _T) -> _T ! PyError
+fn heapify_max[_T](heap: [_T]) -> None ! PyError
+fn heappop_max[_T](heap: [_T]) -> _T ! PyError
+fn heappush_max[_T](heap: [_T], item: _T) -> None ! PyError
+fn heappushpop_max[_T](heap: [_T], item: _T) -> _T ! PyError
+fn heapreplace_max[_T](heap: [_T], item: _T) -> _T ! PyError

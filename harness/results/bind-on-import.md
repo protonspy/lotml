@@ -6,7 +6,7 @@ and no `bindings/` directory, offline; the PyPI modules in a scratch project who
 `uv.lock` pins them (specs/bind-on-import R4.1). `lotml bind <module>` says why one
 fails.
 
-28 of 36 modules ran.
+36 of 36 modules ran.
 
 | module | group | result |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ fails.
 | json | stdlib | ran |
 | re | stdlib | ran |
 | os | stdlib | ran |
-| os.path | stdlib | failed: os_path.lotml:1:8: error[E0216]: there is no interface of the Python module `os.path` |
+| os.path | stdlib | ran |
 | shutil | stdlib | ran |
 | datetime | stdlib | ran |
 | time | stdlib | ran |
@@ -27,8 +27,8 @@ fails.
 | statistics | stdlib | ran |
 | fractions | stdlib | ran |
 | decimal | stdlib | ran |
-| heapq | stdlib | failed: heapq.lotml:1:8: error[E0216]: there is no interface of the Python module `heapq` |
-| bisect | stdlib | failed: bisect.lotml:1:8: error[E0216]: there is no interface of the Python module `bisect` |
+| heapq | stdlib | ran |
+| bisect | stdlib | ran |
 | base64 | stdlib | ran |
 | hashlib | stdlib | ran |
 | difflib | stdlib | ran |
@@ -37,12 +37,12 @@ fails.
 | uuid | stdlib | ran |
 | requests | pypi | ran |
 | urllib3 | pypi | ran |
-| certifi | pypi | failed: certifi.lotml:1:8: error[E0216]: there is no interface of the Python module `certifi` |
-| idna | pypi | failed: idna.lotml:1:8: error[E0216]: there is no interface of the Python module `idna` |
-| charset_normalizer | pypi | failed: charset_normalizer.lotml:1:8: error[E0216]: there is no interface of the Python module `charset_normalizer` |
-| dateutil.parser | pypi | failed: dateutil_parser.lotml:1:8: error[E0216]: there is no interface of the Python module `dateutil.parser` |
+| certifi | pypi | ran |
+| idna | pypi | ran |
+| charset_normalizer | pypi | ran |
+| dateutil.parser | pypi | ran |
 | packaging.version | pypi | ran |
 | six | pypi | ran |
 | yaml | pypi | ran |
 | numpy | pypi | ran |
-| pandas | pypi | failed: pandas.lotml:1:8: error[E0216]: there is no interface of the Python module `pandas` |
+| pandas | pypi | ran |
