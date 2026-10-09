@@ -9,5 +9,5 @@
   _Depends 2.1_
 - [x] 3.1 (Unit) Measure the corpus as `reexports` beside `generics`, and the bind-on-import report again — R3.1, R3.2
   _Depends 2.2_
-- [ ] 3.2 (Unit) Write re-exports into the wiki and the notes — R1.1, R2.1
+- [x] 3.2 (Unit) Write re-exports into the wiki and the notes — R1.1, R2.1
   _Depends 3.1_

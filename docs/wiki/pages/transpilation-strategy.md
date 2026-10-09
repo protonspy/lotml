@@ -212,6 +212,10 @@ Phase 2 built both directions of R14 and R27 on one checked boundary
   interface of bodyless signatures each returning `T ! PyError`;
   names typeshed writes as methods of a module-level instance, `randint = _inst.randint`, are
   bound from those methods.
+  A name the stub re-exports (`from .core import where` with `where` in `__all__`, `from x import
+  n as n`, `from posixpath import *`) is bound as the module's own, from the stub of the module it
+  comes from, found as the stub was and followed through at most four modules; those stubs are
+  locked and keyed with the module's (specs/python-reexports).
   A class the stub defines is bound as a `class` block of the interface, its constructor, methods,
   static methods and attributes each `T ! PyError`, its value a handle to the Python object that
   only those members reach (specs/python-classes,
