@@ -9,7 +9,7 @@ use lotml_syntax::span::Span;
 
 use crate::builtins;
 use crate::closest;
-use crate::program::{FnSig, Method, Program, TypeDef};
+use crate::program::{FnSig, Method, ParamSig, Program, TypeDef};
 use crate::ty::{F64, INT, Infer, IntKind, TYPE_LIMIT, Ty};
 
 /// The most type nodes one body keeps for its expressions, in all: each keeps a whole tree, so
@@ -85,8 +85,9 @@ pub struct Body<'p> {
     /// Each name that resolved to a local, with where that local was declared; a declaration
     /// refers to itself.
     locals: Vec<(Span, Span)>,
-    /// The overload each overloaded Python call was given, by the call's span (adr:0035).
-    overloads: Vec<(Span, usize)>,
+    /// Each call into Python as it was typed, by the call's span, its types not yet resolved
+    /// (adr:0035, adr:0036).
+    calls: Vec<(Span, crate::PyCall)>,
     /// The lineage of each Python class a value was fitted to a base of, walked once: an
     /// overloaded call fits its arguments to every overload's parameters.
     lineages: HashMap<String, HashSet<String>>,
@@ -130,7 +131,7 @@ impl<'p> Body<'p> {
             stored: 0,
             full: false,
             locals: Vec::new(),
-            overloads: Vec::new(),
+            calls: Vec::new(),
             lineages: HashMap::new(),
             diagnostics: Vec::new(),
         };
@@ -1231,6 +1232,7 @@ impl<'p> Body<'p> {
             types: self.program.types.clone(),
             traits: self.program.traits.clone(),
             py_classes: self.program.py_classes.clone(),
+            py_params: self.program.py_params.clone(),
             ..Program::default()
         };
         let ty = scratch.lower(t, &scope);
@@ -1329,9 +1331,47 @@ impl<'p> Body<'p> {
         &self.locals
     }
 
-    /// The overload each overloaded Python call was given, by the call's span.
-    pub fn overloads(&self) -> &[(Span, usize)] {
-        &self.overloads
+    /// Each call into Python as it was typed, by the call's span, its types resolved. A type a
+    /// call's parameters or result came to hold that does not cross into Python is reported here,
+    /// once the whole body has fixed it: `xs.append(p)` after `f(xs)` fixes what `f` was given.
+    pub fn calls(&mut self) -> Vec<(Span, crate::PyCall)> {
+        let calls = std::mem::take(&mut self.calls);
+        calls
+            .into_iter()
+            .map(|(span, mut call)| {
+                let sig = &mut call.sig;
+                for p in &mut sig.params {
+                    p.ty = self.infer.resolve(&p.ty);
+                }
+                sig.ret = self.infer.resolve(&sig.ret);
+                sig.error = sig.error.as_ref().map(|e| self.infer.resolve(e));
+                let types: Vec<Ty> = sig.params.iter().map(|p| p.ty.clone()).chain([sig.ret.clone()]).collect();
+                if let Some(stranger) = types.iter().find_map(|ty| self.stranger(ty)) {
+                    let name = call.sig.name.clone();
+                    self.report(
+                        Diagnostic::error(
+                            "E0204",
+                            span,
+                            format!("`{stranger}` does not cross into Python, so `{name}` cannot be given one"),
+                        )
+                        .note("Python is given numbers, text, bytes, collections of them, `PyObject`s and its classes' values"),
+                    );
+                }
+                (span, call)
+            })
+            .collect()
+    }
+
+    /// The first part of `ty` that does not cross into Python, if one does not.
+    fn stranger(&self, ty: &Ty) -> Option<Ty> {
+        match self.resolve(ty) {
+            Ty::Adt(..) if self.py_class(ty).is_some() => None,
+            Ty::List(t) | Ty::Set(t) | Ty::Optional(t) => self.stranger(&t),
+            Ty::Dict(k, v) => self.stranger(&k).or_else(|| self.stranger(&v)),
+            Ty::Tuple(items) => items.iter().find_map(|t| self.stranger(t)),
+            Ty::Error | Ty::Never => None,
+            other => (!self.carried(&other)).then_some(other),
+        }
     }
 
     /// Accept `found` where `expected` is wanted, allowing the coercions lotml has: a value
@@ -1583,6 +1623,7 @@ impl<'p> Body<'p> {
             ExprKind::Compare { first, rest } => {
                 let mut left = self.expr(first, None);
                 let mut left_span = first.span;
+                let mut left_none = matches!(first.kind, ExprKind::None);
                 for (op, right) in rest {
                     let r = self.expr(right, None);
                     // A result compares with `Ok(v)` or `Err(e)`; ordering needs its value.
@@ -1595,8 +1636,12 @@ impl<'p> Body<'p> {
                         r
                     };
                     left_span = right.span;
-                    self.compare(*op, &left, &r, expr.span);
+                    // `x is None` asks whether a value is there, which no Python code answers.
+                    let none = left_none || matches!(right.kind, ExprKind::None);
+                    let presence = matches!(op, CmpOp::Is | CmpOp::IsNot) && none;
+                    self.compare(*op, &left, &r, expr.span, presence);
                     left = r;
+                    left_none = matches!(right.kind, ExprKind::None);
                 }
                 Ty::Bool
             }
@@ -2050,9 +2095,9 @@ impl<'p> Body<'p> {
         }
     }
 
-    fn compare(&mut self, op: CmpOp, l: &Ty, r: &Ty, span: Span) {
+    fn compare(&mut self, op: CmpOp, l: &Ty, r: &Ty, span: Span, presence: bool) {
         let (l, r) = (self.resolve(l), self.resolve(r));
-        if self.holds_object(&l) || self.holds_object(&r) {
+        if !presence && (self.holds_object(&l) || self.holds_object(&r)) {
             let python = if self.holds_object(&l) { l.clone() } else { r.clone() };
             self.refuse_python(
                 span,
@@ -2096,7 +2141,7 @@ impl<'p> Body<'p> {
                     (Ty::Optional(l), Ty::Optional(r)) => (self.present(Ty::Optional(l), span), *r),
                     (l, r) => (self.present(l, span), self.present(r, span)),
                 };
-                self.compare(op, &l, &r, span);
+                self.compare(op, &l, &r, span, false);
             }
             _ => {
                 if self.infer.unify(&l, &r) || self.fits(&l, &r) || self.fits(&r, &l) {
@@ -2192,7 +2237,12 @@ impl<'p> Body<'p> {
             return Ty::Error;
         }
         if let Some(class) = self.py_class(&ty) {
-            if let Some(attribute) = self.py_attribute(&class, &name.name) {
+            if let Some((owner, attribute)) = self.py_attribute_of(&class, &name.name) {
+                let params = self.program.py_params.get(&owner).cloned().unwrap_or_default();
+                let Ty::Adt(_, type_args) = self.resolve(&ty) else { unreachable!("a Python class's value") };
+                let args =
+                    if owner == class { self.owner_args(&params, &type_args) } else { self.owner_args(&params, &[]) };
+                let attribute = attribute.substitute(&params, &args);
                 return Ty::Result(Box::new(attribute), Box::new(Ty::Adt("PyError".into(), vec![])));
             }
             let names = self.py_members(&class);
@@ -2685,7 +2735,7 @@ impl<'p> Body<'p> {
         skip_self: Option<()>,
     ) -> Ty {
         if !sig.overloads.is_empty() {
-            return self.call_overloaded(sig, args, span, skip_self);
+            return self.call_overloaded(sig, (owner_params, owner_args), args, span, skip_self);
         }
         let fresh: Vec<Ty> = sig.type_params.iter().map(|_| self.infer.fresh()).collect();
         let mut names: Vec<String> = owner_params.to_vec();
@@ -2779,10 +2829,30 @@ impl<'p> Body<'p> {
             }
         }
         let ret = sig.ret.substitute(&names, &values);
+        if sig.python {
+            self.python_call(sig, &names, &values, 0, span);
+        }
         match &sig.error {
             Some(e) => Ty::Result(Box::new(ret), Box::new(e.substitute(&names, &values))),
             None => ret,
         }
+    }
+
+    /// A call into Python checked against `sig`, its type parameters `names` given `values`,
+    /// recorded as instantiated: for the lowering, and for [`Body::calls`] to check that what it
+    /// passes crosses the boundary once the body's types are known (adr:0036).
+    fn python_call(&mut self, sig: &FnSig, names: &[String], values: &[Ty], overload: usize, span: Span) {
+        let instantiated = FnSig {
+            name: sig.name.clone(),
+            type_params: Vec::new(),
+            params: sig.params.iter().map(|p| ParamSig { ty: p.ty.substitute(names, values), ..p.clone() }).collect(),
+            ret: sig.ret.substitute(names, values),
+            error: sig.error.as_ref().map(|e| e.substitute(names, values)),
+            span: sig.span,
+            python: true,
+            overloads: Vec::new(),
+        };
+        self.calls.push((span, crate::PyCall { overload, sig: instantiated }));
     }
 
     /// The function `sig` named other than to call it: a value of its type, or, overloaded, no
@@ -2806,24 +2876,33 @@ impl<'p> Body<'p> {
     /// checked once, with no expected type, so a nest of such calls stays linear; the call is then
     /// given the first overload that takes the arguments without passing a value that is not a
     /// `PyObject` to a `PyObject` parameter, else the first that takes them at all, and the choice
-    /// is recorded by the call's span for the lowering.
-    fn call_overloaded(&mut self, sig: &FnSig, args: &[Arg], span: Span, skip_self: Option<()>) -> Ty {
+    /// is recorded by the call's span for the lowering. A method's receiver brings its type
+    /// arguments, `owner_args` for `owner_params`, and an overload's annotated `self` must fit
+    /// them (adr:0036).
+    fn call_overloaded(
+        &mut self,
+        sig: &FnSig,
+        owner: (&[String], &[Ty]),
+        args: &[Arg],
+        span: Span,
+        skip_self: Option<()>,
+    ) -> Ty {
         let found: Vec<Ty> = args.iter().map(|a| self.expr(a.expr(), None)).collect();
         let skip = usize::from(skip_self.is_some());
         let all: Vec<&FnSig> = std::iter::once(sig).chain(&sig.overloads).collect();
         let mut loose = None;
         let mut exact = None;
         for (i, candidate) in all.iter().enumerate() {
-            match self.takes(candidate, skip, args, &found) {
-                Some((false, _)) => {
+            match self.takes(candidate, owner, skip, args, &found) {
+                Some(taken) if !taken.loose => {
                     exact = Some(i);
                     break;
                 }
-                Some((true, _)) if loose.is_none() => loose = Some(i),
+                Some(_) if loose.is_none() => loose = Some(i),
                 _ => {}
             }
         }
-        let Some(chosen) = exact.or(loose) else {
+        let Some(overload) = exact.or(loose) else {
             let mut d = Diagnostic::error(
                 "E0204",
                 span,
@@ -2835,25 +2914,34 @@ impl<'p> Body<'p> {
             self.report(d);
             return Ty::Error;
         };
-        self.overloads.push((span, chosen));
-        let chosen = all[chosen];
-        let (_, slots) = self.takes(chosen, skip, args, &found).expect("it was taken");
+        let chosen = all[overload];
+        let taken = self.takes(chosen, owner, skip, args, &found).expect("it was taken");
         let params: Vec<_> = chosen.params.iter().skip(skip).collect();
-        for ((arg, ty), i) in args.iter().zip(&found).zip(slots) {
-            self.coerce(ty, &params[i].ty, arg.expr().span);
+        for ((arg, ty), &i) in args.iter().zip(&found).zip(&taken.slots) {
+            let want = params[i].ty.substitute(&taken.names, &taken.values);
+            self.coerce(ty, &want, arg.expr().span);
             self.convention(params[i].convention, arg, &params[i].name, &chosen.name);
         }
+        self.python_call(chosen, &taken.names, &taken.values, overload, span);
+        let ret = chosen.ret.substitute(&taken.names, &taken.values);
         match &chosen.error {
-            Some(e) => Ty::Result(Box::new(chosen.ret.clone()), Box::new(e.clone())),
-            None => chosen.ret.clone(),
+            Some(e) => Ty::Result(Box::new(ret), Box::new(e.substitute(&taken.names, &taken.values))),
+            None => ret,
         }
     }
 
     /// Whether the overload `sig` takes arguments of the types `found`, its first `skip`
-    /// parameters aside: by count, by keyword and by type, with whether a value that is not a
-    /// `PyObject` would go to a `PyObject` parameter, and each argument's parameter. A trial: it
-    /// binds no inference variable and reports nothing.
-    fn takes(&mut self, sig: &FnSig, skip: usize, args: &[Arg], found: &[Ty]) -> Option<(bool, Vec<usize>)> {
+    /// parameters aside: by count, by keyword and by type, its type parameters given fresh
+    /// variables and its owner's the receiver's `owner` arguments, an annotated `self` fitting
+    /// them. A trial: it binds no inference variable and reports nothing.
+    fn takes(
+        &mut self,
+        sig: &FnSig,
+        owner: (&[String], &[Ty]),
+        skip: usize,
+        args: &[Arg],
+        found: &[Ty],
+    ) -> Option<Taken> {
         let params: Vec<_> = sig.params.iter().skip(skip).collect();
         let mut filled = vec![false; params.len()];
         let mut slots = Vec::with_capacity(args.len());
@@ -2874,21 +2962,31 @@ impl<'p> Body<'p> {
         if params.iter().zip(&filled).any(|(p, f)| !f && !p.has_default) {
             return None;
         }
+        let mut names: Vec<String> = owner.0.to_vec();
+        names.extend(sig.type_params.iter().map(|(n, _)| n.clone()));
+        let mut values: Vec<Ty> = owner.1.to_vec();
+        values.extend(sig.type_params.iter().map(|_| self.infer.fresh()));
         let said = self.diagnostics.len();
         self.infer.begin_trial();
-        let mut loose = false;
         let mut fits = true;
+        if skip == 1
+            && let Some(Ty::Adt(class, _)) = sig.params.first().map(|p| &p.ty)
+        {
+            let receiver = Ty::Adt(class.clone(), owner.1.to_vec());
+            fits = self.fits(&receiver, &sig.params[0].ty.substitute(&names, &values));
+        }
+        let mut loose = false;
         for (ty, &slot) in found.iter().zip(&slots) {
-            let want = &params[slot].ty;
-            loose |= *want == Ty::PyObject && self.resolve(ty) != Ty::PyObject;
-            if !self.fits(ty, want) {
-                fits = false;
+            if !fits {
                 break;
             }
+            let want = params[slot].ty.substitute(&names, &values);
+            loose |= want == Ty::PyObject && self.resolve(ty) != Ty::PyObject;
+            fits = self.fits(ty, &want);
         }
         self.infer.undo_trial();
         self.diagnostics.truncate(said);
-        fits.then_some((loose, slots))
+        fits.then_some(Taken { loose, slots, names, values })
     }
 
     /// The types of a call's arguments, as a diagnostic lists them.
@@ -3071,9 +3169,12 @@ impl<'p> Body<'p> {
                     }
                 }
             }
-            Ty::Adt(type_name, _) if self.program.py_attributes.contains_key(&type_name) => {
+            Ty::Adt(type_name, type_args) if self.program.py_attributes.contains_key(&type_name) => {
                 match self.py_method(&type_name, &name.name) {
-                    Some(m) => self.user_method(&m, object, &[], args, span, name),
+                    Some(m) => {
+                        let owner_args = self.owner_args(&m.owner_params, &type_args);
+                        self.user_method(&m, object, &owner_args, args, span, name)
+                    }
                     None => {
                         self.arg_types(args, &[]);
                         let names = self.py_members(&type_name);
@@ -3214,7 +3315,22 @@ impl<'p> Body<'p> {
 
     /// The type of the attribute `name` of the Python class `class` or of a base it declares.
     fn py_attribute(&self, class: &str, name: &str) -> Option<Ty> {
-        self.py_lineage(class).iter().find_map(|c| self.program.py_attributes.get(c).and_then(|a| a.get(name)).cloned())
+        self.py_attribute_of(class, name).map(|(_, ty)| ty)
+    }
+
+    /// The attribute `name` of the Python class `class` or of a base it declares, with the class
+    /// that declares it.
+    fn py_attribute_of(&self, class: &str, name: &str) -> Option<(String, Ty)> {
+        self.py_lineage(class)
+            .into_iter()
+            .find_map(|c| self.program.py_attributes.get(&c).and_then(|a| a.get(name)).cloned().map(|ty| (c, ty)))
+    }
+
+    /// The type arguments a generic Python class's member takes from a receiver typed with
+    /// `given`: those, when they are the member's class's, else a fresh variable each, since a
+    /// base's arguments are not written (adr:0036).
+    fn owner_args(&mut self, params: &[String], given: &[Ty]) -> Vec<Ty> {
+        if params.len() == given.len() { given.to_vec() } else { params.iter().map(|_| self.infer.fresh()).collect() }
     }
 
     /// Every member name of the Python class `class` and its bases, for an alternative.
@@ -3302,14 +3418,23 @@ fn positional_values_for(name: &str, values: &[Ty], all: &[Ty]) -> Vec<Ty> {
     if matches!(name, "map" | "filter") { all.to_vec() } else { values.to_vec() }
 }
 
-/// Whether two places, as written, may be the same memory: one is the other or inside it.
-/// `xs[i]` and `xs[j]` are taken to overlap, since `i` may equal `j`.
+/// An overload that takes a call's arguments: whether one is a value given to a `PyObject`
+/// parameter, each argument's parameter, and the type arguments it was given.
+struct Taken {
+    loose: bool,
+    slots: Vec<usize>,
+    names: Vec<String>,
+    values: Vec<Ty>,
+}
+
 /// An overload as a diagnostic lists it: `joined(other: str) -> py.os.Path`.
 fn overload_text(sig: &FnSig, skip: usize) -> String {
     let params: Vec<String> = sig.params.iter().skip(skip).map(|p| format!("{}: {}", p.name, p.ty)).collect();
     format!("{}({}) -> {}", sig.name, params.join(", "), sig.ret)
 }
 
+/// Whether two places, as written, may be the same memory: one is the other or inside it.
+/// `xs[i]` and `xs[j]` are taken to overlap, since `i` may equal `j`.
 fn overlaps(a: &str, b: &str) -> bool {
     let root = |s: &str| s.split(['.', '[']).next().unwrap_or("").to_string();
     if root(a) != root(b) {

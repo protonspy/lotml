@@ -167,9 +167,10 @@ impl Shift for ImplDef {
 
 impl Shift for ClassDef {
     fn shift(&mut self, from: u32, to: u32) {
-        let ClassDef { span, name, bases, attributes, methods } = self;
+        let ClassDef { span, name, type_params, bases, attributes, methods } = self;
         span.shift(from, to);
         name.shift(from, to);
+        type_params.shift(from, to);
         bases.shift(from, to);
         attributes.shift(from, to);
         methods.shift(from, to);

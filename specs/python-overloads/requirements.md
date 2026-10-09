@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/python-overloads
-delivery: in-review
+delivery: merged
 pr: 60
 ---
 

@@ -121,6 +121,15 @@ def test_a_module_counts_the_public_names_lotml_bind_binds_and_one_without_a_stu
     assert (over.bound, over.reachable) == (["get"], ["raw"]), (
         "an overloaded name is typed when one overload is (specs/python-overloads R4.1)"
     )
+    write(
+        purelib / "gen-stubs" / "__init__.pyi",
+        "from typing import Generic, TypeVar\n"
+        "T = TypeVar('T')\n"
+        "class Box(Generic[T]):\n    def get(self) -> T: ...\n"
+        "def first(xs: list[T]) -> T: ...\n",
+    )
+    gen = bc.measure(bc.Module("gen", "pypi", "types-gen"), COMPILER, None, purelib)
+    assert gen.bound == ["Box", "first"], "a generic name is read before its type parameters"
     missing = bc.measure(bc.Module("absent", "pypi", "absent"), COMPILER, None, purelib)
     assert (missing.stub, missing.public, missing.share) == (None, 0, 0.0)
 

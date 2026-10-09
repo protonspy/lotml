@@ -7,11 +7,11 @@ fn seed(a: PyObject? = None, version: int = 2) -> None ! PyError
 fn uniform(a: f64, b: f64) -> f64 ! PyError
 fn triangular(low: f64 = 0.0, high: f64 = 1.0, mode: f64? = None) -> f64 ! PyError
 fn randint(a: int, b: int) -> int ! PyError
-fn choice(seq: PyObject) -> PyObject ! PyError
+fn choice[_T](seq: PyObject) -> _T ! PyError
 fn randrange(start: int, stop: int? = None, step: int = 1) -> int ! PyError
-fn sample(population: [PyObject], k: int, counts: [int]? = None) -> [PyObject] ! PyError
+fn sample[_T](population: [_T], k: int, counts: [int]? = None) -> [_T] ! PyError
 fn shuffle(x: [PyObject]) -> None ! PyError
-fn choices(population: PyObject, weights: [PyObject]? = None, cum_weights: [PyObject]? = None, k: int = 1) -> [PyObject] ! PyError
+fn choices[_T](population: PyObject, weights: [PyObject]? = None, cum_weights: [PyObject]? = None, k: int = 1) -> [_T] ! PyError
 fn normalvariate(mu: f64 = 0.0, sigma: f64 = 1.0) -> f64 ! PyError
 fn lognormvariate(mu: f64, sigma: f64) -> f64 ! PyError
 fn expovariate(lambd: f64 = 1.0) -> f64 ! PyError
@@ -35,10 +35,10 @@ class Random:
     fn randrange(self, start: int, stop: int? = None, step: int = 1) -> int ! PyError
     fn randint(self, a: int, b: int) -> int ! PyError
     fn randbytes(self, n: int) -> bytes ! PyError
-    fn choice(self, seq: PyObject) -> PyObject ! PyError
-    fn choices(self, population: PyObject, weights: [PyObject]? = None, cum_weights: [PyObject]? = None, k: int = 1) -> [PyObject] ! PyError
+    fn choice[_T](self, seq: PyObject) -> _T ! PyError
+    fn choices[_T](self, population: PyObject, weights: [PyObject]? = None, cum_weights: [PyObject]? = None, k: int = 1) -> [_T] ! PyError
     fn shuffle(self, x: [PyObject]) -> None ! PyError
-    fn sample(self, population: [PyObject], k: int, counts: [int]? = None) -> [PyObject] ! PyError
+    fn sample[_T](self, population: [_T], k: int, counts: [int]? = None) -> [_T] ! PyError
     fn uniform(self, a: f64, b: f64) -> f64 ! PyError
     fn triangular(self, low: f64 = 0.0, high: f64 = 1.0, mode: f64? = None) -> f64 ! PyError
     fn binomialvariate(self, n: int = 1, p: f64 = 0.5) -> int ! PyError

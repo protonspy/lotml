@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 9514dcaa0d355b3bd7e0deba7a4c8315bc646197c3d24cea6a73d3c780b5c412
+checksum: 1964e0f85bb2ad11afcc331b5a011977bee4574cfbd9a5c1cec3caebaf2583bd
 ---
 
 # Python compatibility
@@ -90,7 +90,7 @@ the typed share each spec added.
   bound, and `uv.toml` and `.python-version` stay ignored; the owner accepts it before 2.4
 - [x] 3.1 (Unit) Write and build the spec python-classes, the coverage report run before and after
   _Depends 2.4_
-- [ ] 3.2 (Unit) Write and build the spec python-overloads, the coverage report run before and after
+- [x] 3.2 (Unit) Write and build the spec python-overloads, the coverage report run before and after
   _Depends 2.4_
 - [ ] 3.3 (Unit) Write and build the spec python-generics, the coverage report run before and after
   _Depends 3.1_

@@ -154,6 +154,8 @@ pub struct ImplDef {
 pub struct ClassDef {
     pub span: Span,
     pub name: Ident,
+    /// Its type parameters, `class Pattern[AnyStr]:` (adr:0036).
+    pub type_params: Vec<TypeParam>,
     pub bases: Vec<Ident>,
     pub attributes: Vec<Field>,
     pub methods: Vec<FnDef>,

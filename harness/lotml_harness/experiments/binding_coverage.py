@@ -205,13 +205,15 @@ def bound_names(compiler: Path, name: str, stub: Path | None) -> tuple[set[str],
     """The names `lotml bind` writes as functions of the interface of `name` from `stub`: those
     typed, and those with a `PyObject` among their types; and each class it writes, typed
     (specs/python-classes R4.1). An overloaded function is written once per overload, and is
-    typed when one of them is (specs/python-overloads R4.1)."""
+    typed when one of them is (specs/python-overloads R4.1). A generic one is named before its
+    type parameters (specs/python-generics R6.1)."""
     typed, reachable = set(), set()
     for line in interface(compiler, name, stub).splitlines():
         if line.startswith("fn "):
-            (reachable if "PyObject" in line else typed).add(line[3 : line.index("(")])
+            fn = line[3 : line.index("(")].split("[")[0]
+            (reachable if "PyObject" in line else typed).add(fn)
         elif line.startswith("class "):
-            typed.add(line[len("class ") :].split("(")[0].rstrip(":"))
+            typed.add(line[len("class ") :].split("(")[0].split("[")[0].rstrip(":"))
     return typed, reachable - typed
 
 

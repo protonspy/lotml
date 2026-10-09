@@ -25,6 +25,8 @@ pub struct Interface {
 /// A Python class an interface declares, its types written by their module (`py.datetime.date`).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PyClass {
+    /// Its type parameters (adr:0036).
+    pub params: Vec<String>,
     /// Its bases among the interface's classes, by their full names.
     pub bases: Vec<String>,
     pub attributes: BTreeMap<String, Ty>,
@@ -196,10 +198,13 @@ fn python_interface(module: &str, text: &str) -> (Interface, Vec<Diagnostic>) {
     let mut diagnostics: Vec<Diagnostic> = parsed.errors.iter().map(crate::syntax).collect();
     let mut program = Program::with_prelude();
     for item in &parsed.module.items {
-        if let Item::Class(c) = item
-            && program.py_classes.insert(c.name.name.clone(), format!("{module}.{}", c.name.name)).is_some()
-        {
+        let Item::Class(c) = item else { continue };
+        let qualified = format!("{module}.{}", c.name.name);
+        if program.py_classes.insert(c.name.name.clone(), qualified.clone()).is_some() {
             diagnostics.push(Diagnostic::error("E0210", c.name.span, format!("`{}` is declared twice", c.name.name)));
+        }
+        if !c.type_params.is_empty() {
+            program.py_params.insert(qualified, c.type_params.iter().map(|p| p.name.name.clone()).collect());
         }
     }
     let mut functions: BTreeMap<String, FnSig> = BTreeMap::new();
@@ -226,7 +231,7 @@ fn python_interface(module: &str, text: &str) -> (Interface, Vec<Diagnostic>) {
         if closed.contains(&f.name.name) {
             continue;
         }
-        let Some(sig) = python_signature(f, None, &mut program, &mut diagnostics) else {
+        let Some(sig) = python_signature(f, None, &[], &mut program, &mut diagnostics) else {
             closed.insert(f.name.name.clone());
             continue;
         };
@@ -247,11 +252,12 @@ fn python_interface(module: &str, text: &str) -> (Interface, Vec<Diagnostic>) {
 }
 
 /// The signature of `f`, a function of the interface or a member of a class whose type is
-/// `self_ty`, or `None` with the reason reported: it has a body, type parameters, or does not
-/// fail with `PyError`.
+/// `self_ty` and whose type parameters are `outer`, or `None` with the reason reported: it has a
+/// body, a bounded type parameter, or does not fail with `PyError`.
 fn python_signature(
     f: &lotml_syntax::ast::FnDef,
     self_ty: Option<&Ty>,
+    outer: &[String],
     program: &mut Program,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<FnSig> {
@@ -263,16 +269,28 @@ fn python_signature(
         ));
         return None;
     }
-    if !f.type_params.is_empty() {
+    if f.type_params.len() > TYPE_PARAMS {
         diagnostics.push(Diagnostic::error(
             "E0221",
             f.name.span,
-            format!("`{}` has type parameters, which a Python function's binding cannot check", f.name.name),
+            format!("`{}` has more than {TYPE_PARAMS} type parameters, which lotml does not infer", f.name.name),
+        ));
+        return None;
+    }
+    // A Python type variable's bound is Python's to check, at the call (adr:0036).
+    if let Some(bounded) = f.type_params.iter().find(|p| p.bound.is_some()) {
+        diagnostics.push(Diagnostic::error(
+            "E0221",
+            bounded.name.span,
+            format!(
+                "`{}` of `{}` has a bound, which a Python function's binding does not check",
+                bounded.name.name, f.name.name
+            ),
         ));
         return None;
     }
     let before = program.diagnostics.len();
-    let sig = program.signature(f, &[], self_ty);
+    let mut sig = program.signature(f, outer, self_ty);
     if program.diagnostics.len() > before {
         return None;
     }
@@ -287,14 +305,34 @@ fn python_signature(
         );
         return None;
     }
+    sig.python = true;
     Some(sig)
 }
 
 /// A class block read: its bases among the interface's classes, its attributes, its constructor
 /// (the function named after it), its methods (taking `self`) and its static methods.
 fn python_class(c: &ClassDef, program: &mut Program, diagnostics: &mut Vec<Diagnostic>) -> PyClass {
-    let own = Ty::Adt(program.py_classes[&c.name.name].clone(), vec![]);
-    let mut class = PyClass::default();
+    let mut params: Vec<String> = c.type_params.iter().map(|p| p.name.name.clone()).collect();
+    if params.len() > TYPE_PARAMS {
+        diagnostics.push(Diagnostic::error(
+            "E0221",
+            c.name.span,
+            format!("`{}` has more than {TYPE_PARAMS} type parameters, which lotml does not infer", c.name.name),
+        ));
+        params.truncate(TYPE_PARAMS);
+    }
+    let own = Ty::Adt(program.py_classes[&c.name.name].clone(), params.iter().cloned().map(Ty::Param).collect());
+    let mut class = PyClass { params: params.clone(), ..PyClass::default() };
+    if let Some(bounded) = c.type_params.iter().find(|p| p.bound.is_some()) {
+        diagnostics.push(Diagnostic::error(
+            "E0221",
+            bounded.name.span,
+            format!(
+                "`{}` of `{}` has a bound, which a Python class's binding does not check",
+                bounded.name.name, c.name.name
+            ),
+        ));
+    }
     for base in &c.bases {
         match program.py_classes.get(&base.name) {
             Some(qualified) => class.bases.push(qualified.clone()),
@@ -308,7 +346,7 @@ fn python_class(c: &ClassDef, program: &mut Program, diagnostics: &mut Vec<Diagn
     for attribute in &c.attributes {
         let Some(name) = &attribute.name else { continue };
         let before = program.diagnostics.len();
-        let ty = program.lower(&attribute.ty, &[]);
+        let ty = program.lower(&attribute.ty, &params);
         if program.diagnostics.len() == before && class.attributes.insert(name.name.clone(), ty).is_some() {
             diagnostics.push(Diagnostic::error("E0210", name.span, format!("`{}` is declared twice", name.name)));
         }
@@ -319,10 +357,17 @@ fn python_class(c: &ClassDef, program: &mut Program, diagnostics: &mut Vec<Diagn
             continue;
         }
         let has_self = m.params.first().is_some_and(|p| p.name.name == "self");
-        let Some(sig) = python_signature(m, has_self.then_some(&own), program, diagnostics) else {
+        let Some(mut sig) = python_signature(m, has_self.then_some(&own), &params, program, diagnostics) else {
             closed.insert(m.name.name.clone());
             continue;
         };
+        if !has_self {
+            // A constructor or static method infers the class's type arguments where it is
+            // called, as a generic function's are (adr:0036).
+            let mut own_params: Vec<(String, Option<String>)> = params.iter().map(|p| (p.clone(), None)).collect();
+            own_params.append(&mut sig.type_params);
+            sig.type_params = own_params;
+        }
         if m.name.name == c.name.name {
             if has_self || sig.ret != own {
                 diagnostics.push(Diagnostic::error(
@@ -358,12 +403,17 @@ fn python_class(c: &ClassDef, program: &mut Program, diagnostics: &mut Vec<Diagn
             }
             Some(first) => overload(&mut first.sig, sig, m.name.span, &mut closed, diagnostics),
             None => {
-                class.methods.insert(m.name.name.clone(), Method { sig, receiver, owner_params: Vec::new() });
+                let owner_params = if has_self { params.clone() } else { Vec::new() };
+                class.methods.insert(m.name.name.clone(), Method { sig, receiver, owner_params });
             }
         }
     }
     class
 }
+
+/// The most type parameters a Python function, member or class takes (adr:0036): as many as the
+/// binder writes, so a hostile interface cannot make each call infer thousands.
+pub const TYPE_PARAMS: usize = 16;
 
 /// The most overloads one name keeps (adr:0035), past the 43 of the largest set the binding
 /// coverage corpus declares, so a stub cannot make every call try thousands.
@@ -415,8 +465,16 @@ pub fn py_constructor<'a>(
     constructors: impl Fn(&str) -> Option<&'a FnSig>,
     bases: impl Fn(&str) -> Option<&'a [String]>,
 ) -> Option<FnSig> {
-    let found = py_lineage(class, bases).into_iter().find_map(|c| constructors(&c))?;
-    let mut sig = found.clone();
+    let (owner, found) = py_lineage(class, bases).into_iter().find_map(|c| Some((constructors(&c)?, c)))?;
+    if found == class {
+        return Some(owner.clone());
+    }
+    // A generic base's constructor is not inherited: which of its type arguments the subclass
+    // fixes is in a base the interface does not write (adr:0036).
+    if std::iter::once(owner).chain(&owner.overloads).any(|s| !s.type_params.is_empty()) {
+        return None;
+    }
+    let mut sig = owner.clone();
     let name = class.rsplit('.').next().unwrap_or(class);
     let mut overloads = std::mem::take(&mut sig.overloads);
     for each in std::iter::once(&mut sig).chain(&mut overloads) {

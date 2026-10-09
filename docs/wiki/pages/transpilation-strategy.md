@@ -215,8 +215,12 @@ Phase 2 built both directions of R14 and R27 on one checked boundary
   A class the stub defines is bound as a `class` block of the interface, its constructor, methods,
   static methods and attributes each `T ! PyError`, its value a handle to the Python object that
   only those members reach (specs/python-classes,
-  adr:0034-a-python-class-crosses-as-a-nominal-handle-with-its-declared-members); a generic class,
-  a protocol and a class's dunder methods are listed in a comment. A union other than `X | None`,
+  adr:0034-a-python-class-crosses-as-a-nominal-handle-with-its-declared-members); a protocol and a
+  class's dunder methods are listed in a comment. A type variable is a type parameter of what uses
+  it, inferred at the call, its bound left to Python; a constrained one (`AnyStr`) is an overload
+  per type; a generic class is a handle with type arguments, `Pattern[str]`, which Python erases,
+  so what is checked is each value read through it (specs/python-generics,
+  adr:0036-a-python-type-variable-crosses-as-a-type-parameter-checked-where-a-value-crosses). A union other than `X | None`,
   `Any`, a callable or a class the stub does not define is bound as `PyObject`, an opaque value a
   program passes back to Python or converts with `o.value()`, the boundary checking it
   (adr:0031-a-python-name-no-stub-types-crosses-as-an-opaque-python-value); an overloaded

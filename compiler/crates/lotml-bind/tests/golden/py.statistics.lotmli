@@ -5,18 +5,34 @@
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
 fn fmean(data: [f64], weights: [f64]? = None) -> f64 ! PyError
 fn geometric_mean(data: [f64]) -> f64 ! PyError
+fn mean(data: [f64]) -> f64 ! PyError
 fn mean(data: [PyObject]) -> PyObject ! PyError
+fn mean(data: [PyObject]) -> PyObject ! PyError
+fn harmonic_mean(data: [f64], weights: [PyObject]? = None) -> f64 ! PyError
 fn harmonic_mean(data: [PyObject], weights: [PyObject]? = None) -> PyObject ! PyError
+fn harmonic_mean(data: [PyObject], weights: [PyObject]? = None) -> PyObject ! PyError
+fn median(data: [f64]) -> f64 ! PyError
 fn median(data: [PyObject]) -> PyObject ! PyError
-fn median_low(data: [PyObject]) -> PyObject ! PyError
-fn median_high(data: [PyObject]) -> PyObject ! PyError
+fn median(data: [PyObject]) -> PyObject ! PyError
+fn median_low[SupportsRichComparisonT](data: [SupportsRichComparisonT]) -> SupportsRichComparisonT ! PyError
+fn median_high[SupportsRichComparisonT](data: [SupportsRichComparisonT]) -> SupportsRichComparisonT ! PyError
 fn median_grouped(data: [f64], interval: f64 = 1.0) -> f64 ! PyError
-fn mode(data: [PyObject]) -> PyObject ! PyError
-fn multimode(data: [PyObject]) -> [PyObject] ! PyError
+fn mode[_HashableT](data: [_HashableT]) -> _HashableT ! PyError
+fn multimode[_HashableT](data: [_HashableT]) -> [_HashableT] ! PyError
+fn pstdev(data: [f64], mu: f64? = None) -> f64 ! PyError
 fn pstdev(data: [PyObject], mu: PyObject? = None) -> PyObject ! PyError
+fn pstdev(data: [PyObject], mu: PyObject? = None) -> PyObject ! PyError
+fn pvariance(data: [f64], mu: f64? = None) -> f64 ! PyError
 fn pvariance(data: [PyObject], mu: PyObject? = None) -> PyObject ! PyError
+fn pvariance(data: [PyObject], mu: PyObject? = None) -> PyObject ! PyError
+fn quantiles(data: [f64], n: int = 4, method: PyObject = "exclusive") -> [f64] ! PyError
 fn quantiles(data: [PyObject], n: int = 4, method: PyObject = "exclusive") -> [PyObject] ! PyError
+fn quantiles(data: [PyObject], n: int = 4, method: PyObject = "exclusive") -> [PyObject] ! PyError
+fn stdev(data: [f64], xbar: f64? = None) -> f64 ! PyError
 fn stdev(data: [PyObject], xbar: PyObject? = None) -> PyObject ! PyError
+fn stdev(data: [PyObject], xbar: PyObject? = None) -> PyObject ! PyError
+fn variance(data: [f64], xbar: f64? = None) -> f64 ! PyError
+fn variance(data: [PyObject], xbar: PyObject? = None) -> PyObject ! PyError
 fn variance(data: [PyObject], xbar: PyObject? = None) -> PyObject ! PyError
 fn correlation(x: [PyObject], y: [PyObject], method: PyObject = "linear") -> f64 ! PyError
 fn covariance(x: [PyObject], y: [PyObject]) -> f64 ! PyError

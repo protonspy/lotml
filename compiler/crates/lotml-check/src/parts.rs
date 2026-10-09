@@ -145,15 +145,15 @@ pub struct PartChecked {
     pub types: Vec<(Span, Ty)>,
     /// Each name that resolved to a local, with the span of its declaration.
     pub locals: Vec<(Span, Span)>,
-    /// The overload each overloaded Python call was given, by the call's span (adr:0035).
-    pub overloads: Vec<(Span, usize)>,
+    /// Each call into Python as it was typed, by the call's span (adr:0035, adr:0036).
+    pub calls: Vec<(Span, crate::PyCall)>,
 }
 
 impl PartChecked {
     fn of(mut body: Body) -> PartChecked {
         let types = body.types();
-        let overloads = body.overloads().to_vec();
-        PartChecked { types, locals: body.locals().to_vec(), overloads, diagnostics: body.diagnostics }
+        let calls = body.calls();
+        PartChecked { types, locals: body.locals().to_vec(), calls, diagnostics: body.diagnostics }
     }
 }
 
@@ -201,6 +201,7 @@ fn quiet_signature(program: &Program, f: &FnDef, outer: &[String], self_ty: Opti
         types: program.types.clone(),
         traits: program.traits.clone(),
         py_classes: program.py_classes.clone(),
+        py_params: program.py_params.clone(),
         ..Program::default()
     };
     scratch.signature(f, outer, self_ty)
@@ -271,7 +272,7 @@ impl Assembly {
         if self.keep {
             checked.locals.extend(part.locals.iter().map(|(name, local)| (name.shifted(0, at), local.shifted(0, at))));
         }
-        checked.py_overloads.extend(part.overloads.iter().map(|(call, chosen)| (call.shifted(0, at), *chosen)));
+        checked.py_calls.extend(part.calls.iter().map(|(call, typed)| (call.shifted(0, at), typed.clone())));
         checked.diagnostics.extend(part.diagnostics.iter().map(|d| {
             let mut d = d.clone();
             d.shift(0, at);

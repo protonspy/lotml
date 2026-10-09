@@ -3,25 +3,126 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
-fn tee(iterable: [PyObject], n: int = 2) -> PyObject ! PyError
+fn tee[_T](iterable: [_T], n: int = 2) -> PyObject ! PyError
+
+class count[_N]:
+    fn count() -> count[_N] ! PyError
+    fn count(start: _N, step: PyObject = 1) -> count[_N] ! PyError
+    fn count(step: _N) -> count[_N] ! PyError
+
+class cycle[_T]:
+    fn cycle(iterable: [_T]) -> cycle[_T] ! PyError
+
+class repeat[_T]:
+    fn repeat(object: _T) -> repeat[_T] ! PyError
+    fn repeat(object: _T, times: int) -> repeat[_T] ! PyError
+
+class accumulate[_T]:
+    fn accumulate(iterable: [_T], func: None = None, initial: _T? = None) -> accumulate[_T] ! PyError
+    fn accumulate[_S](iterable: [_S], func: PyObject, initial: _T? = None) -> accumulate[_T] ! PyError
+
+class chain[_T]:
+    fn chain() -> chain[_T] ! PyError
+    fn from_iterable[_S](iterable: [[_S]]) -> chain[_S] ! PyError
+
+class compress[_T]:
+    fn compress(data: [_T], selectors: [PyObject]) -> compress[_T] ! PyError
+
+class dropwhile[_T]:
+    fn dropwhile(predicate: PyObject, iterable: [_T]) -> dropwhile[_T] ! PyError
+
+class filterfalse[_T]:
+    fn filterfalse(function: PyObject?, iterable: [_T]) -> filterfalse[_T] ! PyError
+
+class groupby[_T_co, _S_co]:
+    fn groupby[_T1](iterable: [_T1], key: None = None) -> groupby[_T_co, _S_co] ! PyError
+    fn groupby[_T1](iterable: [_T1], key: PyObject) -> groupby[_T_co, _S_co] ! PyError
+
+class islice[_T]:
+    fn islice(iterable: [_T], stop: int?) -> islice[_T] ! PyError
+    fn islice(iterable: [_T], start: int?, stop: int?, step: int? = 1) -> islice[_T] ! PyError
+
+class starmap[_T_co]:
+    fn starmap(function: PyObject, iterable: [[PyObject]]) -> starmap[_T_co] ! PyError
+
+class takewhile[_T]:
+    fn takewhile(predicate: PyObject, iterable: [_T]) -> takewhile[_T] ! PyError
+
+class zip_longest[_T_co]:
+    fn zip_longest[_T1](iter1: [_T1], fillvalue: PyObject = None) -> zip_longest[_T_co] ! PyError
+    fn zip_longest[_T1, _T2](iter1: [_T1], iter2: [_T2]) -> zip_longest[_T_co] ! PyError
+    fn zip_longest[_T1, _T2, _T](iter1: [_T1], iter2: [_T2], fillvalue: _T) -> zip_longest[_T_co] ! PyError
+    fn zip_longest[_T1, _T2, _T3](iter1: [_T1], iter2: [_T2], iter3: [_T3]) -> zip_longest[_T_co] ! PyError
+    fn zip_longest[_T1, _T2, _T3, _T](iter1: [_T1], iter2: [_T2], iter3: [_T3], fillvalue: _T) -> zip_longest[_T_co] ! PyError
+    fn zip_longest[_T1, _T2, _T3, _T4](iter1: [_T1], iter2: [_T2], iter3: [_T3], iter4: [_T4]) -> zip_longest[_T_co] ! PyError
+    fn zip_longest[_T1, _T2, _T3, _T4, _T](iter1: [_T1], iter2: [_T2], iter3: [_T3], iter4: [_T4], fillvalue: _T) -> zip_longest[_T_co] ! PyError
+    fn zip_longest[_T1, _T2, _T3, _T4, _T5](iter1: [_T1], iter2: [_T2], iter3: [_T3], iter4: [_T4], iter5: [_T5]) -> zip_longest[_T_co] ! PyError
+    fn zip_longest[_T1, _T2, _T3, _T4, _T5, _T](iter1: [_T1], iter2: [_T2], iter3: [_T3], iter4: [_T4], iter5: [_T5], fillvalue: _T) -> zip_longest[_T_co] ! PyError
+    fn zip_longest[_T](iter1: [_T], iter2: [_T], iter3: [_T], iter4: [_T], iter5: [_T], iter6: [_T]) -> zip_longest[_T_co] ! PyError
+    fn zip_longest[_T](iter1: [_T], iter2: [_T], iter3: [_T], iter4: [_T], iter5: [_T], iter6: [_T], fillvalue: _T) -> zip_longest[_T_co] ! PyError
+
+class product[_T_co]:
+    fn product[_T1](iter1: [_T1]) -> product[_T_co] ! PyError
+    fn product[_T1, _T2](iter1: [_T1], iter2: [_T2]) -> product[_T_co] ! PyError
+    fn product[_T1, _T2, _T3](iter1: [_T1], iter2: [_T2], iter3: [_T3]) -> product[_T_co] ! PyError
+    fn product[_T1, _T2, _T3, _T4](iter1: [_T1], iter2: [_T2], iter3: [_T3], iter4: [_T4]) -> product[_T_co] ! PyError
+    fn product[_T1, _T2, _T3, _T4, _T5](iter1: [_T1], iter2: [_T2], iter3: [_T3], iter4: [_T4], iter5: [_T5]) -> product[_T_co] ! PyError
+    fn product[_T1, _T2, _T3, _T4, _T5, _T6](iter1: [_T1], iter2: [_T2], iter3: [_T3], iter4: [_T4], iter5: [_T5], iter6: [_T6]) -> product[_T_co] ! PyError
+    fn product[_T1, _T2, _T3, _T4, _T5, _T6, _T7](iter1: [_T1], iter2: [_T2], iter3: [_T3], iter4: [_T4], iter5: [_T5], iter6: [_T6], iter7: [_T7]) -> product[_T_co] ! PyError
+    fn product[_T1, _T2, _T3, _T4, _T5, _T6, _T7, _T8](iter1: [_T1], iter2: [_T2], iter3: [_T3], iter4: [_T4], iter5: [_T5], iter6: [_T6], iter7: [_T7], iter8: [_T8]) -> product[_T_co] ! PyError
+    fn product[_T1, _T2, _T3, _T4, _T5, _T6, _T7, _T8, _T9](iter1: [_T1], iter2: [_T2], iter3: [_T3], iter4: [_T4], iter5: [_T5], iter6: [_T6], iter7: [_T7], iter8: [_T8], iter9: [_T9]) -> product[_T_co] ! PyError
+    fn product[_T1, _T2, _T3, _T4, _T5, _T6, _T7, _T8, _T9, _T10](iter1: [_T1], iter2: [_T2], iter3: [_T3], iter4: [_T4], iter5: [_T5], iter6: [_T6], iter7: [_T7], iter8: [_T8], iter9: [_T9], iter10: [_T10]) -> product[_T_co] ! PyError
+    fn product(repeat: int = 1) -> product[_T_co] ! PyError
+
+class permutations[_T_co]:
+    fn permutations[_T](iterable: [_T], r: PyObject) -> permutations[_T_co] ! PyError
+    fn permutations[_T](iterable: [_T], r: int? = None) -> permutations[_T_co] ! PyError
+
+class combinations[_T_co]:
+    fn combinations[_T](iterable: [_T], r: PyObject) -> combinations[_T_co] ! PyError
+    fn combinations[_T](iterable: [_T], r: int) -> combinations[_T_co] ! PyError
+
+class combinations_with_replacement[_T_co]:
+    fn combinations_with_replacement[_T](iterable: [_T], r: PyObject) -> combinations_with_replacement[_T_co] ! PyError
+    fn combinations_with_replacement[_T](iterable: [_T], r: int) -> combinations_with_replacement[_T_co] ! PyError
+
+class pairwise[_T_co]:
+    fn pairwise[_T](iterable: [_T]) -> pairwise[_T_co] ! PyError
+
+class batched[_T_co]:
+    fn batched[_T](iterable: [_T], n: PyObject, strict: PyObject) -> batched[_T_co] ! PyError
+    fn batched[_T](iterable: [_T], n: int, strict: bool = False) -> batched[_T_co] ! PyError
 
 # Not bound:
-#   count: it is generic, which specs/python-generics/ binds
-#   cycle: it is generic, which specs/python-generics/ binds
-#   repeat: it is generic, which specs/python-generics/ binds
-#   accumulate: it is generic, which specs/python-generics/ binds
-#   chain: it is generic, which specs/python-generics/ binds
-#   compress: it is generic, which specs/python-generics/ binds
-#   dropwhile: it is generic, which specs/python-generics/ binds
-#   filterfalse: it is generic, which specs/python-generics/ binds
-#   groupby: it is generic, which specs/python-generics/ binds
-#   islice: it is generic, which specs/python-generics/ binds
-#   starmap: it is generic, which specs/python-generics/ binds
-#   takewhile: it is generic, which specs/python-generics/ binds
-#   zip_longest: it is generic, which specs/python-generics/ binds
-#   product: it is generic, which specs/python-generics/ binds
-#   permutations: it is generic, which specs/python-generics/ binds
-#   combinations: it is generic, which specs/python-generics/ binds
-#   combinations_with_replacement: it is generic, which specs/python-generics/ binds
-#   pairwise: it is generic, which specs/python-generics/ binds
-#   batched: it is generic, which specs/python-generics/ binds
+#   count.__next__, __iter__: dunder methods, which operators would call
+#   cycle.__next__, __iter__: dunder methods, which operators would call
+#   repeat.__next__, __iter__, __length_hint__: dunder methods, which operators would call
+#   accumulate.__iter__, __next__: dunder methods, which operators would call
+#   chain.__next__, __iter__, __class_getitem__: dunder methods, which operators would call
+#   compress.__iter__, __next__: dunder methods, which operators would call
+#   dropwhile.__iter__, __next__: dunder methods, which operators would call
+#   filterfalse.__iter__, __next__: dunder methods, which operators would call
+#   groupby.__iter__, __next__: dunder methods, which operators would call
+#   islice.__iter__, __next__: dunder methods, which operators would call
+#   starmap.__iter__, __next__: dunder methods, which operators would call
+#   takewhile.__iter__, __next__: dunder methods, which operators would call
+#   zip_longest.__iter__, __next__: dunder methods, which operators would call
+#   product.__iter__, __next__: dunder methods, which operators would call
+#   permutations.__new__: overload 2 of 5: an earlier one takes the same parameters, so no call is given it
+#   permutations.__new__: overload 3 of 5: an earlier one takes the same parameters, so no call is given it
+#   permutations.__new__: overload 4 of 5: an earlier one takes the same parameters, so no call is given it
+#   permutations.__iter__, __next__: dunder methods, which operators would call
+#   combinations.__new__: overload 2 of 5: an earlier one takes the same parameters, so no call is given it
+#   combinations.__new__: overload 3 of 5: an earlier one takes the same parameters, so no call is given it
+#   combinations.__new__: overload 4 of 5: an earlier one takes the same parameters, so no call is given it
+#   combinations.__iter__, __next__: dunder methods, which operators would call
+#   combinations_with_replacement.__new__: overload 2 of 5: an earlier one takes the same parameters, so no call is given it
+#   combinations_with_replacement.__new__: overload 3 of 5: an earlier one takes the same parameters, so no call is given it
+#   combinations_with_replacement.__new__: overload 4 of 5: an earlier one takes the same parameters, so no call is given it
+#   combinations_with_replacement.__iter__, __next__: dunder methods, which operators would call
+#   pairwise.__iter__, __next__: dunder methods, which operators would call
+#   batched.__new__: overload 2 of 6: an earlier one takes the same parameters, so no call is given it
+#   batched.__new__: overload 3 of 6: an earlier one takes the same parameters, so no call is given it
+#   batched.__new__: overload 4 of 6: an earlier one takes the same parameters, so no call is given it
+#   batched.__new__: overload 5 of 6: an earlier one takes the same parameters, so no call is given it
+#   batched.__iter__, __next__: dunder methods, which operators would call

@@ -3,7 +3,7 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
-fn reduce(function: PyObject, iterable: [PyObject], initial: PyObject) -> PyObject ! PyError
+fn reduce[_S, _T](function: PyObject, iterable: [_S], initial: _T) -> _T ! PyError
 fn lru_cache(maxsize: int? = 128, typed: bool = False) -> PyObject ! PyError
 fn lru_cache(maxsize: PyObject, typed: bool = False) -> PyObject ! PyError
 fn update_wrapper(wrapper: PyObject, wrapped: PyObject, assigned: [str] = todo(), updated: [str] = todo()) -> PyObject ! PyError
@@ -13,8 +13,36 @@ fn cmp_to_key(mycmp: PyObject) -> PyObject ! PyError
 fn singledispatch(func: PyObject) -> PyObject ! PyError
 fn cache(user_function: PyObject) -> PyObject ! PyError
 
+class partial[_T]:
+    fn partial(func: PyObject) -> partial[_T] ! PyError
+    func: PyObject
+    args: PyObject
+    keywords: {str: PyObject}
+
+class partialmethod[_T]:
+    fn partialmethod(func: PyObject) -> partialmethod[_T] ! PyError
+    func: PyObject
+    args: PyObject
+    keywords: {str: PyObject}
+    __isabstractmethod__: bool
+
+class singledispatchmethod[_T]:
+    fn singledispatchmethod(func: PyObject) -> singledispatchmethod[_T] ! PyError
+    dispatcher: PyObject
+    func: PyObject
+    __isabstractmethod__: bool
+    fn register(self, cls: PyObject, method: None = None) -> PyObject ! PyError
+    fn register(self, cls: PyObject, method: PyObject) -> PyObject ! PyError
+
+class cached_property[_T_co]:
+    fn cached_property(func: PyObject) -> cached_property[_T_co] ! PyError
+    func: PyObject
+    attrname: str?
+
 # Not bound:
-#   partial: it is generic, which specs/python-generics/ binds
-#   partialmethod: it is generic, which specs/python-generics/ binds
-#   singledispatchmethod: it is generic, which specs/python-generics/ binds
-#   cached_property: it is generic, which specs/python-generics/ binds
+#   partial.__call__, __get__, __class_getitem__: dunder methods, which operators would call
+#   partialmethod.__init__: overload 2 of 2: an earlier one takes the same parameters, so no call is given it
+#   partialmethod.__get__, __class_getitem__: dunder methods, which operators would call
+#   singledispatchmethod.register: overload 2 of 3: an earlier one takes the same parameters, so no call is given it
+#   singledispatchmethod.__get__: dunder methods, which operators would call
+#   cached_property.__get__, __set_name__, __set__, __class_getitem__: dunder methods, which operators would call

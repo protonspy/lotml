@@ -118,6 +118,7 @@ impl Walk<'_> {
             Item::Class(c) => self.within("class", c.span, parent, after, |w, s| {
                 let mut at = s.start;
                 w.ident(&c.name, s, &mut at);
+                w.type_params(&c.type_params, s, &mut at);
                 for base in &c.bases {
                     w.ident(base, s, &mut at);
                 }

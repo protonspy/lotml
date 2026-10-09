@@ -229,10 +229,11 @@ pub const ALL: &[Code] = &[
         code: "E0221",
         title: "not allowed in an interface",
         explanation: "An interface (`bindings/py.<module>.lotmli`) declares the functions of a Python module, as \
-        `lotml bind` wrote them: one signature per line, no body, no type parameters, over the types every \
+        `lotml bind` wrote them: one signature per line, no body, over the types every \
         program has, each returning `T ! PyError` because any call into Python can fail:\n\n    \
         fn dedent(text: str) -> str ! PyError\n\nA function written again is its next overload, at most 64 \
-        of them, each taking `self` if the first does. Regenerate the file with `lotml bind <module> --stub <file.pyi>` \
+        of them, each taking `self` if the first does. A function or class may take type parameters, \
+        `fn first[T](xs: [T]) -> T ! PyError`, and none has a bound: Python checks its own. Regenerate the file with `lotml bind <module> --stub <file.pyi>` \
         rather than editing it.",
     },
     Code {

@@ -4,16 +4,17 @@
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
 fn copyfileobj(fsrc: PyObject, fdst: PyObject, length: int = 0) -> None ! PyError
-fn copyfile(src: str, dst: PyObject, follow_symlinks: bool = True) -> PyObject ! PyError
+fn copyfileobj(fsrc: PyObject, fdst: PyObject, length: int = 0) -> None ! PyError
+fn copyfile[_StrOrBytesPathT](src: str, dst: _StrOrBytesPathT, follow_symlinks: bool = True) -> _StrOrBytesPathT ! PyError
 fn copymode(src: str, dst: str, follow_symlinks: bool = True) -> None ! PyError
 fn copystat(src: str, dst: str, follow_symlinks: bool = True) -> None ! PyError
-fn copy(src: str, dst: PyObject, follow_symlinks: bool = True) -> PyObject ! PyError
-fn copy(src: PyObject, dst: PyObject, follow_symlinks: bool = True) -> PyObject ! PyError
-fn copy2(src: str, dst: PyObject, follow_symlinks: bool = True) -> PyObject ! PyError
-fn copy2(src: PyObject, dst: PyObject, follow_symlinks: bool = True) -> PyObject ! PyError
+fn copy[_StrPathT](src: str, dst: _StrPathT, follow_symlinks: bool = True) -> PyObject ! PyError
+fn copy[_BytesPathT](src: PyObject, dst: _BytesPathT, follow_symlinks: bool = True) -> PyObject ! PyError
+fn copy2[_StrPathT](src: str, dst: _StrPathT, follow_symlinks: bool = True) -> PyObject ! PyError
+fn copy2[_BytesPathT](src: PyObject, dst: _BytesPathT, follow_symlinks: bool = True) -> PyObject ! PyError
 fn ignore_patterns() -> PyObject ! PyError
-fn copytree(src: str, dst: PyObject, symlinks: bool = False, ignore: PyObject? = None, copy_function: PyObject = todo(), ignore_dangling_symlinks: bool = False, dirs_exist_ok: bool = False) -> PyObject ! PyError
-fn move(src: str, dst: PyObject, copy_function: PyObject = todo()) -> PyObject ! PyError
+fn copytree[_StrPathT](src: str, dst: _StrPathT, symlinks: bool = False, ignore: PyObject? = None, copy_function: PyObject = todo(), ignore_dangling_symlinks: bool = False, dirs_exist_ok: bool = False) -> _StrPathT ! PyError
+fn move[_StrPathT](src: str, dst: _StrPathT, copy_function: PyObject = todo()) -> PyObject ! PyError
 fn disk_usage(path: PyObject) -> PyObject ! PyError
 fn chown(path: PyObject, user: PyObject, group: None = None, dir_fd: int? = None, follow_symlinks: bool = True) -> None ! PyError
 fn chown(path: PyObject, user: None = None, group: PyObject, dir_fd: int? = None, follow_symlinks: bool = True) -> None ! PyError

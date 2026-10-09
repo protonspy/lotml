@@ -3,8 +3,9 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
-fn get_close_matches(word: PyObject, possibilities: [PyObject], n: int = 3, cutoff: f64 = 0.6) -> [PyObject] ! PyError
-fn get_close_matches(word: [PyObject], possibilities: [[PyObject]], n: int = 3, cutoff: f64 = 0.6) -> [PyObject] ! PyError
+fn get_close_matches(word: str, possibilities: [str], n: int = 3, cutoff: f64 = 0.6) -> [str] ! PyError
+fn get_close_matches(word: bytes, possibilities: [bytes], n: int = 3, cutoff: f64 = 0.6) -> [bytes] ! PyError
+fn get_close_matches[_T](word: [_T], possibilities: [[_T]], n: int = 3, cutoff: f64 = 0.6) -> [PyObject] ! PyError
 fn IS_LINE_JUNK(line: str, pat: PyObject? = None) -> bool ! PyError
 fn IS_CHARACTER_JUNK(ch: str, ws: str = " \x09") -> bool ! PyError
 fn unified_diff(a: [str], b: [str], fromfile: str = "", tofile: str = "", fromfiledate: str = "", tofiledate: str = "", n: int = 3, lineterm: str = "\n", color: bool = False) -> PyObject ! PyError
@@ -18,6 +19,21 @@ class Match:
     b: int
     size: int
 
+class SequenceMatcher[_T]:
+    fn SequenceMatcher(isjunk: PyObject?, a: [_T], b: [_T], autojunk: bool = True) -> SequenceMatcher[_T] ! PyError
+    fn SequenceMatcher(a: [_T], b: [_T], autojunk: bool = True) -> SequenceMatcher[_T] ! PyError
+    fn SequenceMatcher(isjunk: PyObject? = None, a: [str] = "", b: [str] = "", autojunk: bool = True) -> SequenceMatcher[_T] ! PyError
+    fn set_seqs(self, a: [_T], b: [_T]) -> None ! PyError
+    fn set_seq1(self, a: [_T]) -> None ! PyError
+    fn set_seq2(self, b: [_T]) -> None ! PyError
+    fn find_longest_match(self, alo: int = 0, ahi: int? = None, blo: int = 0, bhi: int? = None) -> Match ! PyError
+    fn get_matching_blocks(self) -> [Match] ! PyError
+    fn get_opcodes(self) -> [(PyObject, int, int, int, int)] ! PyError
+    fn get_grouped_opcodes(self, n: int = 3) -> PyObject ! PyError
+    fn ratio(self) -> f64 ! PyError
+    fn quick_ratio(self) -> f64 ! PyError
+    fn real_quick_ratio(self) -> f64 ! PyError
+
 class Differ:
     fn Differ(linejunk: PyObject? = None, charjunk: PyObject? = None) -> Differ ! PyError
     fn compare(self, a: [str], b: [str]) -> PyObject ! PyError
@@ -28,4 +44,4 @@ class HtmlDiff:
     fn make_table(self, fromlines: [str], tolines: [str], fromdesc: str = "", todesc: str = "", context: bool = False, numlines: int = 5) -> str ! PyError
 
 # Not bound:
-#   SequenceMatcher: it is generic, which specs/python-generics/ binds
+#   SequenceMatcher.__class_getitem__: dunder methods, which operators would call

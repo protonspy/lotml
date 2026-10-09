@@ -108,10 +108,11 @@ fn chosen(body: &str, call: &str) -> usize {
     assert!(found.is_empty(), "{source}\n{found:?}");
     let start = source.find(call).unwrap() as u32;
     let at = lotml_syntax::span::Span { start, end: start + call.len() as u32 };
-    *checked
-        .py_overloads
+    checked
+        .py_calls
         .get(&at)
-        .unwrap_or_else(|| panic!("no overload recorded at `{call}`: {:?}", checked.py_overloads))
+        .unwrap_or_else(|| panic!("no call recorded at `{call}`: {:?}", checked.py_calls.keys()))
+        .overload
 }
 
 fn refused(body: &str) -> Vec<String> {

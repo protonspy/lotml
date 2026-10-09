@@ -615,6 +615,7 @@ impl<'a> Parser<'a> {
         let start = self.span();
         self.bump(); // class
         let name = self.name("the class's name");
+        let type_params = self.type_params();
         let mut bases = Vec::new();
         if self.eat(T::LParen) {
             while !matches!(self.peek(), T::RParen | T::Newline | T::Eof) {
@@ -630,7 +631,7 @@ impl<'a> Parser<'a> {
         // `class C` alone: a class with no member the interface declares.
         if !self.at(T::Colon) {
             self.end_of_line("after the class");
-            return ClassDef { span: self.since(start), name, bases, attributes, methods };
+            return ClassDef { span: self.since(start), name, type_params, bases, attributes, methods };
         }
         if self.expect(T::Colon, "after the class's name")
             && self.expect(T::Newline, "after `class …:`")
@@ -660,7 +661,7 @@ impl<'a> Parser<'a> {
             }
             self.eat(T::Dedent);
         }
-        ClassDef { span: self.since(start), name, bases, attributes, methods }
+        ClassDef { span: self.since(start), name, type_params, bases, attributes, methods }
     }
 
     fn trait_def(&mut self) -> TraitDef {
