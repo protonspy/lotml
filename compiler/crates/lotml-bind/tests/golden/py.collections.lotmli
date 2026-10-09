@@ -4,3 +4,63 @@
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
 fn namedtuple(typename: str, field_names: PyObject, rename: bool = False, module: str? = None, defaults: [PyObject]? = None) -> PyObject ! PyError
+
+class UserString:
+    fn UserString(seq: PyObject) -> UserString ! PyError
+    data: str
+    fn capitalize(self) -> UserString ! PyError
+    fn casefold(self) -> UserString ! PyError
+    fn center(self, width: int) -> UserString ! PyError
+    fn count(self, sub: PyObject, start: int = 0, end: int = todo()) -> int ! PyError
+    fn encode(self, encoding: str? = "utf-8", errors: str? = "strict") -> bytes ! PyError
+    fn endswith(self, suffix: PyObject, start: int? = 0, end: int? = todo()) -> bool ! PyError
+    fn expandtabs(self, tabsize: int = 8) -> UserString ! PyError
+    fn find(self, sub: PyObject, start: int = 0, end: int = todo()) -> int ! PyError
+    fn format(self) -> str ! PyError
+    fn format_map(self, mapping: {str: PyObject}) -> str ! PyError
+    fn index(self, sub: str, start: int = 0, end: int = todo()) -> int ! PyError
+    fn isalpha(self) -> bool ! PyError
+    fn isalnum(self) -> bool ! PyError
+    fn isdecimal(self) -> bool ! PyError
+    fn isdigit(self) -> bool ! PyError
+    fn isidentifier(self) -> bool ! PyError
+    fn islower(self) -> bool ! PyError
+    fn isnumeric(self) -> bool ! PyError
+    fn isprintable(self) -> bool ! PyError
+    fn isspace(self) -> bool ! PyError
+    fn istitle(self) -> bool ! PyError
+    fn isupper(self) -> bool ! PyError
+    fn isascii(self) -> bool ! PyError
+    fn join(self, seq: [str]) -> str ! PyError
+    fn ljust(self, width: int) -> UserString ! PyError
+    fn lower(self) -> UserString ! PyError
+    fn lstrip(self, chars: str? = None) -> UserString ! PyError
+    fn partition(self, sep: str) -> (str, str, str) ! PyError
+    fn removeprefix(self, prefix: PyObject) -> UserString ! PyError
+    fn removesuffix(self, suffix: PyObject) -> UserString ! PyError
+    fn replace(self, old: PyObject, new: PyObject, maxsplit: int = todo()) -> UserString ! PyError
+    fn rfind(self, sub: PyObject, start: int = 0, end: int = todo()) -> int ! PyError
+    fn rindex(self, sub: PyObject, start: int = 0, end: int = todo()) -> int ! PyError
+    fn rjust(self, width: int) -> UserString ! PyError
+    fn rpartition(self, sep: str) -> (str, str, str) ! PyError
+    fn rstrip(self, chars: str? = None) -> UserString ! PyError
+    fn split(self, sep: str? = None, maxsplit: int = todo()) -> [str] ! PyError
+    fn rsplit(self, sep: str? = None, maxsplit: int = todo()) -> [str] ! PyError
+    fn splitlines(self, keepends: bool = False) -> [str] ! PyError
+    fn startswith(self, prefix: PyObject, start: int? = 0, end: int? = todo()) -> bool ! PyError
+    fn strip(self, chars: str? = None) -> UserString ! PyError
+    fn swapcase(self) -> UserString ! PyError
+    fn title(self) -> UserString ! PyError
+    fn translate(self) -> UserString ! PyError
+    fn upper(self) -> UserString ! PyError
+    fn zfill(self, width: int) -> UserString ! PyError
+
+# Not bound:
+#   UserDict: it is generic, which specs/python-generics/ binds
+#   UserList: it is generic, which specs/python-generics/ binds
+#   deque: it is generic, which specs/python-generics/ binds
+#   Counter: it is generic, which specs/python-generics/ binds
+#   OrderedDict: it is generic, which specs/python-generics/ binds
+#   defaultdict: it is generic, which specs/python-generics/ binds
+#   ChainMap: it is generic, which specs/python-generics/ binds
+#   UserString.__int__, __float__, __complex__, __getnewargs__, __lt__, __le__, __gt__, __ge__, __eq__, __hash__, __contains__, __len__, __getitem__, __iter__, __reversed__, __add__, __radd__, __mul__, __rmul__, __mod__, __rmod__: dunder methods, which operators would call

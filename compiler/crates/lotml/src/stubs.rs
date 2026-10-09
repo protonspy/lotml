@@ -97,12 +97,16 @@ fn generate(
 }
 
 /// The name a stub's interface is kept under: the SHA-256 of the stub and of where it was read,
-/// which the interface's first line names, and lotml's version, whose binder wrote it.
+/// which the interface's first line names, lotml's version, and the binder that wrote it, by a
+/// hash of its source, so a changed binder never reads what an earlier one kept.
 fn key(stub: &Stub) -> String {
+    static BINDER: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    let binder =
+        BINDER.get_or_init(|| lotml_llvm::sha256::hex_of(lotml_bind::binder::SOURCE.as_bytes())[..16].to_string());
     let mut bytes = stub.text.as_bytes().to_vec();
     bytes.push(0);
     bytes.extend_from_slice(stub.said.as_bytes());
-    format!("{}-{}", lotml_llvm::sha256::hex_of(&bytes), env!("CARGO_PKG_VERSION"))
+    format!("{}-{}-{binder}", lotml_llvm::sha256::hex_of(&bytes), env!("CARGO_PKG_VERSION"))
 }
 
 /// `text` written to `entry` whole: to a name of its own first, then renamed, so a reader never
@@ -327,7 +331,9 @@ mod tests {
         let kept: Vec<PathBuf> = std::fs::read_dir(&cache).unwrap().flatten().map(|e| e.path()).collect();
         assert_eq!(kept.len(), 1, "one entry, no partial file left: {kept:?}");
         let name = kept[0].file_name().unwrap().to_string_lossy().into_owned();
-        assert!(name.ends_with(&format!("-{}.lotmli", env!("CARGO_PKG_VERSION"))), "{name}");
+        assert!(name.contains(&format!("-{}-", env!("CARGO_PKG_VERSION"))) && name.ends_with(".lotmli"), "{name}");
+        let binder = &lotml_llvm::sha256::hex_of(lotml_bind::binder::SOURCE.as_bytes())[..16];
+        assert!(name.ends_with(&format!("-{binder}.lotmli")), "keyed by the binder that wrote it: {name}");
         assert_eq!(std::fs::read_to_string(&kept[0]).unwrap(), first);
         std::fs::write(&kept[0], "# read from the cache\n").unwrap();
         assert_eq!(interface_in("textwrap", None, Some(&cache)).unwrap(), "# read from the cache\n");

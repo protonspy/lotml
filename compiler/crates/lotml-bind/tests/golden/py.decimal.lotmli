@@ -3,3 +3,178 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
+
+class DecimalTuple:
+    sign: int
+    digits: PyObject
+    exponent: PyObject
+
+class DecimalException
+
+class Clamped(DecimalException)
+
+class InvalidOperation(DecimalException)
+
+class ConversionSyntax(InvalidOperation)
+
+class DivisionByZero(DecimalException)
+
+class DivisionImpossible(InvalidOperation)
+
+class DivisionUndefined(InvalidOperation)
+
+class Inexact(DecimalException)
+
+class InvalidContext(InvalidOperation)
+
+class Rounded(DecimalException)
+
+class Subnormal(DecimalException)
+
+class Overflow(Inexact, Rounded)
+
+class Underflow(Inexact, Rounded, Subnormal)
+
+class FloatOperation(DecimalException)
+
+class Decimal:
+    fn Decimal(value: PyObject = "0", context: Context? = None) -> Decimal ! PyError
+    fn from_number(number: PyObject) -> Decimal ! PyError
+    fn from_float(f: f64) -> Decimal ! PyError
+    fn compare(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn as_tuple(self) -> DecimalTuple ! PyError
+    fn as_integer_ratio(self) -> (int, int) ! PyError
+    fn to_eng_string(self, context: Context? = None) -> str ! PyError
+    fn remainder_near(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    real: Decimal
+    imag: Decimal
+    fn conjugate(self) -> Decimal ! PyError
+    fn fma(self, other: PyObject, third: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn normalize(self, context: Context? = None) -> Decimal ! PyError
+    fn quantize(self, exp: PyObject, rounding: str? = None, context: Context? = None) -> Decimal ! PyError
+    fn same_quantum(self, other: PyObject, context: Context? = None) -> bool ! PyError
+    fn to_integral_exact(self, rounding: str? = None, context: Context? = None) -> Decimal ! PyError
+    fn to_integral_value(self, rounding: str? = None, context: Context? = None) -> Decimal ! PyError
+    fn to_integral(self, rounding: str? = None, context: Context? = None) -> Decimal ! PyError
+    fn sqrt(self, context: Context? = None) -> Decimal ! PyError
+    fn max(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn min(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn adjusted(self) -> int ! PyError
+    fn canonical(self) -> Decimal ! PyError
+    fn compare_signal(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn compare_total(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn compare_total_mag(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn copy_abs(self) -> Decimal ! PyError
+    fn copy_negate(self) -> Decimal ! PyError
+    fn copy_sign(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn exp(self, context: Context? = None) -> Decimal ! PyError
+    fn is_canonical(self) -> bool ! PyError
+    fn is_finite(self) -> bool ! PyError
+    fn is_infinite(self) -> bool ! PyError
+    fn is_nan(self) -> bool ! PyError
+    fn is_normal(self, context: Context? = None) -> bool ! PyError
+    fn is_qnan(self) -> bool ! PyError
+    fn is_signed(self) -> bool ! PyError
+    fn is_snan(self) -> bool ! PyError
+    fn is_subnormal(self, context: Context? = None) -> bool ! PyError
+    fn is_zero(self) -> bool ! PyError
+    fn ln(self, context: Context? = None) -> Decimal ! PyError
+    fn log10(self, context: Context? = None) -> Decimal ! PyError
+    fn logb(self, context: Context? = None) -> Decimal ! PyError
+    fn logical_and(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn logical_invert(self, context: Context? = None) -> Decimal ! PyError
+    fn logical_or(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn logical_xor(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn max_mag(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn min_mag(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn next_minus(self, context: Context? = None) -> Decimal ! PyError
+    fn next_plus(self, context: Context? = None) -> Decimal ! PyError
+    fn next_toward(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn number_class(self, context: Context? = None) -> str ! PyError
+    fn radix(self) -> Decimal ! PyError
+    fn rotate(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn scaleb(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+    fn shift(self, other: PyObject, context: Context? = None) -> Decimal ! PyError
+
+class Context:
+    fn Context(prec: int? = None, rounding: str? = None, Emin: int? = None, Emax: int? = None, capitals: int? = None, clamp: int? = None, flags: PyObject? = None, traps: PyObject? = None) -> Context ! PyError
+    prec: int
+    rounding: str
+    Emin: int
+    Emax: int
+    capitals: int
+    clamp: int
+    traps: {PyObject: bool}
+    flags: {PyObject: bool}
+    fn clear_flags(self) -> None ! PyError
+    fn clear_traps(self) -> None ! PyError
+    fn copy(self) -> Context ! PyError
+    fn Etiny(self) -> int ! PyError
+    fn Etop(self) -> int ! PyError
+    fn create_decimal(self, num: PyObject = "0") -> Decimal ! PyError
+    fn create_decimal_from_float(self, f: f64) -> Decimal ! PyError
+    fn abs(self, x: PyObject) -> Decimal ! PyError
+    fn add(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn canonical(self, x: Decimal) -> Decimal ! PyError
+    fn compare(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn compare_signal(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn compare_total(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn compare_total_mag(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn copy_abs(self, x: PyObject) -> Decimal ! PyError
+    fn copy_decimal(self, x: PyObject) -> Decimal ! PyError
+    fn copy_negate(self, x: PyObject) -> Decimal ! PyError
+    fn copy_sign(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn divide(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn divide_int(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn divmod(self, x: PyObject, y: PyObject) -> (Decimal, Decimal) ! PyError
+    fn exp(self, x: PyObject) -> Decimal ! PyError
+    fn fma(self, x: PyObject, y: PyObject, z: PyObject) -> Decimal ! PyError
+    fn is_canonical(self, x: PyObject) -> bool ! PyError
+    fn is_finite(self, x: PyObject) -> bool ! PyError
+    fn is_infinite(self, x: PyObject) -> bool ! PyError
+    fn is_nan(self, x: PyObject) -> bool ! PyError
+    fn is_normal(self, x: PyObject) -> bool ! PyError
+    fn is_qnan(self, x: PyObject) -> bool ! PyError
+    fn is_signed(self, x: PyObject) -> bool ! PyError
+    fn is_snan(self, x: PyObject) -> bool ! PyError
+    fn is_subnormal(self, x: PyObject) -> bool ! PyError
+    fn is_zero(self, x: PyObject) -> bool ! PyError
+    fn ln(self, x: PyObject) -> Decimal ! PyError
+    fn log10(self, x: PyObject) -> Decimal ! PyError
+    fn logb(self, x: PyObject) -> Decimal ! PyError
+    fn logical_and(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn logical_invert(self, x: PyObject) -> Decimal ! PyError
+    fn logical_or(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn logical_xor(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn max(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn max_mag(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn min(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn min_mag(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn minus(self, x: PyObject) -> Decimal ! PyError
+    fn multiply(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn next_minus(self, x: PyObject) -> Decimal ! PyError
+    fn next_plus(self, x: PyObject) -> Decimal ! PyError
+    fn next_toward(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn normalize(self, x: PyObject) -> Decimal ! PyError
+    fn number_class(self, x: PyObject) -> str ! PyError
+    fn plus(self, x: PyObject) -> Decimal ! PyError
+    fn power(self, a: PyObject, b: PyObject, modulo: PyObject? = None) -> Decimal ! PyError
+    fn quantize(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn radix(self) -> Decimal ! PyError
+    fn remainder(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn remainder_near(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn rotate(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn same_quantum(self, x: PyObject, y: PyObject) -> bool ! PyError
+    fn scaleb(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn shift(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn sqrt(self, x: PyObject) -> Decimal ! PyError
+    fn subtract(self, x: PyObject, y: PyObject) -> Decimal ! PyError
+    fn to_eng_string(self, x: PyObject) -> str ! PyError
+    fn to_sci_string(self, x: PyObject) -> str ! PyError
+    fn to_integral_exact(self, x: PyObject) -> Decimal ! PyError
+    fn to_integral_value(self, x: PyObject) -> Decimal ! PyError
+    fn to_integral(self, x: PyObject) -> Decimal ! PyError
+
+# Not bound:
+#   Decimal.__bool__, __hash__, __abs__, __add__, __divmod__, __eq__, __floordiv__, __ge__, __gt__, __le__, __lt__, __mod__, __mul__, __neg__, __pos__, __pow__, __radd__, __rdivmod__, __rfloordiv__, __rmod__, __rmul__, __rsub__, __rtruediv__, __sub__, __truediv__, __float__, __int__, __trunc__, __complex__, __round__, __floor__, __ceil__, __rpow__, __reduce__, __copy__, __deepcopy__, __format__: dunder methods, which operators would call
+#   Context.__reduce__, __copy__: dunder methods, which operators would call

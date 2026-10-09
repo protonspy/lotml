@@ -26,11 +26,11 @@
 
 ## 4 · The binder
 
-- [ ] 4.1 (Unit) Bind a stub's public, non-generic classes: constructor, methods, static and class methods, annotated attributes and properties, and the bases the interface declares — R1.1, R1.2
+- [x] 4.1 (Unit) Bind a stub's public, non-generic classes: constructor, methods, static and class methods, annotated attributes and properties, and the bases the interface declares — R1.1, R1.2
   _Depends 1.2_
-- [ ] 4.2 (Unit) Write a class the interface declares by its name wherever the stub names it, instead of `PyObject` — R1.3
+- [x] 4.2 (Unit) Write a class the interface declares by its name wherever the stub names it, instead of `PyObject` — R1.3
   _Depends 4.1_
-- [ ] 4.3 (Unit) Leave out overloaded, generic, private and dunder members, each named with its reason in the interface's comments, and bring the goldens to the new interfaces — R1.4
+- [x] 4.3 (Unit) Leave out overloaded, generic, private and dunder members, each named with its reason in the interface's comments, and bring the goldens to the new interfaces — R1.4
   _Depends 4.1_
 
 ## 5 · The coverage

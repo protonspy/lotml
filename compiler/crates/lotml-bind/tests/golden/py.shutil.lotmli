@@ -19,6 +19,18 @@ fn unregister_unpack_format(name: str) -> None ! PyError
 fn get_unpack_formats() -> [(str, [str], str)] ! PyError
 fn get_terminal_size(fallback: (int, int) = todo()) -> PyObject ! PyError
 
+class Error
+
+class SameFileError(Error)
+
+class SpecialFileError
+
+class ExecError
+
+class ReadError
+
+class RegistryError
+
 # Not bound:
 #   copy: it is overloaded
 #   copy2: it is overloaded

@@ -5,12 +5,12 @@
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
 fn asctime(time_tuple: PyObject = todo()) -> str ! PyError
 fn ctime(seconds: PyObject? = None) -> str ! PyError
-fn gmtime(seconds: PyObject? = None) -> PyObject ! PyError
-fn localtime(seconds: PyObject? = None) -> PyObject ! PyError
+fn gmtime(seconds: PyObject? = None) -> struct_time ! PyError
+fn localtime(seconds: PyObject? = None) -> struct_time ! PyError
 fn mktime(time_tuple: PyObject) -> f64 ! PyError
 fn sleep(seconds: PyObject) -> None ! PyError
 fn strftime(format: str, time_tuple: PyObject = todo()) -> str ! PyError
-fn strptime(data_string: str, format: str = "%a %b %d %H:%M:%S %Y") -> PyObject ! PyError
+fn strptime(data_string: str, format: str = "%a %b %d %H:%M:%S %Y") -> struct_time ! PyError
 fn time() -> f64 ! PyError
 fn tzset() -> None ! PyError
 fn get_clock_info(name: PyObject) -> PyObject ! PyError
@@ -29,3 +29,16 @@ fn process_time_ns() -> int ! PyError
 fn time_ns() -> int ! PyError
 fn thread_time() -> f64 ! PyError
 fn thread_time_ns() -> int ! PyError
+
+class struct_time:
+    tm_year: int
+    tm_mon: int
+    tm_mday: int
+    tm_hour: int
+    tm_min: int
+    tm_sec: int
+    tm_wday: int
+    tm_yday: int
+    tm_isdst: int
+    tm_zone: str
+    tm_gmtoff: int

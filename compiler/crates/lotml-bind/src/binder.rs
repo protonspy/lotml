@@ -1,6 +1,6 @@
 //! A Python stub read as a LotML interface (specs/rust-binder R1, adr:0012): its module-level
-//! functions, and the names typeshed writes as methods of a module-level instance, `randint =
-//! _inst.randint`, bound from those methods. A function whose types LotML cannot express is listed
+//! functions, the names typeshed writes as methods of a module-level instance, `randint =
+//! _inst.randint`, bound from those methods, and its classes (specs/python-classes, adr:0034). A function whose types LotML cannot express is listed
 //! in a comment with the reason, never bound half-way; a type no LotML type describes is `PyObject`
 //! (adr:0031).
 
@@ -15,6 +15,51 @@ pub struct Refused(pub String);
 /// The type of a value no LotML type describes: opaque, taken out only through a conversion the
 /// boundary checks (adr:0031).
 const OBJECT: &str = "PyObject";
+
+/// What an annotation is read against: the classes of the stub the interface declares, which a
+/// type names by name, and the class a member belongs to, which `Self` names.
+#[derive(Clone, Copy)]
+struct Cx<'a> {
+    classes: &'a HashSet<String>,
+    this: Option<&'a str>,
+}
+
+/// LotML's keywords, which no name of an interface may be.
+const KEYWORDS: &[&str] = &[
+    "fn", "type", "impl", "trait", "for", "test", "from", "import", "var", "inout", "sink", "return", "if", "elif",
+    "else", "while", "in", "match", "case", "lambda", "and", "or", "not", "is", "None", "True", "False", "fail",
+    "pass", "break", "continue", "assert", "dyn",
+];
+
+/// The names a class of an interface may not take: LotML's keywords and the names of its own
+/// types, which a type named so would shadow.
+fn reserved(name: &str) -> bool {
+    KEYWORDS.contains(&name)
+        || matches!(
+            name,
+            "int"
+                | "i8"
+                | "i16"
+                | "i32"
+                | "i64"
+                | "u8"
+                | "f32"
+                | "f64"
+                | "str"
+                | "bool"
+                | "bytes"
+                | "PyObject"
+                | "PyError"
+                | "Heap"
+                | "Ok"
+                | "Err"
+                | "Self"
+        )
+}
+
+/// The binder's own source: what an interface kept from a run of lotml is keyed by, so a binder
+/// that writes differently never reads one an earlier binder wrote.
+pub const SOURCE: &str = include_str!("binder.rs");
 
 /// Past this, a file is no stub lotml reads.
 pub const LARGEST: usize = 8 << 20;
@@ -86,8 +131,11 @@ fn bind(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
     let body = &parsed.syntax().body;
     let mut bound = Vec::new();
     let mut skipped = Vec::new();
+    let (classes, refused) = bindable_classes(body);
+    skipped.extend(refused);
+    let cx = Cx { classes: &classes, this: None };
     let mut seen = HashSet::new();
-    for (name, function) in functions(body) {
+    for (name, function) in functions(body, cx) {
         if name.starts_with('_') || !seen.insert(name.clone()) {
             continue;
         }
@@ -105,6 +153,16 @@ fn bind(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
         "# A `PyObject` is a value no LotML type describes: convert it with `value()`.".to_string(),
     ];
     lines.extend(bound);
+    let mut written = HashSet::new();
+    for class in module_level(body).into_iter().filter_map(Stmt::as_class_def_stmt) {
+        // A class written in two `sys.version_info` branches is bound from the first, as a function is.
+        if classes.contains(class.name.as_str()) && written.insert(class.name.as_str()) {
+            let (block, left_out) = class_block(class, body, &classes);
+            lines.push(String::new());
+            lines.extend(block);
+            skipped.extend(left_out);
+        }
+    }
     if !skipped.is_empty() {
         lines.push(String::new());
         lines.push("# Not bound:".to_string());
@@ -117,7 +175,7 @@ fn bind(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
 /// bound. The functions come first, then the names written as an instance's methods, each found
 /// in an index of its class's methods built once, the first written of a name winning, so a stub
 /// of many aliases binds in time linear in its size.
-fn functions(body: &[Stmt]) -> Vec<(String, Result<String, String>)> {
+fn functions(body: &[Stmt], cx: Cx<'_>) -> Vec<(String, Result<String, String>)> {
     let declared = definitions(body);
     let overloaded: HashSet<&str> = declared.iter().filter(|f| is_overload(f)).map(|f| f.name.as_str()).collect();
     let mut found: Vec<(String, Result<String, String>)> = declared
@@ -126,7 +184,7 @@ fn functions(body: &[Stmt]) -> Vec<(String, Result<String, String>)> {
             let bound = if overloaded.contains(f.name.as_str()) {
                 Err("it is overloaded".to_string())
             } else {
-                written(f, f.name.as_str(), false)
+                written(f, f.name.as_str(), false, cx)
             };
             (f.name.to_string(), bound)
         })
@@ -144,7 +202,7 @@ fn functions(body: &[Stmt]) -> Vec<(String, Result<String, String>)> {
         let bound = match first {
             None => Err(format!("`{class}` holds no `{method}` in this stub")),
             Some(m) if is_overload(m) => Err("it is overloaded".to_string()),
-            Some(m) => written(m, &name, !is_static(m)),
+            Some(m) => written(m, &name, !is_static(m), cx),
         };
         found.push((name, bound));
     }
@@ -220,36 +278,261 @@ fn name_of(expr: &Expr) -> Option<&str> {
 /// The signature of `function` under `name`, its first parameter dropped when it is a method
 /// bound to its instance or class; `*args` and `**kwargs` take nothing when not given, so the named
 /// parameters are bound and those are left to Python.
-fn written(function: &ast::StmtFunctionDef, name: &str, bound_method: bool) -> Result<String, String> {
+fn written(function: &ast::StmtFunctionDef, name: &str, bound_method: bool, cx: Cx<'_>) -> Result<String, String> {
+    let params = params(function, bound_method, cx)?;
+    let returns = function.returns.as_deref().map_or_else(|| OBJECT.to_string(), |r| lotml_type(r, false, cx));
+    Ok(format!("fn {name}({}) -> {returns} ! PyError", params.join(", ")))
+}
+
+/// The parameters of `function` as an interface writes them, its first dropped when it is bound
+/// to an instance or a class; or why it is not bound: a coroutine, or a name LotML keeps.
+fn params(function: &ast::StmtFunctionDef, drop_first: bool, cx: Cx<'_>) -> Result<Vec<String>, String> {
     if function.is_async {
         return Err("it is a coroutine".to_string());
+    }
+    if KEYWORDS.contains(&function.name.as_str()) {
+        return Err(format!("`{}` is a LotML keyword", function.name.as_str()));
     }
     let parameters = &function.parameters;
     let mut positional: Vec<&ast::ParameterWithDefault> =
         parameters.posonlyargs.iter().chain(parameters.args.iter()).collect();
-    if bound_method && !positional.is_empty() {
+    if drop_first && !positional.is_empty() {
         positional.remove(0);
     }
-    let params: Vec<String> = positional
-        .into_iter()
-        .chain(parameters.kwonlyargs.iter())
-        .map(|p| {
-            let annotated =
-                p.parameter.annotation.as_deref().map_or_else(|| OBJECT.to_string(), |a| lotml_type(a, true));
-            match &p.default {
-                Some(given) => format!("{}: {annotated} = {}", p.parameter.name.as_str(), default(given)),
-                None => format!("{}: {annotated}", p.parameter.name.as_str()),
+    let mut written = Vec::new();
+    for p in positional.into_iter().chain(parameters.kwonlyargs.iter()) {
+        let name = p.parameter.name.as_str();
+        if KEYWORDS.contains(&name) {
+            return Err(format!("its parameter `{name}` is a LotML keyword"));
+        }
+        let annotated =
+            p.parameter.annotation.as_deref().map_or_else(|| OBJECT.to_string(), |a| lotml_type(a, true, cx));
+        written.push(match &p.default {
+            Some(given) => format!("{name}: {annotated} = {}", default(given)),
+            None => format!("{name}: {annotated}"),
+        });
+    }
+    Ok(written)
+}
+
+/// The classes of the stub the interface declares, and a comment for each public one it does
+/// not: generic, a protocol, of a name LotML keeps, or of a function's name.
+fn bindable_classes(body: &[Stmt]) -> (HashSet<String>, Vec<String>) {
+    let type_vars = type_vars(body);
+    let functions: HashSet<&str> = definitions(body).iter().map(|f| f.name.as_str()).collect();
+    let mut bound = HashSet::new();
+    let mut refused = Vec::new();
+    for class in module_level(body).into_iter().filter_map(Stmt::as_class_def_stmt) {
+        let name = class.name.as_str();
+        if name.starts_with('_') || bound.contains(name) {
+            continue;
+        }
+        let why = if class.type_params.is_some() || class.bases().iter().any(|b| mentions(b, &type_vars)) {
+            Some("it is generic, which specs/python-generics/ binds".to_string())
+        } else if class.bases().iter().any(|b| name_of(head(b)) == Some("Protocol")) {
+            Some("it is a protocol, a shape rather than a class".to_string())
+        } else if reserved(name) {
+            Some(format!("`{name}` is a name LotML keeps"))
+        } else if functions.contains(name) {
+            Some("a function of the stub has its name".to_string())
+        } else {
+            None
+        };
+        match why {
+            Some(why) => refused.push(format!("#   {name}: {why}")),
+            None => {
+                bound.insert(name.to_string());
             }
+        }
+    }
+    (bound, refused)
+}
+
+/// The names the stub declares as type variables: `T = TypeVar("T")`.
+fn type_vars(body: &[Stmt]) -> HashSet<String> {
+    let mut found = HashSet::new();
+    for statement in module_level(body) {
+        if let Stmt::Assign(assigned) = statement
+            && let [Expr::Name(target)] = assigned.targets.as_slice()
+            && let Expr::Call(call) = &*assigned.value
+            && matches!(name_of(&call.func), Some("TypeVar" | "ParamSpec" | "TypeVarTuple"))
+        {
+            found.insert(target.id.to_string());
+        }
+    }
+    found
+}
+
+/// The expression a subscript is of: `Generic` of `Generic[T]`, or the expression itself.
+fn head(expr: &Expr) -> &Expr {
+    match expr {
+        Expr::Subscript(subscript) => &subscript.value,
+        other => other,
+    }
+}
+
+/// Whether `expr` is `Generic[…]`, or names one of `type_vars` anywhere inside it.
+fn mentions(expr: &Expr, type_vars: &HashSet<String>) -> bool {
+    match expr {
+        Expr::Name(name) => type_vars.contains(name.id.as_str()),
+        Expr::Subscript(subscript) => {
+            name_of(&subscript.value) == Some("Generic") || mentions(&subscript.slice, type_vars)
+        }
+        Expr::Tuple(tuple) => tuple.elts.iter().any(|e| mentions(e, type_vars)),
+        _ => false,
+    }
+}
+
+/// A class as an interface writes it: its bases the interface declares, its attributes (annotated,
+/// and `@property`s), its constructor (its `__init__`, else `__new__`, else a base's), its methods
+/// and its static and class methods; and a comment for each member it leaves out.
+fn class_block(class: &ast::StmtClassDef, body: &[Stmt], classes: &HashSet<String>) -> (Vec<String>, Vec<String>) {
+    let name = class.name.as_str();
+    let cx = Cx { classes, this: Some(name) };
+    let bases: Vec<&str> =
+        class.bases().iter().filter_map(name_of).filter(|b| classes.contains(*b) && *b != name).collect();
+    let mut lines =
+        vec![if bases.is_empty() { format!("class {name}:") } else { format!("class {name}({}):", bases.join(", ")) }];
+    let mut skipped = Vec::new();
+    let mut dunders = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    let members = module_level(&class.body);
+    for statement in &members {
+        if let Stmt::AnnAssign(declared) = statement
+            && let Expr::Name(target) = &*declared.target
+        {
+            let attribute = target.id.as_str();
+            if attribute.starts_with('_') || !seen.insert(attribute.to_string()) {
+                continue;
+            }
+            if KEYWORDS.contains(&attribute) {
+                skipped.push(format!("#   {name}.{attribute}: `{attribute}` is a LotML keyword"));
+                continue;
+            }
+            let annotation = match &*declared.annotation {
+                Expr::Subscript(wrapped) if matches!(name_of(&wrapped.value), Some("ClassVar" | "Final")) => {
+                    &*wrapped.slice
+                }
+                other => other,
+            };
+            lines.push(format!("    {attribute}: {}", lotml_type(annotation, false, cx)));
+        }
+    }
+    let defs: Vec<&ast::StmtFunctionDef> = members.iter().filter_map(|s| s.as_function_def_stmt()).collect();
+    let overloaded: HashSet<&str> = defs.iter().filter(|f| is_overload(f)).map(|f| f.name.as_str()).collect();
+    let decorated = |f: &ast::StmtFunctionDef, what: &str| {
+        f.decorator_list.iter().any(|d| match &d.expression {
+            Expr::Attribute(attribute) => attribute.attr.as_str() == what,
+            other => name_of(other) == Some(what),
         })
-        .collect();
-    let returns = function.returns.as_deref().map_or_else(|| OBJECT.to_string(), |r| lotml_type(r, false));
-    Ok(format!("fn {name}({}) -> {returns} ! PyError", params.join(", ")))
+    };
+    for f in &defs {
+        let member = f.name.as_str();
+        if member.starts_with('_') && !member.starts_with("__") {
+            continue;
+        }
+        if decorated(f, "setter") || decorated(f, "deleter") || !seen.insert(member.to_string()) {
+            continue;
+        }
+        if decorated(f, "property") || decorated(f, "cached_property") {
+            if KEYWORDS.contains(&member) {
+                skipped.push(format!("#   {name}.{member}: `{member}` is a LotML keyword"));
+            } else {
+                let returns = f.returns.as_deref().map_or_else(|| OBJECT.to_string(), |r| lotml_type(r, false, cx));
+                lines.push(format!("    {member}: {returns}"));
+            }
+            continue;
+        }
+        if member == "__init__" || member == "__new__" {
+            continue;
+        }
+        if member.starts_with("__") {
+            dunders.push(member.to_string());
+            continue;
+        }
+        if overloaded.contains(member) {
+            skipped.push(format!("#   {name}.{member}: it is overloaded"));
+            continue;
+        }
+        let is_method = !is_static(f) && !decorated(f, "classmethod");
+        let signature = params(f, !is_static(f), cx).map(|params| {
+            let returns = f.returns.as_deref().map_or_else(|| OBJECT.to_string(), |r| lotml_type(r, false, cx));
+            let params = if is_method { std::iter::once("self".to_string()).chain(params).collect() } else { params };
+            format!("    fn {member}({}) -> {returns} ! PyError", params.join(", "))
+        });
+        match signature {
+            Ok(line) => lines.push(line),
+            Err(why) => skipped.push(format!("#   {name}.{member}: {why}")),
+        }
+    }
+    match constructor(class, body) {
+        Some(init) if is_overload(init) || defs_overloaded(class, body, init.name.as_str()) => {
+            skipped.push(format!("#   {name}.{}: it is overloaded", init.name.as_str()));
+        }
+        Some(init) => match params(init, true, cx) {
+            Ok(params) => lines.insert(1, format!("    fn {name}({}) -> {name} ! PyError", params.join(", "))),
+            Err(why) => skipped.push(format!("#   {name}.{}: {why}", init.name.as_str())),
+        },
+        None => {}
+    }
+    if !dunders.is_empty() {
+        skipped.push(format!("#   {name}.{}: dunder methods, which operators would call", dunders.join(", ")));
+    }
+    if lines.len() == 1 {
+        // A class with no member written: its header alone, which the parser reads as such.
+        lines[0].pop();
+    }
+    (lines, skipped)
+}
+
+/// Whether `class`, or the base the constructor `init` was found in, overloads it.
+fn defs_overloaded(class: &ast::StmtClassDef, body: &[Stmt], member: &str) -> bool {
+    let mut at = Some(class);
+    let mut walked = 0;
+    while let Some(c) = at {
+        let defs: Vec<&ast::StmtFunctionDef> =
+            module_level(&c.body).into_iter().filter_map(Stmt::as_function_def_stmt).collect();
+        if defs.iter().any(|f| f.name.as_str() == member) {
+            return defs.iter().filter(|f| f.name.as_str() == member).count() > 1
+                || defs.iter().any(|f| f.name.as_str() == member && is_overload(f));
+        }
+        walked += 1;
+        at = if walked > 64 { None } else { base_class(c, body) };
+    }
+    false
+}
+
+/// The constructor a class is called through: its own `__init__`, else its `__new__`, else its
+/// first base's in the stub, a chain followed no further than 64 classes.
+fn constructor<'a>(class: &'a ast::StmtClassDef, body: &'a [Stmt]) -> Option<&'a ast::StmtFunctionDef> {
+    let mut at = Some(class);
+    let mut walked = 0;
+    while let Some(c) = at {
+        let defs: Vec<&ast::StmtFunctionDef> =
+            module_level(&c.body).into_iter().filter_map(Stmt::as_function_def_stmt).collect();
+        if let Some(init) = defs
+            .iter()
+            .find(|f| f.name.as_str() == "__init__")
+            .or_else(|| defs.iter().find(|f| f.name.as_str() == "__new__"))
+        {
+            return Some(init);
+        }
+        walked += 1;
+        at = if walked > 64 { None } else { base_class(c, body) };
+    }
+    None
+}
+
+/// The first base of `class` the stub defines.
+fn base_class<'a>(class: &ast::StmtClassDef, body: &'a [Stmt]) -> Option<&'a ast::StmtClassDef> {
+    let base = class.bases().iter().find_map(name_of)?;
+    module_level(body).into_iter().filter_map(Stmt::as_class_def_stmt).find(|c| c.name.as_str() == base)
 }
 
 /// The LotML type of an annotation. A parameter may take an abstract collection, which a LotML
 /// list, dict or set satisfies, while a result must be the concrete one LotML receives; a type
 /// LotML has none for is a `PyObject`.
-fn lotml_type(expr: &Expr, parameter: bool) -> String {
+fn lotml_type(expr: &Expr, parameter: bool, cx: Cx<'_>) -> String {
     if let Expr::NoneLiteral(_) = expr {
         return "None".to_string();
     }
@@ -259,11 +542,19 @@ fn lotml_type(expr: &Expr, parameter: bool) -> String {
         let rest: Vec<&Expr> =
             [&*union.left, &*union.right].into_iter().filter(|side| !matches!(side, Expr::NoneLiteral(_))).collect();
         return match rest.as_slice() {
-            [one] => optional(lotml_type(one, parameter)),
+            [one] => optional(lotml_type(one, parameter, cx)),
             _ => OBJECT.to_string(),
         };
     }
     if let Some(name) = name_of(expr) {
+        if name == "Self"
+            && let Some(this) = cx.this
+        {
+            return this.to_string();
+        }
+        if cx.classes.contains(name) {
+            return name.to_string();
+        }
         return match name {
             "int" => "int",
             "float" => "f64",
@@ -284,7 +575,7 @@ fn lotml_type(expr: &Expr, parameter: bool) -> String {
         Expr::Tuple(tuple) => tuple.elts.iter().collect(),
         one => vec![one],
     };
-    let of = |arg: &Expr| lotml_type(arg, parameter);
+    let of = |arg: &Expr| lotml_type(arg, parameter, cx);
     match (head, args.as_slice()) {
         ("Optional", [inner]) => optional(of(inner)),
         ("list" | "List", [item, ..]) => format!("[{}]", of(item)),
@@ -583,6 +874,100 @@ mod tests {
             functions(stub),
             ["fn f(a: int) -> int ! PyError", "fn g() -> None ! PyError", "fn h() -> None ! PyError"]
         );
+    }
+
+    const DATES: &str = "\
+from typing import Self, overload
+class date:
+    min: ClassVar[date]
+    year: int
+    def __init__(self, year: int, month: int) -> None: ...
+    @classmethod
+    def today(cls) -> Self: ...
+    @staticmethod
+    def parse(text: str) -> date: ...
+    def isoformat(self) -> str: ...
+    @property
+    def month(self) -> int: ...
+    @month.setter
+    def month(self, value: int) -> None: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __lt__(self, other: date) -> bool: ...
+    def _hidden(self) -> None: ...
+class datetime(date):
+    def now(self) -> datetime: ...
+class empty: ...
+def combine(d: date, t: datetime) -> datetime: ...
+";
+
+    #[test]
+    fn a_class_is_written_with_its_constructor_attributes_and_methods() {
+        let text = bound(DATES);
+        let block: Vec<&str> = text.lines().skip_while(|l| *l != "class date:").take_while(|l| !l.is_empty()).collect();
+        assert_eq!(
+            block,
+            [
+                "class date:",
+                "    fn date(year: int, month: int) -> date ! PyError",
+                "    min: date",
+                "    year: int",
+                "    fn today() -> date ! PyError",
+                "    fn parse(text: str) -> date ! PyError",
+                "    fn isoformat(self) -> str ! PyError",
+                "    month: int",
+            ]
+        );
+        assert!(
+            text.contains(
+                "\nclass datetime(date):\n    fn datetime(year: int, month: int) -> datetime ! PyError\n    fn now(self) -> datetime ! PyError\n"
+            ),
+            "a base's constructor, returning the class: {text}"
+        );
+        assert!(text.contains("\nclass empty\n"), "a class with no member is its header alone: {text}");
+        assert!(text.contains("#   date.__eq__, __lt__: dunder methods, which operators would call"), "{text}");
+        assert!(!text.contains("_hidden"), "a private member is left out");
+    }
+
+    #[test]
+    fn a_class_of_the_stub_is_written_by_its_name_instead_of_pyobject() {
+        assert!(bound(DATES).contains("fn combine(d: date, t: datetime) -> datetime ! PyError"));
+        let without = "def combine(d: date) -> date: ...\n";
+        assert_eq!(one(without), "fn combine(d: PyObject) -> PyObject ! PyError", "a class the stub does not define");
+    }
+
+    #[test]
+    fn a_class_or_member_lotml_cannot_hold_is_listed_with_the_reason() {
+        let stub = "\
+from typing import Generic, TypeVar, Protocol, overload
+T = TypeVar(\"T\")
+class Box(Generic[T]):
+    def get(self) -> T: ...
+class Sized(Protocol):
+    def size(self) -> int: ...
+class str: ...
+class Odd:
+    @overload
+    def pick(self, x: int) -> int: ...
+    @overload
+    def pick(self, x: str) -> str: ...
+    def given(self, var: int) -> None: ...
+    match: int
+def f() -> None: ...
+class f: ...
+";
+        let text = bound(stub);
+        for reason in [
+            "#   Box: it is generic",
+            "#   Sized: it is a protocol",
+            "#   str: `str` is a name LotML keeps",
+            "#   f: a function of the stub has its name",
+            "#   Odd.pick: it is overloaded",
+            "#   Odd.given: its parameter `var` is a LotML keyword",
+            "#   Odd.match: `match` is a LotML keyword",
+        ] {
+            assert!(text.contains(reason), "{reason}: {text}");
+        }
+        assert!(text.contains("\nclass Odd\n"), "{text}");
     }
 
     #[test]

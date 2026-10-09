@@ -53,3 +53,14 @@ fn a_class_holds_attributes_and_signatures_and_nothing_else() {
     let [Item::Class(date)] = parsed.module.items.as_slice() else { panic!() };
     assert_eq!(date.methods.len(), 1, "the line after the error is still read");
 }
+
+#[test]
+fn a_class_with_no_member_is_its_header_alone() {
+    let parsed = parse_interface("class empty\nclass child(empty)\nfn f() -> child ! PyError\n");
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    let [Item::Class(empty), Item::Class(child), Item::Fn(_)] = parsed.module.items.as_slice() else {
+        panic!("{:?}", parsed.module.items);
+    };
+    assert!(empty.attributes.is_empty() && empty.methods.is_empty());
+    assert_eq!(child.bases[0].name, "empty");
+}

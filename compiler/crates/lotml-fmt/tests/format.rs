@@ -159,4 +159,7 @@ fn a_class_of_an_interface_is_written_as_its_block() {
         lotml_fmt::item(source, &parsed.module.items[0]),
         "class datetime(date):\n    year: int\n    fn now() -> datetime ! PyError\n    fn isoformat(self) -> str ! PyError\n"
     );
+    let empty = "class empty( base )\n";
+    let parsed = lotml_syntax::parse_interface(empty);
+    assert_eq!(lotml_fmt::item(empty, &parsed.module.items[0]), "class empty(base)\n", "no member, no colon");
 }

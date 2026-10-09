@@ -22,7 +22,7 @@ not at all.
 - **R1.1** The binder shall write each public, non-generic class a stub defines at module level as a `class` block of the interface, holding its own attributes, constructor and methods, and naming the bases the same interface declares.
 - **R1.2** The binder shall write a class's `__init__` (or `__new__`) as its constructor, a function named after the class returning it; a method taking `self` as a method; a `@staticmethod` or `@classmethod` as a function of the class; and an annotated attribute or a `@property` as an attribute.
 - **R1.3** The binder shall write the class's type, instead of `PyObject`, wherever a function, method or attribute of the stub names a class the same interface declares.
-- **R1.4** If a member of a class is overloaded, generic, private, or a dunder method other than the constructor, then the binder shall leave it out and name it, with the reason, in the interface's comments.
+- **R1.4** If a class or a member of one is overloaded, generic, a dunder method other than the constructor, or named with a word LotML keeps, then the binder shall leave it out and name it, with the reason, in the interface's comments, and shall leave a private one out as it leaves a private function out.
 - **R1.5** The checker shall accept a `class` block in a Python interface only; a `class` in a program shall stay refused with E0102, and one in a C interface with E0221.
 
 ## R2 · The checker

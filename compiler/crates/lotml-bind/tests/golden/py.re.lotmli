@@ -7,7 +7,19 @@ fn escape(pattern: PyObject) -> PyObject ! PyError
 fn purge() -> None ! PyError
 fn template(pattern: PyObject, flags: PyObject = 0) -> PyObject ! PyError
 
+class error:
+    fn error(msg: str, pattern: PyObject? = None, pos: int? = None) -> error ! PyError
+    msg: str
+    pattern: PyObject?
+    pos: int?
+    lineno: int
+    colno: int
+
+class RegexFlag
+
 # Not bound:
+#   Match: it is generic, which specs/python-generics/ binds
+#   Pattern: it is generic, which specs/python-generics/ binds
 #   compile: it is overloaded
 #   search: it is overloaded
 #   match: it is overloaded

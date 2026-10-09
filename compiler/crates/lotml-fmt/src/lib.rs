@@ -223,10 +223,11 @@ impl Formatter<'_> {
             }
             Item::Class(c) => {
                 let bases: Vec<&str> = c.bases.iter().map(|b| b.name.as_str()).collect();
+                let colon = if c.attributes.is_empty() && c.methods.is_empty() { "" } else { ":" };
                 let header = if bases.is_empty() {
-                    format!("class {}:", c.name.name)
+                    format!("class {}{colon}", c.name.name)
                 } else {
-                    format!("class {}({}):", c.name.name, bases.join(", "))
+                    format!("class {}({}){colon}", c.name.name, bases.join(", "))
                 };
                 self.line(&header);
                 self.indent += 1;

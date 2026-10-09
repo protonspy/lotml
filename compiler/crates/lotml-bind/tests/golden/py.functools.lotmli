@@ -11,5 +11,9 @@ fn singledispatch(func: PyObject) -> PyObject ! PyError
 fn cache(user_function: PyObject) -> PyObject ! PyError
 
 # Not bound:
+#   partial: it is generic, which specs/python-generics/ binds
+#   partialmethod: it is generic, which specs/python-generics/ binds
+#   singledispatchmethod: it is generic, which specs/python-generics/ binds
+#   cached_property: it is generic, which specs/python-generics/ binds
 #   reduce: it is overloaded
 #   lru_cache: it is overloaded

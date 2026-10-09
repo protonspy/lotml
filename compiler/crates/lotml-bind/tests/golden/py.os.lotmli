@@ -39,7 +39,7 @@ fn setreuid(ruid: int, euid: int) -> None ! PyError
 fn getsid(pid: int) -> int ! PyError
 fn setsid() -> None ! PyError
 fn setuid(uid: int) -> None ! PyError
-fn uname() -> PyObject ! PyError
+fn uname() -> uname_result ! PyError
 fn putenv(name: str, value: str) -> None ! PyError
 fn unsetenv(name: str) -> None ! PyError
 fn close(fd: int) -> None ! PyError
@@ -47,7 +47,7 @@ fn closerange(fd_low: int, fd_high: int) -> None ! PyError
 fn device_encoding(fd: int) -> str? ! PyError
 fn dup(fd: int) -> int ! PyError
 fn dup2(fd: int, fd2: int, inheritable: bool = True) -> int ! PyError
-fn fstat(fd: int) -> PyObject ! PyError
+fn fstat(fd: int) -> stat_result ! PyError
 fn ftruncate(fd: int, length: int) -> None ! PyError
 fn fsync(fd: PyObject) -> None ! PyError
 fn isatty(fd: int) -> bool ! PyError
@@ -60,7 +60,7 @@ fn get_blocking(fd: int) -> bool ! PyError
 fn set_blocking(fd: int, blocking: bool) -> None ! PyError
 fn fchown(fd: int, uid: int, gid: int) -> None ! PyError
 fn fpathconf(fd: int, name: PyObject) -> int ! PyError
-fn fstatvfs(fd: int) -> PyObject ! PyError
+fn fstatvfs(fd: int) -> statvfs_result ! PyError
 fn lockf(fd: int, command: int, length: int) -> None ! PyError
 fn openpty() -> (int, int) ! PyError
 fn fdatasync(fd: PyObject) -> None ! PyError
@@ -75,7 +75,7 @@ fn sendfile(out_fd: PyObject, in_fd: PyObject, offset: int?, count: int) -> int 
 fn readv(fd: int, buffers: PyObject) -> int ! PyError
 fn writev(fd: int, buffers: PyObject) -> int ! PyError
 fn readinto(fd: int, buffer: bytes) -> int ! PyError
-fn get_terminal_size(fd: int = todo()) -> PyObject ! PyError
+fn get_terminal_size(fd: int = todo()) -> terminal_size ! PyError
 fn get_inheritable(fd: int) -> bool ! PyError
 fn set_inheritable(fd: int, inheritable: bool) -> None ! PyError
 fn get_handle_inheritable(handle: int) -> bool ! PyError
@@ -96,7 +96,7 @@ fn chroot(path: str) -> None ! PyError
 fn chown(path: PyObject, uid: int, gid: int, dir_fd: int? = None, follow_symlinks: bool = True) -> None ! PyError
 fn lchown(path: str, uid: int, gid: int) -> None ! PyError
 fn link(src: str, dst: str, src_dir_fd: int? = None, dst_dir_fd: int? = None, follow_symlinks: bool = True) -> None ! PyError
-fn lstat(path: str, dir_fd: int? = None) -> PyObject ! PyError
+fn lstat(path: str, dir_fd: int? = None) -> stat_result ! PyError
 fn mkdir(path: str, mode: int = 511, dir_fd: int? = None) -> None ! PyError
 fn mkfifo(path: str, mode: int = 438, dir_fd: int? = None) -> None ! PyError
 fn makedirs(name: str, mode: int = 511, exist_ok: bool = False, parent_mode: int? = None) -> None ! PyError
@@ -112,9 +112,9 @@ fn rename(src: str, dst: str, src_dir_fd: int? = None, dst_dir_fd: int? = None) 
 fn renames(old: str, new: str) -> None ! PyError
 fn replace(src: str, dst: str, src_dir_fd: int? = None, dst_dir_fd: int? = None) -> None ! PyError
 fn rmdir(path: str, dir_fd: int? = None) -> None ! PyError
-fn stat(path: PyObject, dir_fd: int? = None, follow_symlinks: bool = True) -> PyObject ! PyError
-fn statvfs(path: PyObject) -> PyObject ! PyError
-fn statx(path: PyObject, mask: int, flags: int = 0, dir_fd: int? = None, follow_symlinks: bool = True) -> PyObject ! PyError
+fn stat(path: PyObject, dir_fd: int? = None, follow_symlinks: bool = True) -> stat_result ! PyError
+fn statvfs(path: PyObject) -> statvfs_result ! PyError
+fn statx(path: PyObject, mask: int, flags: int = 0, dir_fd: int? = None, follow_symlinks: bool = True) -> statx_result ! PyError
 fn symlink(src: str, dst: str, target_is_directory: bool = False, dir_fd: int? = None) -> None ! PyError
 fn sync() -> None ! PyError
 fn truncate(path: PyObject, length: int) -> None ! PyError
@@ -146,7 +146,7 @@ fn spawnle(mode: int, file: str, arg0: str) -> int ! PyError
 fn spawnv(mode: int, file: str, args: PyObject) -> int ! PyError
 fn spawnve(mode: int, file: str, args: PyObject, env: PyObject) -> int ! PyError
 fn system(command: str) -> int ! PyError
-fn times() -> PyObject ! PyError
+fn times() -> times_result ! PyError
 fn waitpid(pid: int, options: int) -> (int, int) ! PyError
 fn startfile(filepath: str, operation: str = todo(), arguments: str = "", cwd: str? = None, show_cmd: int = 1) -> None ! PyError
 fn spawnlp(mode: int, file: str, arg0: str) -> int ! PyError
@@ -154,7 +154,7 @@ fn spawnlpe(mode: int, file: str, arg0: str) -> int ! PyError
 fn spawnvp(mode: int, file: str, args: PyObject) -> int ! PyError
 fn spawnvpe(mode: int, file: str, args: PyObject, env: PyObject) -> int ! PyError
 fn wait() -> (int, int) ! PyError
-fn waitid(idtype: int, ident: int, options: int) -> PyObject? ! PyError
+fn waitid(idtype: int, ident: int, options: int) -> waitid_result? ! PyError
 fn wait3(options: int) -> (int, int, PyObject) ! PyError
 fn wait4(pid: int, options: int) -> (int, int, PyObject) ! PyError
 fn WCOREDUMP(status: int) -> bool ! PyError
@@ -165,16 +165,16 @@ fn WIFEXITED(status: int) -> bool ! PyError
 fn WEXITSTATUS(status: int) -> int ! PyError
 fn WSTOPSIG(status: int) -> int ! PyError
 fn WTERMSIG(status: int) -> int ! PyError
-fn posix_spawn(path: str, argv: PyObject, env: PyObject?, file_actions: [PyObject]? = todo(), setpgroup: int? = None, resetids: bool = False, setsid: bool = False, setsigmask: [int] = todo(), setsigdef: [int] = todo(), scheduler: (PyObject, PyObject)? = None) -> int ! PyError
-fn posix_spawnp(path: str, argv: PyObject, env: PyObject?, file_actions: [PyObject]? = todo(), setpgroup: int? = None, resetids: bool = False, setsid: bool = False, setsigmask: [int] = todo(), setsigdef: [int] = todo(), scheduler: (PyObject, PyObject)? = None) -> int ! PyError
+fn posix_spawn(path: str, argv: PyObject, env: PyObject?, file_actions: [PyObject]? = todo(), setpgroup: int? = None, resetids: bool = False, setsid: bool = False, setsigmask: [int] = todo(), setsigdef: [int] = todo(), scheduler: (PyObject, sched_param)? = None) -> int ! PyError
+fn posix_spawnp(path: str, argv: PyObject, env: PyObject?, file_actions: [PyObject]? = todo(), setpgroup: int? = None, resetids: bool = False, setsid: bool = False, setsigmask: [int] = todo(), setsigdef: [int] = todo(), scheduler: (PyObject, sched_param)? = None) -> int ! PyError
 fn sched_get_priority_min(policy: int) -> int ! PyError
 fn sched_get_priority_max(policy: int) -> int ! PyError
 fn sched_yield() -> None ! PyError
-fn sched_setscheduler(pid: int, policy: int, param: PyObject) -> None ! PyError
+fn sched_setscheduler(pid: int, policy: int, param: sched_param) -> None ! PyError
 fn sched_getscheduler(pid: int) -> int ! PyError
 fn sched_rr_get_interval(pid: int) -> f64 ! PyError
-fn sched_setparam(pid: int, param: PyObject) -> None ! PyError
-fn sched_getparam(pid: int) -> PyObject ! PyError
+fn sched_setparam(pid: int, param: sched_param) -> None ! PyError
+fn sched_getparam(pid: int) -> sched_param ! PyError
 fn sched_setaffinity(pid: int, mask: [int]) -> None ! PyError
 fn sched_getaffinity(pid: int) -> {int} ! PyError
 fn cpu_count() -> int? ! PyError
@@ -211,7 +211,105 @@ fn timerfd_gettime_ns(fd: PyObject) -> (int, int) ! PyError
 fn fchmod(fd: int, mode: int) -> None ! PyError
 fn lchmod(path: str, mode: int) -> None ! PyError
 
+class stat_result:
+    st_mode: int
+    st_ino: int
+    st_dev: int
+    st_nlink: int
+    st_uid: int
+    st_gid: int
+    st_size: int
+    st_atime: f64
+    st_mtime: f64
+    st_ctime: f64
+    st_atime_ns: int
+    st_mtime_ns: int
+    st_ctime_ns: int
+    st_file_attributes: int
+    st_reparse_tag: int
+    st_birthtime: f64
+    st_birthtime_ns: int
+    st_blocks: int
+    st_blksize: int
+    st_rdev: int
+    st_gen: int
+    st_flags: int
+
+class statvfs_result:
+    f_bsize: int
+    f_frsize: int
+    f_blocks: int
+    f_bfree: int
+    f_bavail: int
+    f_files: int
+    f_ffree: int
+    f_favail: int
+    f_flag: int
+    f_namemax: int
+    f_fsid: int
+
+class uname_result:
+    sysname: str
+    nodename: str
+    release: str
+    version: str
+    machine: str
+
+class terminal_size:
+    columns: int
+    lines: int
+
+class statx_result:
+    stx_mask: int
+    stx_blksize: int
+    stx_attributes: int
+    stx_attributes_mask: int
+    stx_rdev_major: int
+    stx_rdev_minor: int
+    stx_rdev: int
+    stx_dev_major: int
+    stx_dev_minor: int
+    stx_dev: int
+    stx_mode: int?
+    stx_nlink: int?
+    stx_uid: int?
+    stx_gid: int?
+    stx_ino: int?
+    stx_size: int?
+    stx_blocks: int?
+    stx_atime: f64?
+    stx_atime_ns: int?
+    stx_btime: f64?
+    stx_btime_ns: int?
+    stx_ctime: f64?
+    stx_ctime_ns: int?
+    stx_mtime: f64?
+    stx_mtime_ns: int?
+    stx_mnt_id: int?
+    stx_dio_mem_align: int?
+    stx_dio_offset_align: int?
+
+class times_result:
+    user: f64
+    system: f64
+    children_user: f64
+    children_system: f64
+    elapsed: f64
+
+class waitid_result:
+    si_pid: int
+    si_uid: int
+    si_signo: int
+    si_status: int
+    si_code: int
+
+class sched_param:
+    fn sched_param(sched_priority: int) -> sched_param ! PyError
+    sched_priority: int
+
 # Not bound:
+#   PathLike: it is a protocol, a shape rather than a class
+#   DirEntry: it is generic, which specs/python-generics/ binds
 #   listdir: it is overloaded
 #   fspath: it is overloaded
 #   getenv: it is overloaded

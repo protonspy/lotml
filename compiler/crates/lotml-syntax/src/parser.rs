@@ -608,8 +608,9 @@ impl<'a> Parser<'a> {
         ImplDef { span: self.since(start), trait_name, target, methods }
     }
 
-    /// `class C(B, …):` and a block of attribute lines (`name: T`) and bodyless `fn` signatures:
-    /// a Python class, read in an interface only (adr:0034).
+    /// `class C(B, …):` and a block of attribute lines (`name: T`) and bodyless `fn` signatures, or
+    /// `class C(B, …)` alone for a class with no member: a Python class, read in an interface only
+    /// (adr:0034).
     fn class_def(&mut self) -> ClassDef {
         let start = self.span();
         self.bump(); // class
@@ -626,6 +627,11 @@ impl<'a> Parser<'a> {
         }
         let mut attributes = Vec::new();
         let mut methods = Vec::new();
+        // `class C` alone: a class with no member the interface declares.
+        if !self.at(T::Colon) {
+            self.end_of_line("after the class");
+            return ClassDef { span: self.since(start), name, bases, attributes, methods };
+        }
         if self.expect(T::Colon, "after the class's name")
             && self.expect(T::Newline, "after `class …:`")
             && self.expect(T::Indent, "for the class's attributes and methods")

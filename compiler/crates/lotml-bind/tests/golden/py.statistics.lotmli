@@ -20,6 +20,31 @@ fn stdev(data: [PyObject], xbar: PyObject? = None) -> PyObject ! PyError
 fn variance(data: [PyObject], xbar: PyObject? = None) -> PyObject ! PyError
 fn correlation(x: [PyObject], y: [PyObject], method: PyObject = "linear") -> f64 ! PyError
 fn covariance(x: [PyObject], y: [PyObject]) -> f64 ! PyError
-fn linear_regression(regressor: PyObject, dependent_variable: PyObject, proportional: bool = False) -> PyObject ! PyError
+fn linear_regression(regressor: PyObject, dependent_variable: PyObject, proportional: bool = False) -> LinearRegression ! PyError
 fn kde(data: [f64], h: f64, kernel: PyObject = "normal", cumulative: bool = False) -> PyObject ! PyError
 fn kde_random(data: [f64], h: f64, kernel: PyObject = "normal", seed: PyObject? = None) -> PyObject ! PyError
+
+class StatisticsError
+
+class NormalDist:
+    fn NormalDist(mu: f64 = 0.0, sigma: f64 = 1.0) -> NormalDist ! PyError
+    mean: f64
+    median: f64
+    mode: f64
+    stdev: f64
+    variance: f64
+    fn from_samples(data: [f64]) -> NormalDist ! PyError
+    fn samples(self, n: int, seed: PyObject? = None) -> [f64] ! PyError
+    fn pdf(self, x: f64) -> f64 ! PyError
+    fn cdf(self, x: f64) -> f64 ! PyError
+    fn inv_cdf(self, p: f64) -> f64 ! PyError
+    fn overlap(self, other: NormalDist) -> f64 ! PyError
+    fn quantiles(self, n: int = 4) -> [f64] ! PyError
+    fn zscore(self, x: f64) -> f64 ! PyError
+
+class LinearRegression:
+    slope: f64
+    intercept: f64
+
+# Not bound:
+#   NormalDist.__eq__, __add__, __sub__, __mul__, __truediv__, __pos__, __neg__, __rsub__, __hash__: dunder methods, which operators would call
