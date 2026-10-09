@@ -2,7 +2,8 @@
 autonomy: auto
 ci: wait
 branch: feat/python-classes
-delivery: in-progress
+delivery: in-review
+pr: 59
 ---
 
 # Python classes — requirements
