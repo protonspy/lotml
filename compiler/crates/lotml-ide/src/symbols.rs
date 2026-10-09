@@ -106,7 +106,7 @@ fn declare(module: &Module) -> Declared {
                     d.params.insert(Symbol::Member(owner.name.clone(), m.name.name.clone()), params(m));
                 }
             }
-            Item::Import(_) | Item::Test(_) | Item::Error(_) => {}
+            Item::Import(_) | Item::Test(_) | Item::Class(_) | Item::Error(_) => {}
         }
     }
     d
@@ -196,7 +196,7 @@ impl Walk<'_> {
                 self.type_params.truncate(saved);
             }
             Item::Test(t) => self.block(&t.body),
-            Item::Import(_) | Item::Error(_) => {}
+            Item::Import(_) | Item::Class(_) | Item::Error(_) => {}
         }
     }
 

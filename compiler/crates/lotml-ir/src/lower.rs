@@ -482,7 +482,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
                     cx.unsupported(t.name.span, "a generic trait");
                 }
             }
-            Item::Import(_) | Item::Test(_) | Item::Error(_) | Item::Record(_) | Item::Sum(_) => {}
+            Item::Import(_) | Item::Test(_) | Item::Error(_) | Item::Record(_) | Item::Sum(_) | Item::Class(_) => {}
         }
     }
     let defaults = cx.defaults_of(module);

@@ -221,6 +221,24 @@ impl Formatter<'_> {
                 self.line(&format!("test {name}:"));
                 self.block(&t.body);
             }
+            Item::Class(c) => {
+                let bases: Vec<&str> = c.bases.iter().map(|b| b.name.as_str()).collect();
+                let header = if bases.is_empty() {
+                    format!("class {}:", c.name.name)
+                } else {
+                    format!("class {}({}):", c.name.name, bases.join(", "))
+                };
+                self.line(&header);
+                self.indent += 1;
+                for attribute in &c.attributes {
+                    if let Some(name) = &attribute.name {
+                        let line = format!("{}: {}", name.name, self.ty(&attribute.ty));
+                        self.line(&line);
+                    }
+                }
+                self.indent -= 1;
+                self.members(&c.methods, c.span.end, false);
+            }
             Item::Error(_) => {}
         }
     }

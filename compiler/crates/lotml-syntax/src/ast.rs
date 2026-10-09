@@ -25,6 +25,8 @@ pub enum Item {
     Trait(TraitDef),
     Import(Import),
     Test(TestDef),
+    /// A Python class, which only an interface declares (adr:0034).
+    Class(ClassDef),
     Error(Span),
 }
 
@@ -36,6 +38,9 @@ impl Item {
             Item::Fn(f) => f.end(),
             Item::Impl(imp) => imp.methods.last().map_or(imp.span.end, FnDef::end),
             Item::Trait(t) => t.methods.last().map_or(t.span.end, FnDef::end),
+            Item::Class(c) => {
+                c.methods.last().map_or(c.span.end, FnDef::end).max(c.attributes.last().map_or(0, |a| a.span.end))
+            }
             Item::Test(t) => t.body.end(),
             other => other.span().end,
         }
@@ -50,6 +55,7 @@ impl Item {
             Item::Trait(t) => t.span,
             Item::Import(i) => i.span,
             Item::Test(t) => t.span,
+            Item::Class(c) => c.span,
             Item::Error(span) => *span,
         }
     }
@@ -139,6 +145,17 @@ pub struct ImplDef {
     pub span: Span,
     pub trait_name: Option<TypeExpr>,
     pub target: TypeExpr,
+    pub methods: Vec<FnDef>,
+}
+
+/// A Python class an interface declares (adr:0034): the bases it names, its attributes, and the
+/// signatures of its constructor, methods and static methods.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ClassDef {
+    pub span: Span,
+    pub name: Ident,
+    pub bases: Vec<Ident>,
+    pub attributes: Vec<Field>,
     pub methods: Vec<FnDef>,
 }
 

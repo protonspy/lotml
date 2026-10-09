@@ -84,7 +84,7 @@ pub fn parts(module: &Module) -> Vec<Part<'_>> {
             Item::Trait(t) => found.extend(t.methods.iter().map(|f| Part::TraitMethod { owner: &t.name.name, f })),
             Item::Record(r) => found.push(Part::Record(r)),
             Item::Test(t) => found.push(Part::Test(t)),
-            Item::Sum(_) | Item::Import(_) | Item::Error(_) => {}
+            Item::Sum(_) | Item::Import(_) | Item::Class(_) | Item::Error(_) => {}
         }
     }
     found

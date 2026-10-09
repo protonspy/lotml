@@ -115,6 +115,17 @@ impl Walk<'_> {
                 w.node("name", t.name_span, s, &mut at);
                 w.block(&t.body, s, &mut at);
             }),
+            Item::Class(c) => self.within("class", c.span, parent, after, |w, s| {
+                let mut at = s.start;
+                w.ident(&c.name, s, &mut at);
+                for base in &c.bases {
+                    w.ident(base, s, &mut at);
+                }
+                w.fields(&c.attributes, s, &mut at);
+                for m in &c.methods {
+                    w.function(m, s, &mut at);
+                }
+            }),
             Item::Error(span) => self.node("error", *span, parent, after),
         }
     }

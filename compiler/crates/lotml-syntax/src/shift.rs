@@ -79,6 +79,7 @@ impl Shift for Item {
             Item::Trait(t) => t.shift(from, to),
             Item::Import(i) => i.shift(from, to),
             Item::Test(t) => t.shift(from, to),
+            Item::Class(c) => c.shift(from, to),
             Item::Error(span) => span.shift(from, to),
         }
     }
@@ -160,6 +161,17 @@ impl Shift for ImplDef {
         span.shift(from, to);
         trait_name.shift(from, to);
         target.shift(from, to);
+        methods.shift(from, to);
+    }
+}
+
+impl Shift for ClassDef {
+    fn shift(&mut self, from: u32, to: u32) {
+        let ClassDef { span, name, bases, attributes, methods } = self;
+        span.shift(from, to);
+        name.shift(from, to);
+        bases.shift(from, to);
+        attributes.shift(from, to);
         methods.shift(from, to);
     }
 }

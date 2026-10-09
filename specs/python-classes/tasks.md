@@ -2,7 +2,7 @@
 
 ## 1 · The interface
 
-- [ ] 1.1 (Unit) Parse `class C(B):` blocks of attribute lines and bodyless `fn` signatures in interface mode into `Item::Class`, keeping E0102 at `class` in a program — R1.5
+- [x] 1.1 (Unit) Parse `class C(B):` blocks of attribute lines and bodyless `fn` signatures in interface mode into `Item::Class`, keeping E0102 at `class` in a program — R1.5
 - [ ] 1.2 (Unit) Read a class block into the interface — attributes, constructor, methods, static methods and the bases it declares — resolving type names to the interface's classes, with E0221 for a class in a C interface, an undeclared base or a member without `PyError` — R1.5, R2.1
   _Depends 1.1_
 

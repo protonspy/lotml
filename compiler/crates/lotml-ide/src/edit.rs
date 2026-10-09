@@ -260,7 +260,7 @@ fn find<'m>(module: &'m Module, text: &str, name: &str) -> Result<Found<'m>, Ref
                     known.push(full);
                 }
             }
-            Item::Import(_) | Item::Test(_) | Item::Error(_) => {}
+            Item::Import(_) | Item::Test(_) | Item::Class(_) | Item::Error(_) => {}
         }
     }
     match found.len() {
