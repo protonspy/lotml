@@ -212,8 +212,13 @@ Phase 2 built both directions of R14 and R27 on one checked boundary
   interface of bodyless signatures each returning `T ! PyError`;
   names typeshed writes as methods of a module-level instance, `randint = _inst.randint`, are
   bound from those methods.
-  A union other than `X | None`, `Any`, a callable or a class is bound as `PyObject`, an opaque
-  value a program passes back to Python or converts with `o.value()`, the boundary checking it
+  A class the stub defines is bound as a `class` block of the interface, its constructor, methods,
+  static methods and attributes each `T ! PyError`, its value a handle to the Python object that
+  only those members reach (specs/python-classes,
+  adr:0034-a-python-class-crosses-as-a-nominal-handle-with-its-declared-members); a generic class,
+  a protocol and a class's dunder methods are listed in a comment. A union other than `X | None`,
+  `Any`, a callable or a class the stub does not define is bound as `PyObject`, an opaque value a
+  program passes back to Python or converts with `o.value()`, the boundary checking it
   (adr:0031-a-python-name-no-stub-types-crosses-as-an-opaque-python-value); an overloaded
   function is listed in a comment, not bound; an optional parameter whose default is not a literal is
   written `= todo()`. A program imports the module by its origin, `import py.m` or `from py.m
