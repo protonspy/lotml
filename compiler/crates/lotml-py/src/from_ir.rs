@@ -271,8 +271,8 @@ struct ModuleWriter<'l> {
     lines: Vec<u32>,
     /// Sum types whose variants all have no fields: their values never change.
     enums: HashSet<String>,
-    /// Each Python function the program calls, by module and function, with the result its
-    /// interface declares, in the order first called: the `k`th is bound to `__py<k>`.
+    /// Each Python function the program calls, by module, function and the result its interface
+    /// declares, in the order first called: the `k`th is bound to `__py<k>`.
     python_calls: Vec<(String, String, Ty)>,
     /// The default of each parameter, by the function's symbol and the parameter: its index.
     param_defaults: HashMap<(String, String), usize>,
@@ -731,6 +731,14 @@ impl<'m, 'l> Writer<'m, 'l> {
     /// The operand `o` stored somewhere it outlives this read — in a container, an argument, a
     /// returned value, a binding: copied when a `var` may still change it, or when `into_var`, a
     /// changed container it is stored in, would share a value someone else holds.
+    /// A Python call's arguments: those given by position, and the last `keywords.len()`, given
+    /// by name.
+    fn python_args<'k>(&mut self, args: &[Operand], keywords: &'k [String]) -> (Vec<Value>, Vec<(&'k str, Value)>) {
+        let mut values: Vec<Value> = args.iter().map(|o| self.stored(o, false)).collect();
+        let named = values.split_off(values.len().saturating_sub(keywords.len()));
+        (values, keywords.iter().map(String::as_str).zip(named).collect())
+    }
+
     fn stored(&mut self, o: &Operand, into_var: bool) -> Value {
         let value = self.operand(o);
         let ty = self.operand_ty(o);
@@ -1245,16 +1253,19 @@ impl<'m, 'l> Writer<'m, 'l> {
                 let args: Vec<Value> = args.iter().map(|o| self.operand(o)).collect();
                 call(name(&format!("__c_{symbol}")), args)
             }
-            Expr::CallPython { module, function, args, ret, .. } => {
-                let k = match self.m.python_calls.iter().position(|(m, f, _)| m == module && f == function) {
+            Expr::CallPython { module, function, args, keywords, ret, .. } => {
+                // One binding per result checked: the overloads of one function return different
+                // types (adr:0035).
+                let bound = |(m, f, r): &(String, String, Ty)| m == module && f == function && r == ret;
+                let k = match self.m.python_calls.iter().position(bound) {
                     Some(k) => k,
                     None => {
                         self.m.python_calls.push((module.clone(), function.clone(), ret.clone()));
                         self.m.python_calls.len() - 1
                     }
                 };
-                let args: Vec<Value> = args.iter().map(|o| self.stored(o, false)).collect();
-                call(name(&format!("__py{k}")), args)
+                let (args, named) = self.python_args(args, keywords);
+                call_kw(name(&format!("__py{k}")), args, named)
             }
             Expr::Parallel { tasks, .. } => {
                 let tasks = self.operand(tasks);
@@ -1264,10 +1275,11 @@ impl<'m, 'l> Writer<'m, 'l> {
                 let value = self.operand(value);
                 call(rt("convert"), vec![value, text(&crate::boundary::descriptor(ty).to_string())])
             }
-            Expr::CallPyMethod { object, method, args, ret, .. } => {
+            Expr::CallPyMethod { object, method, args, keywords, ret, .. } => {
                 let mut values = vec![self.operand(object), text(method), text(&returned(ret).to_string())];
-                values.extend(args.iter().map(|o| self.stored(o, false)));
-                call(rt("method"), values)
+                let (args, named) = self.python_args(args, keywords);
+                values.extend(args);
+                call_kw(rt("method"), values, named)
             }
             Expr::PyAttribute { object, name, ret } => {
                 let values = vec![self.operand(object), text(name), text(&returned(ret).to_string())];

@@ -61,7 +61,7 @@ fn bind_writes_an_interface_from_a_stub() {
     let dir = scratch("bind", &[("stubs/textwrap.pyi", TEXTWRAP_PYI)]);
     let out = lotml(&["bind", "textwrap", "--stub", "stubs/textwrap.pyi"], &dir);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    assert!(stdout(&out).contains("5 functions and 1 class bound, 1 not"), "{}", stdout(&out));
+    assert!(stdout(&out).contains("6 functions and 1 class bound\n"), "{}", stdout(&out));
     let interface = std::fs::read_to_string(dir.join("bindings").join("py.textwrap.lotmli")).unwrap();
     assert!(interface.contains(
         "fn wrap(text: str, width: int = 70, max_lines: int? = None, placeholder: str = \" [...]\") -> [str] ! PyError\n"
@@ -72,7 +72,10 @@ fn bind_writes_an_interface_from_a_stub() {
         interface.contains("fn indent(text: str, prefix: str, predicate: PyObject? = None) -> str ! PyError"),
         "a callable is a `PyObject`: {interface}"
     );
-    assert!(interface.contains("#   pick: it is overloaded"));
+    assert!(
+        interface.contains("fn pick(x: int) -> int ! PyError\nfn pick(x: str) -> str ! PyError\n"),
+        "an overloaded function is bound once per overload (specs/python-overloads): {interface}"
+    );
     assert!(!interface.contains("_private"));
     assert!(interface.contains("\nclass TextWrapper:\n"), "a class is bound (specs/python-classes): {interface}");
 }
@@ -130,10 +133,10 @@ fn bind_binds_the_names_a_stub_writes_as_methods_of_an_instance() {
     ] {
         assert!(interface.contains(bound), "{bound}in\n{interface}");
     }
-    assert!(interface.contains("#   pick: it is overloaded\n"), "{interface}");
+    assert!(interface.contains("fn pick(x: int) -> int ! PyError\nfn pick(x: str) -> str ! PyError\n"), "{interface}");
     assert!(interface.contains("#   getrandbits: `Random` holds no `getrandbits` in this stub\n"), "{interface}");
     assert!(!interface.contains("_hidden"));
-    assert!(stdout(&out).contains("5 functions and 1 class bound, 4 not"), "{}", stdout(&out));
+    assert!(stdout(&out).contains("6 functions and 1 class bound, 1 not"), "{}", stdout(&out));
 }
 
 #[test]
@@ -868,4 +871,93 @@ fn bind_refuses_a_stub_it_cannot_parse_saying_where() {
     assert_eq!(out.status.code(), Some(2));
     let said = String::from_utf8_lossy(&out.stderr);
     assert!(said.contains("does not parse, at line 2"), "{said}");
+}
+
+const TWICE_PY: &str = "\
+def twice(x):
+    return x * 2
+
+class Pad:
+    def __init__(self, start):
+        self.start = start
+    def grow(self, by):
+        return self.start + by
+";
+
+const TWICE_LOTMLI: &str = "\
+fn twice(x: int) -> int ! PyError
+fn twice(x: str) -> str ! PyError
+
+class Pad:
+    fn Pad(start: int) -> Pad ! PyError
+    fn Pad(start: str) -> Pad ! PyError
+    fn grow(self, by: int) -> int ! PyError
+    fn grow(self, by: str) -> str ! PyError
+";
+
+#[test]
+fn an_overloaded_call_runs_through_the_overload_the_checker_gave_it() {
+    let program = "\
+from py.twice import twice, Pad
+
+fn main() -> None ! PyError:
+    n: int = twice(21)?
+    s: str = twice(\"ab\")?
+    print(n, s)
+    p = Pad(3)?
+    q = Pad(\"x\")?
+    k: int = p.grow(2)?
+    t: str = q.grow(\"y\")?
+    print(k, t)
+";
+    let dir = scratch(
+        "python-overloads",
+        &[(".git", ""), ("twice.py", TWICE_PY), ("bindings/py.twice.lotmli", TWICE_LOTMLI), ("main.lot", program)],
+    );
+    let checked = lotml(&["check", "main.lot"], &dir);
+    assert!(checked.status.success(), "{}", stdout(&checked));
+    let out = lotml(&["run", "main.lot"], &dir);
+    assert_eq!(
+        stdout(&out),
+        "42 abab\n5 xy\n",
+        "each call converts and checks by its own overload: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn a_keyword_argument_reaches_python_by_its_name_past_a_parameter_left_to_its_default() {
+    let module = "\
+def f(a, b=10, c=20):
+    return a * 100 + b * 10 + c
+
+class Acc:
+    def __init__(self):
+        pass
+    def add(self, a, b=1, c=2):
+        return a + b * 10 + c * 100
+    def tag(self, name, target=0):
+        return name * 10 + target
+";
+    let interface = "\
+fn f(a: int, b: int = todo(), c: int = todo()) -> int ! PyError
+
+class Acc:
+    fn Acc() -> Acc ! PyError
+    fn add(self, a: int, b: int = todo(), c: int = todo()) -> int ! PyError
+    fn tag(self, name: int, target: int = todo()) -> int ! PyError
+";
+    let program = "\
+from py.kw import f, Acc
+
+fn main() -> None ! PyError:
+    print(f(1, c=3)?, f(1, c=3, b=2)?)
+    print(Acc()?.add(5, c=7)?, Acc()?.tag(name=4, target=2)?)
+";
+    let dir = scratch(
+        "python-keywords",
+        &[(".git", ""), ("kw.py", module), ("bindings/py.kw.lotmli", interface), ("main.lot", program)],
+    );
+    let out = lotml(&["run", "main.lot"], &dir);
+    assert_eq!(stdout(&out), "203 123\n715 42\n", "{}", String::from_utf8_lossy(&out.stderr));
 }

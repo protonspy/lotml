@@ -3,8 +3,9 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
-
-# Not bound:
-#   merge: it is overloaded
-#   nlargest: it is overloaded
-#   nsmallest: it is overloaded
+fn merge(key: PyObject, reverse: bool = False) -> PyObject ! PyError
+fn merge(key: None = None, reverse: bool = False) -> PyObject ! PyError
+fn nlargest(n: int, iterable: [PyObject], key: PyObject) -> [PyObject] ! PyError
+fn nlargest(n: int, iterable: [PyObject], key: None = None) -> [PyObject] ! PyError
+fn nsmallest(n: int, iterable: [PyObject], key: PyObject) -> [PyObject] ! PyError
+fn nsmallest(n: int, iterable: [PyObject], key: None = None) -> [PyObject] ! PyError

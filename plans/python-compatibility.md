@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: fefb8c8007b9d374175470972297021a19206dfff2971eeee7bde6a260d3afe5
+checksum: 9514dcaa0d355b3bd7e0deba7a4c8315bc646197c3d24cea6a73d3c780b5c412
 ---
 
 # Python compatibility
@@ -88,7 +88,7 @@ the typed share each spec added.
 - [x] 2.5 (Unit) Write a proposed ADR on `lotml run` installing a project's dependencies through uv
   from its `pyproject.toml` and `uv.lock`, amending adr:0026: the lock's versions are the ones
   bound, and `uv.toml` and `.python-version` stay ignored; the owner accepts it before 2.4
-- [ ] 3.1 (Unit) Write and build the spec python-classes, the coverage report run before and after
+- [x] 3.1 (Unit) Write and build the spec python-classes, the coverage report run before and after
   _Depends 2.4_
 - [ ] 3.2 (Unit) Write and build the spec python-overloads, the coverage report run before and after
   _Depends 2.4_

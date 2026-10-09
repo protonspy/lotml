@@ -135,14 +135,12 @@ fn bind(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
     skipped.extend(refused);
     let cx = Cx { classes: &classes, this: None };
     let mut seen = HashSet::new();
-    for (name, function) in functions(body, cx) {
+    for (name, lines, left_out) in functions(body, cx) {
         if name.starts_with('_') || !seen.insert(name.clone()) {
             continue;
         }
-        match function {
-            Ok(function) => bound.push(function),
-            Err(why) => skipped.push(format!("#   {name}: {why}")),
-        }
+        bound.extend(lines);
+        skipped.extend(left_out);
     }
     let source: String = said.chars().map(|c| if printable(c) { c } else { '?' }).collect();
     let mut lines = vec![
@@ -175,42 +173,145 @@ fn bind(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
     Ok(text)
 }
 
-/// Each module-level function by name, in the order written: its signature, or why it is not
-/// bound. The functions come first, then the names written as an instance's methods, each found
-/// in an index of its class's methods built once, the first written of a name winning, so a stub
-/// of many aliases binds in time linear in its size.
-fn functions(body: &[Stmt], cx: Cx<'_>) -> Vec<(String, Result<String, String>)> {
-    let declared = definitions(body);
-    let overloaded: HashSet<&str> = declared.iter().filter(|f| is_overload(f)).map(|f| f.name.as_str()).collect();
-    let mut found: Vec<(String, Result<String, String>)> = declared
-        .iter()
+/// Each module-level function by name, in the order written: the lines of its signatures (one,
+/// or one per overload), and a comment for what is left out. The functions come first, then the
+/// names written as an instance's methods, each found in an index of its class's methods built
+/// once, the first written of a name winning, so a stub of many aliases binds in time linear in
+/// its size.
+fn functions(body: &[Stmt], cx: Cx<'_>) -> Vec<(String, Vec<String>, Vec<String>)> {
+    let runs = overload_runs(body);
+    // Each name once, the first written winning, so a stub repeating one overload thousands of
+    // times binds it once rather than once per repetition.
+    let mut named: HashSet<String> = HashSet::new();
+    let mut found: Vec<(String, Vec<String>, Vec<String>)> = definitions(body)
+        .into_iter()
+        .filter(|f| named.insert(f.name.to_string()))
         .map(|f| {
-            let bound = if overloaded.contains(f.name.as_str()) {
-                Err("it is overloaded".to_string())
-            } else {
-                written(f, f.name.as_str(), false, cx)
+            let name = f.name.as_str();
+            let (lines, left_out) = match runs.get(name) {
+                Some(run) if is_overload(f) => overloads(run, name, |o| written(o, name, false, cx), |_| false),
+                _ => one(name, written(f, name, false, cx)),
             };
-            (f.name.to_string(), bound)
+            (name.to_string(), lines, left_out)
         })
         .collect();
-    let mut methods: HashMap<&str, HashMap<&str, &ast::StmtFunctionDef>> = HashMap::new();
+    let mut methods: HashMap<&str, (HashMap<&str, &ast::StmtFunctionDef>, Runs<'_>)> = HashMap::new();
     for class in module_level(body).into_iter().filter_map(Stmt::as_class_def_stmt) {
         let mut index = HashMap::new();
         for method in definitions(&class.body) {
             index.entry(method.name.as_str()).or_insert(method);
         }
-        methods.insert(class.name.as_str(), index);
+        methods.insert(class.name.as_str(), (index, overload_runs(&class.body)));
     }
     for (name, class, method) in aliases(body) {
-        let first = methods.get(class.as_str()).and_then(|index| index.get(method.as_str()));
-        let bound = match first {
-            None => Err(format!("`{class}` holds no `{method}` in this stub")),
-            Some(m) if is_overload(m) => Err("it is overloaded".to_string()),
-            Some(m) => written(m, &name, !is_static(m), cx),
+        if !named.insert(name.clone()) {
+            continue;
+        }
+        let index = methods.get(class.as_str());
+        let first = index.and_then(|(index, _)| index.get(method.as_str()));
+        let run = index.and_then(|(_, runs)| runs.get(method.as_str()));
+        let (lines, left_out) = match (first, run) {
+            (None, _) => one(&name, Err(format!("`{class}` holds no `{method}` in this stub"))),
+            (Some(m), Some(run)) if is_overload(m) => {
+                overloads(run, &name, |o| written(o, &name, !is_static(o), cx), |o| !is_static(o))
+            }
+            (Some(m), _) => one(&name, written(m, &name, !is_static(m), cx)),
         };
-        found.push((name, bound));
+        found.push((name, lines, left_out));
     }
     found
+}
+
+/// A name's one signature as lines of the interface, or the comment saying why it is left out.
+fn one(name: &str, written: Result<String, String>) -> (Vec<String>, Vec<String>) {
+    match written {
+        Ok(line) => (vec![line], Vec::new()),
+        Err(why) => (Vec::new(), vec![format!("#   {name}: {why}")]),
+    }
+}
+
+/// The most overloads of one name the binder writes: as many as the checker reads (adr:0035).
+const OVERLOADS: usize = 64;
+
+/// Runs of `@overload` definitions by name.
+type Runs<'s> = HashMap<&'s str, Vec<&'s ast::StmtFunctionDef>>;
+
+/// The `@overload` definitions of each name in `body`: those written one after another in one
+/// statement list, the first such run of a name in the order written winning, as the first
+/// definition of a function does.
+fn overload_runs(body: &[Stmt]) -> Runs<'_> {
+    fn walk<'s>(body: &'s [Stmt], runs: &mut Runs<'s>) {
+        let mut at = 0;
+        while let Some(statement) = body.get(at) {
+            at += 1;
+            match statement {
+                Stmt::If(branch) => {
+                    walk(&branch.body, runs);
+                    for clause in &branch.elif_else_clauses {
+                        walk(&clause.body, runs);
+                    }
+                }
+                Stmt::FunctionDef(f) if is_overload(f) => {
+                    let mut run = vec![f];
+                    while let Some(Stmt::FunctionDef(next)) = body.get(at)
+                        && next.name.as_str() == f.name.as_str()
+                        && is_overload(next)
+                    {
+                        run.push(next);
+                        at += 1;
+                    }
+                    runs.entry(f.name.as_str()).or_insert(run);
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut runs = HashMap::new();
+    walk(body, &mut runs);
+    runs
+}
+
+/// The overloads of `run` as `write` writes each, in order, and a comment for each left out
+/// (adr:0035): one that cannot be written, or whose receiver differs from the first's, and every
+/// one after it, since a call it would take would go to a later one of another result; one whose
+/// parameters are an earlier one's, which no call would be given; and those past [`OVERLOADS`].
+fn overloads(
+    run: &[&ast::StmtFunctionDef],
+    label: &str,
+    write: impl Fn(&ast::StmtFunctionDef) -> Result<String, String>,
+    receiver: impl Fn(&ast::StmtFunctionDef) -> bool,
+) -> (Vec<String>, Vec<String>) {
+    let mut lines: Vec<String> = Vec::new();
+    let mut taken = HashSet::new();
+    let mut skipped = Vec::new();
+    let total = run.len();
+    for (k, f) in run.iter().enumerate() {
+        let which = format!("#   {label}: overload {} of {total}", k + 1);
+        // Counted as declared, repeats included, so no run costs more than the limit to read.
+        if k == OVERLOADS {
+            skipped.push(format!("#   {label}: overloads {} to {total}: past the {OVERLOADS} lotml reads", k + 1));
+            break;
+        }
+        if receiver(f) != receiver(run[0]) {
+            skipped.push(format!("{which}: it takes `self` where the first does not; it and those after are left out"));
+            break;
+        }
+        match write(f) {
+            Ok(line) => {
+                let parameters = line.split(" -> ").next().unwrap_or(&line).to_string();
+                if taken.insert(parameters) {
+                    lines.push(line);
+                } else {
+                    skipped.push(format!("{which}: an earlier one takes the same parameters, so no call is given it"));
+                }
+            }
+            Err(why) => {
+                skipped.push(format!("{which}: {why}; it and those after are left out"));
+                break;
+            }
+        }
+    }
+    (lines, skipped)
 }
 
 /// The functions at `body`'s level, those under `if sys.version_info …` blocks included.
@@ -423,7 +524,7 @@ fn class_block(class: &ast::StmtClassDef, classes: &HashSet<String>) -> (Vec<Str
         }
     }
     let defs: Vec<&ast::StmtFunctionDef> = members.iter().filter_map(|s| s.as_function_def_stmt()).collect();
-    let overloaded: HashSet<&str> = defs.iter().filter(|f| is_overload(f)).map(|f| f.name.as_str()).collect();
+    let runs = overload_runs(&class.body);
     let decorated = |f: &ast::StmtFunctionDef, what: &str| {
         f.decorator_list.iter().any(|d| match &d.expression {
             Expr::Attribute(attribute) => attribute.attr.as_str() == what,
@@ -454,20 +555,22 @@ fn class_block(class: &ast::StmtClassDef, classes: &HashSet<String>) -> (Vec<Str
             dunders.push(member.to_string());
             continue;
         }
-        if overloaded.contains(member) {
-            skipped.push(format!("#   {name}.{member}: it is overloaded"));
-            continue;
-        }
-        let is_method = !is_static(f) && !decorated(f, "classmethod");
-        let signature = params(f, !is_static(f), cx).map(|params| {
-            let returns = f.returns.as_deref().map_or_else(|| OBJECT.to_string(), |r| lotml_type(r, false, cx));
-            let params = if is_method { std::iter::once("self".to_string()).chain(params).collect() } else { params };
-            format!("    fn {member}({}) -> {returns} ! PyError", params.join(", "))
-        });
-        match signature {
-            Ok(line) => lines.push(line),
-            Err(why) => skipped.push(format!("#   {name}.{member}: {why}")),
-        }
+        let is_method = |f: &ast::StmtFunctionDef| !is_static(f) && !decorated(f, "classmethod");
+        let signature = |f: &ast::StmtFunctionDef| {
+            params(f, !is_static(f), cx).map(|params| {
+                let returns = f.returns.as_deref().map_or_else(|| OBJECT.to_string(), |r| lotml_type(r, false, cx));
+                let params =
+                    if is_method(f) { std::iter::once("self".to_string()).chain(params).collect() } else { params };
+                format!("    fn {member}({}) -> {returns} ! PyError", params.join(", "))
+            })
+        };
+        let label = format!("{name}.{member}");
+        let (written, left_out) = match runs.get(member) {
+            Some(run) if is_overload(f) => overloads(run, &label, signature, is_method),
+            _ => one(&label, signature(f)),
+        };
+        lines.extend(written);
+        skipped.extend(left_out);
     }
     // The class's own constructor, its `__init__` else its `__new__`. One a class inherits is not
     // written again: the checker takes it from the base (adr:0034), so a stub of many subclasses
@@ -476,15 +579,19 @@ fn class_block(class: &ast::StmtClassDef, classes: &HashSet<String>) -> (Vec<Str
         .iter()
         .find(|f| f.name.as_str() == "__init__")
         .or_else(|| defs.iter().find(|f| f.name.as_str() == "__new__"));
-    match own {
-        Some(init) if overloaded.contains(init.name.as_str()) => {
-            skipped.push(format!("#   {name}.{}: it is overloaded", init.name.as_str()));
+    if let Some(init) = own {
+        let constructor = |f: &ast::StmtFunctionDef| {
+            params(f, true, cx).map(|params| format!("    fn {name}({}) -> {name} ! PyError", params.join(", ")))
+        };
+        let label = format!("{name}.{}", init.name.as_str());
+        let (written, left_out) = match runs.get(init.name.as_str()) {
+            Some(run) if is_overload(init) => overloads(run, &label, constructor, |_| false),
+            _ => one(&label, constructor(init)),
+        };
+        for (k, line) in written.into_iter().enumerate() {
+            lines.insert(1 + k, line);
         }
-        Some(init) => match params(init, true, cx) {
-            Ok(params) => lines.insert(1, format!("    fn {name}({}) -> {name} ! PyError", params.join(", "))),
-            Err(why) => skipped.push(format!("#   {name}.{}: {why}", init.name.as_str())),
-        },
-        None => {}
+        skipped.extend(left_out);
     }
     if !dunders.is_empty() {
         skipped.push(format!("#   {name}.{}: dunder methods, which operators would call", dunders.join(", ")));
@@ -927,7 +1034,7 @@ def combine(d: date, t: datetime) -> datetime: ...
     #[test]
     fn a_class_or_member_lotml_cannot_hold_is_listed_with_the_reason() {
         let stub = "\
-from typing import Generic, TypeVar, Protocol, overload
+from typing import Generic, TypeVar, Protocol
 T = TypeVar(\"T\")
 class Box(Generic[T]):
     def get(self) -> T: ...
@@ -935,10 +1042,6 @@ class Sized(Protocol):
     def size(self) -> int: ...
 class str: ...
 class Odd:
-    @overload
-    def pick(self, x: int) -> int: ...
-    @overload
-    def pick(self, x: str) -> str: ...
     def given(self, var: int) -> None: ...
     match: int
 def f() -> None: ...
@@ -950,7 +1053,6 @@ class f: ...
             "#   Sized: it is a protocol",
             "#   str: `str` is a name LotML keeps",
             "#   f: a function of the stub has its name",
-            "#   Odd.pick: it is overloaded",
             "#   Odd.given: its parameter `var` is a LotML keyword",
             "#   Odd.match: `match` is a LotML keyword",
         ] {
@@ -966,14 +1068,145 @@ class f: ...
     }
 
     #[test]
-    fn an_overload_and_a_coroutine_are_listed_with_the_reason() {
+    fn a_coroutine_is_listed_with_the_reason_and_an_overload_bound_in_order() {
         let stub = "@overload\ndef p(x: int) -> int: ...\n@typing.overload\ndef p(x: str) -> str: ...\nasync def c() -> None: ...\ndef f() -> None: ...\n";
         let text = bound(stub);
         assert!(
             text.ends_with(
-                "fn f() -> None ! PyError\n\n# Not bound:\n#   p: it is overloaded\n#   c: it is a coroutine\n"
+                "fn p(x: int) -> int ! PyError\nfn p(x: str) -> str ! PyError\nfn f() -> None ! PyError\n\n\
+                 # Not bound:\n#   c: it is a coroutine\n"
             ),
             "{text}"
+        );
+    }
+
+    #[test]
+    fn overloads_are_bound_in_order_and_the_implementation_a_typed_module_writes_after_them_is_not() {
+        let stub = "\
+from typing import overload
+@overload
+def listdir(path: str | None = None) -> list[str]: ...
+@overload
+def listdir(path: bytes) -> list[bytes]: ...
+@overload
+def listdir(path: int) -> list[str]: ...
+def listdir(path=None): ...
+";
+        assert_eq!(
+            functions(stub),
+            [
+                "fn listdir(path: str? = None) -> [str] ! PyError",
+                "fn listdir(path: bytes) -> [bytes] ! PyError",
+                "fn listdir(path: int) -> [str] ! PyError",
+            ]
+        );
+    }
+
+    #[test]
+    fn an_overload_that_cannot_be_bound_ends_the_ones_written_and_a_repeat_is_left_out() {
+        let stub = "\
+@overload
+def p(x: int) -> int: ...
+@overload
+def p(x: StrPath) -> str: ...
+@overload
+def p(x: str) -> bytes: ...
+@overload
+def p(match: bytes) -> bytes: ...
+@overload
+def p(x: float) -> float: ...
+";
+        let text = bound(stub);
+        let written: Vec<&str> = text.lines().filter(|l| l.starts_with("fn ")).collect();
+        assert_eq!(written, ["fn p(x: int) -> int ! PyError", "fn p(x: str) -> str ! PyError"], "{text}");
+        assert!(text.contains("#   p: overload 3 of 5: an earlier one takes the same parameters"), "{text}");
+        assert!(
+            text.contains(
+                "#   p: overload 4 of 5: its parameter `match` is a LotML keyword; it and those after are left out"
+            ),
+            "{text}"
+        );
+        assert!(!text.contains("overload 5 of 5"), "one after the cut is not listed alone: {text}");
+    }
+
+    #[test]
+    fn the_overloads_of_the_first_branch_that_declares_them_are_bound() {
+        let stub = "\
+import sys
+if sys.version_info >= (3, 12):
+    @overload
+    def f(x: int) -> int: ...
+    @overload
+    def f(x: str) -> str: ...
+else:
+    @overload
+    def f(x: int) -> int: ...
+    @overload
+    def f(x: bytes) -> bytes: ...
+";
+        assert_eq!(functions(stub), ["fn f(x: int) -> int ! PyError", "fn f(x: str) -> str ! PyError"]);
+    }
+
+    #[test]
+    fn a_name_is_bound_with_at_most_its_limit_of_overloads() {
+        let stub: String =
+            (0..OVERLOADS + 6).map(|i| format!("@overload\ndef f(x: int, n{i}: int) -> int: ...\n")).collect();
+        let text = bound(&stub);
+        assert_eq!(functions(&stub).len(), OVERLOADS);
+        assert!(text.contains("#   f: overloads 65 to 70: past the 64 lotml reads"), "{text}");
+    }
+
+    #[test]
+    fn thousands_of_one_overload_repeated_bind_in_time_linear_in_the_stub() {
+        let unit = "@overload\ndef f(x: int) -> int: ...\n";
+        let method = "    @overload\n    def m(self, x: int) -> int: ...\n";
+        let stub =
+            format!("{}class C:\n{}_c: C\n{}", unit.repeat(20_000), method.repeat(20_000), "g = _c.m\n".repeat(5_000));
+        let started = std::time::Instant::now();
+        let text = bound(&stub);
+        assert!(started.elapsed().as_secs() < 5, "took {:?}", started.elapsed());
+        assert_eq!(functions(&stub), ["fn f(x: int) -> int ! PyError", "fn g(x: int) -> int ! PyError"], "{text}");
+    }
+
+    #[test]
+    fn a_class_s_overloaded_constructor_methods_and_aliased_methods_are_bound() {
+        let stub = "\
+class Path:
+    @overload
+    def __init__(self, text: str) -> None: ...
+    @overload
+    def __init__(self, parts: list[str]) -> None: ...
+    @overload
+    def joined(self, other: str) -> Path: ...
+    @overload
+    def joined(self, other: Path) -> Path: ...
+    @overload
+    def pick(self, x: int) -> int: ...
+    @overload
+    @staticmethod
+    def pick(x: str) -> str: ...
+_inst: Path
+joined = _inst.joined
+";
+        let text = bound(stub);
+        let class: Vec<&str> = text[text.find("class Path:").unwrap()..].lines().take(6).collect();
+        assert_eq!(
+            class,
+            [
+                "class Path:",
+                "    fn Path(text: str) -> Path ! PyError",
+                "    fn Path(parts: [str]) -> Path ! PyError",
+                "    fn joined(self, other: str) -> Path ! PyError",
+                "    fn joined(self, other: Path) -> Path ! PyError",
+                "    fn pick(self, x: int) -> int ! PyError",
+            ],
+            "{text}"
+        );
+        assert!(text.contains("#   Path.pick: overload 2 of 2: it takes `self` where the first does not"), "{text}");
+        assert_eq!(
+            functions(stub),
+            ["fn joined(other: str) -> Path ! PyError", "fn joined(other: Path) -> Path ! PyError"],
+            "an instance's overloaded method, bound as a function"
         );
     }
 

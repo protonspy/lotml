@@ -231,7 +231,8 @@ pub const ALL: &[Code] = &[
         explanation: "An interface (`bindings/py.<module>.lotmli`) declares the functions of a Python module, as \
         `lotml bind` wrote them: one signature per line, no body, no type parameters, over the types every \
         program has, each returning `T ! PyError` because any call into Python can fail:\n\n    \
-        fn dedent(text: str) -> str ! PyError\n\nRegenerate the file with `lotml bind <module> --stub <file.pyi>` \
+        fn dedent(text: str) -> str ! PyError\n\nA function written again is its next overload, at most 64 \
+        of them, each taking `self` if the first does. Regenerate the file with `lotml bind <module> --stub <file.pyi>` \
         rather than editing it.",
     },
     Code {
@@ -269,6 +270,14 @@ pub const ALL: &[Code] = &[
         found on import differs, the compiler binds from it, so the program checks against what it will run with, \
         and warns: the project's environment changed since the lock was written. `lotml bind --lock` records the \
         stubs found; `lotml check --locked` fails on the difference, for CI.",
+    },
+    Code {
+        code: "E0226",
+        title: "an overloaded Python function used as a value",
+        explanation: "A Python function whose stub declares overloads returns a different type for different \
+        arguments, so a call is typed by the overload its arguments fit, and the function itself has no one \
+        type to give a value. Call it, or wrap the call you mean in a lambda:\n\n    \
+        list_in = lambda path: listdir(path)",
     },
     Code {
         code: "E0301",

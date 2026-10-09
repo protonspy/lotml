@@ -1,7 +1,7 @@
 //! Checking one function body, test block or method: expressions with an expected type
 //! where there is one (bidirectional), locals inferred, optionals narrowed by `is not None`.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use lotml_diag::{Applicability, Diagnostic};
 use lotml_syntax::ast::*;
@@ -85,6 +85,11 @@ pub struct Body<'p> {
     /// Each name that resolved to a local, with where that local was declared; a declaration
     /// refers to itself.
     locals: Vec<(Span, Span)>,
+    /// The overload each overloaded Python call was given, by the call's span (adr:0035).
+    overloads: Vec<(Span, usize)>,
+    /// The lineage of each Python class a value was fitted to a base of, walked once: an
+    /// overloaded call fits its arguments to every overload's parameters.
+    lineages: HashMap<String, HashSet<String>>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -125,6 +130,8 @@ impl<'p> Body<'p> {
             stored: 0,
             full: false,
             locals: Vec::new(),
+            overloads: Vec::new(),
+            lineages: HashMap::new(),
             diagnostics: Vec::new(),
         };
         if let Some(sig) = sig {
@@ -1322,6 +1329,11 @@ impl<'p> Body<'p> {
         &self.locals
     }
 
+    /// The overload each overloaded Python call was given, by the call's span.
+    pub fn overloads(&self) -> &[(Span, usize)] {
+        &self.overloads
+    }
+
     /// Accept `found` where `expected` is wanted, allowing the coercions lotml has: a value
     /// where an optional is wanted, a type implementing a trait where `dyn` is.
     pub fn coerce(&mut self, found: &Ty, expected: &Ty, span: Span) -> bool {
@@ -1380,7 +1392,7 @@ impl<'p> Body<'p> {
             // A Python class where a base its interface declares is expected (adr:0034), and where
             // any Python object is: it is one.
             (Ty::Adt(sub, _), Ty::Adt(base, _)) if sub != base && self.py_class(&f).is_some() => {
-                self.py_lineage(sub).contains(base)
+                self.descends(sub, base)
             }
             (Ty::Adt(..), Ty::PyObject) if self.py_class(&f).is_some() => true,
             (_, Ty::PyObject) if !matches!(f, Ty::Var(_)) => self.carried(&f),
@@ -1841,7 +1853,7 @@ impl<'p> Body<'p> {
             return local.ty;
         }
         if let Some(sig) = self.program.functions.get(name) {
-            return function_value(sig);
+            return self.named_function(sig, span);
         }
         if let Some(owner) = self.program.variant_of.get(name).cloned() {
             return self.variant_value(name, &owner, span);
@@ -2231,7 +2243,7 @@ impl<'p> Body<'p> {
             }
             Ty::Module(module) if self.program.foreign.contains_key(module) => {
                 match self.program.foreign[module].get(&name.name) {
-                    Some(sig) => function_value(sig),
+                    Some(sig) => self.named_function(&sig.clone(), name.span),
                     None => {
                         let names: Vec<String> = self.program.foreign[module].keys().cloned().collect();
                         self.report(
@@ -2672,6 +2684,9 @@ impl<'p> Body<'p> {
         span: Span,
         skip_self: Option<()>,
     ) -> Ty {
+        if !sig.overloads.is_empty() {
+            return self.call_overloaded(sig, args, span, skip_self);
+        }
         let fresh: Vec<Ty> = sig.type_params.iter().map(|_| self.infer.fresh()).collect();
         let mut names: Vec<String> = owner_params.to_vec();
         names.extend(sig.type_params.iter().map(|(n, _)| n.clone()));
@@ -2768,6 +2783,120 @@ impl<'p> Body<'p> {
             Some(e) => Ty::Result(Box::new(ret), Box::new(e.substitute(&names, &values))),
             None => ret,
         }
+    }
+
+    /// The function `sig` named other than to call it: a value of its type, or, overloaded, no
+    /// value, since it has no one type (adr:0035).
+    fn named_function(&mut self, sig: &FnSig, span: Span) -> Ty {
+        if sig.overloads.is_empty() {
+            return function_value(sig);
+        }
+        self.report(
+            Diagnostic::error(
+                "E0226",
+                span,
+                format!("`{}` is overloaded, so it has no one type: call it, or wrap the call in a lambda", sig.name),
+            )
+            .note(format!("it has {} overloads", sig.overloads.len() + 1)),
+        );
+        Ty::Error
+    }
+
+    /// A call of an overloaded Python function, constructor or method (adr:0035). Each argument is
+    /// checked once, with no expected type, so a nest of such calls stays linear; the call is then
+    /// given the first overload that takes the arguments without passing a value that is not a
+    /// `PyObject` to a `PyObject` parameter, else the first that takes them at all, and the choice
+    /// is recorded by the call's span for the lowering.
+    fn call_overloaded(&mut self, sig: &FnSig, args: &[Arg], span: Span, skip_self: Option<()>) -> Ty {
+        let found: Vec<Ty> = args.iter().map(|a| self.expr(a.expr(), None)).collect();
+        let skip = usize::from(skip_self.is_some());
+        let all: Vec<&FnSig> = std::iter::once(sig).chain(&sig.overloads).collect();
+        let mut loose = None;
+        let mut exact = None;
+        for (i, candidate) in all.iter().enumerate() {
+            match self.takes(candidate, skip, args, &found) {
+                Some((false, _)) => {
+                    exact = Some(i);
+                    break;
+                }
+                Some((true, _)) if loose.is_none() => loose = Some(i),
+                _ => {}
+            }
+        }
+        let Some(chosen) = exact.or(loose) else {
+            let mut d = Diagnostic::error(
+                "E0204",
+                span,
+                format!("no overload of `{}` takes these arguments, of {}", sig.name, self.listed(&found)),
+            );
+            for candidate in &all {
+                d = d.note(format!("`{}`", overload_text(candidate, skip)));
+            }
+            self.report(d);
+            return Ty::Error;
+        };
+        self.overloads.push((span, chosen));
+        let chosen = all[chosen];
+        let (_, slots) = self.takes(chosen, skip, args, &found).expect("it was taken");
+        let params: Vec<_> = chosen.params.iter().skip(skip).collect();
+        for ((arg, ty), i) in args.iter().zip(&found).zip(slots) {
+            self.coerce(ty, &params[i].ty, arg.expr().span);
+            self.convention(params[i].convention, arg, &params[i].name, &chosen.name);
+        }
+        match &chosen.error {
+            Some(e) => Ty::Result(Box::new(chosen.ret.clone()), Box::new(e.clone())),
+            None => chosen.ret.clone(),
+        }
+    }
+
+    /// Whether the overload `sig` takes arguments of the types `found`, its first `skip`
+    /// parameters aside: by count, by keyword and by type, with whether a value that is not a
+    /// `PyObject` would go to a `PyObject` parameter, and each argument's parameter. A trial: it
+    /// binds no inference variable and reports nothing.
+    fn takes(&mut self, sig: &FnSig, skip: usize, args: &[Arg], found: &[Ty]) -> Option<(bool, Vec<usize>)> {
+        let params: Vec<_> = sig.params.iter().skip(skip).collect();
+        let mut filled = vec![false; params.len()];
+        let mut slots = Vec::with_capacity(args.len());
+        let mut position = 0;
+        for arg in args {
+            let slot = match arg {
+                Arg::Keyword(k, _) => params.iter().position(|p| p.name == k.name)?,
+                Arg::Positional(_) | Arg::Inout(..) => {
+                    position += 1;
+                    position - 1
+                }
+            };
+            if slot >= params.len() || std::mem::replace(&mut filled[slot], true) {
+                return None;
+            }
+            slots.push(slot);
+        }
+        if params.iter().zip(&filled).any(|(p, f)| !f && !p.has_default) {
+            return None;
+        }
+        let said = self.diagnostics.len();
+        self.infer.begin_trial();
+        let mut loose = false;
+        let mut fits = true;
+        for (ty, &slot) in found.iter().zip(&slots) {
+            let want = &params[slot].ty;
+            loose |= *want == Ty::PyObject && self.resolve(ty) != Ty::PyObject;
+            if !self.fits(ty, want) {
+                fits = false;
+                break;
+            }
+        }
+        self.infer.undo_trial();
+        self.diagnostics.truncate(said);
+        fits.then_some((loose, slots))
+    }
+
+    /// The types of a call's arguments, as a diagnostic lists them.
+    fn listed(&mut self, found: &[Ty]) -> String {
+        if found.is_empty() {
+            return "none".to_string();
+        }
+        found.iter().map(|t| format!("`{}`", self.resolve(t))).collect::<Vec<_>>().join(", ")
     }
 
     /// `inout` parameters take `&place`, of a mutable place; others take no `&`.
@@ -3065,6 +3194,15 @@ impl<'p> Body<'p> {
     }
 
     /// `class` and its declared bases, nearest first, each once.
+    /// Whether the Python class `sub` has `base` in its lineage, the lineage walked once a body.
+    fn descends(&mut self, sub: &str, base: &str) -> bool {
+        if !self.lineages.contains_key(sub) {
+            let lineage = self.py_lineage(sub).into_iter().collect();
+            self.lineages.insert(sub.to_string(), lineage);
+        }
+        self.lineages[sub].contains(base)
+    }
+
     fn py_lineage(&self, class: &str) -> Vec<String> {
         crate::interface::py_lineage(class, |c| self.program.py_bases.get(c).map(Vec::as_slice))
     }
@@ -3166,6 +3304,12 @@ fn positional_values_for(name: &str, values: &[Ty], all: &[Ty]) -> Vec<Ty> {
 
 /// Whether two places, as written, may be the same memory: one is the other or inside it.
 /// `xs[i]` and `xs[j]` are taken to overlap, since `i` may equal `j`.
+/// An overload as a diagnostic lists it: `joined(other: str) -> py.os.Path`.
+fn overload_text(sig: &FnSig, skip: usize) -> String {
+    let params: Vec<String> = sig.params.iter().skip(skip).map(|p| format!("{}: {}", p.name, p.ty)).collect();
+    format!("{}({}) -> {}", sig.name, params.join(", "), sig.ret)
+}
+
 fn overlaps(a: &str, b: &str) -> bool {
     let root = |s: &str| s.split(['.', '[']).next().unwrap_or("").to_string();
     if root(a) != root(b) {

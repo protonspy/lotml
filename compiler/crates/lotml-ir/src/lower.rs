@@ -2497,7 +2497,7 @@ impl<'c, 'a> Builder<'c, 'a> {
             return Value::Expr(Expr::CallC { symbol: name.clone(), args: operands, params, ret: sig.ret });
         }
         if let Some((module, sig)) = self.cx.py_imports.get(name.as_str()).cloned() {
-            return self.python_call(module, name, &sig, args);
+            return self.python_call(whole.span, module, name, &sig, args);
         }
         if matches!(self.cx.checked.declared.get(name), Some(TypeDef::Record { .. })) {
             let ty = self.ty(whole);
@@ -3237,29 +3237,54 @@ impl<'c, 'a> Builder<'c, 'a> {
     }
 
     /// A call of `function` of the Python module `module` through its interface's `sig` (R1.3).
-    fn python_call(&mut self, module: String, function: &str, sig: &FnSig, args: &[AstArg]) -> Value {
-        let mut operands = Vec::new();
-        for (a, p) in args.iter().zip(&sig.params) {
-            let v = self.value(a.expr());
-            operands.push(self.coerce(v, &p.ty));
-        }
+    fn python_call(&mut self, call: Span, module: String, function: &str, sig: &FnSig, args: &[AstArg]) -> Value {
+        // An overloaded function is called through the overload the checker gave the call (adr:0035).
+        let sig = &self.cx.checked.py_overload(call, sig).clone();
+        let (operands, keywords) = self.python_args(&sig.params, args);
         let params = sig.params.iter().map(|p| p.ty.clone()).collect();
         let ret = call_ret(sig);
-        Value::Expr(Expr::CallPython { module, function: function.to_string(), args: operands, params, ret })
+        let function = function.to_string();
+        Value::Expr(Expr::CallPython { module, function, args: operands, keywords, params, ret })
+    }
+
+    /// The arguments of a call into Python, each converted to its parameter of `params`: those
+    /// given by position, then those given by keyword, with their names, which Python is passed
+    /// by name, since a parameter left to its default may come between.
+    fn python_args(&mut self, params: &[ParamSig], args: &[AstArg]) -> (Vec<Operand>, Vec<String>) {
+        let mut operands = Vec::new();
+        let mut named = Vec::new();
+        for (i, a) in args.iter().enumerate() {
+            let (param, keyword) = match a {
+                AstArg::Keyword(k, _) => (params.iter().find(|p| p.name == k.name), Some(k.name.clone())),
+                _ => (params.get(i), None),
+            };
+            let v = match param {
+                Some(p) => {
+                    let v = self.value(a.expr());
+                    self.coerce(v, &p.ty)
+                }
+                None => self.materialize(a.expr()),
+            };
+            match keyword {
+                Some(name) => named.push((name, v)),
+                None => operands.push(v),
+            }
+        }
+        let keywords = named.iter().map(|(name, _)| name.clone()).collect();
+        operands.extend(named.into_iter().map(|(_, v)| v));
+        (operands, keywords)
     }
 
     /// `object.method(args)` of a value of a Python class through the method's `sig`, `self` its
     /// first parameter (adr:0034).
-    fn python_method(&mut self, object: &ast::Expr, method: &str, sig: &FnSig, args: &[AstArg]) -> Value {
+    fn python_method(&mut self, call: Span, object: &ast::Expr, method: &str, sig: &FnSig, args: &[AstArg]) -> Value {
+        let sig = &self.cx.checked.py_overload(call, sig).clone();
         let target = self.value(object);
-        let mut operands = Vec::new();
-        for (a, p) in args.iter().zip(sig.params.iter().skip(1)) {
-            let v = self.value(a.expr());
-            operands.push(self.coerce(v, &p.ty));
-        }
+        let (operands, keywords) = self.python_args(sig.params.get(1..).unwrap_or_default(), args);
         let params = sig.params.iter().skip(1).map(|p| p.ty.clone()).collect();
         let ret = call_ret(sig);
-        Value::Expr(Expr::CallPyMethod { object: target, method: method.to_string(), args: operands, params, ret })
+        let method = method.to_string();
+        Value::Expr(Expr::CallPyMethod { object: target, method, args: operands, keywords, params, ret })
     }
 
     /// `object.name(args)`: a method of a declared type, or of a built-in one.
@@ -3272,13 +3297,13 @@ impl<'c, 'a> Builder<'c, 'a> {
             && let Some(m) = self.cx.checked.py_method(&qualified, name).cloned()
             && let Some((module, class)) = qualified.rsplit_once('.')
         {
-            return self.python_call(module.to_string(), &format!("{class}.{name}"), &m.sig, args);
+            return self.python_call(whole.span, module.to_string(), &format!("{class}.{name}"), &m.sig, args);
         }
         let ty = self.ty(object);
         if let Ty::Adt(class, _) = &ty
             && let Some(m) = self.cx.checked.py_method(class, name).cloned()
         {
-            return self.python_method(object, name, &m.sig, args);
+            return self.python_method(whole.span, object, name, &m.sig, args);
         }
         let owner = match &ty {
             Ty::Adt(owner, _) | Ty::TypeName(owner) => Some(owner.clone()),
@@ -3293,11 +3318,11 @@ impl<'c, 'a> Builder<'c, 'a> {
             Ty::Dyn(trait_name) => return self.dyn_method(whole, object, trait_name, name, args),
             Ty::Module(module) => {
                 if let Some(sig) = self.cx.checked.foreign.get(module).and_then(|fs| fs.get(name)).cloned() {
-                    return self.python_call(module.clone(), name, &sig, args);
+                    return self.python_call(whole.span, module.clone(), name, &sig, args);
                 }
                 // `py.m.C(...)`: a class's constructor, its own or a base's (adr:0034).
                 if let Some(sig) = self.cx.checked.py_constructor(&format!("{module}.{name}")) {
-                    return self.python_call(module.clone(), name, &sig, args);
+                    return self.python_call(whole.span, module.clone(), name, &sig, args);
                 }
                 return self.math_call(whole, name, args);
             }

@@ -2,11 +2,12 @@
 //! file of function signatures with no body, over the types every program has, each returning
 //! `T ! PyError` — a stub says nothing about what a Python call raises, so every one can fail.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use lotml_diag::Diagnostic;
 use lotml_syntax::ast::{ClassDef, Item};
 use lotml_syntax::parse_interface;
+use lotml_syntax::span::Span;
 
 use crate::program::{FnSig, Method, Program};
 use crate::ty::Ty;
@@ -46,6 +47,11 @@ pub enum Mark {
 impl Interface {
     pub fn names(&self) -> impl Iterator<Item = &str> {
         self.functions.keys().map(String::as_str)
+    }
+
+    /// The signature of its function `name`, its overloads after the first in it.
+    pub fn function(&self, name: &str) -> Option<&FnSig> {
+        self.functions.get(name)
     }
 
     /// The classes it declares, by the name the module gives them.
@@ -196,8 +202,9 @@ fn python_interface(module: &str, text: &str) -> (Interface, Vec<Diagnostic>) {
             diagnostics.push(Diagnostic::error("E0210", c.name.span, format!("`{}` is declared twice", c.name.name)));
         }
     }
-    let mut functions = BTreeMap::new();
+    let mut functions: BTreeMap<String, FnSig> = BTreeMap::new();
     let mut classes = BTreeMap::new();
+    let mut closed = HashSet::new();
     for item in &parsed.module.items {
         let f = match item {
             Item::Fn(f) => f,
@@ -216,9 +223,22 @@ fn python_interface(module: &str, text: &str) -> (Interface, Vec<Diagnostic>) {
                 continue;
             }
         };
-        let Some(sig) = python_signature(f, None, &mut program, &mut diagnostics) else { continue };
-        if functions.insert(f.name.name.clone(), sig).is_some() || classes.contains_key(&f.name.name) {
+        if closed.contains(&f.name.name) {
+            continue;
+        }
+        let Some(sig) = python_signature(f, None, &mut program, &mut diagnostics) else {
+            closed.insert(f.name.name.clone());
+            continue;
+        };
+        if classes.contains_key(&f.name.name) {
             diagnostics.push(Diagnostic::error("E0210", f.name.span, format!("`{}` is declared twice", f.name.name)));
+            continue;
+        }
+        match functions.get_mut(&f.name.name) {
+            Some(first) => overload(first, sig, f.name.span, &mut closed, &mut diagnostics),
+            None => {
+                functions.insert(f.name.name.clone(), sig);
+            }
         }
     }
     diagnostics.append(&mut program.diagnostics);
@@ -293,9 +313,16 @@ fn python_class(c: &ClassDef, program: &mut Program, diagnostics: &mut Vec<Diagn
             diagnostics.push(Diagnostic::error("E0210", name.span, format!("`{}` is declared twice", name.name)));
         }
     }
+    let mut closed = HashSet::new();
     for m in &c.methods {
+        if closed.contains(&m.name.name) {
+            continue;
+        }
         let has_self = m.params.first().is_some_and(|p| p.name.name == "self");
-        let Some(sig) = python_signature(m, has_self.then_some(&own), program, diagnostics) else { continue };
+        let Some(sig) = python_signature(m, has_self.then_some(&own), program, diagnostics) else {
+            closed.insert(m.name.name.clone());
+            continue;
+        };
         if m.name.name == c.name.name {
             if has_self || sig.ret != own {
                 diagnostics.push(Diagnostic::error(
@@ -303,18 +330,58 @@ fn python_class(c: &ClassDef, program: &mut Program, diagnostics: &mut Vec<Diagn
                     m.name.span,
                     format!("the constructor `{}` takes no `self` and returns `{}`", m.name.name, c.name.name),
                 ));
+                closed.insert(m.name.name.clone());
                 continue;
             }
-            class.constructor = Some(sig);
+            match &mut class.constructor {
+                Some(first) => overload(first, sig, m.name.span, &mut closed, diagnostics),
+                None => class.constructor = Some(sig),
+            }
             continue;
         }
         let receiver = has_self.then(|| m.params[0].convention);
-        let method = Method { sig, receiver, owner_params: Vec::new() };
-        if class.methods.insert(m.name.name.clone(), method).is_some() || class.attributes.contains_key(&m.name.name) {
+        if class.attributes.contains_key(&m.name.name) {
             diagnostics.push(Diagnostic::error("E0210", m.name.span, format!("`{}` is declared twice", m.name.name)));
+            continue;
+        }
+        match class.methods.get_mut(&m.name.name) {
+            Some(first) if first.receiver.is_some() != receiver.is_some() => {
+                diagnostics.push(Diagnostic::error(
+                    "E0221",
+                    m.name.span,
+                    format!(
+                        "an overload of `{}` takes `self` where its first does not, or the other way round",
+                        m.name.name
+                    ),
+                ));
+                closed.insert(m.name.name.clone());
+            }
+            Some(first) => overload(&mut first.sig, sig, m.name.span, &mut closed, diagnostics),
+            None => {
+                class.methods.insert(m.name.name.clone(), Method { sig, receiver, owner_params: Vec::new() });
+            }
         }
     }
     class
+}
+
+/// The most overloads one name keeps (adr:0035), past the 43 of the largest set the binding
+/// coverage corpus declares, so a stub cannot make every call try thousands.
+pub const OVERLOADS: usize = 64;
+
+/// `sig`, declared again under `first`'s name, kept as its next overload; past [`OVERLOADS`], it
+/// and every later one are left out and the name is closed.
+fn overload(first: &mut FnSig, sig: FnSig, at: Span, closed: &mut HashSet<String>, diagnostics: &mut Vec<Diagnostic>) {
+    if first.overloads.len() + 1 < OVERLOADS {
+        first.overloads.push(sig);
+        return;
+    }
+    diagnostics.push(Diagnostic::error(
+        "E0221",
+        at,
+        format!("`{}` has more than {OVERLOADS} overloads, which lotml does not try", sig.name),
+    ));
+    closed.insert(sig.name);
 }
 
 /// The modules whose interface carries a mark, with it.
@@ -350,8 +417,13 @@ pub fn py_constructor<'a>(
 ) -> Option<FnSig> {
     let found = py_lineage(class, bases).into_iter().find_map(|c| constructors(&c))?;
     let mut sig = found.clone();
-    sig.ret = Ty::Adt(class.to_string(), Vec::new());
-    sig.name = class.rsplit('.').next().unwrap_or(class).to_string();
+    let name = class.rsplit('.').next().unwrap_or(class);
+    let mut overloads = std::mem::take(&mut sig.overloads);
+    for each in std::iter::once(&mut sig).chain(&mut overloads) {
+        each.ret = Ty::Adt(class.to_string(), Vec::new());
+        each.name = name.to_string();
+    }
+    sig.overloads = overloads;
     Some(sig)
 }
 

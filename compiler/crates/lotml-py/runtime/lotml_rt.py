@@ -640,10 +640,11 @@ def _descriptor(text: str):
     return json.loads(text)
 
 
-def method(target, name: str, returns: str, *args, **kwargs):
+def method(target, name: str, returns: str, /, *args, **kwargs):
     """A method of a Python class's value a LotML program calls (adr:0034), as `foreign` calls a
     function: the arguments copied, any exception and any returned value of the wrong type an
-    `Err(PyError)`, the rest `Ok`."""
+    `Err(PyError)`, the rest `Ok`. Its own parameters are positional only, so the method's
+    keywords may be named `name` or `target` too."""
     descriptor = _descriptor(returns)
     try:
         bound = getattr(to_python(target), name)

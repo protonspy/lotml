@@ -12,7 +12,8 @@ mod program;
 pub mod ty;
 
 pub use interface::{
-    Interface, Interfaces, PyClass, c_interface, interface, interface_of, is_c_library, shadowing, unlocked,
+    Interface, Interfaces, OVERLOADS, PyClass, c_interface, interface, interface_of, is_c_library, py_constructor,
+    shadowing, unlocked,
 };
 pub use parts::{Assembly, Declarations, Part, PartChecked, PartKind, check_part, declarations, parts};
 pub use prefix::{PrefixCheck, Verdict, check_prefix, check_prefix_with};
@@ -108,9 +109,21 @@ pub struct Checked {
     /// The constructor each of those classes has of its own; [`Checked::py_constructor`] finds an
     /// inherited one.
     pub py_constructors: BTreeMap<String, FnSig>,
+    /// The overload each call of an overloaded Python function, constructor or method was given,
+    /// by the call's span: 0 its first signature, `i` its `overloads[i - 1]` (adr:0035).
+    pub py_overloads: BTreeMap<Span, usize>,
 }
 
 impl Checked {
+    /// The overload of `sig` the call at `call` was given (adr:0035): `sig` itself for a function
+    /// with no overloads, or a call the checker gave none.
+    pub fn py_overload<'a>(&self, call: Span, sig: &'a FnSig) -> &'a FnSig {
+        match self.py_overloads.get(&call) {
+            Some(&chosen) if chosen > 0 => sig.overloads.get(chosen - 1).unwrap_or(sig),
+            _ => sig,
+        }
+    }
+
     /// The method or static method `name` of the Python class `class`, or of the nearest base it
     /// declares that has one (adr:0034).
     pub fn py_method(&self, class: &str, name: &str) -> Option<&Method> {

@@ -10,6 +10,7 @@ change rather than left pointing at the old slug.
 <!-- Newest first, as `- 2026-01-14 — added [[page-slug]], folded [[other-page]]
 into it`. -->
 
+- 2026-10-09 — Python overloads: [[transpilation-strategy]] says an overloaded function is bound once per overload and a call is typed by the first its arguments fit
 - 2026-10-08 — Python classes: [[transpilation-strategy]] says a stub's classes bind as `class` blocks, typed handles whose members can each fail
 - 2026-10-08 — binding on import: [[transpilation-strategy]] says `import py.<module>` needs no `lotml bind`, packages come from the `uv.lock` environment alone, and `lotml.lock` records what was bound
 - 2026-10-08 — a project's dependencies: [[transpilation-strategy]] says `lotml run` installs from the project's `uv.lock`, checked to name PyPI alone

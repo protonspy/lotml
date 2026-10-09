@@ -3,6 +3,8 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn get_close_matches(word: PyObject, possibilities: [PyObject], n: int = 3, cutoff: f64 = 0.6) -> [PyObject] ! PyError
+fn get_close_matches(word: [PyObject], possibilities: [[PyObject]], n: int = 3, cutoff: f64 = 0.6) -> [PyObject] ! PyError
 fn IS_LINE_JUNK(line: str, pat: PyObject? = None) -> bool ! PyError
 fn IS_CHARACTER_JUNK(ch: str, ws: str = " \x09") -> bool ! PyError
 fn unified_diff(a: [str], b: [str], fromfile: str = "", tofile: str = "", fromfiledate: str = "", tofiledate: str = "", n: int = 3, lineterm: str = "\n", color: bool = False) -> PyObject ! PyError
@@ -27,4 +29,3 @@ class HtmlDiff:
 
 # Not bound:
 #   SequenceMatcher: it is generic, which specs/python-generics/ binds
-#   get_close_matches: it is overloaded

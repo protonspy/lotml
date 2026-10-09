@@ -11,6 +11,7 @@ fn atan(x: PyObject) -> f64 ! PyError
 fn atan2(y: PyObject, x: PyObject) -> f64 ! PyError
 fn atanh(x: PyObject) -> f64 ! PyError
 fn cbrt(x: PyObject) -> f64 ! PyError
+fn ceil(x: PyObject) -> PyObject ! PyError
 fn comb(n: int, k: int) -> int ! PyError
 fn copysign(x: PyObject, y: PyObject) -> f64 ! PyError
 fn cos(x: PyObject) -> f64 ! PyError
@@ -24,6 +25,7 @@ fn exp2(x: PyObject) -> f64 ! PyError
 fn expm1(x: PyObject) -> f64 ! PyError
 fn fabs(x: PyObject) -> f64 ! PyError
 fn factorial(x: int) -> int ! PyError
+fn floor(x: PyObject) -> PyObject ! PyError
 fn fmod(x: PyObject, y: PyObject) -> f64 ! PyError
 fn fmax(x: PyObject, y: PyObject) -> f64 ! PyError
 fn fmin(x: PyObject, y: PyObject) -> f64 ! PyError
@@ -50,6 +52,9 @@ fn modf(x: PyObject) -> (f64, f64) ! PyError
 fn nextafter(x: PyObject, y: PyObject, steps: int? = None) -> f64 ! PyError
 fn perm(n: int, k: int? = None) -> int ! PyError
 fn pow(x: PyObject, y: PyObject) -> f64 ! PyError
+fn prod(iterable: [PyObject], start: int = 1) -> int ! PyError
+fn prod(iterable: [PyObject]) -> PyObject ! PyError
+fn prod(iterable: [PyObject], start: PyObject) -> PyObject ! PyError
 fn radians(x: PyObject) -> f64 ! PyError
 fn remainder(x: PyObject, y: PyObject) -> f64 ! PyError
 fn sin(x: PyObject) -> f64 ! PyError
@@ -64,6 +69,5 @@ fn ulp(x: PyObject) -> f64 ! PyError
 fn fma(x: PyObject, y: PyObject, z: PyObject) -> f64 ! PyError
 
 # Not bound:
-#   ceil: it is overloaded
-#   floor: it is overloaded
-#   prod: it is overloaded
+#   ceil: overload 2 of 2: an earlier one takes the same parameters, so no call is given it
+#   floor: overload 2 of 2: an earlier one takes the same parameters, so no call is given it
