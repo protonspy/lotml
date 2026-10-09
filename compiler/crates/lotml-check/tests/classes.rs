@@ -120,7 +120,7 @@ fn a_class_imported_beside_a_record_of_its_name_is_declared_twice() {
     assert!(codes(source).contains(&"E0210"), "{:?}", messages(source));
 }
 
-const USES: &str = "from py.datetime import date, datetime\n\n";
+const USES: &str = "from py.datetime import date, datetime, combine\n\n";
 
 fn clean(body: &str) {
     let source = format!("{USES}{body}");
@@ -162,4 +162,25 @@ fn a_member_is_used_as_the_interface_declares_it() {
 #[test]
 fn an_attribute_of_a_python_object_is_never_assigned() {
     refused("fn f() -> None ! PyError:\n    var d = date.today()?\n    d.year = 2027\n", "read, never assigned");
+}
+
+#[test]
+fn a_subclass_goes_where_its_base_is_expected_and_nowhere_else() {
+    clean("fn f() -> date ! PyError:\n    return datetime.now()?\n");
+    clean("fn f() -> datetime ! PyError:\n    now = datetime.now()?\n    return combine(now, 3)?\n");
+    refused(
+        "fn f() -> datetime ! PyError:\n    return date.today()?\n",
+        "expected `py.datetime.datetime`, found `py.datetime.date`",
+    );
+    refused("fn f() -> str ! PyError:\n    return date.today()?\n", "expected `str`");
+}
+
+#[test]
+fn a_python_class_goes_where_a_python_object_is_expected() {
+    let (read, _) = interface_of("py.datetime", &format!("{DATETIME}fn keep(o: PyObject) -> None ! PyError\n"));
+    let interfaces = lotml_check::Interfaces::from([("py.datetime".to_string(), read)]);
+    let source = "from py.datetime import date, keep\n\nfn f() -> None ! PyError:\n    keep(date.today()?)?\n";
+    let parsed = lotml_syntax::parse(source);
+    let found = lotml_check::check_resolved_with(&parsed.module, source, &interfaces).diagnostics;
+    assert!(found.is_empty(), "{:?}", found.iter().map(|d| &d.message).collect::<Vec<_>>());
 }

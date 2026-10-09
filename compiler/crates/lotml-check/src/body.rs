@@ -1343,6 +1343,12 @@ impl<'p> Body<'p> {
             (Ty::Adt(name, _), Ty::Dyn(trait_name)) => {
                 self.program.implements.contains(&(trait_name.clone(), name.clone()))
             }
+            // A Python class where a base its interface declares is expected (adr:0034), and where
+            // any Python object is: it is one.
+            (Ty::Adt(sub, _), Ty::Adt(base, _)) if sub != base && self.py_class(&f).is_some() => {
+                self.py_lineage(sub).contains(base)
+            }
+            (Ty::Adt(..), Ty::PyObject) if self.py_class(&f).is_some() => true,
             (_, Ty::PyObject) if !matches!(f, Ty::Var(_)) => self.carried(&f),
             (_, e) if e.holds_py_object() && !matches!(f, Ty::Var(_)) => self.fits_shape(&f, e),
             (Ty::List(a), Ty::List(b)) if matches!(self.resolve(b), Ty::Dyn(_)) => {

@@ -12,7 +12,7 @@
   _Depends 1.2_
 - [x] 2.2 (Unit) Type method calls, static method calls and attribute reads through the class and its declared bases as `T ! PyError`, and refuse assigning an attribute — R2.2, R2.3
   _Depends 2.1_
-- [ ] 2.3 (Unit) Accept a class where a declared base is expected, and refuse it where any other type is — R2.4
+- [x] 2.3 (Unit) Accept a class where a declared base is expected, and refuse it where any other type is — R2.4
   _Depends 2.1_
 - [ ] 2.4 (Unit) Refuse operators, comparison, iteration, `len`, printing, formatting and hashing on a class's value, as on a `PyObject` — R2.5
   _Depends 2.1_
