@@ -17,7 +17,7 @@
   _Depends 2.1_
 - [x] 2.3 (Unit) Bind a generic class with its type parameters, a stub class named with its arguments, and an annotated `self` — R2.1, R2.2, R2.3
   _Depends 2.1_
-- [ ] 3.1 (Unit) Read a generic name in the coverage report, and measure the corpus as `generics` beside `overloads` — R6.1, R6.2
+- [x] 3.1 (Unit) Read a generic name in the coverage report, and measure the corpus as `generics` beside `overloads` — R6.1, R6.2
   _Depends 1.6, 2.2, 2.3_
 - [ ] 3.2 (Unit) Write generics into the language reference, the guide, the E0221 explanation, the glossary and the wiki — R3.1, R4.3
   _Depends 3.1_
