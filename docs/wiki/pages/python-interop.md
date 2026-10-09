@@ -18,7 +18,7 @@ comes first: `check`, `run`, `test` and both servers generate the module's inter
   stub is typeshed's, embedded in lotml at a pinned commit; any other is found in the environment
   made from the project's `uv.lock`, and nowhere else
   (adr:0033-lotml-run-installs-a-project-s-python-dependencies-from-its-uv-lock).
-- **What was bound is locked.** `lotml bind --lock` writes `lotml.lock`: each module's source and
+- **What was bound is recorded.** `lotml bind --lock` writes `lotml.lock`: each module's source and
   the hashes of its stub, the stubs it re-exports from, and its interface. A stub that differs from
   the lock is bound all the same and warned (E0225); `lotml check --locked` fails on it, for CI.
 - **A file can stand in.** `bindings/py.<module>.lotmli`, written by `lotml bind <module>` or by
