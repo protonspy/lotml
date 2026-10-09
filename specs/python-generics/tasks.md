@@ -9,7 +9,7 @@
   _Depends 1.3_
 - [x] 1.5 (TDD) Choose among generic overloads, and among a method's overloads by the receiver's type arguments — R4.4
   _Depends 1.4_
-- [ ] 1.6 (Unit) Lower each Python call by its recorded instantiation, the runtime checking a generic class by its class alone, through to the Python target's run — R5.1, R5.2
+- [x] 1.6 (Unit) Lower each Python call by its recorded instantiation, the runtime checking a generic class by its class alone, through to the Python target's run — R5.1, R5.2
   _Depends 1.5_
 - [ ] 2.1 (Unit) Bind a stub's plain and bounded type variables as type parameters, imported ones read from the embedded typeshed, a `ParamSpec` or `TypeVarTuple` as `PyObject` — R1.1, R1.3, R1.4, R1.5
   _Depends 1.2_

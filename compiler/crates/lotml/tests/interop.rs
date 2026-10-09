@@ -961,3 +961,67 @@ fn main() -> None ! PyError:
     let out = lotml(&["run", "main.lot"], &dir);
     assert_eq!(stdout(&out), "203 123\n715 42\n", "{}", String::from_utf8_lossy(&out.stderr));
 }
+
+const BOXES_GENERIC_PY: &str = "\
+def first(xs):
+    return xs[0]
+
+class Box:
+    def __init__(self, item):
+        self.item = item
+    def get(self):
+        return self.item
+    def paired(self, other):
+        return (self.item, other)
+
+def lie():
+    return Box(5)
+";
+
+const BOXES_GENERIC_LOTMLI: &str = "\
+fn first[T](xs: [T]) -> T ! PyError
+fn lie() -> Box[str] ! PyError
+
+class Box[T]:
+    item: T
+    fn Box(item: T) -> Box[T] ! PyError
+    fn get(self) -> T ! PyError
+    fn paired[S](self, other: S) -> (T, S) ! PyError
+";
+
+#[test]
+fn a_generic_call_runs_by_its_instantiation_and_a_handle_s_arguments_are_checked_where_values_cross() {
+    let program = "\
+from py.boxes import first, lie, Box
+
+fn main() -> None ! PyError:
+    print(first([3, 4])?, first([\"a\", \"b\"])?)
+    b = Box(\"s\")?
+    n = Box(5)?
+    print(b.get()?, n.item?, n.paired(1.5)?)
+    wrong = lie()?
+    match wrong.get():
+        case Ok(text):
+            print(text)
+        case Err(e):
+            print(e.kind)
+";
+    let dir = scratch(
+        "python-generics",
+        &[
+            (".git", ""),
+            ("boxes.py", BOXES_GENERIC_PY),
+            ("bindings/py.boxes.lotmli", BOXES_GENERIC_LOTMLI),
+            ("main.lot", program),
+        ],
+    );
+    let checked = lotml(&["check", "main.lot"], &dir);
+    assert!(checked.status.success(), "{}", stdout(&checked));
+    let out = lotml(&["run", "main.lot"], &dir);
+    assert_eq!(
+        stdout(&out),
+        "3 a\ns 5 (5, 1.5)\nTypeError\n",
+        "each call converts by the types it was inferred at, and a `Box[str]` holding an `int` fails where it is read: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
