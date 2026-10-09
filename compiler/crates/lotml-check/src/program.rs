@@ -33,6 +33,9 @@ pub struct FnSig {
     pub ret: Ty,
     pub error: Option<Ty>,
     pub span: Span,
+    /// A Python function's overloads after this one, in the order its interface declares them
+    /// (adr:0035); empty for any other function.
+    pub overloads: Vec<FnSig>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -563,6 +566,7 @@ impl Program {
             ret,
             error,
             span: f.span,
+            overloads: Vec::new(),
         }
     }
 
