@@ -8,11 +8,11 @@ fn geometric_mean(data: [f64]) -> f64 ! PyError
 fn mean(data: [PyObject]) -> PyObject ! PyError
 fn harmonic_mean(data: [PyObject], weights: [PyObject]? = None) -> PyObject ! PyError
 fn median(data: [PyObject]) -> PyObject ! PyError
-fn median_low(data: [PyObject]) -> PyObject ! PyError
-fn median_high(data: [PyObject]) -> PyObject ! PyError
+fn median_low[SupportsRichComparisonT](data: [SupportsRichComparisonT]) -> SupportsRichComparisonT ! PyError
+fn median_high[SupportsRichComparisonT](data: [SupportsRichComparisonT]) -> SupportsRichComparisonT ! PyError
 fn median_grouped(data: [f64], interval: f64 = 1.0) -> f64 ! PyError
-fn mode(data: [PyObject]) -> PyObject ! PyError
-fn multimode(data: [PyObject]) -> [PyObject] ! PyError
+fn mode[_HashableT](data: [_HashableT]) -> _HashableT ! PyError
+fn multimode[_HashableT](data: [_HashableT]) -> [_HashableT] ! PyError
 fn pstdev(data: [PyObject], mu: PyObject? = None) -> PyObject ! PyError
 fn pvariance(data: [PyObject], mu: PyObject? = None) -> PyObject ! PyError
 fn quantiles(data: [PyObject], n: int = 4, method: PyObject = "exclusive") -> [PyObject] ! PyError

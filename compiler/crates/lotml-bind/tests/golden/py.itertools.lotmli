@@ -3,7 +3,7 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
-fn tee(iterable: [PyObject], n: int = 2) -> PyObject ! PyError
+fn tee[_T](iterable: [_T], n: int = 2) -> PyObject ! PyError
 
 # Not bound:
 #   count: it is generic, which specs/python-generics/ binds

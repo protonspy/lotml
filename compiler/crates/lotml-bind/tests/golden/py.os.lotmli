@@ -47,9 +47,9 @@ fn setsid() -> None ! PyError
 fn setuid(uid: int) -> None ! PyError
 fn uname() -> uname_result ! PyError
 fn getenv(key: str) -> str? ! PyError
-fn getenv(key: str, default: PyObject) -> PyObject ! PyError
+fn getenv[_T](key: str, default: _T) -> PyObject ! PyError
 fn getenvb(key: bytes) -> bytes? ! PyError
-fn getenvb(key: bytes, default: PyObject) -> PyObject ! PyError
+fn getenvb[_T](key: bytes, default: _T) -> PyObject ! PyError
 fn putenv(name: str, value: str) -> None ! PyError
 fn unsetenv(name: str) -> None ! PyError
 fn fdopen(fd: int, mode: PyObject = "r", buffering: int = todo(), encoding: str? = None, errors: str? = None, newline: str? = None, closefd: bool = True, opener: PyObject? = None) -> PyObject ! PyError
@@ -328,7 +328,7 @@ class sched_param:
     sched_priority: int
 
 # Not bound:
-#   PathLike: it is a protocol, a shape rather than a class
+#   PathLike: it is generic, which specs/python-generics/ binds
 #   DirEntry: it is generic, which specs/python-generics/ binds
 #   fdopen: overload 4 of 7: an earlier one takes the same parameters, so no call is given it
 #   fdopen: overload 5 of 7: an earlier one takes the same parameters, so no call is given it

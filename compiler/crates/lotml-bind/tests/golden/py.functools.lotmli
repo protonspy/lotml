@@ -3,7 +3,7 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
-fn reduce(function: PyObject, iterable: [PyObject], initial: PyObject) -> PyObject ! PyError
+fn reduce[_S, _T](function: PyObject, iterable: [_S], initial: _T) -> _T ! PyError
 fn lru_cache(maxsize: int? = 128, typed: bool = False) -> PyObject ! PyError
 fn lru_cache(maxsize: PyObject, typed: bool = False) -> PyObject ! PyError
 fn update_wrapper(wrapper: PyObject, wrapped: PyObject, assigned: [str] = todo(), updated: [str] = todo()) -> PyObject ! PyError

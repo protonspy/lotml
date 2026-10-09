@@ -11,7 +11,7 @@
   _Depends 1.4_
 - [x] 1.6 (Unit) Lower each Python call by its recorded instantiation, the runtime checking a generic class by its class alone, through to the Python target's run — R5.1, R5.2
   _Depends 1.5_
-- [ ] 2.1 (Unit) Bind a stub's plain and bounded type variables as type parameters, imported ones read from the embedded typeshed, a `ParamSpec` or `TypeVarTuple` as `PyObject` — R1.1, R1.3, R1.4, R1.5
+- [x] 2.1 (Unit) Bind a stub's plain and bounded type variables as type parameters, imported ones read from the embedded typeshed, a `ParamSpec` or `TypeVarTuple` as `PyObject` — R1.1, R1.3, R1.4, R1.5
   _Depends 1.2_
 - [ ] 2.2 (Unit) Expand a constrained type variable into an overload per constraint — R1.2
   _Depends 2.1_

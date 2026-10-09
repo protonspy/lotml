@@ -22,7 +22,25 @@ const OBJECT: &str = "PyObject";
 struct Cx<'a> {
     classes: &'a HashSet<String>,
     this: Option<&'a str>,
+    /// The stub's type variables, its own and those it imports (adr:0036).
+    vars: &'a Vars,
+    /// The type parameters of the class a member belongs to.
+    own: &'a [String],
 }
+
+/// What a type variable is (adr:0036).
+#[derive(Clone, Debug, PartialEq)]
+enum Var {
+    /// One type a call infers: plain, or bounded, the bound left to Python.
+    Plain,
+    /// One of the types it lists, as an interface writes them: an overload each.
+    Constrained(Vec<String>),
+    /// A `ParamSpec` or a `TypeVarTuple`, which no LotML type describes.
+    Spread,
+}
+
+/// Type variables by the name a stub gives them.
+type Vars = HashMap<String, Var>;
 
 /// LotML's keywords, which no name of an interface may be.
 const KEYWORDS: &[&str] = &[
@@ -131,9 +149,10 @@ fn bind(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
     let body = &parsed.syntax().body;
     let mut bound = Vec::new();
     let mut skipped = Vec::new();
-    let (classes, refused) = bindable_classes(body);
+    let vars = type_vars(body);
+    let (classes, refused) = bindable_classes(body, &vars);
     skipped.extend(refused);
-    let cx = Cx { classes: &classes, this: None };
+    let cx = Cx { classes: &classes, this: None, vars: &vars, own: &[] };
     let mut seen = HashSet::new();
     for (name, lines, left_out) in functions(body, cx) {
         if name.starts_with('_') || !seen.insert(name.clone()) {
@@ -155,7 +174,7 @@ fn bind(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
     for class in module_level(body).into_iter().filter_map(Stmt::as_class_def_stmt) {
         // A class written in two `sys.version_info` branches is bound from the first, as a function is.
         if classes.contains(class.name.as_str()) && written.insert(class.name.as_str()) {
-            let (block, left_out) = class_block(class, &classes);
+            let (block, left_out) = class_block(class, &classes, &vars);
             lines.push(String::new());
             lines.extend(block);
             skipped.extend(left_out);
@@ -386,7 +405,9 @@ fn name_of(expr: &Expr) -> Option<&str> {
 fn written(function: &ast::StmtFunctionDef, name: &str, bound_method: bool, cx: Cx<'_>) -> Result<String, String> {
     let params = params(function, bound_method, cx)?;
     let returns = function.returns.as_deref().map_or_else(|| OBJECT.to_string(), |r| lotml_type(r, false, cx));
-    Ok(format!("fn {name}({}) -> {returns} ! PyError", params.join(", ")))
+    let params = params.join(", ");
+    let generics = generics(&format!("{params} {returns}"), cx);
+    Ok(format!("fn {name}{generics}({params}) -> {returns} ! PyError"))
 }
 
 /// The parameters of `function` as an interface writes them, its first dropped when it is bound
@@ -422,8 +443,7 @@ fn params(function: &ast::StmtFunctionDef, drop_first: bool, cx: Cx<'_>) -> Resu
 
 /// The classes of the stub the interface declares, and a comment for each public one it does
 /// not: generic, a protocol, of a name LotML keeps, or of a function's name.
-fn bindable_classes(body: &[Stmt]) -> (HashSet<String>, Vec<String>) {
-    let type_vars = type_vars(body);
+fn bindable_classes(body: &[Stmt], type_vars: &Vars) -> (HashSet<String>, Vec<String>) {
     let functions: HashSet<&str> = definitions(body).iter().map(|f| f.name.as_str()).collect();
     let mut bound = HashSet::new();
     let mut refused = Vec::new();
@@ -432,7 +452,7 @@ fn bindable_classes(body: &[Stmt]) -> (HashSet<String>, Vec<String>) {
         if name.starts_with('_') || bound.contains(name) {
             continue;
         }
-        let why = if class.type_params.is_some() || class.bases().iter().any(|b| mentions(b, &type_vars)) {
+        let why = if class.type_params.is_some() || class.bases().iter().any(|b| mentions(b, type_vars)) {
             Some("it is generic, which specs/python-generics/ binds".to_string())
         } else if class.bases().iter().any(|b| name_of(head(b)) == Some("Protocol")) {
             Some("it is a protocol, a shape rather than a class".to_string())
@@ -453,19 +473,87 @@ fn bindable_classes(body: &[Stmt]) -> (HashSet<String>, Vec<String>) {
     (bound, refused)
 }
 
-/// The names the stub declares as type variables: `T = TypeVar("T")`.
-fn type_vars(body: &[Stmt]) -> HashSet<String> {
-    let mut found = HashSet::new();
+/// The type variables of a stub: those it declares, and those it imports from `typing`,
+/// `typing_extensions` or `_typeshed`, read from the typeshed lotml carries (adr:0036).
+fn type_vars(body: &[Stmt]) -> Vars {
+    let mut found = declared_vars(body);
+    for statement in module_level(body) {
+        if let Stmt::ImportFrom(import) = statement
+            && let Some(vars) = import.module.as_ref().and_then(|m| shared_vars(m.as_str()))
+        {
+            for alias in &import.names {
+                if let Some(var) = vars.get(alias.name.as_str()) {
+                    let local = alias.asname.as_ref().unwrap_or(&alias.name);
+                    found.entry(local.to_string()).or_insert_with(|| var.clone());
+                }
+            }
+        }
+    }
+    found
+}
+
+/// The type variables `body` declares: `T = TypeVar("T")`, `AnyStr = TypeVar("AnyStr", str,
+/// bytes)`, `P = ParamSpec("P")`. A `Self` one is the class's own, which `Self` already names.
+fn declared_vars(body: &[Stmt]) -> Vars {
+    let (classes, vars) = (HashSet::new(), Vars::new());
+    let cx = Cx { classes: &classes, this: None, vars: &vars, own: &[] };
+    let mut found = Vars::new();
     for statement in module_level(body) {
         if let Stmt::Assign(assigned) = statement
             && let [Expr::Name(target)] = assigned.targets.as_slice()
             && let Expr::Call(call) = &*assigned.value
-            && matches!(name_of(&call.func), Some("TypeVar" | "ParamSpec" | "TypeVarTuple"))
+            && target.id.as_str() != "Self"
         {
-            found.insert(target.id.to_string());
+            let var = match name_of(&call.func) {
+                Some("TypeVar") if call.arguments.args.len() > 1 => {
+                    Var::Constrained(call.arguments.args[1..].iter().map(|c| lotml_type(c, false, cx)).collect())
+                }
+                Some("TypeVar") => Var::Plain,
+                Some("ParamSpec" | "TypeVarTuple") => Var::Spread,
+                _ => continue,
+            };
+            found.insert(target.id.to_string(), var);
         }
     }
     found
+}
+
+/// The type variables of `module`, one of those stubs import them from, parsed from the typeshed
+/// lotml carries once a process.
+fn shared_vars(module: &str) -> Option<&'static Vars> {
+    static SHARED: std::sync::OnceLock<HashMap<&'static str, Vars>> = std::sync::OnceLock::new();
+    let shared = SHARED.get_or_init(|| {
+        ["typing", "typing_extensions", "_typeshed"]
+            .into_iter()
+            .map(|name| {
+                let vars = match crate::typeshed::find(name) {
+                    crate::typeshed::Found::Stub { text, .. } => {
+                        let parsed = ruff_python_parser::parse_unchecked_source(text, PySourceType::Stub);
+                        declared_vars(&parsed.syntax().body)
+                    }
+                    _ => Vars::new(),
+                };
+                (name, vars)
+            })
+            .collect()
+    });
+    shared.get(module)
+}
+
+/// The type parameters a signature written as `text` declares: the plain type variables it names
+/// that are not its class's, in the order written, `[T, S]`, or nothing (adr:0036).
+fn generics(text: &str, cx: Cx<'_>) -> String {
+    let mut found: Vec<&str> = Vec::new();
+    for word in text.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
+        if matches!(cx.vars.get(word), Some(Var::Plain))
+            && !reserved(word)
+            && !cx.own.iter().any(|o| o == word)
+            && !found.contains(&word)
+        {
+            found.push(word);
+        }
+    }
+    if found.is_empty() { String::new() } else { format!("[{}]", found.join(", ")) }
 }
 
 /// The expression a subscript is of: `Generic` of `Generic[T]`, or the expression itself.
@@ -477,9 +565,9 @@ fn head(expr: &Expr) -> &Expr {
 }
 
 /// Whether `expr` is `Generic[…]`, or names one of `type_vars` anywhere inside it.
-fn mentions(expr: &Expr, type_vars: &HashSet<String>) -> bool {
+fn mentions(expr: &Expr, type_vars: &Vars) -> bool {
     match expr {
-        Expr::Name(name) => type_vars.contains(name.id.as_str()),
+        Expr::Name(name) => type_vars.contains_key(name.id.as_str()),
         Expr::Subscript(subscript) => {
             name_of(&subscript.value) == Some("Generic") || mentions(&subscript.slice, type_vars)
         }
@@ -491,9 +579,9 @@ fn mentions(expr: &Expr, type_vars: &HashSet<String>) -> bool {
 /// A class as an interface writes it: its bases the interface declares, its attributes (annotated,
 /// and `@property`s), its constructor (its `__init__`, else `__new__`, else a base's), its methods
 /// and its static and class methods; and a comment for each member it leaves out.
-fn class_block(class: &ast::StmtClassDef, classes: &HashSet<String>) -> (Vec<String>, Vec<String>) {
+fn class_block(class: &ast::StmtClassDef, classes: &HashSet<String>, vars: &Vars) -> (Vec<String>, Vec<String>) {
     let name = class.name.as_str();
-    let cx = Cx { classes, this: Some(name) };
+    let cx = Cx { classes, this: Some(name), vars, own: &[] };
     let bases: Vec<&str> =
         class.bases().iter().filter_map(name_of).filter(|b| classes.contains(*b) && *b != name).collect();
     let mut lines =
@@ -561,7 +649,9 @@ fn class_block(class: &ast::StmtClassDef, classes: &HashSet<String>) -> (Vec<Str
                 let returns = f.returns.as_deref().map_or_else(|| OBJECT.to_string(), |r| lotml_type(r, false, cx));
                 let params =
                     if is_method(f) { std::iter::once("self".to_string()).chain(params).collect() } else { params };
-                format!("    fn {member}({}) -> {returns} ! PyError", params.join(", "))
+                let params = params.join(", ");
+                let generics = generics(&format!("{params} {returns}"), cx);
+                format!("    fn {member}{generics}({params}) -> {returns} ! PyError")
             })
         };
         let label = format!("{name}.{member}");
@@ -581,7 +671,10 @@ fn class_block(class: &ast::StmtClassDef, classes: &HashSet<String>) -> (Vec<Str
         .or_else(|| defs.iter().find(|f| f.name.as_str() == "__new__"));
     if let Some(init) = own {
         let constructor = |f: &ast::StmtFunctionDef| {
-            params(f, true, cx).map(|params| format!("    fn {name}({}) -> {name} ! PyError", params.join(", ")))
+            params(f, true, cx).map(|params| {
+                let params = params.join(", ");
+                format!("    fn {name}{}({params}) -> {name} ! PyError", generics(&params, cx))
+            })
         };
         let label = format!("{name}.{}", init.name.as_str());
         let (written, left_out) = match runs.get(init.name.as_str()) {
@@ -628,6 +721,14 @@ fn lotml_type(expr: &Expr, parameter: bool, cx: Cx<'_>) -> String {
         }
         if cx.classes.contains(name) {
             return name.to_string();
+        }
+        // A type variable: the class's own parameter or a plain one by its name, a constrained one
+        // once its overloads give it each type, any other a `PyObject` (adr:0036).
+        if cx.own.iter().any(|o| o == name) {
+            return name.to_string();
+        }
+        if let Some(var) = cx.vars.get(name) {
+            return if *var == Var::Plain && !reserved(name) { name.to_string() } else { OBJECT.to_string() };
         }
         return match name {
             "int" => "int",
@@ -1166,6 +1267,57 @@ else:
         let text = bound(&stub);
         assert!(started.elapsed().as_secs() < 5, "took {:?}", started.elapsed());
         assert_eq!(functions(&stub), ["fn f(x: int) -> int ! PyError", "fn g(x: int) -> int ! PyError"], "{text}");
+    }
+
+    #[test]
+    fn a_plain_or_bounded_type_variable_is_a_type_parameter_and_its_bound_is_not_written() {
+        let stub = "\
+from typing import TypeVar, Iterable
+T = TypeVar(\"T\")
+B = TypeVar(\"B\", bound=int)
+def first(xs: list[T]) -> T: ...
+def largest(xs: Iterable[B], default: T) -> B | T: ...
+def keep(x: B) -> list[B]: ...
+";
+        assert_eq!(
+            functions(stub),
+            [
+                "fn first[T](xs: [T]) -> T ! PyError",
+                "fn largest[B, T](xs: [B], default: T) -> PyObject ! PyError",
+                "fn keep[B](x: B) -> [B] ! PyError",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_type_variable_a_stub_imports_is_read_from_the_typeshed_lotml_carries() {
+        let stub = "\
+from _typeshed import SupportsRichComparisonT as _T
+from typing import AnyStr
+def nlargest(n: int, iterable: Iterable[_T]) -> list[_T]: ...
+";
+        assert_eq!(functions(stub), ["fn nlargest[_T](n: int, iterable: [_T]) -> [_T] ! PyError"]);
+        let vars = type_vars(&ruff_python_parser::parse_unchecked_source(stub, PySourceType::Stub).syntax().body);
+        assert_eq!(vars["AnyStr"], Var::Constrained(vec!["str".into(), "bytes".into()]));
+        assert_eq!(vars["_T"], Var::Plain);
+    }
+
+    #[test]
+    fn a_param_spec_or_type_var_tuple_is_a_py_object() {
+        let stub = "\
+P = ParamSpec(\"P\")
+Ts = TypeVarTuple(\"Ts\")
+def spread(x: Ts, p: P) -> Ts: ...
+";
+        assert_eq!(functions(stub), ["fn spread(x: PyObject, p: PyObject) -> PyObject ! PyError"]);
+    }
+
+    #[test]
+    fn a_generic_method_declares_its_own_type_parameters() {
+        let stub = "T = TypeVar(\"T\")\nclass C:\n    def __init__(self, seed: T) -> None: ...\n    def pick(self, xs: list[T]) -> T: ...\n";
+        let text = bound(stub);
+        assert!(text.contains("    fn C[T](seed: T) -> C ! PyError\n"), "{text}");
+        assert!(text.contains("    fn pick[T](self, xs: [T]) -> T ! PyError\n"), "{text}");
     }
 
     #[test]
