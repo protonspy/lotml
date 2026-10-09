@@ -6,7 +6,7 @@ and no `bindings/` directory, offline; the PyPI modules in a scratch project who
 `uv.lock` pins them (specs/bind-on-import R4.1). `lotml bind <module>` says why one
 fails.
 
-24 of 36 modules ran.
+28 of 36 modules ran.
 
 | module | group | result |
 | --- | --- | --- |
@@ -19,20 +19,20 @@ fails.
 | os | stdlib | ran |
 | os.path | stdlib | failed: os_path.lotml:1:8: error[E0216]: there is no interface of the Python module `os.path` |
 | shutil | stdlib | ran |
-| datetime | stdlib | failed: datetime.lotml:1:8: error[E0216]: there is no interface of the Python module `datetime` |
+| datetime | stdlib | ran |
 | time | stdlib | ran |
 | collections | stdlib | ran |
 | itertools | stdlib | ran |
 | functools | stdlib | ran |
 | statistics | stdlib | ran |
-| fractions | stdlib | failed: fractions.lotml:1:8: error[E0216]: there is no interface of the Python module `fractions` |
-| decimal | stdlib | failed: decimal.lotml:1:8: error[E0216]: there is no interface of the Python module `decimal` |
+| fractions | stdlib | ran |
+| decimal | stdlib | ran |
 | heapq | stdlib | failed: heapq.lotml:1:8: error[E0216]: there is no interface of the Python module `heapq` |
 | bisect | stdlib | failed: bisect.lotml:1:8: error[E0216]: there is no interface of the Python module `bisect` |
 | base64 | stdlib | ran |
 | hashlib | stdlib | ran |
 | difflib | stdlib | ran |
-| csv | stdlib | failed: csv.lotml:1:8: error[E0216]: there is no interface of the Python module `csv` |
+| csv | stdlib | ran |
 | urllib.parse | stdlib | ran |
 | uuid | stdlib | ran |
 | requests | pypi | ran |

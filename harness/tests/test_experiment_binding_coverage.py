@@ -104,11 +104,11 @@ def test_a_module_counts_the_public_names_lotml_bind_binds_and_one_without_a_stu
     assert (measured.stub, measured.public, measured.bound) == (
         "rand-stubs/__init__.pyi",
         4,
-        ["roll", "seed"],
-    )
-    assert measured.share == 0.5
+        ["R", "roll", "seed"],
+    ), "a class the interface declares is bound typed (specs/python-classes R4.1)"
+    assert measured.share == 0.75
     assert measured.reachable == ["pick"], "`object` is bound as a `PyObject`: reachable, not typed"
-    assert measured.reached == 0.75
+    assert measured.reached == 1.0
     missing = bc.measure(bc.Module("absent", "pypi", "absent"), COMPILER, None, purelib)
     assert (missing.stub, missing.public, missing.share) == (None, 0, 0.0)
 

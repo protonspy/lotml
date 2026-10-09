@@ -128,9 +128,9 @@ fn bound(module: &str, stub: &Stub) -> Result<String, String> {
     if let Some(problem) = problems.first() {
         return Err(format!("the binding of `{module}` does not check: {} {}", problem.code, problem.message));
     }
-    if interface.names().next().is_none() {
+    if interface.names().next().is_none() && interface.classes().next().is_none() {
         return Err(format!(
-            "the stub of `{module}` binds no function lotml can type; the interface's comments say why"
+            "the stub of `{module}` binds no function or class lotml can type; the interface's comments say why"
         ));
     }
     Ok(text)
@@ -372,15 +372,13 @@ mod tests {
     }
 
     #[test]
-    fn a_stub_that_binds_no_function_counts_as_none() {
-        let classes = Stub {
-            text: "class Box:\n    def size(self) -> int: ...\n".into(),
-            said: "box.pyi".into(),
-            source: String::new(),
-        };
-        assert!(bound("box", &classes).unwrap_err().contains("binds no function"));
-        let one = Stub { text: "def size() -> int: ...\n".into(), said: "box.pyi".into(), source: String::new() };
-        assert!(bound("box", &one).unwrap().contains("fn size() -> int ! PyError"));
+    fn a_stub_that_binds_no_function_or_class_counts_as_none() {
+        let stub = |text: &str| Stub { text: text.into(), said: "box.pyi".into(), source: String::new() };
+        let hidden = stub("class _Box:\n    def size(self) -> int: ...\n@overload\ndef f(x: int) -> int: ...\n");
+        assert!(bound("box", &hidden).unwrap_err().contains("binds no function or class"));
+        assert!(bound("box", &stub("def size() -> int: ...\n")).unwrap().contains("fn size() -> int ! PyError"));
+        let classes = bound("box", &stub("class Box:\n    def size(self) -> int: ...\n")).unwrap();
+        assert!(classes.contains("class Box:"), "a class alone is bound (specs/python-classes): {classes}");
     }
 
     #[test]

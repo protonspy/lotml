@@ -35,5 +35,5 @@
 
 ## 5 · The coverage
 
-- [ ] 5.1 (Unit) Count a `class` of the interface as bound typed, and run the coverage report and the binding corpus after the spec, beside `embedded-typeshed` — R4.1
+- [x] 5.1 (Unit) Count a `class` of the interface as bound typed, and run the coverage report and the binding corpus after the spec, beside `embedded-typeshed` — R4.1
   _Depends 3.1, 4.3_
