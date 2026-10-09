@@ -26,6 +26,37 @@ fn getstate() -> PyObject ! PyError
 fn setstate(state: PyObject) -> None ! PyError
 fn randbytes(n: int) -> bytes ! PyError
 
+class Random:
+    fn Random(x: PyObject? = None) -> Random ! PyError
+    VERSION: int
+    fn seed(self, a: PyObject? = None, version: int = 2) -> None ! PyError
+    fn getstate(self) -> PyObject ! PyError
+    fn setstate(self, state: PyObject) -> None ! PyError
+    fn randrange(self, start: int, stop: int? = None, step: int = 1) -> int ! PyError
+    fn randint(self, a: int, b: int) -> int ! PyError
+    fn randbytes(self, n: int) -> bytes ! PyError
+    fn choice(self, seq: PyObject) -> PyObject ! PyError
+    fn choices(self, population: PyObject, weights: [PyObject]? = None, cum_weights: [PyObject]? = None, k: int = 1) -> [PyObject] ! PyError
+    fn sample(self, population: [PyObject], k: int, counts: [int]? = None) -> [PyObject] ! PyError
+    fn uniform(self, a: f64, b: f64) -> f64 ! PyError
+    fn triangular(self, low: f64 = 0.0, high: f64 = 1.0, mode: f64? = None) -> f64 ! PyError
+    fn binomialvariate(self, n: int = 1, p: f64 = 0.5) -> int ! PyError
+    fn betavariate(self, alpha: f64, beta: f64) -> f64 ! PyError
+    fn expovariate(self, lambd: f64 = 1.0) -> f64 ! PyError
+    fn gammavariate(self, alpha: f64, beta: f64) -> f64 ! PyError
+    fn gauss(self, mu: f64 = 0.0, sigma: f64 = 1.0) -> f64 ! PyError
+    fn normalvariate(self, mu: f64 = 0.0, sigma: f64 = 1.0) -> f64 ! PyError
+    fn lognormvariate(self, mu: f64, sigma: f64) -> f64 ! PyError
+    fn vonmisesvariate(self, mu: f64, kappa: f64) -> f64 ! PyError
+    fn paretovariate(self, alpha: f64) -> f64 ! PyError
+    fn weibullvariate(self, alpha: f64, beta: f64) -> f64 ! PyError
+
+class SystemRandom(Random):
+    fn getrandbits(self, k: int) -> int ! PyError
+    fn getstate(self) -> PyObject ! PyError
+    fn setstate(self) -> PyObject ! PyError
+
 # Not bound:
 #   random: `Random` holds no `random` in this stub
 #   getrandbits: `Random` holds no `getrandbits` in this stub
+#   Random.shuffle: it is overloaded

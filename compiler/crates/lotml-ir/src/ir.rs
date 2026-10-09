@@ -633,6 +633,21 @@ pub enum Expr {
         params: Vec<Ty>,
         ret: Ty,
     },
+    /// A method of `object`, a value of a Python class (adr:0034), declared with `params` and
+    /// returning `ret`, a `T ! PyError`: `object.method(args)`, the arguments read and converted.
+    CallPyMethod {
+        object: Operand,
+        method: String,
+        args: Vec<Operand>,
+        params: Vec<Ty>,
+        ret: Ty,
+    },
+    /// The attribute `name` of `object`, a value of a Python class, read: a `ret`, `T ! PyError`.
+    PyAttribute {
+        object: Operand,
+        name: String,
+        ret: Ty,
+    },
     /// `parallel(tasks)`: each closure of `tasks` run on a thread, its result of type `result`.
     Parallel {
         tasks: Operand,
@@ -759,6 +774,11 @@ impl Expr {
             Expr::FnRef(_) => {}
             Expr::Parallel { tasks, .. } => f(tasks),
             Expr::CallC { args, .. } | Expr::CallPython { args, .. } => args.iter().for_each(f),
+            Expr::CallPyMethod { object, args, .. } => {
+                f(object);
+                args.iter().for_each(f);
+            }
+            Expr::PyAttribute { object, .. } => f(object),
             Expr::ToDyn { value, .. } | Expr::ToDynOf { value, .. } => f(value),
             Expr::Method { place, args, keywords, .. } => {
                 f(&Operand::Local(place.local));
@@ -972,10 +992,13 @@ fn expr_types(e: &Expr, f: &mut impl FnMut(&Ty)) {
             f(ret);
         }
         Expr::Parallel { result, .. } => f(&Ty::List(Box::new(result.clone()))),
-        Expr::CallC { params, ret, .. } | Expr::CallPython { params, ret, .. } => {
+        Expr::CallC { params, ret, .. }
+        | Expr::CallPython { params, ret, .. }
+        | Expr::CallPyMethod { params, ret, .. } => {
             params.iter().for_each(&mut *f);
             f(ret);
         }
+        Expr::PyAttribute { ret, .. } => f(ret),
         Expr::Rt { args, .. } | Expr::CallSlots(_, args) | Expr::CallGeneric { args, .. } => arg_types(args, f),
         Expr::RtValue { args, ty, .. } => {
             arg_types(args, f);
@@ -1110,10 +1133,13 @@ fn expr_types_mut(e: &mut Expr, f: &mut impl FnMut(&mut Ty)) {
             f(ty);
         }
         Expr::Format(parts) => format_types_mut(parts, f),
-        Expr::CallC { params, ret, .. } | Expr::CallPython { params, ret, .. } => {
+        Expr::CallC { params, ret, .. }
+        | Expr::CallPython { params, ret, .. }
+        | Expr::CallPyMethod { params, ret, .. } => {
             params.iter_mut().for_each(&mut *f);
             f(ret);
         }
+        Expr::PyAttribute { ret, .. } => f(ret),
         Expr::CallDyn { ty, params, ret, .. } => {
             f(ty);
             params.iter_mut().for_each(&mut *f);

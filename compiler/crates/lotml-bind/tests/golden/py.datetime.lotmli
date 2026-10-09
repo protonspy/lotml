@@ -3,3 +3,108 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
+
+class tzinfo:
+    fn tzname(self, dt: datetime?) -> str? ! PyError
+    fn utcoffset(self, dt: datetime?) -> timedelta? ! PyError
+    fn dst(self, dt: datetime?) -> timedelta? ! PyError
+    fn fromutc(self, dt: datetime) -> datetime ! PyError
+
+class timezone(tzinfo):
+    fn timezone(offset: timedelta, name: str = todo()) -> timezone ! PyError
+    utc: timezone
+    min: timezone
+    max: timezone
+    fn tzname(self, dt: datetime?) -> str ! PyError
+    fn utcoffset(self, dt: datetime?) -> timedelta ! PyError
+    fn dst(self, dt: datetime?) -> None ! PyError
+
+class date:
+    fn date(year: int, month: int, day: int) -> date ! PyError
+    min: date
+    max: date
+    resolution: timedelta
+    fn fromtimestamp(timestamp: f64) -> date ! PyError
+    fn today() -> date ! PyError
+    fn fromordinal(n: int) -> date ! PyError
+    fn fromisoformat(string: str) -> date ! PyError
+    fn fromisocalendar(year: int, week: int, day: int) -> date ! PyError
+    year: int
+    month: int
+    day: int
+    fn ctime(self) -> str ! PyError
+    fn strptime(string: str, format: str) -> date ! PyError
+    fn strftime(self, format: str) -> str ! PyError
+    fn isoformat(self) -> str ! PyError
+    fn timetuple(self) -> PyObject ! PyError
+    fn toordinal(self) -> int ! PyError
+    fn replace(self, year: int = todo(), month: int = todo(), day: int = todo()) -> date ! PyError
+    fn weekday(self) -> int ! PyError
+    fn isoweekday(self) -> int ! PyError
+    fn isocalendar(self) -> PyObject ! PyError
+
+class time:
+    fn time(hour: int = 0, minute: int = 0, second: int = 0, microsecond: int = 0, tzinfo: PyObject? = None, fold: int = 0) -> time ! PyError
+    min: time
+    max: time
+    resolution: timedelta
+    hour: int
+    minute: int
+    second: int
+    microsecond: int
+    tzinfo: PyObject?
+    fold: int
+    fn isoformat(self, timespec: str = "auto") -> str ! PyError
+    fn fromisoformat(string: str) -> time ! PyError
+    fn strptime(string: str, format: str) -> time ! PyError
+    fn strftime(self, format: str) -> str ! PyError
+    fn utcoffset(self) -> timedelta? ! PyError
+    fn tzname(self) -> str? ! PyError
+    fn dst(self) -> timedelta? ! PyError
+    fn replace(self, hour: int = todo(), minute: int = todo(), second: int = todo(), microsecond: int = todo(), tzinfo: PyObject? = todo(), fold: int = todo()) -> time ! PyError
+
+class timedelta:
+    fn timedelta(days: f64 = 0, seconds: f64 = 0, microseconds: f64 = 0, milliseconds: f64 = 0, minutes: f64 = 0, hours: f64 = 0, weeks: f64 = 0) -> timedelta ! PyError
+    min: timedelta
+    max: timedelta
+    resolution: timedelta
+    days: int
+    seconds: int
+    microseconds: int
+    fn total_seconds(self) -> f64 ! PyError
+
+class datetime(date):
+    fn datetime(year: int, month: int, day: int, hour: int = 0, minute: int = 0, second: int = 0, microsecond: int = 0, tzinfo: PyObject? = None, fold: int = 0) -> datetime ! PyError
+    min: datetime
+    max: datetime
+    hour: int
+    minute: int
+    second: int
+    microsecond: int
+    tzinfo: PyObject?
+    fold: int
+    fn fromtimestamp(timestamp: f64, tz: PyObject? = None) -> datetime ! PyError
+    fn utcfromtimestamp(t: f64) -> datetime ! PyError
+    fn now(tz: PyObject? = None) -> datetime ! PyError
+    fn utcnow() -> datetime ! PyError
+    fn combine(date: PyObject, time: PyObject, tzinfo: PyObject? = todo()) -> datetime ! PyError
+    fn fromisoformat(string: str) -> datetime ! PyError
+    fn timestamp(self) -> f64 ! PyError
+    fn utctimetuple(self) -> PyObject ! PyError
+    fn date(self) -> PyObject ! PyError
+    fn time(self) -> PyObject ! PyError
+    fn timetz(self) -> PyObject ! PyError
+    fn replace(self, year: int = todo(), month: int = todo(), day: int = todo(), hour: int = todo(), minute: int = todo(), second: int = todo(), microsecond: int = todo(), tzinfo: PyObject? = todo(), fold: int = todo()) -> datetime ! PyError
+    fn astimezone(self, tz: PyObject? = None) -> datetime ! PyError
+    fn isoformat(self, sep: str = "T", timespec: str = "auto") -> str ! PyError
+    fn strptime(string: str, format: str) -> datetime ! PyError
+    fn utcoffset(self) -> timedelta? ! PyError
+    fn tzname(self) -> str? ! PyError
+    fn dst(self) -> timedelta? ! PyError
+
+# Not bound:
+#   timezone.__hash__, __eq__: dunder methods, which operators would call
+#   date.__format__, __replace__, __le__, __lt__, __ge__, __gt__, __eq__, __add__, __radd__, __sub__, __hash__: dunder methods, which operators would call
+#   time.__le__, __lt__, __ge__, __gt__, __eq__, __hash__, __format__, __replace__: dunder methods, which operators would call
+#   timedelta.__add__, __radd__, __sub__, __rsub__, __neg__, __pos__, __abs__, __mul__, __rmul__, __floordiv__, __truediv__, __mod__, __divmod__, __le__, __lt__, __ge__, __gt__, __eq__, __bool__, __hash__: dunder methods, which operators would call
+#   datetime.__replace__, __le__, __lt__, __ge__, __gt__, __eq__, __hash__, __sub__: dunder methods, which operators would call

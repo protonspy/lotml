@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/rust-binder
-delivery: in-review
+delivery: merged
 pr: 55
 ---
 

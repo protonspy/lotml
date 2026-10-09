@@ -482,7 +482,7 @@ pub fn lower(module: &Module, checked: &Checked, text: &str, tests: bool) -> Res
                     cx.unsupported(t.name.span, "a generic trait");
                 }
             }
-            Item::Import(_) | Item::Test(_) | Item::Error(_) | Item::Record(_) | Item::Sum(_) => {}
+            Item::Import(_) | Item::Test(_) | Item::Error(_) | Item::Record(_) | Item::Sum(_) | Item::Class(_) => {}
         }
     }
     let defaults = cx.defaults_of(module);
@@ -590,6 +590,9 @@ impl<'a> Context<'a> {
             for name in &import.names {
                 if let Some(sig) = self.checked.foreign.get(&path).and_then(|fs| fs.get(&name.name)) {
                     self.py_imports.insert(name.name.clone(), (path.clone(), sig.clone()));
+                } else if let Some(sig) = self.checked.py_constructor(&format!("{path}.{}", name.name)) {
+                    // A class imported by name is called through its constructor (adr:0034).
+                    self.py_imports.insert(name.name.clone(), (path.clone(), sig));
                 }
             }
             return;
@@ -2032,6 +2035,12 @@ impl<'c, 'a> Builder<'c, 'a> {
             }
             ExprKind::Attr { object, name } => {
                 let ty = self.ty(object);
+                if let Ty::Adt(class, _) = &ty
+                    && self.cx.checked.py_methods.contains_key(class)
+                {
+                    let target = self.value(object);
+                    return Value::Expr(Expr::PyAttribute { object: target, name: name.name.clone(), ret: self.ty(e) });
+                }
                 match self.record_field(&ty, &name.name) {
                     Some((index, _)) => {
                         let o = self.value(object);
@@ -3239,9 +3248,38 @@ impl<'c, 'a> Builder<'c, 'a> {
         Value::Expr(Expr::CallPython { module, function: function.to_string(), args: operands, params, ret })
     }
 
+    /// `object.method(args)` of a value of a Python class through the method's `sig`, `self` its
+    /// first parameter (adr:0034).
+    fn python_method(&mut self, object: &ast::Expr, method: &str, sig: &FnSig, args: &[AstArg]) -> Value {
+        let target = self.value(object);
+        let mut operands = Vec::new();
+        for (a, p) in args.iter().zip(sig.params.iter().skip(1)) {
+            let v = self.value(a.expr());
+            operands.push(self.coerce(v, &p.ty));
+        }
+        let params = sig.params.iter().skip(1).map(|p| p.ty.clone()).collect();
+        let ret = call_ret(sig);
+        Value::Expr(Expr::CallPyMethod { object: target, method: method.to_string(), args: operands, params, ret })
+    }
+
     /// `object.name(args)`: a method of a declared type, or of a built-in one.
     fn method(&mut self, whole: &ast::Expr, object: &ast::Expr, name: &str, args: &[AstArg]) -> Value {
+        // `date.today()`: a static method of an imported Python class, called through its module
+        // (adr:0034). The checker gave the class's name no type, as it gives one to a local.
+        if let ExprKind::Name(class) = &object.kind
+            && !self.cx.checked.types.contains_key(&object.span)
+            && let Some(qualified) = self.cx.checked.py_classes.get(class).cloned()
+            && let Some(m) = self.cx.checked.py_method(&qualified, name).cloned()
+            && let Some((module, class)) = qualified.rsplit_once('.')
+        {
+            return self.python_call(module.to_string(), &format!("{class}.{name}"), &m.sig, args);
+        }
         let ty = self.ty(object);
+        if let Ty::Adt(class, _) = &ty
+            && let Some(m) = self.cx.checked.py_method(class, name).cloned()
+        {
+            return self.python_method(object, name, &m.sig, args);
+        }
         let owner = match &ty {
             Ty::Adt(owner, _) | Ty::TypeName(owner) => Some(owner.clone()),
             Ty::PyObject => {
@@ -3255,6 +3293,10 @@ impl<'c, 'a> Builder<'c, 'a> {
             Ty::Dyn(trait_name) => return self.dyn_method(whole, object, trait_name, name, args),
             Ty::Module(module) => {
                 if let Some(sig) = self.cx.checked.foreign.get(module).and_then(|fs| fs.get(name)).cloned() {
+                    return self.python_call(module.clone(), name, &sig, args);
+                }
+                // `py.m.C(...)`: a class's constructor, its own or a base's (adr:0034).
+                if let Some(sig) = self.cx.checked.py_constructor(&format!("{module}.{name}")) {
                     return self.python_call(module.clone(), name, &sig, args);
                 }
                 return self.math_call(whole, name, args);

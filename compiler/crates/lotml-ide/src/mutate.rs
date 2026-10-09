@@ -62,7 +62,7 @@ pub fn mutants(text: &str) -> Vec<Mutant> {
                     walk.annotation(&field.ty, Place::Field);
                 }
             }
-            Item::Trait(_) | Item::Import(_) | Item::Test(_) | Item::Error(_) => {}
+            Item::Trait(_) | Item::Import(_) | Item::Test(_) | Item::Class(_) | Item::Error(_) => {}
         }
     }
     let mut found = walk.found;

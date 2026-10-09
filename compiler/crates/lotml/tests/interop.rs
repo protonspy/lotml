@@ -61,7 +61,7 @@ fn bind_writes_an_interface_from_a_stub() {
     let dir = scratch("bind", &[("stubs/textwrap.pyi", TEXTWRAP_PYI)]);
     let out = lotml(&["bind", "textwrap", "--stub", "stubs/textwrap.pyi"], &dir);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    assert!(stdout(&out).contains("5 functions bound, 1 not"), "{}", stdout(&out));
+    assert!(stdout(&out).contains("5 functions and 1 class bound, 1 not"), "{}", stdout(&out));
     let interface = std::fs::read_to_string(dir.join("bindings").join("py.textwrap.lotmli")).unwrap();
     assert!(interface.contains(
         "fn wrap(text: str, width: int = 70, max_lines: int? = None, placeholder: str = \" [...]\") -> [str] ! PyError\n"
@@ -73,7 +73,8 @@ fn bind_writes_an_interface_from_a_stub() {
         "a callable is a `PyObject`: {interface}"
     );
     assert!(interface.contains("#   pick: it is overloaded"));
-    assert!(!interface.contains("_private") && !interface.contains("TextWrapper"));
+    assert!(!interface.contains("_private"));
+    assert!(interface.contains("\nclass TextWrapper:\n"), "a class is bound (specs/python-classes): {interface}");
 }
 
 /// A stub written as typeshed writes `random`: module-level names bound to the methods of an
@@ -132,7 +133,7 @@ fn bind_binds_the_names_a_stub_writes_as_methods_of_an_instance() {
     assert!(interface.contains("#   pick: it is overloaded\n"), "{interface}");
     assert!(interface.contains("#   getrandbits: `Random` holds no `getrandbits` in this stub\n"), "{interface}");
     assert!(!interface.contains("_hidden"));
-    assert!(stdout(&out).contains("5 functions bound, 2 not"), "{}", stdout(&out));
+    assert!(stdout(&out).contains("5 functions and 1 class bound, 4 not"), "{}", stdout(&out));
 }
 
 #[test]
@@ -351,6 +352,118 @@ fn check_locked_fails_on_a_missing_lock_an_unrecorded_import_and_a_differing_stu
     let (code, said) = locked(&dir);
     assert_eq!(code, Some(1));
     assert!(said.contains("differs from the one lotml.lock records"), "{said}");
+}
+
+const BOXES_PY: &str = "\
+class Box:
+    def __init__(self, n: int):
+        self.n = n
+    def bump(self) -> None:
+        self.n += 1
+    @property
+    def double(self) -> int:
+        return self.n * 2
+
+class Crate(Box):
+    pass
+
+def make() -> Box: return Box(1)
+def size(b: Box) -> int: return b.n
+def wrong() -> Box: return 3
+def broken(b: Box) -> int: raise KeyError('n')
+";
+
+const BOXES_LOTMLI: &str = "\
+class Box:
+    n: int
+    double: int
+    fn Box(n: int) -> Box ! PyError
+    fn bump(self) -> None ! PyError
+
+class Crate(Box)
+
+fn make() -> Box ! PyError
+fn size(b: Box) -> int ! PyError
+fn wrong() -> Box ! PyError
+fn broken(b: Box) -> int ! PyError
+";
+
+#[test]
+fn a_python_class_s_value_is_the_object_python_gave_and_a_wrong_one_is_an_error() {
+    let program = "\
+from py.boxes import Box, Crate, make, size, wrong, broken
+
+fn main() -> None ! PyError:
+    b = make()?
+    b.bump()?
+    print(size(b)?, b.n?, b.double?)
+    c = Crate(5)?
+    c.bump()?
+    print(size(c)?)
+    made = Box(7)?
+    print(made.n?)
+    match wrong():
+        case Ok(x):
+            print(\"kept\")
+        case Err(e):
+            print(e.kind)
+    match broken(b):
+        case Ok(n):
+            print(n)
+        case Err(e):
+            print(e.kind)
+";
+    let dir = scratch(
+        "python-class",
+        &[(".git", ""), ("boxes.py", BOXES_PY), ("bindings/py.boxes.lotmli", BOXES_LOTMLI), ("main.lot", program)],
+    );
+    let checked = lotml(&["check", "main.lot"], &dir);
+    assert!(checked.status.success(), "{}", stdout(&checked));
+    let out = lotml(&["run", "main.lot"], &dir);
+    assert_eq!(
+        stdout(&out),
+        "2 2 4\n6\n7\nTypeError\nKeyError\n",
+        "the object bumped is the object Python reads, and a value of another type an error: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn the_standard_library_s_classes_run_through_a_hand_written_interface() {
+    let interface = "\
+class date:
+    year: int
+    fn date(year: int, month: int, day: int) -> date ! PyError
+    fn today() -> date ! PyError
+    fn isoformat(self) -> str ! PyError
+    fn replace(self, year: int) -> date ! PyError
+
+class datetime(date):
+    fn now() -> datetime ! PyError
+";
+    let program = "\
+from py.datetime import date, datetime
+
+fn main() -> None ! PyError:
+    d = date(2026, 1, 8)?
+    print(d.isoformat()?, d.year?)
+    print(d.replace(2027)?.isoformat()?)
+    print(date.today()?.year? >= 2026, datetime.now()?.year? >= 2026)
+    match date(2026, 13, 1):
+        case Ok(x):
+            print(\"made\")
+        case Err(e):
+            print(e.kind)
+";
+    let dir =
+        scratch("python-datetime", &[(".git", ""), ("bindings/py.datetime.lotmli", interface), ("main.lot", program)]);
+    let out = lotml(&["run", "main.lot"], &dir);
+    assert_eq!(
+        stdout(&out),
+        "2026-01-08 2026\n2027-01-08\nTrue True\nValueError\n",
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 /// A Python module whose values no stub types: an object, a dataclass, and functions that change

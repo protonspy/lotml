@@ -97,12 +97,16 @@ fn generate(
 }
 
 /// The name a stub's interface is kept under: the SHA-256 of the stub and of where it was read,
-/// which the interface's first line names, and lotml's version, whose binder wrote it.
+/// which the interface's first line names, lotml's version, and the binder that wrote it, by a
+/// hash of its source, so a changed binder never reads what an earlier one kept.
 fn key(stub: &Stub) -> String {
+    static BINDER: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    let binder =
+        BINDER.get_or_init(|| lotml_llvm::sha256::hex_of(lotml_bind::binder::SOURCE.as_bytes())[..16].to_string());
     let mut bytes = stub.text.as_bytes().to_vec();
     bytes.push(0);
     bytes.extend_from_slice(stub.said.as_bytes());
-    format!("{}-{}", lotml_llvm::sha256::hex_of(&bytes), env!("CARGO_PKG_VERSION"))
+    format!("{}-{}-{binder}", lotml_llvm::sha256::hex_of(&bytes), env!("CARGO_PKG_VERSION"))
 }
 
 /// `text` written to `entry` whole: to a name of its own first, then renamed, so a reader never
@@ -124,9 +128,9 @@ fn bound(module: &str, stub: &Stub) -> Result<String, String> {
     if let Some(problem) = problems.first() {
         return Err(format!("the binding of `{module}` does not check: {} {}", problem.code, problem.message));
     }
-    if interface.names().next().is_none() {
+    if interface.names().next().is_none() && interface.classes().next().is_none() {
         return Err(format!(
-            "the stub of `{module}` binds no function lotml can type; the interface's comments say why"
+            "the stub of `{module}` binds no function or class lotml can type; the interface's comments say why"
         ));
     }
     Ok(text)
@@ -327,7 +331,9 @@ mod tests {
         let kept: Vec<PathBuf> = std::fs::read_dir(&cache).unwrap().flatten().map(|e| e.path()).collect();
         assert_eq!(kept.len(), 1, "one entry, no partial file left: {kept:?}");
         let name = kept[0].file_name().unwrap().to_string_lossy().into_owned();
-        assert!(name.ends_with(&format!("-{}.lotmli", env!("CARGO_PKG_VERSION"))), "{name}");
+        assert!(name.contains(&format!("-{}-", env!("CARGO_PKG_VERSION"))) && name.ends_with(".lotmli"), "{name}");
+        let binder = &lotml_llvm::sha256::hex_of(lotml_bind::binder::SOURCE.as_bytes())[..16];
+        assert!(name.ends_with(&format!("-{binder}.lotmli")), "keyed by the binder that wrote it: {name}");
         assert_eq!(std::fs::read_to_string(&kept[0]).unwrap(), first);
         std::fs::write(&kept[0], "# read from the cache\n").unwrap();
         assert_eq!(interface_in("textwrap", None, Some(&cache)).unwrap(), "# read from the cache\n");
@@ -366,15 +372,13 @@ mod tests {
     }
 
     #[test]
-    fn a_stub_that_binds_no_function_counts_as_none() {
-        let classes = Stub {
-            text: "class Box:\n    def size(self) -> int: ...\n".into(),
-            said: "box.pyi".into(),
-            source: String::new(),
-        };
-        assert!(bound("box", &classes).unwrap_err().contains("binds no function"));
-        let one = Stub { text: "def size() -> int: ...\n".into(), said: "box.pyi".into(), source: String::new() };
-        assert!(bound("box", &one).unwrap().contains("fn size() -> int ! PyError"));
+    fn a_stub_that_binds_no_function_or_class_counts_as_none() {
+        let stub = |text: &str| Stub { text: text.into(), said: "box.pyi".into(), source: String::new() };
+        let hidden = stub("class _Box:\n    def size(self) -> int: ...\n@overload\ndef f(x: int) -> int: ...\n");
+        assert!(bound("box", &hidden).unwrap_err().contains("binds no function or class"));
+        assert!(bound("box", &stub("def size() -> int: ...\n")).unwrap().contains("fn size() -> int ! PyError"));
+        let classes = bound("box", &stub("class Box:\n    def size(self) -> int: ...\n")).unwrap();
+        assert!(classes.contains("class Box:"), "a class alone is bound (specs/python-classes): {classes}");
     }
 
     #[test]

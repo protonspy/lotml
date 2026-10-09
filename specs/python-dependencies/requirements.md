@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/python-dependencies
-delivery: in-review
+delivery: merged
 pr: 56
 ---
 

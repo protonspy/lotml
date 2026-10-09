@@ -19,6 +19,9 @@ const BODY_TYPES: usize = 1 << 19;
 /// The note every operation refused on a `PyObject` carries (specs/python-object R1.2).
 const OPAQUE: &str = "a `PyObject` is opaque: take a LotML value out of it with `o.value()`, its type annotated";
 
+/// The note an operation refused on a Python class's value carries (specs/python-classes R2.5).
+const CLASS: &str = "a Python object has only the methods and attributes its interface declares";
+
 #[derive(Clone, Debug)]
 pub struct Local {
     pub ty: Ty,
@@ -204,9 +207,33 @@ impl<'p> Body<'p> {
         self.report(Diagnostic::error(code, span, message).note(OPAQUE));
     }
 
-    /// `d`, with the note on converting a `PyObject` when `ty` is one.
+    /// `d`, with the note on converting a `PyObject` when `ty` is one, or on a Python class's
+    /// members when it is a value of one.
     fn noting(&self, d: Diagnostic, ty: &Ty) -> Diagnostic {
-        if matches!(self.resolve(ty), Ty::PyObject) { d.note(OPAQUE) } else { d }
+        if matches!(self.resolve(ty), Ty::PyObject) {
+            d.note(OPAQUE)
+        } else if self.py_class(ty).is_some() {
+            d.note(CLASS)
+        } else {
+            d
+        }
+    }
+
+    /// Whether `ty` is a Python object: a `PyObject` or a value of a Python class (adr:0034).
+    fn is_python(&self, ty: &Ty) -> bool {
+        matches!(self.resolve(ty), Ty::PyObject) || self.py_class(ty).is_some()
+    }
+
+    /// Report `message` at `span`, an operation the Python object `ty` holds does not have, with
+    /// the note that says what it has.
+    fn refuse_python(&mut self, span: Span, message: String, ty: &Ty) {
+        let note = if self.holds_py_handle(ty) { OPAQUE } else { CLASS };
+        self.report(Diagnostic::error("E0204", span, message).note(note));
+    }
+
+    /// Whether `ty` is or holds a `PyObject` proper, as against only Python classes' values.
+    fn holds_py_handle(&self, ty: &Ty) -> bool {
+        self.holds(ty, false)
     }
 
     /// Whether `found` fits `expected`, a type holding a `PyObject`, part by part: `[int]` where
@@ -242,14 +269,21 @@ impl<'p> Body<'p> {
     /// Whether `ty` is or holds a `PyObject`, a record's and a variant's fields included: what
     /// printing, formatting, comparing, hashing or ordering would hand to Python's own methods.
     fn holds_object(&self, ty: &Ty) -> bool {
-        fn walk(b: &Body<'_>, ty: &Ty, seen: &mut Vec<String>) -> bool {
+        self.holds(ty, true)
+    }
+
+    /// Whether `ty` is or holds a `PyObject`, or, with `classes`, a Python class's value too: a
+    /// record's and a variant's fields included.
+    fn holds(&self, ty: &Ty, classes: bool) -> bool {
+        fn walk(b: &Body<'_>, ty: &Ty, classes: bool, seen: &mut Vec<String>) -> bool {
             match b.resolve(ty) {
                 Ty::PyObject => true,
-                Ty::List(t) | Ty::Set(t) | Ty::Optional(t) | Ty::Heap(t) => walk(b, &t, seen),
-                Ty::Dict(k, v) | Ty::Result(k, v) => walk(b, &k, seen) || walk(b, &v, seen),
-                Ty::Tuple(items) => items.iter().any(|t| walk(b, t, seen)),
+                Ty::Adt(name, _) if b.program.py_attributes.contains_key(&name) => classes,
+                Ty::List(t) | Ty::Set(t) | Ty::Optional(t) | Ty::Heap(t) => walk(b, &t, classes, seen),
+                Ty::Dict(k, v) | Ty::Result(k, v) => walk(b, &k, classes, seen) || walk(b, &v, classes, seen),
+                Ty::Tuple(items) => items.iter().any(|t| walk(b, t, classes, seen)),
                 Ty::Adt(name, args) => {
-                    if args.iter().any(|t| walk(b, t, seen)) {
+                    if args.iter().any(|t| walk(b, t, classes, seen)) {
                         return true;
                     }
                     if seen.contains(&name) {
@@ -263,12 +297,12 @@ impl<'p> Body<'p> {
                         }
                         None => Vec::new(),
                     };
-                    fields.iter().any(|t| walk(b, t, seen))
+                    fields.iter().any(|t| walk(b, t, classes, seen))
                 }
                 _ => false,
             }
         }
-        walk(self, ty, &mut Vec::new())
+        walk(self, ty, classes, &mut Vec::new())
     }
 
     /// Whether `ty` is known in full, no part of it left to inference.
@@ -986,6 +1020,22 @@ impl<'p> Body<'p> {
                     self.forget(&path);
                 }
                 let current = self.expr(target, None);
+                if let ExprKind::Attr { object, name } = &target.kind
+                    && let Some(class) = self.seen.get(&object.span).cloned().and_then(|t| self.py_class(&t))
+                {
+                    self.report(
+                        Diagnostic::error(
+                            "E0205",
+                            name.span,
+                            format!(
+                                "`{}` is an attribute of a `{class}`, a Python object: it is read, never assigned",
+                                name.name
+                            ),
+                        )
+                        .note("a method of the class that changes it, if its interface declares one, is the way"),
+                    );
+                    return;
+                }
                 if !self.fits(&ty, &current) && !ty.is_poison() {
                     let (want, got) = (self.resolve(&current), self.resolve(&ty));
                     self.report(Diagnostic::error(
@@ -1170,8 +1220,12 @@ impl<'p> Body<'p> {
     fn lower(&mut self, t: &TypeExpr) -> Ty {
         let scope: Vec<String> = self.type_params.keys().cloned().collect();
         // Lowering only reads the program's declarations; diagnostics go to this body.
-        let mut scratch =
-            Program { types: self.program.types.clone(), traits: self.program.traits.clone(), ..Program::default() };
+        let mut scratch = Program {
+            types: self.program.types.clone(),
+            traits: self.program.traits.clone(),
+            py_classes: self.program.py_classes.clone(),
+            ..Program::default()
+        };
         let ty = scratch.lower(t, &scope);
         self.diagnostics.extend(scratch.diagnostics);
         ty
@@ -1323,6 +1377,12 @@ impl<'p> Body<'p> {
             (Ty::Adt(name, _), Ty::Dyn(trait_name)) => {
                 self.program.implements.contains(&(trait_name.clone(), name.clone()))
             }
+            // A Python class where a base its interface declares is expected (adr:0034), and where
+            // any Python object is: it is one.
+            (Ty::Adt(sub, _), Ty::Adt(base, _)) if sub != base && self.py_class(&f).is_some() => {
+                self.py_lineage(sub).contains(base)
+            }
+            (Ty::Adt(..), Ty::PyObject) if self.py_class(&f).is_some() => true,
             (_, Ty::PyObject) if !matches!(f, Ty::Var(_)) => self.carried(&f),
             (_, e) if e.holds_py_object() && !matches!(f, Ty::Var(_)) => self.fits_shape(&f, e),
             (Ty::List(a), Ty::List(b)) if matches!(self.resolve(b), Ty::Dyn(_)) => {
@@ -1386,7 +1446,7 @@ impl<'p> Body<'p> {
                         if let StrPart::Expr { expr, conversion, spec } = part {
                             let ty = self.expr(expr, None);
                             if self.holds_object(&ty) {
-                                self.opaque("E0204", expr.span, "a `PyObject` cannot be formatted".into());
+                                self.refuse_python(expr.span, "a Python object cannot be formatted".into(), &ty);
                                 continue;
                             }
                             self.format_spec(expr, &ty, *conversion, spec);
@@ -1430,7 +1490,11 @@ impl<'p> Body<'p> {
                     let found = self.expr(e, Some(&item));
                     self.element(&found, &item, e.span);
                     if self.holds_object(&found) {
-                        self.opaque("E0204", e.span, "a set cannot hold a `PyObject`: it would hash it".into());
+                        self.refuse_python(
+                            e.span,
+                            "a set cannot hold a Python object: it would hash it".into(),
+                            &found,
+                        );
                     }
                 }
                 Ty::Set(Box::new(item))
@@ -1444,10 +1508,10 @@ impl<'p> Body<'p> {
                     let found = self.expr(key, Some(&k));
                     self.element(&found, &k, key.span);
                     if self.holds_object(&found) {
-                        self.opaque(
-                            "E0204",
+                        self.refuse_python(
                             key.span,
-                            "a dict's key cannot hold a `PyObject`: it would hash it".into(),
+                            "a dict's key cannot hold a Python object: it would hash it".into(),
+                            &found,
                         );
                     }
                     let found = self.expr(value, Some(&v));
@@ -1895,8 +1959,9 @@ impl<'p> Body<'p> {
 
     fn binary(&mut self, op: BinOp, l: &Ty, r: &Ty, span: Span) -> Ty {
         let (l, r) = (self.resolve(l), self.resolve(r));
-        if matches!(l, Ty::PyObject) || matches!(r, Ty::PyObject) {
-            self.opaque("E0204", span, format!("`{}` has no operands of type `PyObject`", op.text()));
+        if self.is_python(&l) || self.is_python(&r) {
+            let python = if self.is_python(&l) { l.clone() } else { r.clone() };
+            self.refuse_python(span, format!("`{}` has no operands of type `{python}`", op.text()), &python);
             return Ty::Error;
         }
         if matches!(l, Ty::Error) || matches!(r, Ty::Error) {
@@ -1976,7 +2041,12 @@ impl<'p> Body<'p> {
     fn compare(&mut self, op: CmpOp, l: &Ty, r: &Ty, span: Span) {
         let (l, r) = (self.resolve(l), self.resolve(r));
         if self.holds_object(&l) || self.holds_object(&r) {
-            self.opaque("E0204", span, format!("`{}` cannot compare a `PyObject`, nor a value holding one", op.text()));
+            let python = if self.holds_object(&l) { l.clone() } else { r.clone() };
+            self.refuse_python(
+                span,
+                format!("`{}` cannot compare a Python object, nor a value holding one", op.text()),
+                &python,
+            );
             return;
         }
         if l.is_poison() || r.is_poison() {
@@ -2107,6 +2177,19 @@ impl<'p> Body<'p> {
         let ty = self.present(ty, object.span);
         if matches!(ty, Ty::PyObject) {
             self.opaque("E0205", name.span, format!("a `PyObject` has no attribute `{}`", name.name));
+            return Ty::Error;
+        }
+        if let Some(class) = self.py_class(&ty) {
+            if let Some(attribute) = self.py_attribute(&class, &name.name) {
+                return Ty::Result(Box::new(attribute), Box::new(Ty::Adt("PyError".into(), vec![])));
+            }
+            let names = self.py_members(&class);
+            let mut d = Diagnostic::error("E0205", name.span, format!("`{class}` has no attribute `{}`", name.name))
+                .alternatives(closest(&name.name, &names));
+            if self.py_method(&class, &name.name).is_some() {
+                d = d.note(format!("`{}` is a method: call it, `{}(…)`", name.name, name.name));
+            }
+            self.report(d);
             return Ty::Error;
         }
         match &ty {
@@ -2430,9 +2513,12 @@ impl<'p> Body<'p> {
         let opaque = types
             .iter()
             .chain(keywords.iter().map(|(_, t)| t))
-            .any(|t| matches!(self.resolve(t), Ty::PyObject) || (into_python && self.holds_object(t)));
-        if opaque && !matches!(name, "Ok" | "Err") {
-            self.opaque("E0204", span, format!("`{name}` cannot take a `PyObject`"));
+            .find(|t| self.is_python(t) || (into_python && self.holds_object(t)))
+            .cloned();
+        if let Some(python) = opaque
+            && !matches!(name, "Ok" | "Err")
+        {
+            self.refuse_python(span, format!("`{name}` cannot take a Python object"), &python);
             return Ty::Error;
         }
         match builtins::call(name, &types, &keywords, &mut self.infer) {
@@ -2752,6 +2838,32 @@ impl<'p> Body<'p> {
     }
 
     fn method_call(&mut self, object: &Expr, name: &Ident, args: &[Arg], span: Span, expected: Option<&Ty>) -> Ty {
+        if let ExprKind::Name(class) = &object.kind
+            && self.lookup(class).is_none()
+            && let Some(qualified) = self.program.py_classes.get(class).cloned()
+        {
+            return match self.py_method(&qualified, &name.name) {
+                Some(m) if m.receiver.is_none() => self.call_signature(&m.sig, &[], &[], args, span, None),
+                Some(_) => {
+                    self.arg_types(args, &[]);
+                    self.report(Diagnostic::error(
+                        "E0205",
+                        name.span,
+                        format!("`{}` is a method: call it on a `{class}` value", name.name),
+                    ));
+                    Ty::Error
+                }
+                None => {
+                    self.arg_types(args, &[]);
+                    let names = self.py_members(&qualified);
+                    self.report(
+                        Diagnostic::error("E0205", name.span, format!("`{class}` has no function `{}`", name.name))
+                            .alternatives(closest(&name.name, &names)),
+                    );
+                    Ty::Error
+                }
+            };
+        }
         let receiver = self.expr(object, None);
         let receiver = self.result_value(receiver, object.span);
         let receiver = self.present(receiver, object.span);
@@ -2797,6 +2909,10 @@ impl<'p> Body<'p> {
                 if let Some(sig) = self.program.foreign[&module].get(&name.name).cloned() {
                     return self.call_signature(&sig, &[], &[], args, span, None);
                 }
+                // `py.m.C(...)`: a class's constructor, its own or a base's (adr:0034).
+                if let Some(sig) = self.program.py_constructor(&format!("{module}.{}", name.name)) {
+                    return self.call_signature(&sig, &[], &[], args, span, None);
+                }
                 self.arg_types(args, &[]);
                 let names: Vec<String> = self.program.foreign[&module].keys().cloned().collect();
                 self.report(
@@ -2822,6 +2938,26 @@ impl<'p> Body<'p> {
                                         .collect::<Vec<_>>(),
                                 )),
                         );
+                        Ty::Error
+                    }
+                }
+            }
+            Ty::Adt(type_name, _) if self.program.py_attributes.contains_key(&type_name) => {
+                match self.py_method(&type_name, &name.name) {
+                    Some(m) => self.user_method(&m, object, &[], args, span, name),
+                    None => {
+                        self.arg_types(args, &[]);
+                        let names = self.py_members(&type_name);
+                        let mut d = Diagnostic::error(
+                            "E0205",
+                            name.span,
+                            format!("`{type_name}` has no method `{}`", name.name),
+                        )
+                        .alternatives(closest(&name.name, &names));
+                        if self.py_attribute(&type_name, &name.name).is_some() {
+                            d = d.note(format!("`{}` is an attribute: read it without parentheses", name.name));
+                        }
+                        self.report(d);
                         Ty::Error
                     }
                 }
@@ -2918,6 +3054,39 @@ impl<'p> Body<'p> {
                 }
             }
         }
+    }
+
+    /// The full name of the Python class `ty` is a value of, if it is one (adr:0034).
+    fn py_class(&self, ty: &Ty) -> Option<String> {
+        match self.resolve(ty) {
+            Ty::Adt(name, _) if self.program.py_attributes.contains_key(&name) => Some(name),
+            _ => None,
+        }
+    }
+
+    /// `class` and its declared bases, nearest first, each once.
+    fn py_lineage(&self, class: &str) -> Vec<String> {
+        crate::interface::py_lineage(class, |c| self.program.py_bases.get(c).map(Vec::as_slice))
+    }
+
+    /// The method or static method `name` of the Python class `class` or of a base it declares.
+    fn py_method(&self, class: &str, name: &str) -> Option<Method> {
+        self.py_lineage(class).iter().find_map(|c| self.program.methods.get(c).and_then(|m| m.get(name)).cloned())
+    }
+
+    /// The type of the attribute `name` of the Python class `class` or of a base it declares.
+    fn py_attribute(&self, class: &str, name: &str) -> Option<Ty> {
+        self.py_lineage(class).iter().find_map(|c| self.program.py_attributes.get(c).and_then(|a| a.get(name)).cloned())
+    }
+
+    /// Every member name of the Python class `class` and its bases, for an alternative.
+    fn py_members(&self, class: &str) -> Vec<String> {
+        let mut names = Vec::new();
+        for c in self.py_lineage(class) {
+            names.extend(self.program.methods.get(&c).into_iter().flat_map(|m| m.keys().cloned()));
+            names.extend(self.program.py_attributes.get(&c).into_iter().flat_map(|a| a.keys().cloned()));
+        }
+        names
     }
 
     fn user_method(

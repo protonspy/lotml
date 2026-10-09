@@ -368,10 +368,7 @@ impl<'l> ModuleWriter<'l> {
             imports.push(self.at(assign(vec![target(&format!("__c_{symbol}"))], loaded), Span::new(0, 0)));
         }
         for (k, (module, function, ret)) in self.python_calls.iter().enumerate() {
-            let returns = match ret {
-                Ty::Result(value, _) => descriptor(value),
-                other => descriptor(other),
-            };
+            let returns = returned(ret);
             // A program names the module by its origin, `py.textwrap`; CPython by its own name.
             let python = module.strip_prefix("py.").unwrap_or(module);
             let bound = call(rt("foreign"), vec![text(python), text(function), text(&returns.to_string())]);
@@ -1267,6 +1264,15 @@ impl<'m, 'l> Writer<'m, 'l> {
                 let value = self.operand(value);
                 call(rt("convert"), vec![value, text(&crate::boundary::descriptor(ty).to_string())])
             }
+            Expr::CallPyMethod { object, method, args, ret, .. } => {
+                let mut values = vec![self.operand(object), text(method), text(&returned(ret).to_string())];
+                values.extend(args.iter().map(|o| self.stored(o, false)));
+                call(rt("method"), values)
+            }
+            Expr::PyAttribute { object, name, ret } => {
+                let values = vec![self.operand(object), text(name), text(&returned(ret).to_string())];
+                call(rt("attribute"), values)
+            }
             Expr::ToDyn { value, .. } | Expr::ToDynOf { value, .. } => self.operand(value),
             Expr::CallDyn { receiver, ty, slot, args, .. } => {
                 let Ty::Dyn(trait_name) = ty else { return none() };
@@ -1721,5 +1727,13 @@ fn walk<'b>(block: &'b Block, f: &mut impl FnMut(&'b Stmt)) {
             }
             _ => {}
         }
+    }
+}
+
+/// The descriptor of what a call into Python returns, `ret` being its `T ! PyError`: `T`'s.
+fn returned(ret: &Ty) -> serde_json::Value {
+    match ret {
+        Ty::Result(value, _) => descriptor(value),
+        other => descriptor(other),
     }
 }

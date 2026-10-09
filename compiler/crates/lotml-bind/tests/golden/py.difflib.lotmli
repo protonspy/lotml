@@ -11,5 +11,20 @@ fn ndiff(a: [str], b: [str], linejunk: PyObject? = None, charjunk: PyObject? = t
 fn restore(delta: [str], which: int) -> PyObject ! PyError
 fn diff_bytes(dfunc: PyObject, a: [PyObject], b: [PyObject], fromfile: PyObject = todo(), tofile: PyObject = todo(), fromfiledate: PyObject = todo(), tofiledate: PyObject = todo(), n: int = 3, lineterm: PyObject = todo()) -> PyObject ! PyError
 
+class Match:
+    a: int
+    b: int
+    size: int
+
+class Differ:
+    fn Differ(linejunk: PyObject? = None, charjunk: PyObject? = None) -> Differ ! PyError
+    fn compare(self, a: [str], b: [str]) -> PyObject ! PyError
+
+class HtmlDiff:
+    fn HtmlDiff(tabsize: int = 8, wrapcolumn: int? = None, linejunk: PyObject? = None, charjunk: PyObject? = todo()) -> HtmlDiff ! PyError
+    fn make_file(self, fromlines: [str], tolines: [str], fromdesc: str = "", todesc: str = "", context: bool = False, numlines: int = 5, charset: str = "utf-8") -> str ! PyError
+    fn make_table(self, fromlines: [str], tolines: [str], fromdesc: str = "", todesc: str = "", context: bool = False, numlines: int = 5) -> str ! PyError
+
 # Not bound:
+#   SequenceMatcher: it is generic, which specs/python-generics/ binds
 #   get_close_matches: it is overloaded

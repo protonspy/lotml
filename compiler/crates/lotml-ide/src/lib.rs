@@ -366,7 +366,7 @@ impl Workspace {
                     }
                 }
                 Item::Test(t) => leaf(format!("test \"{}\"", t.name), Kind::Test, span, t.name_span),
-                Item::Import(_) | Item::Error(_) => continue,
+                Item::Import(_) | Item::Class(_) | Item::Error(_) => continue,
             };
             out.push(entry);
         }

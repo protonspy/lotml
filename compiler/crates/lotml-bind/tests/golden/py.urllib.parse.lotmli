@@ -13,7 +13,25 @@ fn urlencode(query: PyObject, doseq: bool = False, safe: PyObject = "", encoding
 fn urljoin(base: PyObject, url: PyObject?, allow_fragments: bool = True) -> PyObject ! PyError
 fn unwrap(url: str) -> str ! PyError
 
+class DefragResult
+
+class SplitResult
+
+class ParseResult
+
+class DefragResultBytes
+
+class SplitResultBytes
+
+class ParseResultBytes
+
 # Not bound:
+#   DefragResult: it is generic, which specs/python-generics/ binds
+#   SplitResult: it is generic, which specs/python-generics/ binds
+#   ParseResult: it is generic, which specs/python-generics/ binds
+#   DefragResultBytes: it is generic, which specs/python-generics/ binds
+#   SplitResultBytes: it is generic, which specs/python-generics/ binds
+#   ParseResultBytes: it is generic, which specs/python-generics/ binds
 #   quote: it is overloaded
 #   quote_plus: it is overloaded
 #   urldefrag: it is overloaded

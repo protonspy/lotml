@@ -4,3 +4,24 @@
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
 fn tee(iterable: [PyObject], n: int = 2) -> PyObject ! PyError
+
+# Not bound:
+#   count: it is generic, which specs/python-generics/ binds
+#   cycle: it is generic, which specs/python-generics/ binds
+#   repeat: it is generic, which specs/python-generics/ binds
+#   accumulate: it is generic, which specs/python-generics/ binds
+#   chain: it is generic, which specs/python-generics/ binds
+#   compress: it is generic, which specs/python-generics/ binds
+#   dropwhile: it is generic, which specs/python-generics/ binds
+#   filterfalse: it is generic, which specs/python-generics/ binds
+#   groupby: it is generic, which specs/python-generics/ binds
+#   islice: it is generic, which specs/python-generics/ binds
+#   starmap: it is generic, which specs/python-generics/ binds
+#   takewhile: it is generic, which specs/python-generics/ binds
+#   zip_longest: it is generic, which specs/python-generics/ binds
+#   product: it is generic, which specs/python-generics/ binds
+#   permutations: it is generic, which specs/python-generics/ binds
+#   combinations: it is generic, which specs/python-generics/ binds
+#   combinations_with_replacement: it is generic, which specs/python-generics/ binds
+#   pairwise: it is generic, which specs/python-generics/ binds
+#   batched: it is generic, which specs/python-generics/ binds

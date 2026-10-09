@@ -373,6 +373,7 @@ impl<'a> Parser<'a> {
             T::Trait => Item::Trait(self.trait_def()),
             T::From | T::Import => Item::Import(self.import()),
             T::Test => Item::Test(self.test_def()),
+            T::Name if self.interface && self.text_of(self.token()) == "class" => Item::Class(self.class_def()),
             _ => {
                 self.unknown_item();
                 Item::Error(self.since(start))
@@ -605,6 +606,61 @@ impl<'a> Parser<'a> {
             self.eat(T::Dedent);
         }
         ImplDef { span: self.since(start), trait_name, target, methods }
+    }
+
+    /// `class C(B, …):` and a block of attribute lines (`name: T`) and bodyless `fn` signatures, or
+    /// `class C(B, …)` alone for a class with no member: a Python class, read in an interface only
+    /// (adr:0034).
+    fn class_def(&mut self) -> ClassDef {
+        let start = self.span();
+        self.bump(); // class
+        let name = self.name("the class's name");
+        let mut bases = Vec::new();
+        if self.eat(T::LParen) {
+            while !matches!(self.peek(), T::RParen | T::Newline | T::Eof) {
+                bases.push(self.name("a base class"));
+                if !self.eat(T::Comma) {
+                    break;
+                }
+            }
+            self.expect(T::RParen, "to close the class's bases");
+        }
+        let mut attributes = Vec::new();
+        let mut methods = Vec::new();
+        // `class C` alone: a class with no member the interface declares.
+        if !self.at(T::Colon) {
+            self.end_of_line("after the class");
+            return ClassDef { span: self.since(start), name, bases, attributes, methods };
+        }
+        if self.expect(T::Colon, "after the class's name")
+            && self.expect(T::Newline, "after `class …:`")
+            && self.expect(T::Indent, "for the class's attributes and methods")
+        {
+            while !matches!(self.peek(), T::Dedent | T::Eof) {
+                self.reported = false;
+                let before = self.pos;
+                if self.at(T::Fn) {
+                    methods.push(self.fn_def(false));
+                    if self.reported {
+                        self.skip_line();
+                    }
+                } else if self.at(T::Name) && self.peek_at(1) == T::Colon {
+                    let field_start = self.span();
+                    let field_name = self.name("an attribute's name");
+                    self.bump(); // :
+                    let ty = self.type_expr();
+                    attributes.push(Field { span: self.since(field_start), name: Some(field_name), ty, default: None });
+                    self.end_of_line("after the attribute");
+                } else if self.eat(T::Newline) {
+                } else {
+                    self.error_here("expected an attribute (`name: T`) or a method signature (`fn`) in the class");
+                    self.skip_line();
+                }
+                self.past(before);
+            }
+            self.eat(T::Dedent);
+        }
+        ClassDef { span: self.since(start), name, bases, attributes, methods }
     }
 
     fn trait_def(&mut self) -> TraitDef {

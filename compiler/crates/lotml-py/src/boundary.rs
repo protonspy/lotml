@@ -28,6 +28,11 @@ pub fn descriptor(ty: &Ty) -> Value {
         Ty::Dict(k, v) => json!(["dict", descriptor(k), descriptor(v)]),
         Ty::Tuple(items) => Value::Array(std::iter::once(json!("tuple")).chain(items.iter().map(descriptor)).collect()),
         Ty::Optional(t) => json!(["optional", descriptor(t)]),
+        // A Python class (adr:0034): its module, as CPython names it, and its name.
+        Ty::Adt(name, _) if name.starts_with("py.") => match name["py.".len()..].rsplit_once('.') {
+            Some((module, class)) => json!(["class", module, class]),
+            None => json!(["object"]),
+        },
         Ty::Adt(name, _) => json!(["adt", name]),
         Ty::PyObject => json!(["object"]),
         _ => json!(["any"]),

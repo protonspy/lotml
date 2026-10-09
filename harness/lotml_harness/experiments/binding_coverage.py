@@ -203,11 +203,14 @@ def interface(compiler: Path, name: str, stub: Path | None) -> str:
 
 def bound_names(compiler: Path, name: str, stub: Path | None) -> tuple[set[str], set[str]]:
     """The names `lotml bind` writes as functions of the interface of `name` from `stub`: those
-    typed, and those with a `PyObject` among their types."""
+    typed, and those with a `PyObject` among their types; and each class it writes, typed
+    (specs/python-classes R4.1)."""
     typed, reachable = set(), set()
     for line in interface(compiler, name, stub).splitlines():
         if line.startswith("fn "):
             (reachable if "PyObject" in line else typed).add(line[3 : line.index("(")])
+        elif line.startswith("class "):
+            typed.add(line[len("class ") :].split("(")[0].rstrip(":"))
     return typed, reachable
 
 

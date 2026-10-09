@@ -630,11 +630,17 @@ pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failu
     let path = out.join(format!("py.{module}.lotmli"));
     write(&path, &text)?;
     let bound = interface.names().count();
+    let classes = interface.classes().count();
     let skipped = text.lines().filter(|l| l.starts_with("#   ")).count();
     println!(
-        "{}: {bound} function{} bound{}",
+        "{}: {bound} function{}{} bound{}",
         path.display(),
         if bound == 1 { "" } else { "s" },
+        match classes {
+            0 => String::new(),
+            1 => " and 1 class".to_string(),
+            n => format!(" and {n} classes"),
+        },
         if skipped == 0 { String::new() } else { format!(", {skipped} not (the file's comments say why)") }
     );
     Ok(true)

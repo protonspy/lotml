@@ -84,7 +84,7 @@ pub fn parts(module: &Module) -> Vec<Part<'_>> {
             Item::Trait(t) => found.extend(t.methods.iter().map(|f| Part::TraitMethod { owner: &t.name.name, f })),
             Item::Record(r) => found.push(Part::Record(r)),
             Item::Test(t) => found.push(Part::Test(t)),
-            Item::Sum(_) | Item::Import(_) | Item::Error(_) => {}
+            Item::Sum(_) | Item::Import(_) | Item::Class(_) | Item::Error(_) => {}
         }
     }
     found
@@ -99,7 +99,14 @@ pub struct Declarations {
 
 /// The declarations of a module that may import the Python modules in `interfaces`.
 pub fn declarations(module: &Module, interfaces: &Interfaces) -> Declarations {
-    Declarations { program: Program::collect(module, &interface::functions(interfaces), &interface::marks(interfaces)) }
+    Declarations {
+        program: Program::collect(
+            module,
+            &interface::functions(interfaces),
+            &interface::classes(interfaces),
+            &interface::marks(interfaces),
+        ),
+    }
 }
 
 impl Declarations {
@@ -187,7 +194,12 @@ pub fn check_part(declarations: &Declarations, part: Part<'_>, text: &str) -> Pa
 /// A signature already reported on when the program was collected, lowered again without
 /// reporting: a duplicate declaration keeps its own signature.
 fn quiet_signature(program: &Program, f: &FnDef, outer: &[String], self_ty: Option<&Ty>) -> FnSig {
-    let mut scratch = Program { types: program.types.clone(), traits: program.traits.clone(), ..Program::default() };
+    let mut scratch = Program {
+        types: program.types.clone(),
+        traits: program.traits.clone(),
+        py_classes: program.py_classes.clone(),
+        ..Program::default()
+    };
     scratch.signature(f, outer, self_ty)
 }
 
@@ -292,6 +304,13 @@ impl Assembly {
             .collect();
         checked.traits = program.traits.clone();
         checked.foreign = program.foreign.clone();
+        checked.py_classes = program.py_classes.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        for class in program.py_attributes.keys() {
+            let own = program.methods.get(class).cloned().unwrap_or_default();
+            checked.py_methods.insert(class.clone(), own);
+        }
+        checked.py_bases = program.py_bases.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        checked.py_constructors = program.py_constructors.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         checked
     }
 }

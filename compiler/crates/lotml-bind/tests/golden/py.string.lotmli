@@ -4,3 +4,28 @@
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
 fn capwords(s: PyObject, sep: PyObject? = None) -> PyObject ! PyError
+
+class Template:
+    fn Template(template: str) -> Template ! PyError
+    template: str
+    delimiter: str
+    idpattern: str
+    braceidpattern: str?
+    flags: PyObject?
+    pattern: PyObject
+    fn substitute(self, mapping: {str: PyObject} = todo()) -> str ! PyError
+    fn safe_substitute(self, mapping: {str: PyObject} = todo()) -> str ! PyError
+    fn get_identifiers(self) -> [str] ! PyError
+    fn is_valid(self) -> bool ! PyError
+
+class Formatter:
+    fn parse(self, format_string: PyObject) -> PyObject ! PyError
+    fn get_field(self, field_name: str, args: [PyObject], kwargs: {str: PyObject}) -> PyObject ! PyError
+    fn get_value(self, key: PyObject, args: [PyObject], kwargs: {str: PyObject}) -> PyObject ! PyError
+    fn check_unused_args(self, used_args: {PyObject}, args: [PyObject], kwargs: {str: PyObject}) -> None ! PyError
+    fn format_field(self, value: PyObject, format_spec: str) -> PyObject ! PyError
+    fn convert_field(self, value: PyObject, conversion: str?) -> PyObject ! PyError
+
+# Not bound:
+#   Formatter.format: it is overloaded
+#   Formatter.vformat: it is overloaded

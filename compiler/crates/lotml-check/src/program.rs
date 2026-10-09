@@ -90,6 +90,21 @@ pub struct Program {
     pub foreign: BTreeMap<String, BTreeMap<String, FnSig>>,
     /// The Python modules whose interface the compiler marked, with the mark.
     pub marks: HashMap<String, crate::interface::Mark>,
+    /// The Python classes a name means, each by its full name (adr:0034): `date` for
+    /// `py.datetime.date` once imported, and in an interface its own classes.
+    pub py_classes: HashMap<String, String>,
+    /// The classes of each Python module there is an interface for, by the name the module
+    /// gives them.
+    pub available_classes: HashMap<String, BTreeMap<String, crate::interface::PyClass>>,
+    /// The attributes of each Python class an imported module declares, by its full name.
+    pub py_attributes: HashMap<String, BTreeMap<String, Ty>>,
+    /// The bases of each Python class an imported module declares, by full names.
+    pub py_bases: HashMap<String, Vec<String>>,
+    /// The constructor each Python class an imported module declares has of its own, by its full
+    /// name; one a class inherits is made by [`Program::py_constructor`] where it is called.
+    pub py_constructors: HashMap<String, FnSig>,
+    /// The Python modules whose classes are registered, each once.
+    pub py_registered: HashSet<String>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -100,10 +115,12 @@ impl Program {
     pub fn collect(
         module: &ast::Module,
         interfaces: &HashMap<String, BTreeMap<String, FnSig>>,
+        classes: &HashMap<String, BTreeMap<String, crate::interface::PyClass>>,
         marks: &HashMap<String, crate::interface::Mark>,
     ) -> Program {
         let mut program = Program::with_prelude();
         program.available = interfaces.clone();
+        program.available_classes = classes.clone();
         program.marks = marks.clone();
         let mut seen: HashMap<String, Span> = HashMap::new();
         let mut declare = |program: &mut Program, name: &ast::Ident| {
@@ -144,6 +161,16 @@ impl Program {
                 }
                 Item::Fn(f) => declare(&mut program, &f.name),
                 Item::Trait(t) => declare(&mut program, &t.name),
+                // A Python class imported by name is a type the signatures may use (adr:0034);
+                // its members, and a clash with a name declared here, come with the import below.
+                Item::Import(import) => {
+                    let path = import.module.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(".");
+                    for name in &import.names {
+                        if program.available_classes.get(&path).is_some_and(|c| c.contains_key(&name.name)) {
+                            program.py_classes.insert(name.name.clone(), format!("{path}.{}", name.name));
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -325,11 +352,53 @@ impl Program {
 
     /// `import m` or `from m import f` of a Python module with an interface: its functions are
     /// called like lotml's own, and each returns `T ! PyError`.
+    /// The constructor of the Python class `class`, by its full name: its own, else a base's
+    /// (adr:0034).
+    pub fn py_constructor(&self, class: &str) -> Option<FnSig> {
+        crate::interface::py_constructor(
+            class,
+            |c| self.py_constructors.get(c),
+            |c| self.py_bases.get(c).map(Vec::as_slice),
+        )
+    }
+
     fn import_python(&mut self, import: &ast::Import, path: &str, functions: BTreeMap<String, FnSig>) {
         if import.names.is_empty() {
             self.modules.insert(path.to_string());
         }
+        // A module's classes, wherever their values come from (adr:0034): their members by the
+        // class's full name, each module once however many times it is imported. A class's own
+        // constructor is kept; one it inherits is made where a program calls it (`py_constructor`).
+        let classes = self.available_classes.remove(path).unwrap_or_default();
+        if self.py_registered.insert(path.to_string()) {
+            for (local, class) in &classes {
+                let qualified = format!("{path}.{local}");
+                self.methods.insert(qualified.clone(), class.methods.clone());
+                self.py_attributes.insert(qualified.clone(), class.attributes.clone());
+                self.py_bases.insert(qualified.clone(), class.bases.clone());
+                if let Some(constructor) = &class.constructor {
+                    self.py_constructors.insert(qualified, constructor.clone());
+                }
+            }
+        }
         for name in &import.names {
+            if classes.contains_key(&name.name) {
+                if self.functions.contains_key(&name.name) || self.types.contains_key(&name.name) {
+                    self.diagnostics.push(Diagnostic::error(
+                        "E0210",
+                        name.span,
+                        format!("`{}` is declared twice: imported from `{path}` and declared in this file", name.name),
+                    ));
+                    continue;
+                }
+                let qualified = format!("{path}.{}", name.name);
+                if let Some(constructor) = self.py_constructor(&qualified) {
+                    self.functions.insert(name.name.clone(), constructor);
+                }
+                self.py_classes.insert(name.name.clone(), qualified);
+                self.imported.insert(name.name.clone(), path.to_string());
+                continue;
+            }
             let Some(sig) = functions.get(&name.name) else {
                 self.diagnostics.push(
                     Diagnostic::error("E0216", name.span, format!("`{path}`'s interface has no `{}`", name.name))
@@ -350,6 +419,7 @@ impl Program {
             self.functions.insert(name.name.clone(), sig.clone());
             self.imported.insert(name.name.clone(), path.to_string());
         }
+        self.available_classes.insert(path.to_string(), classes);
         self.foreign.insert(path.to_string(), functions);
     }
 
@@ -528,6 +598,9 @@ impl Program {
                 let lowered: Vec<Ty> = args.iter().map(|a| self.lower(a, scope)).collect();
                 if name.name == "Heap" && lowered.len() == 1 {
                     return Ty::Heap(Box::new(lowered[0].clone()));
+                }
+                if let Some(qualified) = self.py_classes.get(&name.name) {
+                    return Ty::Adt(qualified.clone(), Vec::new());
                 }
                 if let Some(def) = self.types.get(&name.name) {
                     let wanted = def.params().len();

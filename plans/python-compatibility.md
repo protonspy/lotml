@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: f9821f1bcd882849054210ab1e395ae24119a1b60a38401c4c0e8f80d2c9e845
+checksum: fefb8c8007b9d374175470972297021a19206dfff2971eeee7bde6a260d3afe5
 ---
 
 # Python compatibility
@@ -82,7 +82,7 @@ the typed share each spec added.
   bind-sources 2.1 and saying whether python-via-uv 2.1 stands: a stub read in Rust as data, never
   the module imported or run, a typeshed embedded at a pinned version, the interface written as a
   lock recording its source; the owner accepts it before 2.4
-- [ ] 2.4 (Unit) Write and build the spec bind-on-import, every module of the binding-coverage
+- [x] 2.4 (Unit) Write and build the spec bind-on-import, every module of the binding-coverage
   corpus imported as `py.<module>` under `lotml run` with no `lotml bind`, after bind-sources 1.1
   _Depends 1.2, 1.3, 2.2, 2.3, 2.5_
 - [x] 2.5 (Unit) Write a proposed ADR on `lotml run` installing a project's dependencies through uv
@@ -111,6 +111,11 @@ the typed share each spec added.
       library through a generated loader that keeps adr:0012's checked, copying
       boundary, or on leaving it out with the reason
   _Reason review of the literature on 2026-10-08: the IR report's --pyext and research/prior-art/studies/lpython.md idea 6 are planned nowhere, and adr:0012 covers the Python target only, so Out of scope's 'adr:0012 already settles' does not reach native libraries_
+- [ ] 3.4 (Unit) Write and build the spec python-reexports: a stub's names re-exported
+      from its submodules or another module (`from .core import where`, `from posixpath
+      import *`) bound as the module's own, the coverage report run before and after
+  _Depends 2.4_
+  _Reason harness/results/bind-on-import.md: os.path, certifi, idna and dateutil.parser bind no function because their stubs re-export from submodules, and no spec covered it (n-0117)_
 
 ## Done when
 

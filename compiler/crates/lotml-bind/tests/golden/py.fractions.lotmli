@@ -3,3 +3,20 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
+
+class Fraction:
+    fn from_float(f: f64) -> Fraction ! PyError
+    fn from_decimal(dec: PyObject) -> Fraction ! PyError
+    fn limit_denominator(self, max_denominator: int = 1000000) -> Fraction ! PyError
+    fn as_integer_ratio(self) -> (int, int) ! PyError
+    fn is_integer(self) -> bool ! PyError
+    numerator: int
+    denominator: int
+    real: Fraction
+    imag: PyObject
+    fn conjugate(self) -> Fraction ! PyError
+    fn from_number(number: PyObject) -> Fraction ! PyError
+
+# Not bound:
+#   Fraction.__new__: it is overloaded
+#   Fraction.__add__, __radd__, __sub__, __rsub__, __mul__, __rmul__, __truediv__, __rtruediv__, __floordiv__, __rfloordiv__, __mod__, __rmod__, __divmod__, __rdivmod__, __pow__, __rpow__, __pos__, __neg__, __abs__, __trunc__, __floor__, __ceil__, __round__, __hash__, __eq__, __lt__, __gt__, __le__, __ge__, __bool__, __copy__, __deepcopy__, __int__: dunder methods, which operators would call

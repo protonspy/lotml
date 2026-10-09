@@ -359,7 +359,9 @@ steps = math.floor(d)
   `import py.textwrap`, then `py.textwrap.dedent(raw)?`. `lotml bind <module>` says why a module
   has none. A bare `import textwrap` names a LotML module only. Each of its
   functions returns `T ! PyError`, since any call into Python can fail; `PyError(kind, message)`
-  is in the prelude.
+  is in the prelude. A class is imported the same way and named as a type: `from py.datetime
+  import date`, then `d: date = date(2026, 1, 8)?`, `d.isoformat()?`, `d.year?`,
+  `date.today()?`; each call and attribute read can fail, and nothing else works on the object.
 - A C library is imported from its interface, written by hand in `bindings/c.<library>.lotmli`:
   `from c.m import cos`. Its functions take and return numbers, `bool` and (taken only) `str`,
   and cannot fail.

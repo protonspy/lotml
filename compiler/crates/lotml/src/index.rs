@@ -40,7 +40,7 @@ pub fn digest(sources: &[Source]) -> String {
                     };
                     header + &imp.methods.iter().map(|m| documented(&source.text, m, "    ")).collect::<String>()
                 }
-                Item::Import(_) | Item::Test(_) | Item::Error(_) => continue,
+                Item::Import(_) | Item::Test(_) | Item::Class(_) | Item::Error(_) => continue,
             };
             sections.push(section);
         }
@@ -214,7 +214,7 @@ fn names(item: &Item) -> Vec<(String, Found<'_>)> {
             };
             imp.methods.iter().map(|m| (format!("{target}.{}", m.name.name), Found::Method(m))).collect()
         }
-        Item::Import(_) | Item::Test(_) | Item::Error(_) => vec![],
+        Item::Import(_) | Item::Test(_) | Item::Class(_) | Item::Error(_) => vec![],
     }
 }
 

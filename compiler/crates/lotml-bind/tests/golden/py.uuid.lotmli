@@ -4,11 +4,36 @@
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
 fn getnode() -> int ! PyError
-fn uuid1(node: int? = None, clock_seq: int? = None) -> PyObject ! PyError
-fn uuid6(node: int? = None, clock_seq: int? = None) -> PyObject ! PyError
-fn uuid7() -> PyObject ! PyError
-fn uuid8(a: int? = None, b: int? = None, c: int? = None) -> PyObject ! PyError
-fn uuid3(namespace: PyObject, name: PyObject) -> PyObject ! PyError
-fn uuid4() -> PyObject ! PyError
-fn uuid5(namespace: PyObject, name: PyObject) -> PyObject ! PyError
+fn uuid1(node: int? = None, clock_seq: int? = None) -> UUID ! PyError
+fn uuid6(node: int? = None, clock_seq: int? = None) -> UUID ! PyError
+fn uuid7() -> UUID ! PyError
+fn uuid8(a: int? = None, b: int? = None, c: int? = None) -> UUID ! PyError
+fn uuid3(namespace: UUID, name: PyObject) -> UUID ! PyError
+fn uuid4() -> UUID ! PyError
+fn uuid5(namespace: UUID, name: PyObject) -> UUID ! PyError
 fn main() -> None ! PyError
+
+class SafeUUID
+
+class UUID:
+    fn UUID(hex: str? = None, bytes: bytes? = None, bytes_le: bytes? = None, fields: PyObject? = None, int: int? = None, version: int? = None, is_safe: SafeUUID = todo()) -> UUID ! PyError
+    is_safe: SafeUUID
+    int: int
+    bytes: bytes
+    bytes_le: bytes
+    clock_seq: int
+    clock_seq_hi_variant: int
+    clock_seq_low: int
+    fields: PyObject
+    hex: str
+    node: int
+    time: int
+    time_hi_version: int
+    time_low: int
+    time_mid: int
+    urn: str
+    variant: str
+    version: int?
+
+# Not bound:
+#   UUID.__int__, __eq__, __lt__, __le__, __gt__, __ge__, __hash__, __setattr__: dunder methods, which operators would call
