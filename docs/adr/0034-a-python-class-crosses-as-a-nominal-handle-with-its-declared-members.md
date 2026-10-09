@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # 0034 · A Python class crosses as a nominal handle with the members its interface declares
@@ -20,7 +20,7 @@ dicts, would give the program a snapshot that no longer is the object its method
 
 ## Decision
 
-A class a stub defines is bound as a nominal type whose values are handles to the Python object,
+The owner accepted this on 2026-10-08. A class a stub defines is bound as a nominal type whose values are handles to the Python object,
 as `PyObject`'s are, and on which the program may use what the interface declares and nothing
 else. `specs/python-classes/` specifies it.
 
