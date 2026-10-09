@@ -222,3 +222,12 @@ fn a_method_s_overloads_are_chosen_by_the_receiver_s_type_arguments() {
     let found = codes(&checked);
     assert!(found.len() == 1 && found[0].starts_with("E0204"), "a `Pat[str]` searches no bytes: {found:?}");
 }
+
+#[test]
+fn whether_a_python_value_is_there_is_asked_with_is_none_and_nothing_else_compares_it() {
+    clean("fn f(p: Pattern[str]?) -> bool:\n    return p is None\n");
+    clean("fn f(p: Pattern[str]?) -> bool:\n    return None is not p\n");
+    let source = "from py.re import Pattern\n\nfn f(p: Pattern[str], q: Pattern[str]) -> bool:\n    return p is q\n";
+    let found = codes(&check(source));
+    assert!(found.len() == 1 && found[0].starts_with("E0204"), "two handles are not compared: {found:?}");
+}

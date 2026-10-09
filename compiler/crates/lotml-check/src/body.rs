@@ -1597,6 +1597,7 @@ impl<'p> Body<'p> {
             ExprKind::Compare { first, rest } => {
                 let mut left = self.expr(first, None);
                 let mut left_span = first.span;
+                let mut left_none = matches!(first.kind, ExprKind::None);
                 for (op, right) in rest {
                     let r = self.expr(right, None);
                     // A result compares with `Ok(v)` or `Err(e)`; ordering needs its value.
@@ -1609,8 +1610,12 @@ impl<'p> Body<'p> {
                         r
                     };
                     left_span = right.span;
-                    self.compare(*op, &left, &r, expr.span);
+                    // `x is None` asks whether a value is there, which no Python code answers.
+                    let none = left_none || matches!(right.kind, ExprKind::None);
+                    let presence = matches!(op, CmpOp::Is | CmpOp::IsNot) && none;
+                    self.compare(*op, &left, &r, expr.span, presence);
                     left = r;
+                    left_none = matches!(right.kind, ExprKind::None);
                 }
                 Ty::Bool
             }
@@ -2064,9 +2069,9 @@ impl<'p> Body<'p> {
         }
     }
 
-    fn compare(&mut self, op: CmpOp, l: &Ty, r: &Ty, span: Span) {
+    fn compare(&mut self, op: CmpOp, l: &Ty, r: &Ty, span: Span, presence: bool) {
         let (l, r) = (self.resolve(l), self.resolve(r));
-        if self.holds_object(&l) || self.holds_object(&r) {
+        if !presence && (self.holds_object(&l) || self.holds_object(&r)) {
             let python = if self.holds_object(&l) { l.clone() } else { r.clone() };
             self.refuse_python(
                 span,
@@ -2110,7 +2115,7 @@ impl<'p> Body<'p> {
                     (Ty::Optional(l), Ty::Optional(r)) => (self.present(Ty::Optional(l), span), *r),
                     (l, r) => (self.present(l, span), self.present(r, span)),
                 };
-                self.compare(op, &l, &r, span);
+                self.compare(op, &l, &r, span, false);
             }
             _ => {
                 if self.infer.unify(&l, &r) || self.fits(&l, &r) || self.fits(&r, &l) {
