@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 2d0e8405a9d8ee21a2de152b4345b3bd5527fada51b34aab43ca9ef930ff5482
+checksum: 06c3d41e041761e8c5bd9ebca4ce148da2b6eb357dc21aca3a71de206ce8203e
 ---
 
 # Python via uv
@@ -90,7 +90,7 @@ directory's uv configuration must change nothing, and the docs must describe the
       bind textwrap`, then the same with the offline switch, and check that the run
       fails naming what is missing
   _Depends 1.2, 1.6_
-- [ ] 3.3 (Unit) Describe uv, the resolution order, the offline switch and the recorded
+- [x] 3.3 (Unit) Describe uv, the resolution order, the offline switch and the recorded
       interpreter in `README.md`, `reference/lotml.md` and
       `docs/wiki/pages/transpilation-strategy.md`. Replace the CPython and typeshed
       entries of `docs/stack.md` with what the code now does

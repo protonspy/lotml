@@ -112,12 +112,17 @@ with its language and MCP servers — JSON-RPC written over `serde_json`, with n
 - **miniz_oxide** — deflates the vendored stubs at build time and inflates them on first use, about
   0.5 MB in the binary for 4.6 MB of text (adr:0032); pure Rust, the deflate Rust's own toolchain
   uses.
-- **CPython** 3.11 or later — runs what the Python backend writes (`lotml run`, `lotml test`);
-  found as `LOTML_PYTHON`, `python3`, `python` or `py -3`. Not a library the compiler links.
-- **uv** (shipped beside the binary, pinned) — provisions CPython 3.14, the default, so a user
-  installs no Python of their own
-  (adr:0026-lotml-ships-uv-and-runs-python-3-14-by-default). Decided, and built by
-  `plans/python-via-uv.md`; until then the two entries above describe the code.
+- **CPython** 3.14 — runs what the Python backend writes (`lotml run`, `lotml test`), found in
+  the order adr:0026-lotml-ships-uv-and-runs-python-3-14-by-default sets: `LOTML_PYTHON`, the
+  project's virtual environment for `run` and `test`, the one uv installed, a download through
+  uv, and with no uv `python3`, `python` or `py -3` (3.11 or later). Not a library the compiler
+  links. The harness provisions it once ahead of a run (`python -m lotml_harness.python
+  --provision`) and runs offline.
+- **uv** — shipped beside the binary in each release archive, pinned by version and SHA-256 in
+  `release/uv.json`, with its licences; lotml finds it by absolute path (`LOTML_UV`, beside
+  itself, then the path's absolute entries) and runs it from its own cache with uv's
+  configuration ignored, to provision CPython 3.14 and, from a project's `uv.lock`, its
+  dependencies (adr:0026, adr:0033-lotml-run-installs-a-project-s-python-dependencies-from-its-uv-lock).
 - **clang** 17 or later — compiles the LLVM IR the LLVM backend writes, with the C runtime, into
   an executable, or with `--shared` a shared library
   (`--target llvm`, adr:0021-compiler-in-rust-with-llvm-as-its-native-code-generator):
