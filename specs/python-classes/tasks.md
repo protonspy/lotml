@@ -21,7 +21,7 @@
 
 - [x] 3.1 (Unit) Lower constructors, static methods, method calls and attribute reads to the runtime with the descriptor `["class", module, name]`, and check a returned class with `isinstance`, held in a `PyHandle` — R3.1, R3.2
   _Depends 2.2_
-- [ ] 3.2 (Unit) Refuse a function whose types hold a Python class on the native target with E0402 — R3.3
+- [x] 3.2 (Unit) Refuse a function whose types hold a Python class on the native target with E0402 — R3.3
   _Depends 2.1_
 
 ## 4 · The binder

@@ -87,11 +87,13 @@ impl Ty {
         }
     }
 
-    /// Whether this is or holds a `PyObject`: what a native program and a function Python calls
-    /// cannot have (specs/python-object R3).
+    /// Whether this is or holds a `PyObject`, or a Python class's value (adr:0034), whose names
+    /// are `py.<module>.<Class>` and no LotML record's: what a native program and a function
+    /// Python calls cannot have (specs/python-object R3, specs/python-classes R3.3).
     pub fn holds_py_object(&self) -> bool {
         match self {
             Ty::PyObject => true,
+            Ty::Adt(name, _) if name.starts_with("py.") => true,
             Ty::List(t) | Ty::Set(t) | Ty::Optional(t) | Ty::Heap(t) => t.holds_py_object(),
             Ty::Dict(a, b) | Ty::Result(a, b) => a.holds_py_object() || b.holds_py_object(),
             Ty::Tuple(items) | Ty::Adt(_, items) => items.iter().any(Ty::holds_py_object),

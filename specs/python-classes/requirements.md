@@ -37,7 +37,7 @@ not at all.
 
 - **R3.1** When a call into Python returns a value declared as a Python class, the runtime shall check it is an instance of that class, and give `Err(PyError)` of kind `TypeError` when it is not.
 - **R3.2** The runtime shall hand Python the object Python gave for a value of a Python class, never copied, printed, compared or hashed.
-- **R3.3** The native target shall refuse a function whose types hold a Python class with E0402, as it refuses a `PyObject`.
+- **R3.3** The native target shall refuse a program holding a Python class's value as it refuses a `PyObject`: at the import with E0401, and with E0402 in any function whose types hold one.
 
 ## R4 · The coverage
 
