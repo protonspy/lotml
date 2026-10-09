@@ -306,23 +306,11 @@ impl Assembly {
         checked.foreign = program.foreign.clone();
         checked.py_classes = program.py_classes.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         for class in program.py_attributes.keys() {
-            // Nearest first: a class's own method shadows a base's of the same name.
-            let mut lineage = vec![class.clone()];
-            let mut at = 0;
-            while at < lineage.len() {
-                for base in program.py_bases.get(&lineage[at]).into_iter().flatten() {
-                    if !lineage.contains(base) {
-                        lineage.push(base.clone());
-                    }
-                }
-                at += 1;
-            }
-            let mut methods = std::collections::BTreeMap::new();
-            for c in lineage.iter().rev() {
-                methods.extend(program.methods.get(c).into_iter().flatten().map(|(n, m)| (n.clone(), m.clone())));
-            }
-            checked.py_methods.insert(class.clone(), methods);
+            let own = program.methods.get(class).cloned().unwrap_or_default();
+            checked.py_methods.insert(class.clone(), own);
         }
+        checked.py_bases = program.py_bases.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        checked.py_constructors = program.py_constructors.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         checked
     }
 }

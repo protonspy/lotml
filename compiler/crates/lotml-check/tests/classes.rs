@@ -212,3 +212,40 @@ fn a_python_class_s_value_has_only_its_declared_members() {
         );
     }
 }
+
+#[test]
+fn a_class_without_a_constructor_of_its_own_is_built_through_its_base_s() {
+    clean("fn f() -> datetime ! PyError:\n    return datetime(2026, 1, 8)?\n");
+    refused("fn f() -> datetime ! PyError:\n    return datetime(\"2026\", 1, 8)?\n", "expected `int`");
+    let typed = "import py.datetime\n\nfn f() -> None ! PyError:\n    now = py.datetime.datetime(2026, 1, 8)?\n    print(now.isoformat()?)\n";
+    let found = lotml_check::check_resolved_with(&lotml_syntax::parse(typed).module, typed, &interfaces()).diagnostics;
+    assert!(
+        found.is_empty(),
+        "through the module's path too: {:?}",
+        found.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn a_long_chain_of_classes_and_a_cycle_of_bases_are_checked_in_time() {
+    let mut text = String::from("class c0:\n    fn c0(n: int) -> c0 ! PyError\n    fn f(self) -> int ! PyError\n");
+    for i in 1..3000 {
+        text += &format!("class c{i}(c{})\n", i - 1);
+    }
+    text += "class a(b)\nclass b(a)\n";
+    let (read, problems) = interface_of("py.chain", &text);
+    assert!(problems.is_empty(), "{:?}", problems.iter().take(3).map(|d| &d.message).collect::<Vec<_>>());
+    let interfaces = lotml_check::Interfaces::from([("py.chain".to_string(), read)]);
+    let source = "from py.chain import c2999, a\n\nfn f(x: a) -> int ! PyError:\n    c = c2999(1)?\n    x.f()?\n    return c.f()?\n";
+    let started = std::time::Instant::now();
+    let parsed = lotml_syntax::parse(source);
+    let found = lotml_check::check_resolved_with(&parsed.module, source, &interfaces).diagnostics;
+    assert!(started.elapsed() < std::time::Duration::from_secs(5), "{:?}", started.elapsed());
+    let codes: Vec<&str> = found.iter().map(|d| d.code).collect();
+    assert_eq!(
+        codes,
+        ["E0205"],
+        "the chain's method found, the cycle's ended: {:?}",
+        found.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+}

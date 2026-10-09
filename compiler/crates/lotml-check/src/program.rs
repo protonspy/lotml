@@ -100,6 +100,11 @@ pub struct Program {
     pub py_attributes: HashMap<String, BTreeMap<String, Ty>>,
     /// The bases of each Python class an imported module declares, by full names.
     pub py_bases: HashMap<String, Vec<String>>,
+    /// The constructor each Python class an imported module declares has of its own, by its full
+    /// name; one a class inherits is made by [`Program::py_constructor`] where it is called.
+    pub py_constructors: HashMap<String, FnSig>,
+    /// The Python modules whose classes are registered, each once.
+    pub py_registered: HashSet<String>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -347,20 +352,33 @@ impl Program {
 
     /// `import m` or `from m import f` of a Python module with an interface: its functions are
     /// called like lotml's own, and each returns `T ! PyError`.
-    fn import_python(&mut self, import: &ast::Import, path: &str, mut functions: BTreeMap<String, FnSig>) {
+    /// The constructor of the Python class `class`, by its full name: its own, else a base's
+    /// (adr:0034).
+    pub fn py_constructor(&self, class: &str) -> Option<FnSig> {
+        crate::interface::py_constructor(
+            class,
+            |c| self.py_constructors.get(c),
+            |c| self.py_bases.get(c).map(Vec::as_slice),
+        )
+    }
+
+    fn import_python(&mut self, import: &ast::Import, path: &str, functions: BTreeMap<String, FnSig>) {
         if import.names.is_empty() {
             self.modules.insert(path.to_string());
         }
         // A module's classes, wherever their values come from (adr:0034): their members by the
-        // class's full name, and each constructor among the module's functions, `py.m.C(...)`.
-        let classes = self.available_classes.get(path).cloned().unwrap_or_default();
-        for (local, class) in &classes {
-            let qualified = format!("{path}.{local}");
-            self.methods.insert(qualified.clone(), class.methods.clone());
-            self.py_attributes.insert(qualified.clone(), class.attributes.clone());
-            self.py_bases.insert(qualified, class.bases.clone());
-            if let Some(constructor) = &class.constructor {
-                functions.entry(local.clone()).or_insert_with(|| constructor.clone());
+        // class's full name, each module once however many times it is imported. A class's own
+        // constructor is kept; one it inherits is made where a program calls it (`py_constructor`).
+        let classes = self.available_classes.remove(path).unwrap_or_default();
+        if self.py_registered.insert(path.to_string()) {
+            for (local, class) in &classes {
+                let qualified = format!("{path}.{local}");
+                self.methods.insert(qualified.clone(), class.methods.clone());
+                self.py_attributes.insert(qualified.clone(), class.attributes.clone());
+                self.py_bases.insert(qualified.clone(), class.bases.clone());
+                if let Some(constructor) = &class.constructor {
+                    self.py_constructors.insert(qualified, constructor.clone());
+                }
             }
         }
         for name in &import.names {
@@ -373,10 +391,11 @@ impl Program {
                     ));
                     continue;
                 }
-                self.py_classes.insert(name.name.clone(), format!("{path}.{}", name.name));
-                if let Some(constructor) = functions.get(&name.name) {
-                    self.functions.insert(name.name.clone(), constructor.clone());
+                let qualified = format!("{path}.{}", name.name);
+                if let Some(constructor) = self.py_constructor(&qualified) {
+                    self.functions.insert(name.name.clone(), constructor);
                 }
+                self.py_classes.insert(name.name.clone(), qualified);
                 self.imported.insert(name.name.clone(), path.to_string());
                 continue;
             }
@@ -400,6 +419,7 @@ impl Program {
             self.functions.insert(name.name.clone(), sig.clone());
             self.imported.insert(name.name.clone(), path.to_string());
         }
+        self.available_classes.insert(path.to_string(), classes);
         self.foreign.insert(path.to_string(), functions);
     }
 

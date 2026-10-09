@@ -52,7 +52,6 @@ class Random:
     fn weibullvariate(self, alpha: f64, beta: f64) -> f64 ! PyError
 
 class SystemRandom(Random):
-    fn SystemRandom(x: PyObject? = None) -> SystemRandom ! PyError
     fn getrandbits(self, k: int) -> int ! PyError
     fn getstate(self) -> PyObject ! PyError
     fn setstate(self) -> PyObject ! PyError

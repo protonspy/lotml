@@ -15,14 +15,11 @@ class Dialect:
     quoting: PyObject
     strict: bool
 
-class excel(Dialect):
-    fn excel() -> excel ! PyError
+class excel(Dialect)
 
-class excel_tab(excel):
-    fn excel_tab() -> excel_tab ! PyError
+class excel_tab(excel)
 
-class unix_dialect(Dialect):
-    fn unix_dialect() -> unix_dialect ! PyError
+class unix_dialect(Dialect)
 
 class Sniffer:
     preferred: [str]

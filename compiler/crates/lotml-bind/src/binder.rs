@@ -157,7 +157,7 @@ fn bind(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
     for class in module_level(body).into_iter().filter_map(Stmt::as_class_def_stmt) {
         // A class written in two `sys.version_info` branches is bound from the first, as a function is.
         if classes.contains(class.name.as_str()) && written.insert(class.name.as_str()) {
-            let (block, left_out) = class_block(class, body, &classes);
+            let (block, left_out) = class_block(class, &classes);
             lines.push(String::new());
             lines.extend(block);
             skipped.extend(left_out);
@@ -168,7 +168,11 @@ fn bind(module: &str, stub: &str, said: &str) -> Result<String, Refused> {
         lines.push("# Not bound:".to_string());
         lines.extend(skipped);
     }
-    Ok(lines.join("\n") + "\n")
+    let text = lines.join("\n") + "\n";
+    if text.len() > LARGEST {
+        return Err(Refused(format!("its interface would be past the {LARGEST} bytes lotml reads")));
+    }
+    Ok(text)
 }
 
 /// Each module-level function by name, in the order written: its signature, or why it is not
@@ -386,7 +390,7 @@ fn mentions(expr: &Expr, type_vars: &HashSet<String>) -> bool {
 /// A class as an interface writes it: its bases the interface declares, its attributes (annotated,
 /// and `@property`s), its constructor (its `__init__`, else `__new__`, else a base's), its methods
 /// and its static and class methods; and a comment for each member it leaves out.
-fn class_block(class: &ast::StmtClassDef, body: &[Stmt], classes: &HashSet<String>) -> (Vec<String>, Vec<String>) {
+fn class_block(class: &ast::StmtClassDef, classes: &HashSet<String>) -> (Vec<String>, Vec<String>) {
     let name = class.name.as_str();
     let cx = Cx { classes, this: Some(name) };
     let bases: Vec<&str> =
@@ -465,8 +469,15 @@ fn class_block(class: &ast::StmtClassDef, body: &[Stmt], classes: &HashSet<Strin
             Err(why) => skipped.push(format!("#   {name}.{member}: {why}")),
         }
     }
-    match constructor(class, body) {
-        Some(init) if is_overload(init) || defs_overloaded(class, body, init.name.as_str()) => {
+    // The class's own constructor, its `__init__` else its `__new__`. One a class inherits is not
+    // written again: the checker takes it from the base (adr:0034), so a stub of many subclasses
+    // of one wide base writes each of them once.
+    let own = defs
+        .iter()
+        .find(|f| f.name.as_str() == "__init__")
+        .or_else(|| defs.iter().find(|f| f.name.as_str() == "__new__"));
+    match own {
+        Some(init) if overloaded.contains(init.name.as_str()) => {
             skipped.push(format!("#   {name}.{}: it is overloaded", init.name.as_str()));
         }
         Some(init) => match params(init, true, cx) {
@@ -483,50 +494,6 @@ fn class_block(class: &ast::StmtClassDef, body: &[Stmt], classes: &HashSet<Strin
         lines[0].pop();
     }
     (lines, skipped)
-}
-
-/// Whether `class`, or the base the constructor `init` was found in, overloads it.
-fn defs_overloaded(class: &ast::StmtClassDef, body: &[Stmt], member: &str) -> bool {
-    let mut at = Some(class);
-    let mut walked = 0;
-    while let Some(c) = at {
-        let defs: Vec<&ast::StmtFunctionDef> =
-            module_level(&c.body).into_iter().filter_map(Stmt::as_function_def_stmt).collect();
-        if defs.iter().any(|f| f.name.as_str() == member) {
-            return defs.iter().filter(|f| f.name.as_str() == member).count() > 1
-                || defs.iter().any(|f| f.name.as_str() == member && is_overload(f));
-        }
-        walked += 1;
-        at = if walked > 64 { None } else { base_class(c, body) };
-    }
-    false
-}
-
-/// The constructor a class is called through: its own `__init__`, else its `__new__`, else its
-/// first base's in the stub, a chain followed no further than 64 classes.
-fn constructor<'a>(class: &'a ast::StmtClassDef, body: &'a [Stmt]) -> Option<&'a ast::StmtFunctionDef> {
-    let mut at = Some(class);
-    let mut walked = 0;
-    while let Some(c) = at {
-        let defs: Vec<&ast::StmtFunctionDef> =
-            module_level(&c.body).into_iter().filter_map(Stmt::as_function_def_stmt).collect();
-        if let Some(init) = defs
-            .iter()
-            .find(|f| f.name.as_str() == "__init__")
-            .or_else(|| defs.iter().find(|f| f.name.as_str() == "__new__"))
-        {
-            return Some(init);
-        }
-        walked += 1;
-        at = if walked > 64 { None } else { base_class(c, body) };
-    }
-    None
-}
-
-/// The first base of `class` the stub defines.
-fn base_class<'a>(class: &ast::StmtClassDef, body: &'a [Stmt]) -> Option<&'a ast::StmtClassDef> {
-    let base = class.bases().iter().find_map(name_of)?;
-    module_level(body).into_iter().filter_map(Stmt::as_class_def_stmt).find(|c| c.name.as_str() == base)
 }
 
 /// The LotML type of an annotation. A parameter may take an abstract collection, which a LotML
@@ -918,14 +885,36 @@ def combine(d: date, t: datetime) -> datetime: ...
             ]
         );
         assert!(
-            text.contains(
-                "\nclass datetime(date):\n    fn datetime(year: int, month: int) -> datetime ! PyError\n    fn now(self) -> datetime ! PyError\n"
-            ),
-            "a base's constructor, returning the class: {text}"
+            text.contains("\nclass datetime(date):\n    fn now(self) -> datetime ! PyError\n"),
+            "an inherited constructor is not written again; the checker takes it from the base: {text}"
         );
         assert!(text.contains("\nclass empty\n"), "a class with no member is its header alone: {text}");
         assert!(text.contains("#   date.__eq__, __lt__: dunder methods, which operators would call"), "{text}");
         assert!(!text.contains("_hidden"), "a private member is left out");
+    }
+
+    #[test]
+    fn many_subclasses_of_a_wide_base_write_their_constructor_once() {
+        let params: Vec<String> = (0..200).map(|i| format!("p{i}: int")).collect();
+        let mut stub = format!("class B:\n    def __init__(self, {}) -> None: ...\n", params.join(", "));
+        for i in 0..500 {
+            stub += &format!("class S{i}(B): ...\n");
+        }
+        let text = bound(&stub);
+        assert_eq!(text.matches("p199: int").count(), 1, "the base's constructor, written once");
+        assert!(text.len() < stub.len() * 2, "the interface grows as the stub does: {} for {}", text.len(), stub.len());
+    }
+
+    #[test]
+    fn a_long_chain_of_classes_binds_in_time_linear_in_its_length() {
+        let mut stub = String::from("class C0:\n    def __init__(self, n: int) -> None: ...\n");
+        for i in 1..8000 {
+            stub += &format!("class C{i}(C{}): ...\n", i - 1);
+        }
+        let started = std::time::Instant::now();
+        let text = bound(&stub);
+        assert!(text.contains("\nclass C7999(C7998)\n"), "every class bound");
+        assert!(started.elapsed() < std::time::Duration::from_secs(5), "{:?}", started.elapsed());
     }
 
     #[test]

@@ -2909,6 +2909,10 @@ impl<'p> Body<'p> {
                 if let Some(sig) = self.program.foreign[&module].get(&name.name).cloned() {
                     return self.call_signature(&sig, &[], &[], args, span, None);
                 }
+                // `py.m.C(...)`: a class's constructor, its own or a base's (adr:0034).
+                if let Some(sig) = self.program.py_constructor(&format!("{module}.{}", name.name)) {
+                    return self.call_signature(&sig, &[], &[], args, span, None);
+                }
                 self.arg_types(args, &[]);
                 let names: Vec<String> = self.program.foreign[&module].keys().cloned().collect();
                 self.report(
@@ -3062,17 +3066,7 @@ impl<'p> Body<'p> {
 
     /// `class` and its declared bases, nearest first, each once.
     fn py_lineage(&self, class: &str) -> Vec<String> {
-        let mut found = vec![class.to_string()];
-        let mut at = 0;
-        while at < found.len() {
-            for base in self.program.py_bases.get(&found[at]).into_iter().flatten() {
-                if !found.contains(base) {
-                    found.push(base.clone());
-                }
-            }
-            at += 1;
-        }
-        found
+        crate::interface::py_lineage(class, |c| self.program.py_bases.get(c).map(Vec::as_slice))
     }
 
     /// The method or static method `name` of the Python class `class` or of a base it declares.

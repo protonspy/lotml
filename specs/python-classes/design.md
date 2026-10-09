@@ -21,7 +21,9 @@ interface, a base the interface does not declare, or a member without `PyError` 
 **Checker**. A Python class is `Ty::Adt("py.<module>.<Class>", [])`: the dots keep it apart from
 every LotML record, which a program names with an identifier, and the existing unification by name
 holds. `Program` gains `classes` beside `available`; `import_python` (`program.rs:328`) makes an
-imported class's name a type and its constructor a function. The member hooks are those records
+imported class's name a type and its constructor a function: its own, else the nearest base's,
+made where a program calls it and never kept for every subclass (`interface::py_constructor`), so
+a module of many subclasses of one wide base costs what it is. The member hooks are those records
 use: `attribute()` (`body.rs:2098`) gives `T ! PyError` for a declared attribute and refuses an
 assignment; `method_call` (`body.rs:2754`) looks a method up through the class and its bases, and
 a `Ty::TypeName` receiver (`body.rs:2762`) finds a static method. The coercion to a base is added

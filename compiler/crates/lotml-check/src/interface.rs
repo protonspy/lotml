@@ -322,6 +322,39 @@ pub(crate) fn marks(interfaces: &Interfaces) -> HashMap<String, Mark> {
     interfaces.iter().filter(|(_, i)| i.mark != Mark::None).map(|(module, i)| (module.clone(), i.mark)).collect()
 }
 
+/// `class` and the bases it declares, through theirs, nearest first and each once: the order a
+/// member is looked up in (adr:0034). `bases` gives a class's bases by full name; a cycle a hostile
+/// interface writes ends where it repeats.
+pub fn py_lineage<'a>(class: &str, bases: impl Fn(&str) -> Option<&'a [String]>) -> Vec<String> {
+    let mut found = vec![class.to_string()];
+    let mut seen: std::collections::HashSet<String> = found.iter().cloned().collect();
+    let mut at = 0;
+    while at < found.len() {
+        for base in bases(&found[at]).into_iter().flatten() {
+            if seen.insert(base.clone()) {
+                found.push(base.clone());
+            }
+        }
+        at += 1;
+    }
+    found
+}
+
+/// The constructor of the Python class `class`, by its full name: its own, else the nearest one a
+/// base declares, returning `class` (adr:0034). It is made when a program calls it, never kept for
+/// every subclass, so a module of many subclasses of one wide base costs what it is.
+pub fn py_constructor<'a>(
+    class: &str,
+    constructors: impl Fn(&str) -> Option<&'a FnSig>,
+    bases: impl Fn(&str) -> Option<&'a [String]>,
+) -> Option<FnSig> {
+    let found = py_lineage(class, bases).into_iter().find_map(|c| constructors(&c))?;
+    let mut sig = found.clone();
+    sig.ret = Ty::Adt(class.to_string(), Vec::new());
+    sig.name = class.rsplit('.').next().unwrap_or(class).to_string();
+    Some(sig)
+}
+
 /// The classes of each interface, by the name its module gives them.
 pub(crate) fn classes(interfaces: &Interfaces) -> HashMap<String, BTreeMap<String, PyClass>> {
     interfaces

@@ -380,8 +380,7 @@ class Box:
     fn Box(n: int) -> Box ! PyError
     fn bump(self) -> None ! PyError
 
-class Crate(Box):
-    fn Crate(n: int) -> Crate ! PyError
+class Crate(Box)
 
 fn make() -> Box ! PyError
 fn size(b: Box) -> int ! PyError

@@ -27,7 +27,7 @@ not at all.
 
 ## R2 · The checker
 
-- **R2.1** When a program imports a class of a Python interface, the checker shall let the program write the class's name as a type, and type a call to it as its constructor, `C ! PyError`.
+- **R2.1** When a program imports a class of a Python interface, the checker shall let the program write the class's name as a type, and type a call to it as its constructor, its own or the nearest base's, `C ! PyError`.
 - **R2.2** The checker shall type a method call on a value of a Python class, and a call `C.f(...)` to a static or class method, as the interface declares the member, each returning `T ! PyError`.
 - **R2.3** The checker shall type reading an attribute of a value of a Python class as `T ! PyError`, and refuse assigning to one.
 - **R2.4** The checker shall accept a value of a Python class where a base class the interface declares is expected, and refuse it where any other type is.

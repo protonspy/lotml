@@ -100,9 +100,29 @@ pub struct Checked {
     /// The Python classes imported by name, each with its full name (adr:0034): `date` for
     /// `py.datetime.date`.
     pub py_classes: BTreeMap<String, String>,
-    /// The methods and static methods of each Python class an imported module declares, by its
-    /// full name, those of the bases it declares included.
+    /// The methods and static methods each Python class an imported module declares has of its
+    /// own, by its full name; [`Checked::py_method`] looks through its bases too.
     pub py_methods: BTreeMap<String, BTreeMap<String, Method>>,
+    /// The bases of each Python class an imported module declares, by full names.
+    pub py_bases: BTreeMap<String, Vec<String>>,
+    /// The constructor each of those classes has of its own; [`Checked::py_constructor`] finds an
+    /// inherited one.
+    pub py_constructors: BTreeMap<String, FnSig>,
+}
+
+impl Checked {
+    /// The method or static method `name` of the Python class `class`, or of the nearest base it
+    /// declares that has one (adr:0034).
+    pub fn py_method(&self, class: &str, name: &str) -> Option<&Method> {
+        interface::py_lineage(class, |c| self.py_bases.get(c).map(Vec::as_slice))
+            .iter()
+            .find_map(|c| self.py_methods.get(c).and_then(|m| m.get(name)))
+    }
+
+    /// The constructor of the Python class `class`: its own, else a base's.
+    pub fn py_constructor(&self, class: &str) -> Option<FnSig> {
+        interface::py_constructor(class, |c| self.py_constructors.get(c), |c| self.py_bases.get(c).map(Vec::as_slice))
+    }
 }
 
 /// The most type nodes a module keeps for its expressions, in all: a long-lived editor or MCP
