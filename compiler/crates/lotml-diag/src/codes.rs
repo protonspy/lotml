@@ -197,7 +197,8 @@ pub const ALL: &[Code] = &[
         title: "an unknown module or import",
         explanation: "lotml programs import from the standard modules (`math`); the common names need no import. \
         A Python module is imported by its origin, `import py.textwrap` or `from py.textwrap import dedent`, \
-        through the interface `lotml bind textwrap` writes, `bindings/py.textwrap.lotmli`; a C library as \
+        through the interface the compiler generates from its stub on import, or `bindings/py.textwrap.lotmli` \
+        where one applies; `lotml bind textwrap` says why a module has none. A C library is imported as \
         `c.<library>`. A bare `import textwrap` names a LotML module only.",
     },
     Code {
@@ -252,6 +253,22 @@ pub const ALL: &[Code] = &[
         f\"{count:,d}\"     # an integer, with thousands separated\n    f\"{ratio:.2%}\"    # a float, as a \
         percentage\n\nA width or precision is at most 10000, and a spec holds no `{field}`: compute the width \
         into the text, or pad with `ljust`, `rjust` or `center`.",
+    },
+    Code {
+        code: "E0224",
+        title: "a bindings file shadowing a generated interface",
+        explanation: "The compiler generates a Python module's interface from its stub when a program imports it. \
+        A `bindings/py.<module>.lotmli` that applies to the import is used instead, so a stub's later versions no \
+        longer reach the program. Delete the file to use the generated interface, or keep it on purpose to type \
+        the module by hand.",
+    },
+    Code {
+        code: "E0225",
+        title: "a stub that differs from the lock",
+        explanation: "`lotml.lock` records the SHA-256 of the stub each `py.` module was bound from. When the stub \
+        found on import differs, the compiler binds from it, so the program checks against what it will run with, \
+        and warns: the project's environment changed since the lock was written. `lotml bind --lock` records the \
+        stubs found; `lotml check --locked` fails on the difference, for CI.",
     },
     Code {
         code: "E0301",

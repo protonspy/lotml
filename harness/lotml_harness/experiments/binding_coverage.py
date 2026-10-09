@@ -1,7 +1,9 @@
 """How much of Python a LotML program can call typed (specs/binding-coverage): for each module of
 a fixed corpus, the public names its stub declares and those `lotml bind` binds from it.
 
-The corpus is `binding-corpus.json`; every stub is read from a distribution of the harness group
+The corpus is `binding-corpus.json`; a standard-library module is bound from the typeshed lotml
+carries, at the commit the record names (specs/bind-on-import R4.2), and every other stub is read
+from a distribution of the harness group
 `stubs`, pinned in the lock (adr:0030), and no module of the corpus is imported. Each module is
 bound by running `lotml bind <module> --stub <stub>`, the binder a program gets
 (specs/rust-binder R3.1). Each measurement is kept under a label in
@@ -69,6 +71,8 @@ class Record:
     corpus: str
     """A digest of the corpus measured."""
     taken: str = ""
+    typeshed: str = ""
+    """The commit of the typeshed lotml carries, which the standard library is bound from."""
 
     def share(self, group: str | None = None, reachable: bool = False) -> float:
         """The share of `group`'s public names bound typed, or, with `reachable`, bound at all."""
@@ -87,12 +91,19 @@ def corpus(text: str) -> list[Module]:
     return modules
 
 
+TYPESHED = ROOT / "compiler" / "crates" / "lotml-bind" / "typeshed"
+"""The typeshed lotml embeds, vendored at the commit in its `COMMIT` file."""
+
+
 def typeshed_root() -> Path | None:
-    """typeshed's `stdlib` in the installed mypy, found without importing mypy."""
-    spec = importlib.util.find_spec("mypy")
-    if spec is None or spec.origin is None:
-        return None
-    return Path(spec.origin).parent / "typeshed" / "stdlib"
+    """The `stdlib` of the typeshed lotml carries, where its public names are counted."""
+    stdlib = TYPESHED / "stdlib"
+    return stdlib if stdlib.is_dir() else None
+
+
+def typeshed_commit() -> str:
+    """The commit of the typeshed lotml carries."""
+    return (TYPESHED / "COMMIT").read_text(encoding="utf-8").strip()
 
 
 def stub_of(module: Module, typeshed: Path | None, purelib: Path) -> Path | None:
@@ -173,11 +184,13 @@ def public_names(tree: ast.Module) -> set[str]:
     return {n for n in names if not n.startswith("_")}
 
 
-def interface(compiler: Path, name: str, stub: Path) -> str:
-    """The interface `lotml bind` writes for `name` from `stub`; empty when it binds nothing."""
+def interface(compiler: Path, name: str, stub: Path | None) -> str:
+    """The interface `lotml bind` writes for `name` from `stub`, or, with none, from the typeshed
+    lotml carries; empty when it binds nothing."""
+    given = ["--stub", str(stub)] if stub is not None else []
     with tempfile.TemporaryDirectory(prefix="lotml-coverage-") as out:
         ran = subprocess.run(  # noqa: S603 - the compiler, with fixed arguments
-            [str(compiler), "bind", name, "--stub", str(stub), "--out", out],
+            [str(compiler), "bind", name, *given, "--out", out],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -188,7 +201,7 @@ def interface(compiler: Path, name: str, stub: Path) -> str:
         return written.read_text(encoding="utf-8") if ran.returncode == 0 else ""
 
 
-def bound_names(compiler: Path, name: str, stub: Path) -> tuple[set[str], set[str]]:
+def bound_names(compiler: Path, name: str, stub: Path | None) -> tuple[set[str], set[str]]:
     """The names `lotml bind` writes as functions of the interface of `name` from `stub`: those
     typed, and those with a `PyObject` among their types."""
     typed, reachable = set(), set()
@@ -207,15 +220,18 @@ def measure(module: Module, compiler: Path, typeshed: Path | None, purelib: Path
     tree = ast.parse(stub.read_text(encoding="utf-8"), str(stub))
     public = public_names(tree)
     module.public = len(public)
-    typed, reachable = bound_names(compiler, module.name, stub)
+    # The standard library is bound as `import py.<module>` binds it: from the embedded typeshed.
+    given = None if module.group == "stdlib" else stub
+    typed, reachable = bound_names(compiler, module.name, given)
     module.bound = sorted(public & typed)
     module.reachable = sorted(public & reachable)
     return module
 
 
 def versions(modules: list[Module]) -> dict[str, str]:
+    """The version of each distribution a PyPI module's stub is read from."""
     found = {}
-    for distribution in sorted({m.distribution for m in modules}):
+    for distribution in sorted({m.distribution for m in modules if m.group != "stdlib"}):
         try:
             found[distribution] = importlib.metadata.version(distribution)
         except importlib.metadata.PackageNotFoundError:
@@ -227,6 +243,7 @@ def dump(record: Record) -> str:
     data = {
         "label": record.label,
         "taken": record.taken,
+        "typeshed": record.typeshed,
         "corpus": record.corpus,
         "versions": record.versions,
         "modules": [
@@ -248,7 +265,14 @@ def dump(record: Record) -> str:
 def load(text: str) -> Record:
     data = json.loads(text)
     modules = [Module(**m) for m in data["modules"]]
-    return Record(data["label"], modules, data["versions"], data["corpus"], data["taken"])
+    return Record(
+        data["label"],
+        modules,
+        data["versions"],
+        data["corpus"],
+        data["taken"],
+        data.get("typeshed", ""),
+    )
 
 
 def markdown(records: list[Record]) -> str:
@@ -259,16 +283,21 @@ def markdown(records: list[Record]) -> str:
         "",
         "Generated by `python -m lotml_harness.experiments.binding_coverage <label>`. For each",
         "module of `harness/binding-corpus.json`, the public names its stub declares and the share",
-        "`lotml bind` binds typed, every stub read from a pinned distribution of the harness group",
-        "`stubs` (specs/binding-coverage). The shares are of names bound typed; the last share",
-        "counts also the names bound with a `PyObject` among their types, reachable but not typed",
-        "(specs/python-object).",
+        "`lotml bind` binds typed: the standard library from the typeshed lotml carries, at the",
+        "commit each module names, every other stub from a pinned distribution of the harness",
+        "group `stubs` (specs/binding-coverage). The shares are of names bound typed; the last",
+        "share counts also the names bound with a `PyObject` among their types, reachable but not",
+        "typed (specs/python-object).",
         "",
         "| label | standard library | PyPI | all | all, through PyObject too | measured on |",
         "| --- | ---: | ---: | ---: | ---: | --- |",
     ]
     for r in records:
-        same = latest is not None and (r.corpus, r.versions) == (latest.corpus, latest.versions)
+        same = latest is not None and (r.corpus, r.versions, r.typeshed) == (
+            latest.corpus,
+            latest.versions,
+            latest.typeshed,
+        )
         on = "the latest corpus and versions" if same else "another corpus or other versions"
         shares = " | ".join(f"{r.share(group):.1%}" for group in [*GROUPS, None])
         lines.append(f"| {r.label} | {shares} | {r.share(reachable=True):.1%} | {on} |")
@@ -281,7 +310,12 @@ def markdown(records: list[Record]) -> str:
             "| --- | --- | ---: | ---: | ---: | ---: |",
         ]
         for m in r.modules:
-            source = m.distribution if m.stub else f"{m.distribution}, no stub found"
+            origin = (
+                f"typeshed {r.typeshed[:12]}"
+                if m.group == "stdlib" and r.typeshed
+                else m.distribution
+            )
+            source = origin if m.stub else f"{origin}, no stub found"
             counts = f"{m.public} | {len(m.bound)} | {len(m.reachable)}"
             lines.append(f"| {m.name} | {source} | {counts} | {m.share:.1%} |")
         lines.append("")
@@ -305,6 +339,7 @@ def main(argv: list[str] | None = None) -> None:
         versions(modules),
         hashlib.sha256(text.encode("utf-8")).hexdigest()[:16],
         datetime.now(UTC).isoformat(timespec="seconds"),
+        typeshed_commit(),
     )
     RECORDS.mkdir(parents=True, exist_ok=True)
     (RECORDS / f"{record.label}.json").write_text(dump(record), encoding="utf-8", newline="\n")

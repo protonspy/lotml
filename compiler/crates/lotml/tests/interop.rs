@@ -191,6 +191,168 @@ fn main() -> None ! PyError:
     );
 }
 
+#[test]
+fn check_run_and_test_bind_a_standard_library_module_on_import_with_no_bind() {
+    let program = "\
+from py.textwrap import dedent, wrap
+
+fn main() -> None ! PyError:
+    for line in wrap(dedent(\"    one two three four\")?, width=8)?:
+        print(line)
+
+test \"dedent\":
+    assert dedent(\"  x\") == Ok(\"x\")
+";
+    let dir = scratch("bind-on-import", &[(".git", ""), ("main.lotml", program)]);
+    let checked = lotml(&["check", "main.lotml"], &dir);
+    assert!(checked.status.success(), "{}", stdout(&checked));
+    let out = lotml(&["run", "main.lotml"], &dir);
+    assert_eq!(stdout(&out), "one two\nthree\nfour\n", "{}", String::from_utf8_lossy(&out.stderr));
+    let tested = lotml(&["test", "main.lotml"], &dir);
+    assert!(tested.status.success(), "{}", stdout(&tested));
+    assert!(!dir.join("bindings").exists(), "nothing is written to bind on import");
+}
+
+#[test]
+fn an_import_no_stub_binds_is_reported_and_bind_tells_why() {
+    let program = "import py.nowhere\n\nfn main():\n    print(1)\n";
+    let dir = scratch("unbound-import", &[(".git", ""), ("main.lotml", program)]);
+    let checked = lotml(&["check", "main.lotml"], &dir);
+    assert_eq!(checked.status.code(), Some(1));
+    let said = stdout(&checked);
+    assert!(said.contains("E0216") && said.contains("`lotml bind nowhere` tells why"), "{said}");
+    let why = lotml(&["bind", "nowhere"], &dir);
+    assert_eq!(why.status.code(), Some(2));
+    let why = String::from_utf8_lossy(&why.stderr);
+    assert!(why.contains("no stub for `nowhere`") && why.contains("no uv.lock"), "{why}");
+}
+
+#[test]
+fn a_bare_import_of_a_module_typeshed_covers_is_fixed_to_its_origin() {
+    let program = "import shlex\nimport typing\n\nfn main() -> None ! PyError:\n    print(py.shlex.quote(\"a b\")?)\n";
+    let dir = scratch("bare-import", &[(".git", ""), ("main.lotml", program)]);
+    let checked = lotml(&["check", "main.lotml"], &dir);
+    assert_eq!(checked.status.code(), Some(1));
+    assert!(stdout(&checked).contains("write `py.shlex`"), "{}", stdout(&checked));
+    lotml(&["check", "--fix", "main.lotml"], &dir);
+    let fixed = std::fs::read_to_string(dir.join("main.lotml")).unwrap();
+    assert!(fixed.starts_with("import py.shlex\n"), "{fixed}");
+    assert!(
+        !fixed.contains("py.typing") && !fixed.contains("import typing"),
+        "typing is removed, not given an origin: {fixed}"
+    );
+    let checked = lotml(&["check", "main.lotml"], &dir);
+    assert!(checked.status.success(), "{}", stdout(&checked));
+}
+
+#[test]
+fn a_bindings_file_where_a_stub_binds_is_used_and_warned_and_one_where_none_does_is_not() {
+    let program = "from py.textwrap import dedent\nimport py.liar\n\nfn main() -> None ! PyError:\n    print(dedent(\"  x\")?)\n    print(py.liar.count()?)\n";
+    let dir = scratch(
+        "shadowing",
+        &[(".git", ""), ("stubs/textwrap.pyi", TEXTWRAP_PYI), ("stubs/liar.pyi", LIAR_PYI), ("main.lotml", program)],
+    );
+    assert!(lotml(&["bind", "textwrap", "--stub", "stubs/textwrap.pyi"], &dir).status.success());
+    assert!(lotml(&["bind", "liar", "--stub", "stubs/liar.pyi"], &dir).status.success());
+    let checked = lotml(&["check", "main.lotml"], &dir);
+    assert!(checked.status.success(), "a warning stops nothing: {}", stdout(&checked));
+    let said = stdout(&checked);
+    assert_eq!(said.matches("E0224").count(), 1, "textwrap's file shadows typeshed's, liar's shadows nothing: {said}");
+    assert!(said.contains("bindings/py.textwrap.lotmli shadows"), "{said}");
+}
+
+#[test]
+fn bind_lock_records_each_module_bound_on_import_with_its_source_and_hashes() {
+    let a = "from py.textwrap import dedent\nimport py.shlex\n\nfn main():\n    print(1)\n";
+    let b = "import py.textwrap\nimport py.liar\n\nfn main():\n    print(2)\n";
+    let dir = scratch("bind-lock", &[(".git", ""), ("a.lotml", a), ("app/b.lotml", b), ("stubs/liar.pyi", LIAR_PYI)]);
+    assert!(lotml(&["bind", "liar", "--stub", "stubs/liar.pyi"], &dir).status.success());
+    let out = lotml(&["bind", "--lock"], &dir.join("app"));
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(stdout(&out).contains("2 modules locked"), "{}", stdout(&out));
+    let lock: toml::Table = std::fs::read_to_string(dir.join("lotml.lock")).unwrap().parse().unwrap();
+    let modules = lock["module"].as_array().unwrap();
+    let names: Vec<&str> = modules.iter().map(|m| m["name"].as_str().unwrap()).collect();
+    assert_eq!(names, vec!["py.shlex", "py.textwrap"], "sorted; liar's bindings file is not locked");
+    let shlex = &modules[0];
+    assert!(shlex["source"].as_str().unwrap().starts_with("typeshed "), "{shlex}");
+    let lotml_bind::typeshed::Found::Stub { text, .. } = lotml_bind::typeshed::find("shlex") else { panic!() };
+    assert_eq!(shlex["stub"].as_str().unwrap(), format!("sha256:{}", lotml_llvm::sha256::hex_of(text.as_bytes())));
+    assert!(lotml(&["bind", "shlex", "--out", "generated"], &dir).status.success());
+    let written = std::fs::read(dir.join("generated").join("py.shlex.lotmli")).unwrap();
+    assert_eq!(
+        shlex["interface"].as_str().unwrap(),
+        format!("sha256:{}", lotml_llvm::sha256::hex_of(&written)),
+        "the interface bind writes"
+    );
+
+    std::fs::write(dir.join("c.lotml"), "import py.nowhere\n").unwrap();
+    std::fs::remove_file(dir.join("lotml.lock")).unwrap();
+    let out = lotml(&["bind", "--lock"], &dir);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("py.nowhere"), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(!dir.join("lotml.lock").exists(), "nothing written");
+}
+
+#[test]
+fn check_warns_at_an_import_whose_stub_differs_from_the_lock_and_binds_it_all_the_same() {
+    let program = "from py.textwrap import dedent\n\nfn f() -> str ! PyError:\n    return dedent(\"  x\")?\n";
+    let dir = scratch("lock-differs", &[(".git", ""), ("main.lotml", program)]);
+    assert!(lotml(&["bind", "--lock"], &dir).status.success());
+    let checked = lotml(&["check", "main.lotml"], &dir);
+    assert!(checked.status.success() && !stdout(&checked).contains("E0225"), "{}", stdout(&checked));
+    let lock = std::fs::read_to_string(dir.join("lotml.lock")).unwrap();
+    let other: String = lock
+        .lines()
+        .map(|line| {
+            if line.starts_with("stub = ") {
+                format!("stub = \"sha256:{}\"\n", "0".repeat(64))
+            } else {
+                format!("{line}\n")
+            }
+        })
+        .collect();
+    assert_ne!(other, lock);
+    std::fs::write(dir.join("lotml.lock"), other).unwrap();
+    let checked = lotml(&["check", "main.lotml"], &dir);
+    assert!(checked.status.success(), "a warning stops nothing: {}", stdout(&checked));
+    assert!(stdout(&checked).contains("E0225"), "{}", stdout(&checked));
+}
+
+#[test]
+fn check_locked_fails_on_a_missing_lock_an_unrecorded_import_and_a_differing_stub() {
+    let program = "from py.textwrap import dedent\n\nfn f() -> str ! PyError:\n    return dedent(\"  x\")?\n";
+    let dir = scratch("check-locked", &[(".git", ""), ("main.lotml", program)]);
+    let locked = |dir: &Path| {
+        let out = lotml(&["check", "--locked", "main.lotml"], dir);
+        (out.status.code(), String::from_utf8_lossy(&out.stderr).into_owned())
+    };
+    let (code, said) = locked(&dir);
+    assert_eq!(code, Some(1));
+    assert!(said.contains("has no lotml.lock") && said.contains("lotml bind --lock"), "{said}");
+
+    assert!(lotml(&["bind", "--lock"], &dir).status.success());
+    assert_eq!(locked(&dir), (Some(0), String::new()), "the lock holds");
+
+    std::fs::write(dir.join("main.lotml"), format!("import py.shlex\n{program}")).unwrap();
+    let (code, said) = locked(&dir);
+    assert_eq!(code, Some(1));
+    assert!(said.contains("`py.shlex` is imported, and lotml.lock does not record it"), "{said}");
+
+    assert!(lotml(&["bind", "--lock"], &dir).status.success());
+    let lock = std::fs::read_to_string(dir.join("lotml.lock")).unwrap();
+    let wrong: String = lock
+        .lines()
+        .map(|l| {
+            if l.starts_with("stub = ") { format!("stub = \"sha256:{}\"\n", "0".repeat(64)) } else { format!("{l}\n") }
+        })
+        .collect();
+    std::fs::write(dir.join("lotml.lock"), wrong).unwrap();
+    let (code, said) = locked(&dir);
+    assert_eq!(code, Some(1));
+    assert!(said.contains("differs from the one lotml.lock records"), "{said}");
+}
+
 /// A Python module whose values no stub types: an object, a dataclass, and functions that change
 /// what they are given.
 const OBJS_PY: &str = "\
@@ -419,25 +581,46 @@ fn bind_refuses_a_device_s_name() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("not a Python module name"));
 }
 
-/// A project whose `.venv` holds `packages`, each path under its `site-packages`.
-fn project_with_packages(name: &str, packages: &[(&str, &str)]) -> PathBuf {
-    let (site, python) = if cfg!(windows) {
-        (".venv/Lib/site-packages", ".venv/Scripts/python.exe")
+/// The manifest and lock of a project whose dependencies are none but itself.
+const MANIFEST: &str = "[project]\nname = \"app\"\nversion = \"0.1.0\"\n";
+const LOCK: &str =
+    "version = 1\nrevision = 3\n\n[[package]]\nname = \"app\"\nversion = \"0.1.0\"\nsource = { virtual = \".\" }\n";
+
+/// Where a virtual environment keeps `site-packages` and its interpreter, under `prefix`.
+fn layout(prefix: &str) -> (String, String) {
+    if cfg!(windows) {
+        (format!("{prefix}/Lib/site-packages"), format!("{prefix}/Scripts/python.exe"))
     } else {
-        (".venv/lib/python3.14/site-packages", ".venv/bin/python")
-    };
-    let mut files =
-        vec![("pyproject.toml".to_string(), ""), (".venv/pyvenv.cfg".into(), "home = x\n"), (python.into(), "")];
+        (format!("{prefix}/lib/python3.14/site-packages"), format!("{prefix}/bin/python"))
+    }
+}
+
+/// A project holding a `uv.lock`, and beside it a cache in which `lotml run` has made that lock's
+/// environment, holding `packages`, each path under its `site-packages`, as `lotml run` leaves it.
+fn project_with_packages(name: &str, packages: &[(&str, &str)]) -> PathBuf {
+    let made = "cache/python-environments/0123456789abcdef0123456789abcdef";
+    let (site, python) = layout(&format!("{made}/environment"));
+    let mut files = vec![
+        ("project/.git".to_string(), ""),
+        ("project/pyproject.toml".into(), MANIFEST),
+        ("project/uv.lock".into(), LOCK),
+        (format!("{made}/project/pyproject.toml"), MANIFEST),
+        (format!("{made}/project/uv.lock"), LOCK),
+        (format!("{made}/lotml-complete"), ""),
+        (python, ""),
+    ];
     files.extend(packages.iter().map(|(path, text)| (format!("{site}/{path}"), *text)));
     let files: Vec<(&str, &str)> = files.iter().map(|(path, text)| (path.as_str(), *text)).collect();
     scratch(name, &files)
 }
 
-/// `lotml bind <module>` in `dir`, blind to the virtual environment of the shell running the suite.
-fn bind_in(dir: &Path, module: &str) -> Output {
+/// `lotml bind <module>` in `base`'s project, with `base`'s cache, blind to the virtual
+/// environment of the shell running the suite.
+fn bind_in(base: &Path, module: &str) -> Output {
     Command::new(env!("CARGO_BIN_EXE_lotml"))
         .args(["bind", module])
-        .current_dir(dir)
+        .current_dir(base.join("project"))
+        .env("LOTML_CACHE_DIR", base.join("cache"))
         .env_remove("VIRTUAL_ENV")
         .output()
         .expect("the binary runs")
@@ -456,13 +639,13 @@ fn bind_reads_a_package_s_stub_then_its_annotated_source_never_importing_it() {
     );
     let out = bind_in(&dir, "greet");
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    let greet = std::fs::read_to_string(dir.join("bindings").join("py.greet.lotmli")).unwrap();
+    let greet = std::fs::read_to_string(dir.join("project").join("bindings").join("py.greet.lotmli")).unwrap();
     assert!(greet.contains("fn hello(name: str) -> str ! PyError\n"), "{greet}");
     assert!(greet.contains("from greet-stubs/__init__.pyi, the stub-only package `greet-stubs`"), "{greet}");
 
     let out = bind_in(&dir, "py.calc");
     assert!(out.status.success(), "the module is read, never run: {}", String::from_utf8_lossy(&out.stderr));
-    let calc = std::fs::read_to_string(dir.join("bindings").join("py.calc.lotmli")).unwrap();
+    let calc = std::fs::read_to_string(dir.join("project").join("bindings").join("py.calc.lotmli")).unwrap();
     assert!(calc.contains("fn add(a: int, b: int = 2) -> int ! PyError\n"), "{calc}");
     assert!(calc.contains("calc/__init__.py, the package `calc`'s own annotated source (it ships py.typed)"), "{calc}");
 }
@@ -473,8 +656,47 @@ fn bind_says_where_it_looked_when_no_source_has_the_module() {
     let out = bind_in(&dir, "loose");
     assert_eq!(out.status.code(), Some(2));
     let said = String::from_utf8_lossy(&out.stderr);
-    assert!(said.contains("typeshed has none") && said.contains(".venv") && said.contains("--stub"), "{said}");
-    assert!(!dir.join("bindings").exists());
+    assert!(said.contains("typeshed has none") && said.contains("uv.lock") && said.contains("--stub"), "{said}");
+    assert!(!dir.join("project").join("bindings").exists());
+}
+
+#[test]
+fn bind_never_reads_the_project_s_virtual_environment() {
+    let (site, python) = layout(".venv");
+    let stub = format!("{site}/greet-stubs/__init__.pyi");
+    let dir = scratch(
+        "bind-venv",
+        &[
+            ("project/.git", ""),
+            ("project/.venv/pyvenv.cfg", "home = x\n"),
+            (&format!("project/{python}"), ""),
+            (&format!("project/{stub}"), "def hello(name: str) -> str: ...\n"),
+        ],
+    );
+    let venv = dir.join("project").join(".venv");
+    let out = Command::new(env!("CARGO_BIN_EXE_lotml"))
+        .args(["bind", "greet"])
+        .current_dir(dir.join("project"))
+        .env("LOTML_CACHE_DIR", dir.join("cache"))
+        .env("VIRTUAL_ENV", &venv)
+        .output()
+        .expect("the binary runs");
+    assert_eq!(out.status.code(), Some(2), "neither VIRTUAL_ENV nor .venv is a root");
+    let said = String::from_utf8_lossy(&out.stderr);
+    assert!(said.contains("no uv.lock"), "{said}");
+    assert!(!dir.join("project").join("bindings").exists());
+}
+
+#[test]
+fn bind_with_a_lock_whose_environment_is_not_made_says_how_to_make_it() {
+    let dir = scratch(
+        "bind-unmade",
+        &[("project/.git", ""), ("project/pyproject.toml", MANIFEST), ("project/uv.lock", LOCK)],
+    );
+    let out = bind_in(&dir, "greet");
+    assert_eq!(out.status.code(), Some(2));
+    let said = String::from_utf8_lossy(&out.stderr);
+    assert!(said.contains("no environment made yet") && said.contains("lotml run"), "{said}");
 }
 
 /// `lotml bind <args>` in `dir` with no Python to be found: none named, none on the path.

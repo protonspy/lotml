@@ -11,9 +11,11 @@ mod files;
 mod guide;
 mod index;
 mod init;
+mod lockfile;
 mod lsp;
 mod mcp;
 mod rpc;
+mod stubs;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -52,6 +54,10 @@ enum Command {
         /// Treat each file as a prefix still being written: completable, error, or unknown.
         #[arg(long)]
         prefix: bool,
+        /// Fail when lotml.lock is missing, lacks a module a program imports, or names a stub that
+        /// differs from the one found: for CI.
+        #[arg(long)]
+        locked: bool,
     },
     /// Explain an error code: `lotml explain E0204`.
     Explain {
@@ -132,14 +138,19 @@ enum Command {
     /// Write the interface LotML imports a Python module through, `py.<module>`, from its stub.
     Bind {
         /// The Python module: `textwrap`, `os.path`, with its `py.` or without.
-        module: String,
+        #[arg(required_unless_present = "lock")]
+        module: Option<String>,
         /// The stub to read; when absent, typeshed's for the standard library, which lotml carries,
-        /// else the project's packages'.
+        /// else the packages' of the environment made from the project's uv.lock.
         #[arg(long)]
         stub: Option<PathBuf>,
         /// Where to write `py.<module>.lotmli`.
         #[arg(long, default_value = "bindings")]
         out: PathBuf,
+        /// Write `lotml.lock` at the project's root instead: what each `py.` module the project's
+        /// programs import is bound from on import.
+        #[arg(long, conflicts_with_all = ["module", "stub"])]
+        lock: bool,
     },
     /// Set a project up for coding agents: AGENTS.md, the guide, and the MCP server in each harness.
     Init {
@@ -254,9 +265,9 @@ fn main() -> ExitCode {
 fn run() -> ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
-        Command::Check { paths, format, json, all, fix, since, prefix } => {
+        Command::Check { paths, format, json, all, fix, since, prefix, locked } => {
             let format = if json { Format::Json } else { format };
-            check::run(&check::Options { paths, format, all, fix, since, prefix })
+            check::run(&check::Options { paths, format, all, fix, since, prefix, locked })
         }
         Command::Explain { code } => explain(&code),
         Command::Fmt { paths, check } => fmt(&paths, check),
@@ -271,7 +282,10 @@ fn run() -> ExitCode {
         Command::Test { paths, json, target, offline } => {
             return status(exec::test(&paths, json, target, exec::offline(offline)));
         }
-        Command::Bind { module, stub, out } => exec::bind(&module, stub.as_deref(), &out),
+        Command::Bind { lock: true, .. } => exec::lock(),
+        Command::Bind { module, stub, out, .. } => {
+            exec::bind(module.as_deref().unwrap_or_default(), stub.as_deref(), &out)
+        }
         Command::Init { dir, harness, yes } => return status(init::run(&dir, harness.as_deref(), yes)),
         Command::Lsp => return status(lsp::serve()),
         Command::Mcp { root } => return status(mcp::serve(&root)),

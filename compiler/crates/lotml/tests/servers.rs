@@ -243,6 +243,51 @@ fn the_language_server_refuses_requests_before_initialize() {
     assert_eq!(lsp.child.wait().unwrap().code(), Some(1), "an exit without shutdown");
 }
 
+#[test]
+fn the_language_server_binds_a_python_module_on_import_and_on_an_edit_that_imports_one() {
+    let dir = scratch("lsp-bind-on-import", &[(".git", "")]);
+    let file = uri(&dir.join("main.lotml"));
+    let text = "from py.textwrap import dedent\n\nfn f() -> str ! PyError:\n    return dedent(\"  x\")?\n";
+    let mut lsp = Client::start(&["lsp"], true);
+    lsp.request(1, "initialize", json!({"rootUri": uri(&dir), "capabilities": {}}));
+    lsp.notify("initialized", json!({}));
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({"textDocument": {"uri": file, "languageId": "lotml", "version": 1, "text": text}}),
+    );
+    let edited = format!("{text}\nfn g() -> str ! PyError:\n    return py.shlex.quote(\"a b\")?\n").replacen(
+        "from py.textwrap import dedent\n",
+        "from py.textwrap import dedent\nimport py.shlex\n",
+        1,
+    );
+    lsp.notify(
+        "textDocument/didChange",
+        json!({"textDocument": {"uri": file, "version": 2}, "contentChanges": [{"text": edited}]}),
+    );
+    let (_, published) = lsp.request(2, "textDocument/documentSymbol", json!({"textDocument": {"uri": file}}));
+    let reports: Vec<&Value> = published.iter().filter(|m| m["method"] == "textDocument/publishDiagnostics").collect();
+    assert!(reports.len() >= 2, "{published:?}");
+    for report in reports {
+        assert_eq!(report["params"]["diagnostics"], json!([]), "{report}");
+    }
+    assert!(!dir.join("bindings").exists());
+}
+
+#[test]
+fn the_mcp_server_binds_a_python_module_on_import() {
+    let text = "from py.textwrap import dedent\n\nfn f() -> str ! PyError:\n    return dedent(\"  x\")?\n";
+    let dir = scratch("mcp-bind-on-import", &[(".git", ""), ("main.lotml", text)]);
+    let mut mcp = Client::start(&["mcp", "--root", dir.to_str().unwrap()], false);
+    mcp.request(
+        1,
+        "initialize",
+        json!({"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}),
+    );
+    mcp.notify("notifications/initialized", json!({}));
+    let (said, failed) = call(&mut mcp, 2, "check", json!({}));
+    assert!(!failed && !said.contains("E0"), "{said}");
+}
+
 fn call(mcp: &mut Client, id: u64, tool: &str, arguments: Value) -> (String, bool) {
     let (reply, _) = mcp.request(id, "tools/call", json!({"name": tool, "arguments": arguments}));
     let result = &reply["result"];

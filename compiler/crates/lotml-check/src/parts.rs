@@ -99,7 +99,7 @@ pub struct Declarations {
 
 /// The declarations of a module that may import the Python modules in `interfaces`.
 pub fn declarations(module: &Module, interfaces: &Interfaces) -> Declarations {
-    Declarations { program: Program::collect(module, &interface::functions(interfaces)) }
+    Declarations { program: Program::collect(module, &interface::functions(interfaces), &interface::marks(interfaces)) }
 }
 
 impl Declarations {

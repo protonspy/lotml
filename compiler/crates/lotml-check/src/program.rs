@@ -88,6 +88,8 @@ pub struct Program {
     pub available: HashMap<String, BTreeMap<String, FnSig>>,
     /// The Python modules imported, with their functions.
     pub foreign: BTreeMap<String, BTreeMap<String, FnSig>>,
+    /// The Python modules whose interface the compiler marked, with the mark.
+    pub marks: HashMap<String, crate::interface::Mark>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -95,9 +97,14 @@ pub const MODULES: &[&str] = &["math"];
 
 impl Program {
     /// What a module declares, with the Python modules it may import through `interfaces`.
-    pub fn collect(module: &ast::Module, interfaces: &HashMap<String, BTreeMap<String, FnSig>>) -> Program {
+    pub fn collect(
+        module: &ast::Module,
+        interfaces: &HashMap<String, BTreeMap<String, FnSig>>,
+        marks: &HashMap<String, crate::interface::Mark>,
+    ) -> Program {
         let mut program = Program::with_prelude();
         program.available = interfaces.clone();
+        program.marks = marks.clone();
         let mut seen: HashMap<String, Span> = HashMap::new();
         let mut declare = |program: &mut Program, name: &ast::Ident| {
             if name.name.is_empty() {
@@ -231,6 +238,27 @@ impl Program {
         let python = path.strip_prefix("py.").filter(|m| !m.is_empty());
         let foreign = python.is_some() || crate::interface::is_c_library(&path);
         if foreign && let Some(functions) = self.available.get(&path).cloned() {
+            if let Some(module) = python {
+                match self.marks.get(&path) {
+                    Some(crate::interface::Mark::Shadows) => self.diagnostics.push(
+                        Diagnostic::warning(
+                            "E0224",
+                            span,
+                            format!("bindings/py.{module}.lotmli shadows the interface lotml generates from the module's stub"),
+                        )
+                        .note("delete the file to use the generated interface, or keep it to type the module by hand"),
+                    ),
+                    Some(crate::interface::Mark::Unlocked) => self.diagnostics.push(
+                        Diagnostic::warning(
+                            "E0225",
+                            span,
+                            format!("the stub of `{module}` differs from the one lotml.lock records"),
+                        )
+                        .note("the interface is bound from the stub found; `lotml bind --lock` records it"),
+                    ),
+                    _ => {}
+                }
+            }
             self.import_python(import, &path, functions);
             return;
         }
@@ -238,7 +266,9 @@ impl Program {
             self.diagnostics.push(
                 Diagnostic::error("E0216", span, format!("there is no interface of the Python module `{module}`"))
                     .alternatives(self.available.keys().filter(|k| k.starts_with("py.")).cloned())
-                    .note(format!("`lotml bind {module}` writes it: bindings/py.{module}.lotmli")),
+                    .note(format!(
+                        "no stub bound it on import; `lotml bind {module}` tells why, and writes bindings/py.{module}.lotmli when it can"
+                    )),
             );
             return;
         }
@@ -260,14 +290,14 @@ impl Program {
             let mut d = Diagnostic::error("E0216", span, format!("there is no module `{path}` to import from"))
                 .alternatives(known)
                 .note("the common names are in the prelude and need no import")
-                .note(format!(
-                    "a Python module is imported as `py.{path}`, its interface written by `lotml bind {path}`"
-                ));
+                .note(format!("a Python module is imported as `py.{path}`, its interface generated on import"));
             let origin = format!("py.{path}");
-            if self.available.contains_key(&origin) {
+            let own_syntax =
+                matches!(path.as_str(), "typing" | "__future__" | "dataclasses" | "enum" | "collections.abc");
+            if self.available.contains_key(&origin) && !own_syntax {
                 d = d.fix(format!("write `{origin}`"), Applicability::MachineApplicable, vec![(span, origin)]);
             }
-            if matches!(path.as_str(), "typing" | "__future__" | "dataclasses" | "enum" | "collections.abc") {
+            if own_syntax {
                 d = d.fix(
                     "remove the import: lotml writes these in its own syntax",
                     Applicability::MachineApplicable,

@@ -19,7 +19,7 @@ import knows which rules its calls follow, `T ! PyError` for Python, before read
 
 - **R1.1** When a program writes `import py.<module>` and an interface of `py.<module>` is available, the checker shall bring the module into scope as `py.<module>`, each function of the interface called as `py.<module>.<function>` and returning `T ! PyError`.
 - **R1.2** When a program writes `from py.<module> import <name>` and the interface of `py.<module>` declares `<name>`, the checker shall bring `<name>` into scope as that function.
-- **R1.3** The interface of `py.<module>` shall be the file `bindings/py.<module>.lotmli`, and `lotml bind <module>` shall write it there.
+- **R1.3** The interface of `py.<module>` shall be the file `bindings/py.<module>.lotmli` where one applies, else the one the compiler generates on import (specs/bind-on-import/), and `lotml bind <module>` shall write it there.
 - **R1.4** When a program importing `py.<module>` runs on the Python target, the compiled program shall call the functions of CPython's module `<module>`.
 
 ## R2 · A bare import

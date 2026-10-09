@@ -132,7 +132,8 @@ impl Server {
                 self.workspace.set(&path, text);
                 self.modified.insert(path.clone(), stamp);
             }
-            self.workspace.set_interfaces(&path, interfaces.get(&path));
+            let text = self.workspace.text(&path).unwrap_or_default().to_string();
+            self.workspace.set_interfaces(&path, interfaces.get(&path, &text));
         }
     }
 
@@ -281,13 +282,14 @@ impl Server {
             return Some("edit-fails-check");
         };
         let text = self.workspace.text(&path).unwrap_or_default().to_string();
-        let interfaces: lotml_check::Interfaces = files::interfaces_for(&path)
-            .into_iter()
-            .map(|b| (b.module.clone(), lotml_check::interface_of(&b.module, &b.text).0))
-            .collect();
+        let interfaces: lotml_check::Interfaces =
+            files::interfaces_for(&path, &text).into_iter().map(|b| (b.module.clone(), b.read())).collect();
         let clean =
             |new: &str| lotml_check::check_source_with(new, &interfaces).iter().all(|d| d.severity != Severity::Error);
-        let binds = self.workspace.paths().any(|p| !files::interfaces_for(p).is_empty());
+        let binds = self
+            .workspace
+            .paths()
+            .any(|p| !files::interfaces_for(p, self.workspace.text(p).unwrap_or_default()).is_empty());
         let run = |new: &str| self.candidate_passes(&path, new, state, deadline);
         let failing =
             state.failing.as_ref().map(|_| (config.run_candidates && !binds, &run as &dyn Fn(&str) -> Option<bool>));

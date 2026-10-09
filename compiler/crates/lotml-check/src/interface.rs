@@ -15,11 +15,51 @@ use crate::ty::Ty;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Interface {
     pub(crate) functions: BTreeMap<String, FnSig>,
+    /// What the compiler said of it on its first line, for the checker to warn at the import.
+    pub(crate) mark: Mark,
+}
+
+/// What the compiler says of an interface on its first line (specs/bind-on-import/ R1.6, R2.2).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Mark {
+    #[default]
+    None,
+    /// A bindings file, given where the module's stub would generate an interface ([`shadowing`]).
+    Shadows,
+    /// Generated from a stub that differs from the one `lotml.lock` records ([`unlocked`]).
+    Unlocked,
 }
 
 impl Interface {
     pub fn names(&self) -> impl Iterator<Item = &str> {
         self.functions.keys().map(String::as_str)
+    }
+}
+
+/// The first line the compiler puts before a bindings file's text when the module's stub would
+/// give an interface of its own (specs/bind-on-import/ R1.6).
+const SHADOWS: &str = "# This file shadows the interface lotml generates from the module's stub.";
+
+/// `text`, a bindings file's, marked as shadowing the interface the compiler would generate.
+pub fn shadowing(text: &str) -> String {
+    format!("{SHADOWS}\n{text}")
+}
+
+/// The first line the compiler puts before an interface generated from a stub that differs from
+/// the one `lotml.lock` records.
+const UNLOCKED: &str = "# The module's stub differs from the one lotml.lock records.";
+
+/// `text`, a generated interface's, marked as bound from a stub the lock does not record.
+pub fn unlocked(text: &str) -> String {
+    format!("{UNLOCKED}\n{text}")
+}
+
+/// The mark on `text`'s first line.
+fn mark_of(text: &str) -> Mark {
+    match text.lines().next() {
+        Some(SHADOWS) => Mark::Shadows,
+        Some(UNLOCKED) => Mark::Unlocked,
+        _ => Mark::None,
     }
 }
 
@@ -115,7 +155,7 @@ pub fn c_interface(text: &str) -> (Interface, Vec<Diagnostic>) {
     }
     diagnostics.append(&mut program.diagnostics);
     diagnostics.sort_by_key(|d| d.span.start);
-    (Interface { functions }, diagnostics)
+    (Interface { functions, mark: Mark::None }, diagnostics)
 }
 
 /// Read an interface: the functions it declares, and what is wrong with it. A function that
@@ -176,7 +216,12 @@ pub fn interface(text: &str) -> (Interface, Vec<Diagnostic>) {
     }
     diagnostics.append(&mut program.diagnostics);
     diagnostics.sort_by_key(|d| d.span.start);
-    (Interface { functions }, diagnostics)
+    (Interface { functions, mark: mark_of(text) }, diagnostics)
+}
+
+/// The modules whose interface carries a mark, with it.
+pub(crate) fn marks(interfaces: &Interfaces) -> HashMap<String, Mark> {
+    interfaces.iter().filter(|(_, i)| i.mark != Mark::None).map(|(module, i)| (module.clone(), i.mark)).collect()
 }
 
 /// The functions of each interface, as the checker keeps them.

@@ -190,12 +190,18 @@ impl Server {
             "textDocument/didChange" => {
                 let Some(path) = params["textDocument"]["uri"].as_str().and_then(path_of) else { return Vec::new() };
                 let mut text = self.workspace.text(&path).unwrap_or_default().to_string();
+                let imported = files::interface_names(&text);
                 for change in params["contentChanges"].as_array().into_iter().flatten() {
                     let Some(new) = change["text"].as_str() else { continue };
                     match self.span_in(&text, &change["range"]) {
                         Some(span) => text.replace_range(span.range(), new),
                         None => text = new.to_string(),
                     }
+                }
+                // An edit that changes what the file imports from Python binds what it now imports.
+                if files::interface_names(&text) != imported {
+                    let found = files::InterfaceCache::default().get(&path, &text);
+                    self.workspace.set_interfaces(&path, found);
                 }
                 self.workspace.set(&path, text);
                 vec![self.publish(&path)]
@@ -225,7 +231,8 @@ impl Server {
                     let mut cache = files::InterfaceCache::default();
                     let paths: Vec<PathBuf> = self.workspace.paths().map(Path::to_path_buf).collect();
                     for path in paths {
-                        if self.workspace.set_interfaces(&path, cache.get(&path)) {
+                        let text = self.workspace.text(&path).unwrap_or_default().to_string();
+                        if self.workspace.set_interfaces(&path, cache.get(&path, &text)) {
                             out.push(self.publish(&path));
                         }
                     }
@@ -284,8 +291,9 @@ impl Server {
 
     /// Give the workspace a file's text and the interfaces of the Python modules it may import.
     fn store(&mut self, path: &Path, text: String, interfaces: &mut files::InterfaceCache) {
+        let found = interfaces.get(path, &text);
         self.workspace.set(path, text);
-        self.workspace.set_interfaces(path, interfaces.get(path));
+        self.workspace.set_interfaces(path, found);
     }
 
     /// The path a URI names, remembering how the client spelled it.
