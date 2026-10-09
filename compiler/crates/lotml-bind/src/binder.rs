@@ -151,6 +151,10 @@ pub fn package_of(module: &str, path: &str) -> String {
 /// The most modules a re-exported name is followed through, the stub's own first.
 pub const REEXPORT_DEPTH: usize = 4;
 
+/// The most modules a stub and those it re-exports from may name to re-export from, each a look
+/// for a file, so a stub cannot make binding it search thousands.
+pub const REEXPORT_MODULES: usize = 256;
+
 /// The stubs a stub of `package` re-exports from, through theirs, breadth first: each module asked
 /// of `read` once (its text and its package, or nothing when it has no stub), none further than
 /// [`REEXPORT_DEPTH`] from the stub, and all of them within [`LARGEST`] and the stub's limits.
@@ -172,6 +176,9 @@ pub fn sources(
             }
         }
         while let Some((module, depth)) = queue.pop_front() {
+            if asked.len() > REEXPORT_MODULES {
+                return Err(Refused(format!("it re-exports from more than {REEXPORT_MODULES} modules")));
+            }
             let Some((text, of)) = read(&module) else { continue };
             total += text.len();
             if total > LARGEST {
@@ -203,7 +210,7 @@ struct Reexport {
 /// The re-exporting imports of a stub of `package`: `from m import n as n`, a name its `__all__`
 /// lists, and `from m import *`. An import of a module itself (`from . import m`) is not one.
 fn reexports(body: &[Stmt], package: &str) -> Vec<Reexport> {
-    let listed = all_names(body);
+    let listed: HashSet<String> = all_names(body).unwrap_or_default().into_iter().collect();
     let mut found = Vec::new();
     for statement in module_level(body) {
         let Stmt::ImportFrom(import) = statement else { continue };
@@ -217,8 +224,8 @@ fn reexports(body: &[Stmt], package: &str) -> Vec<Reexport> {
             .iter()
             .filter_map(|alias| {
                 let given = alias.asname.as_ref().unwrap_or(&alias.name).as_str();
-                let exported = alias.asname.as_ref().is_some_and(|a| a.as_str() == alias.name.as_str())
-                    || listed.as_ref().is_some_and(|all| all.iter().any(|n| n == given));
+                let exported =
+                    alias.asname.as_ref().is_some_and(|a| a.as_str() == alias.name.as_str()) || listed.contains(given);
                 exported.then(|| (alias.name.to_string(), given.to_string()))
             })
             .collect();
@@ -246,7 +253,8 @@ fn absolute(package: &str, level: u32, module: Option<&str>) -> Option<String> {
     Some(format!("{}.{module}", base.join(".")))
 }
 
-/// The names a stub's `__all__` lists, `__all__ = [...]` and `__all__ += [...]` added, if it has one.
+/// The names a stub's `__all__` lists, `__all__ = [...]` and `__all__ += [...]` added, if it has
+/// one: identifiers only, since a name it lists may be written into the interface.
 fn all_names(body: &[Stmt]) -> Option<Vec<String>> {
     let mut names: Option<Vec<String>> = None;
     let strings = |value: &Expr| -> Vec<String> {
@@ -255,7 +263,11 @@ fn all_names(body: &[Stmt]) -> Option<Vec<String>> {
             Expr::Tuple(tuple) => &tuple.elts,
             _ => &[],
         };
-        items.iter().filter_map(|e| e.as_string_literal_expr().map(|s| s.value.to_str().to_string())).collect()
+        items
+            .iter()
+            .filter_map(|e| e.as_string_literal_expr().map(|s| s.value.to_str().to_string()))
+            .filter(|name| identifier(name))
+            .collect()
     };
     for statement in module_level(body) {
         match statement {
@@ -272,47 +284,72 @@ fn all_names(body: &[Stmt]) -> Option<Vec<String>> {
     names
 }
 
-/// The public names of a stub: its `__all__`, else each module-level `def`, `class` and
-/// assignment not starting with `_`.
-fn public(body: &[Stmt]) -> Vec<String> {
-    if let Some(listed) = all_names(body) {
-        return listed;
-    }
-    let mut names: Vec<String> = Vec::new();
+/// Whether `name` is a Python identifier: a letter or `_`, then letters, digits and `_`.
+fn identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars.next().is_some_and(|c| c.is_alphabetic() || c == '_') && chars.all(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// A stub read once for its re-exports (specs/python-reexports): the statements defining each
+/// name, its public names, and what it re-exports by name and by `*`, so a name is looked up in it
+/// without reading it again.
+struct Indexed<'s> {
+    defs: HashMap<&'s str, Vec<&'s Stmt>>,
+    /// Its `__all__`, else each module-level `def` and `class` not starting with `_`, in order.
+    public: Vec<String>,
+    exported: HashSet<String>,
+    /// Each name it re-exports, the first import of it winning: the module and the name there.
+    named: HashMap<String, (String, String)>,
+    /// The modules it re-exports `*` from.
+    stars: Vec<String>,
+    reexports: Vec<Reexport>,
+}
+
+fn indexed<'s>(body: &'s [Stmt], package: &str) -> Indexed<'s> {
+    let mut defs: HashMap<&str, Vec<&Stmt>> = HashMap::new();
+    let mut defined = Vec::new();
     for statement in module_level(body) {
         let name = match statement {
             Stmt::FunctionDef(f) => f.name.as_str(),
             Stmt::ClassDef(c) => c.name.as_str(),
             _ => continue,
         };
-        if !name.starts_with('_') && !names.iter().any(|n| n == name) {
-            names.push(name.to_string());
+        let entry = defs.entry(name).or_default();
+        if entry.is_empty() && !name.starts_with('_') {
+            defined.push(name.to_string());
+        }
+        entry.push(statement);
+    }
+    let public = all_names(body).unwrap_or(defined);
+    let exported = public.iter().cloned().collect();
+    let reexports = reexports(body, package);
+    let mut named = HashMap::new();
+    let mut stars = Vec::new();
+    for re in &reexports {
+        match &re.names {
+            Some(names) => {
+                for (had, given) in names {
+                    named.entry(given.clone()).or_insert_with(|| (re.from.clone(), had.clone()));
+                }
+            }
+            None => stars.push(re.from.clone()),
         }
     }
-    names
+    Indexed { defs, public, exported, named, stars, reexports }
 }
 
 /// The statements a stub's re-exports bring, each name's definitions in the module that makes it,
 /// renamed as the stub gives it, and a comment for each name it does not find; a name the stub
 /// defines itself keeps its own.
-fn reexported(body: &[Stmt], package: &str, parts: &HashMap<&str, (&[Stmt], &str)>) -> (Vec<Stmt>, Vec<String>) {
-    let own: HashSet<&str> = module_level(body)
-        .into_iter()
-        .filter_map(|s| match s {
-            Stmt::FunctionDef(f) => Some(f.name.as_str()),
-            Stmt::ClassDef(c) => Some(c.name.as_str()),
-            _ => None,
-        })
-        .collect();
+fn reexported(own: &Indexed<'_>, parts: &HashMap<&str, Indexed<'_>>) -> (Vec<Stmt>, Vec<String>) {
     let mut brought = Vec::new();
     let mut skipped = Vec::new();
     let mut given = HashSet::new();
-    let mut followed = HashSet::new();
-    for re in reexports(body, package) {
-        let names = match re.names {
-            Some(names) => names,
+    for re in &own.reexports {
+        let names: Vec<(String, String)> = match &re.names {
+            Some(names) => names.clone(),
             None => match parts.get(re.from.as_str()) {
-                Some((source, _)) => public(source).into_iter().map(|n| (n.clone(), n)).collect(),
+                Some(source) => source.public.iter().map(|n| (n.clone(), n.clone())).collect(),
                 None => {
                     skipped.push(format!("#   *: `{}`, which it re-exports from, has no stub lotml found", re.from));
                     continue;
@@ -320,11 +357,13 @@ fn reexported(body: &[Stmt], package: &str, parts: &HashMap<&str, (&[Stmt], &str
             },
         };
         for (name, local) in names {
-            if local.starts_with('_') || own.contains(local.as_str()) || !given.insert(local.clone()) {
+            if local.starts_with('_') || own.defs.contains_key(local.as_str()) || !given.insert(local.clone()) {
                 continue;
             }
-            match defined(parts, &re.from, &name, 1, &mut followed) {
-                Ok(statements) => brought.extend(statements.into_iter().map(|s| renamed(s, &local))),
+            // Each name is followed on its own, so one definition re-exported under two names
+            // gives both.
+            match defined(parts, &re.from, &name, 1, &mut HashSet::new()) {
+                Ok(statements) => brought.extend(statements.into_iter().map(|s| renamed(s.clone(), &local))),
                 Err(why) => skipped.push(format!("#   {local}: {why}")),
             }
         }
@@ -333,46 +372,33 @@ fn reexported(body: &[Stmt], package: &str, parts: &HashMap<&str, (&[Stmt], &str
 }
 
 /// The module-level statements that define `name` in `module`, or, where `module` re-exports it,
-/// those of the module it comes from, followed through at most [`REEXPORT_DEPTH`] modules and each
-/// (module, name) once.
-fn defined(
-    parts: &HashMap<&str, (&[Stmt], &str)>,
+/// those of the module it comes from, followed through at most [`REEXPORT_DEPTH`] modules, a
+/// cycle ending where it repeats.
+fn defined<'s>(
+    parts: &HashMap<&str, Indexed<'s>>,
     module: &str,
     name: &str,
     depth: usize,
     followed: &mut HashSet<(String, String)>,
-) -> Result<Vec<Stmt>, String> {
+) -> Result<Vec<&'s Stmt>, String> {
     if !followed.insert((module.to_string(), name.to_string())) {
         return Ok(Vec::new());
     }
-    let Some((body, package)) = parts.get(module) else {
+    let Some(part) = parts.get(module) else {
         return Err(format!("`{module}`, which it re-exports from, has no stub lotml found"));
     };
-    let found: Vec<Stmt> = module_level(body)
-        .into_iter()
-        .filter(|s| match s {
-            Stmt::FunctionDef(f) => f.name.as_str() == name,
-            Stmt::ClassDef(c) => c.name.as_str() == name,
-            _ => false,
-        })
-        .cloned()
-        .collect();
-    if !found.is_empty() {
-        return Ok(found);
+    if let Some(found) = part.defs.get(name) {
+        return Ok(found.clone());
     }
     if depth >= REEXPORT_DEPTH {
         return Err(format!("it is re-exported through more than {REEXPORT_DEPTH} modules"));
     }
-    for re in reexports(body, package) {
-        let source = match &re.names {
-            Some(names) => names.iter().find(|(_, given)| given == name).map(|(had, _)| had.clone()),
-            None => parts
-                .get(re.from.as_str())
-                .and_then(|(b, _)| public(b).contains(&name.to_string()).then(|| name.to_string())),
-        };
-        if let Some(source) = source {
-            return defined(parts, &re.from, &source, depth + 1, followed);
-        }
+    if let Some((from, had)) = part.named.get(name) {
+        return defined(parts, from, had, depth + 1, followed);
+    }
+    let star = part.stars.iter().find(|from| parts.get(from.as_str()).is_some_and(|p| p.exported.contains(name)));
+    if let Some(from) = star {
+        return defined(parts, from, name, depth + 1, followed);
     }
     Err(format!("`{module}` neither defines nor re-exports it"))
 }
@@ -440,14 +466,12 @@ fn bind(module: &str, stub: &str, said: &str, parts: Option<&Parts>) -> Result<S
         .iter()
         .map(|p| (p, ruff_python_parser::parse_unchecked_source(&p.text, PySourceType::Stub)))
         .collect();
-    let index: HashMap<&str, (&[Stmt], &str)> = read
-        .iter()
-        .map(|(p, parsed)| (p.module.as_str(), (parsed.syntax().body.as_slice(), p.package.as_str())))
-        .collect();
+    let index: HashMap<&str, Indexed<'_>> =
+        read.iter().map(|(p, parsed)| (p.module.as_str(), indexed(&parsed.syntax().body, &p.package))).collect();
     // Re-exports are bound only where their stubs were looked for: with none looked for, a stub's
     // imports are left as they were, rather than each listed as having no stub.
     let (brought, left_out) = match parts {
-        Some(parts) => reexported(own, &parts.package, &index),
+        Some(parts) => reexported(&indexed(own, &parts.package), &index),
         None => (Vec::new(), Vec::new()),
     };
     skipped.extend(left_out);
@@ -1991,6 +2015,46 @@ def pair(a: A, b: B) -> A: ...
             panic!("read past the limit")
         };
         assert!(why.contains("past the"), "{why}");
+    }
+
+    #[test]
+    fn many_names_looked_up_through_a_wide_star_import_take_time_linear_in_the_stubs() {
+        let wanted: Vec<String> = (0..40).map(|i| format!("n{i}")).collect();
+        let stub = format!(
+            "from .a import {}\n__all__ = [{}]\n",
+            wanted.join(", "),
+            wanted.iter().map(|n| format!("\"{n}\"")).collect::<Vec<_>>().join(", ")
+        );
+        let wide: String = (0..20_000).map(|i| format!("def d{i}() -> None: ...\n")).collect();
+        let files = [("p.a", "p", "from .b import *\n"), ("p.b", "p", wide.as_str())];
+        let started = std::time::Instant::now();
+        let text = reexporting("p", "p", &stub, &files);
+        assert!(started.elapsed().as_secs() < 5, "took {:?}", started.elapsed());
+        assert!(text.contains("#   n39: `p.a` neither defines nor re-exports it"), "{text}");
+    }
+
+    #[test]
+    fn a_name_all_lists_that_is_no_identifier_never_reaches_the_interface() {
+        let stub = "from .a import *\n";
+        let a = "__all__ = [\"q\\nfn evil() -> int ! PyError #\", \"ok\"]\ndef ok() -> int: ...\n";
+        let text = reexporting("p", "p", stub, &[("p.a", "p", a)]);
+        assert_eq!(fns(&text), ["fn ok() -> int ! PyError"], "{text}");
+        assert!(!text.contains("evil"), "{text}");
+    }
+
+    #[test]
+    fn one_definition_re_exported_under_two_names_gives_both() {
+        let stub = "from .x import f as a, f as b\n__all__ = [\"a\", \"b\"]\n";
+        let text = reexporting("p", "p", stub, &[("p.x", "p", "def f(n: int) -> int: ...\n")]);
+        assert_eq!(fns(&text), ["fn a(n: int) -> int ! PyError", "fn b(n: int) -> int ! PyError"], "{text}");
+    }
+
+    #[test]
+    fn a_stub_naming_more_modules_than_the_limit_to_re_export_from_is_refused() {
+        let stub: String = (0..=REEXPORT_MODULES).map(|i| format!("from m{i} import *\n")).collect();
+        let mut read = |_: &str| Some((String::new(), String::new()));
+        let Err(Refused(why)) = sources("", &stub, &mut read) else { panic!("read past the limit") };
+        assert!(why.contains("more than 256 modules"), "{why}");
     }
 
     #[test]

@@ -34,12 +34,13 @@ impl Stub {
         if self.parts.parts.is_empty() {
             return crate::lockfile::hash(&self.text);
         }
-        let mut all = self.text.clone();
-        for part in &self.parts.parts {
-            all.push('\0');
-            all.push_str(&part.module);
-            all.push('\0');
-            all.push_str(&part.text);
+        // Each field after its length, so no text can pass for another split of the same bytes.
+        let mut all = String::new();
+        for field in
+            std::iter::once(&self.text).chain(self.parts.parts.iter().flat_map(|p| [&p.module, &p.package, &p.text]))
+        {
+            all.push_str(&format!("{}:", field.len()));
+            all.push_str(field);
         }
         crate::lockfile::hash(&all)
     }
@@ -172,23 +173,39 @@ pub fn environment(project: Option<&Path>) -> Result<Environment, String> {
 /// asked for only when the module is none of the standard library's.
 pub fn find(module: &str, environment: impl FnOnce() -> Result<Environment, String> + Send) -> Result<Stub, String> {
     // The environment is made once, for the stub and for each it re-exports from.
-    let asked = std::sync::Mutex::new(Some(environment));
-    let made: std::sync::OnceLock<Result<Environment, String>> = std::sync::OnceLock::new();
-    let environment = || {
-        made.get_or_init(|| match asked.lock().ok().and_then(|mut asked| asked.take()) {
-            Some(environment) => environment(),
-            None => Err("the environment was not asked for".to_string()),
-        })
-        .clone()
-    };
+    let once = Once::new(environment);
+    let environment = || once.get();
     let (mut stub, package) = find_one(module, environment)?;
     let mut read = |part: &str| {
+        name(part).ok()?;
         let (found, package) = find_one(part, environment).ok()?;
         Some((found.text, package))
     };
     stub.parts = lotml_bind::binder::sources(&package, &stub.text, &mut read)
         .map_err(|lotml_bind::binder::Refused(why)| format!("cannot bind `{module}`: {why}"))?;
     Ok(stub)
+}
+
+/// An environment asked for at most once, for a stub and every stub it re-exports from, from
+/// whichever thread reads them.
+struct Once<F> {
+    asked: std::sync::Mutex<Option<F>>,
+    made: std::sync::OnceLock<Result<Environment, String>>,
+}
+
+impl<F: FnOnce() -> Result<Environment, String>> Once<F> {
+    fn new(environment: F) -> Once<F> {
+        Once { asked: std::sync::Mutex::new(Some(environment)), made: std::sync::OnceLock::new() }
+    }
+
+    fn get(&self) -> Result<Environment, String> {
+        self.made
+            .get_or_init(|| match self.asked.lock().ok().and_then(|mut asked| asked.take()) {
+                Some(environment) => environment(),
+                None => Err("the environment was not asked for".to_string()),
+            })
+            .clone()
+    }
 }
 
 /// The stub `lotml bind --stub <path>` is given for `module`, with the stubs it re-exports from: a
@@ -203,15 +220,8 @@ pub fn given(
     let file = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let package = lotml_bind::binder::package_of(module, &file);
     let beside = path.parent().map(Path::to_path_buf).unwrap_or_default();
-    let asked = std::sync::Mutex::new(Some(environment));
-    let made: std::sync::OnceLock<Result<Environment, String>> = std::sync::OnceLock::new();
-    let environment = || {
-        made.get_or_init(|| match asked.lock().ok().and_then(|mut asked| asked.take()) {
-            Some(environment) => environment(),
-            None => Err("the environment was not asked for".to_string()),
-        })
-        .clone()
-    };
+    let once = Once::new(environment);
+    let environment = || once.get();
     let mut read_part = |part: &str| {
         name(part).ok()?;
         if let Some(rest) = part.strip_prefix(&format!("{package}.")).filter(|_| !package.is_empty()) {
@@ -222,7 +232,12 @@ pub fn given(
                 rest.join("__init__.pyi"),
                 rest.join("__init__.py"),
             ];
-            let found = candidates.iter().map(|c| beside.join(c)).find(|c| c.is_file())?;
+            // Beside the stub and inside its directory: a link leading out of it is not followed.
+            let root = beside.canonicalize().ok()?;
+            let found = candidates
+                .iter()
+                .filter_map(|c| beside.join(c).canonicalize().ok())
+                .find(|c| c.starts_with(&root) && c.is_file())?;
             let text = read(&found).ok()?;
             return Some((text, lotml_bind::binder::package_of(part, &found.to_string_lossy())));
         }
