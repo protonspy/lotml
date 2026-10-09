@@ -138,6 +138,16 @@ pub struct Part {
     pub text: String,
 }
 
+/// The package a stub at `path` (a file name is enough) of `module` is of, which its relative
+/// imports are read against: the module itself for an `__init__`, else the module above it.
+pub fn package_of(module: &str, path: &str) -> String {
+    let file = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    if file.starts_with("__init__.") {
+        return module.to_string();
+    }
+    module.rsplit_once('.').map_or_else(String::new, |(above, _)| above.to_string())
+}
+
 /// The most modules a re-exported name is followed through, the stub's own first.
 pub const REEXPORT_DEPTH: usize = 4;
 

@@ -340,6 +340,14 @@ class sched_param:
     sched_priority: int
 
 # Not bound:
+#   altsep: `ntpath` neither defines nor re-exports it
+#   curdir: `posixpath` neither defines nor re-exports it
+#   defpath: `posixpath` neither defines nor re-exports it
+#   devnull: `posixpath` neither defines nor re-exports it
+#   extsep: `posixpath` neither defines nor re-exports it
+#   pardir: `posixpath` neither defines nor re-exports it
+#   pathsep: `posixpath` neither defines nor re-exports it
+#   sep: `posixpath` neither defines nor re-exports it
 #   PathLike: it is a protocol, a shape rather than a class
 #   fspath: overload 3 of 3: an earlier one takes the same parameters, so no call is given it
 #   fdopen: overload 4 of 7: an earlier one takes the same parameters, so no call is given it

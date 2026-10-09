@@ -110,7 +110,7 @@ pub fn verify(paths: &[PathBuf]) -> Vec<String> {
             };
             let module = name.strip_prefix("py.").unwrap_or(&name);
             match crate::stubs::find(module, || crate::stubs::environment(Some(&root))) {
-                Ok(stub) if hash(&stub.text) != entry.stub => {
+                Ok(stub) if stub.hash() != entry.stub => {
                     problems.push(format!("the stub of `{name}` differs from the one {NAME} records"));
                 }
                 Ok(_) => {}
@@ -136,7 +136,7 @@ pub fn entries(root: &Path) -> Result<Vec<Entry>, String> {
         let module = name.strip_prefix("py.").unwrap_or(&name);
         match crate::stubs::bound_with_stub(module, Some(root)) {
             Ok((stub, interface)) => {
-                entries.push(Entry { source: stub.source, stub: hash(&stub.text), interface: hash(&interface), name })
+                entries.push(Entry { stub: stub.hash(), source: stub.source, interface: hash(&interface), name })
             }
             Err(why) => unbound.push(format!("{name}: {why}")),
         }

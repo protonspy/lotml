@@ -6,6 +6,7 @@
 use std::path::{Path, PathBuf};
 
 /// The environment a module outside the standard library may come from.
+#[derive(Clone)]
 pub enum Environment {
     /// The project has no `uv.lock`.
     NoLock,
@@ -22,6 +23,26 @@ pub struct Stub {
     pub text: String,
     pub said: String,
     pub source: String,
+    /// The stubs it re-exports names from, found as it was (specs/python-reexports).
+    pub parts: lotml_bind::binder::Parts,
+}
+
+impl Stub {
+    /// The SHA-256 `lotml.lock` records of the stub: of its text and of each stub it re-exports
+    /// from, so a change to any of them is a change to the stub (specs/python-reexports R2.3).
+    pub fn hash(&self) -> String {
+        if self.parts.parts.is_empty() {
+            return crate::lockfile::hash(&self.text);
+        }
+        let mut all = self.text.clone();
+        for part in &self.parts.parts {
+            all.push('\0');
+            all.push_str(&part.module);
+            all.push('\0');
+            all.push_str(&part.text);
+        }
+        crate::lockfile::hash(&all)
+    }
 }
 
 /// Whether `module`, without its `py.` origin, may name a module: identifiers and dots only, so as
@@ -62,7 +83,7 @@ pub fn interface(module: &str, project: Option<&Path>) -> Result<String, String>
 fn interface_in(module: &str, project: Option<&Path>, cache: Option<&Path>) -> Result<String, String> {
     let locked = project.and_then(|root| crate::lockfile::entry(root, &format!("py.{module}")));
     let (stub, text) = generate(module, project, cache, locked.as_ref())?;
-    let differs = locked.is_some_and(|entry| entry.stub != crate::lockfile::hash(&stub.text));
+    let differs = locked.is_some_and(|entry| entry.stub != stub.hash());
     Ok(if differs { lotml_check::unlocked(&text) } else { text })
 }
 
@@ -103,7 +124,7 @@ fn key(stub: &Stub) -> String {
     static BINDER: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     let binder =
         BINDER.get_or_init(|| lotml_llvm::sha256::hex_of(lotml_bind::binder::SOURCE.as_bytes())[..16].to_string());
-    let mut bytes = stub.text.as_bytes().to_vec();
+    let mut bytes = stub.hash().into_bytes();
     bytes.push(0);
     bytes.extend_from_slice(stub.said.as_bytes());
     format!("{}-{}-{binder}", lotml_llvm::sha256::hex_of(&bytes), env!("CARGO_PKG_VERSION"))
@@ -122,7 +143,7 @@ fn keep(entry: &Path, text: &str) {
 /// The interface `stub` gives `module`, or why it gives none: it does not check, or it binds no
 /// function, which counts as no stub (specs/bind-on-import/ R1.4).
 fn bound(module: &str, stub: &Stub) -> Result<String, String> {
-    let text = lotml_bind::binder::interface(module, &stub.text, &stub.said)
+    let text = lotml_bind::binder::interface_with(module, &stub.text, &stub.said, &stub.parts)
         .map_err(|lotml_bind::binder::Refused(why)| format!("cannot bind `{module}`: {why}"))?;
     let (interface, problems) = lotml_check::interface(&text);
     if let Some(problem) = problems.first() {
@@ -149,13 +170,80 @@ pub fn environment(project: Option<&Path>) -> Result<Environment, String> {
 /// The stub of `module`, a dotted name of identifiers without its `py.` origin, or why there is
 /// none. A standard-library name is never taken from the project's packages, and `environment` is
 /// asked for only when the module is none of the standard library's.
-pub fn find(module: &str, environment: impl FnOnce() -> Result<Environment, String>) -> Result<Stub, String> {
+pub fn find(module: &str, environment: impl FnOnce() -> Result<Environment, String> + Send) -> Result<Stub, String> {
+    // The environment is made once, for the stub and for each it re-exports from.
+    let asked = std::sync::Mutex::new(Some(environment));
+    let made: std::sync::OnceLock<Result<Environment, String>> = std::sync::OnceLock::new();
+    let environment = || {
+        made.get_or_init(|| match asked.lock().ok().and_then(|mut asked| asked.take()) {
+            Some(environment) => environment(),
+            None => Err("the environment was not asked for".to_string()),
+        })
+        .clone()
+    };
+    let (mut stub, package) = find_one(module, environment)?;
+    let mut read = |part: &str| {
+        let (found, package) = find_one(part, environment).ok()?;
+        Some((found.text, package))
+    };
+    stub.parts = lotml_bind::binder::sources(&package, &stub.text, &mut read)
+        .map_err(|lotml_bind::binder::Refused(why)| format!("cannot bind `{module}`: {why}"))?;
+    Ok(stub)
+}
+
+/// The stub `lotml bind --stub <path>` is given for `module`, with the stubs it re-exports from: a
+/// module of its package read from beside it (`<dir>/<rest>.pyi`, `.py`, `<rest>/__init__.pyi`,
+/// `.py`), any other found as the compiler finds a module's (specs/python-reexports R2.2).
+pub fn given(
+    module: &str,
+    path: &Path,
+    environment: impl FnOnce() -> Result<Environment, String> + Send,
+) -> Result<Stub, String> {
+    let text = read(path)?;
+    let file = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let package = lotml_bind::binder::package_of(module, &file);
+    let beside = path.parent().map(Path::to_path_buf).unwrap_or_default();
+    let asked = std::sync::Mutex::new(Some(environment));
+    let made: std::sync::OnceLock<Result<Environment, String>> = std::sync::OnceLock::new();
+    let environment = || {
+        made.get_or_init(|| match asked.lock().ok().and_then(|mut asked| asked.take()) {
+            Some(environment) => environment(),
+            None => Err("the environment was not asked for".to_string()),
+        })
+        .clone()
+    };
+    let mut read_part = |part: &str| {
+        name(part).ok()?;
+        if let Some(rest) = part.strip_prefix(&format!("{package}.")).filter(|_| !package.is_empty()) {
+            let rest: PathBuf = rest.split('.').collect();
+            let candidates = [
+                rest.with_extension("pyi"),
+                rest.with_extension("py"),
+                rest.join("__init__.pyi"),
+                rest.join("__init__.py"),
+            ];
+            let found = candidates.iter().map(|c| beside.join(c)).find(|c| c.is_file())?;
+            let text = read(&found).ok()?;
+            return Some((text, lotml_bind::binder::package_of(part, &found.to_string_lossy())));
+        }
+        let (found, of) = find_one(part, environment).ok()?;
+        Some((found.text, of))
+    };
+    let parts = lotml_bind::binder::sources(&package, &text, &mut read_part)
+        .map_err(|lotml_bind::binder::Refused(why)| format!("cannot bind `{module}`: {why}"))?;
+    Ok(Stub { text, said: format!("{file}, the stub given"), source: String::new(), parts })
+}
+
+/// The stub of `module` alone, with the package it is of, or why there is none.
+fn find_one(module: &str, environment: impl FnOnce() -> Result<Environment, String>) -> Result<(Stub, String), String> {
+    let stub = |text: String, said: String, source: String| Stub { text, said, source, parts: Default::default() };
     match lotml_bind::typeshed::find(module) {
         lotml_bind::typeshed::Found::Stub { path, text } => {
             let commit = lotml_bind::typeshed::COMMIT.trim();
             let commit = &commit[..commit.len().min(12)];
             let said = format!("typeshed's stdlib/{path}, at commit {commit}");
-            Ok(Stub { text: text.to_string(), said, source: format!("typeshed {commit}") })
+            let package = lotml_bind::binder::package_of(module, &path);
+            Ok((stub(text.to_string(), said, format!("typeshed {commit}")), package))
         }
         lotml_bind::typeshed::Found::Absent { range } => {
             let (major, minor) = lotml_bind::typeshed::PYTHON;
@@ -186,7 +274,8 @@ pub fn find(module: &str, environment: impl FnOnce() -> Result<Environment, Stri
                 ));
             };
             let text = read(&found.path)?;
-            Ok(Stub { text, said: found.said, source: distribution(&found.path, &roots) })
+            let package = lotml_bind::binder::package_of(module, &found.path.to_string_lossy());
+            Ok((stub(text, found.said, distribution(&found.path, &roots)), package))
         }
     }
 }
@@ -342,7 +431,12 @@ mod tests {
 
     #[test]
     fn the_key_changes_with_the_stub_and_where_it_was_read() {
-        let stub = |text: &str, said: &str| Stub { text: text.into(), said: said.into(), source: String::new() };
+        let stub = |text: &str, said: &str| Stub {
+            text: text.into(),
+            said: said.into(),
+            source: String::new(),
+            parts: Default::default(),
+        };
         let base = key(&stub("def f() -> int: ...\n", "a.pyi"));
         assert_ne!(base, key(&stub("def g() -> int: ...\n", "a.pyi")));
         assert_ne!(base, key(&stub("def f() -> int: ...\n", "b.pyi")));
@@ -373,7 +467,12 @@ mod tests {
 
     #[test]
     fn a_stub_that_binds_no_function_or_class_counts_as_none() {
-        let stub = |text: &str| Stub { text: text.into(), said: "box.pyi".into(), source: String::new() };
+        let stub = |text: &str| Stub {
+            text: text.into(),
+            said: "box.pyi".into(),
+            source: String::new(),
+            parts: Default::default(),
+        };
         let hidden = stub("class _Box:\n    def size(self) -> int: ...\nasync def f(x: int) -> int: ...\n");
         assert!(bound("box", &hidden).unwrap_err().contains("binds no function or class"));
         assert!(bound("box", &stub("def size() -> int: ...\n")).unwrap().contains("fn size() -> int ! PyError"));
@@ -416,5 +515,71 @@ mod tests {
         let made = environment("empty", &[]);
         let why = find("greet", || Ok(Environment::Made(made.clone()))).unwrap_err();
         assert!(why.contains("typeshed has none") && why.contains(&made.display().to_string()), "{why}");
+    }
+
+    const REEXPORTING: &str = "from .core import where\n__all__ = [\"where\"]\n";
+
+    #[test]
+    fn a_package_s_re_exports_are_found_in_its_environment_and_bound_as_its_own() {
+        let made = environment(
+            "reexports",
+            &[("pkg/__init__.pyi", REEXPORTING), ("pkg/core.pyi", "def where() -> str: ...\n"), ("pkg/py.typed", "")],
+        );
+        let stub = find("pkg", || Ok(Environment::Made(made.clone()))).unwrap();
+        assert_eq!(stub.parts.package, "pkg");
+        assert_eq!(stub.parts.parts.iter().map(|p| p.module.as_str()).collect::<Vec<_>>(), ["pkg.core"]);
+        assert!(bound("pkg", &stub).unwrap().contains("\nfn where() -> str ! PyError\n"));
+        let before = stub.hash();
+        let site = std::fs::read_dir(&made).unwrap().next().unwrap().unwrap().path();
+        let core = walk(&site).into_iter().find(|p| p.ends_with("core.pyi")).unwrap();
+        std::fs::write(core, "def where() -> bytes: ...\n").unwrap();
+        let again = find("pkg", || Ok(Environment::Made(made))).unwrap();
+        assert_eq!(again.text, stub.text, "the package's own stub did not change");
+        assert_ne!(again.hash(), before, "a changed stub it re-exports from changes what the lock records");
+        assert_ne!(key(&again), key(&stub), "and the cache's key");
+    }
+
+    fn walk(dir: &Path) -> Vec<PathBuf> {
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() { found.extend(walk(&path)) } else { found.push(path) }
+        }
+        found
+    }
+
+    #[test]
+    fn the_standard_library_s_re_exports_are_read_from_typeshed() {
+        let stub = find("os.path", || panic!("not asked")).unwrap();
+        assert_eq!(stub.parts.package, "os");
+        assert!(!stub.parts.parts.is_empty(), "posixpath or ntpath, and genericpath");
+        assert_ne!(stub.hash(), crate::lockfile::hash(&stub.text));
+        let text = bound("os.path", &stub).unwrap();
+        assert!(text.contains("\nfn exists("), "{text}");
+        let plain = find("textwrap", || panic!("not asked")).unwrap();
+        assert_eq!(plain.hash(), crate::lockfile::hash(&plain.text), "a lock written before is still read alike");
+    }
+
+    #[test]
+    fn a_given_stub_reads_its_package_s_modules_from_beside_it() {
+        let dir = std::env::temp_dir().join(format!("lotml-given-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("pkg").join("sub")).unwrap();
+        std::fs::write(
+            dir.join("pkg").join("__init__.py"),
+            REEXPORTING
+                .replace("where\"]", "where\", \"deep\"]")
+                .replace("import where", "import where\nfrom .sub import deep"),
+        )
+        .unwrap();
+        std::fs::write(dir.join("pkg").join("core.py"), "def where() -> str: ...\n").unwrap();
+        std::fs::write(dir.join("pkg").join("sub").join("__init__.pyi"), "def deep(n: int) -> int: ...\n").unwrap();
+        let stub = given("pkg", &dir.join("pkg").join("__init__.py"), || panic!("not asked")).unwrap();
+        let text = lotml_bind::binder::interface_with("pkg", &stub.text, &stub.said, &stub.parts).unwrap();
+        assert!(
+            text.contains("\nfn where() -> str ! PyError\n") && text.contains("\nfn deep(n: int) -> int ! PyError\n"),
+            "{text}"
+        );
+        assert!(text.contains("__init__.py, the stub given"), "{text}");
     }
 }

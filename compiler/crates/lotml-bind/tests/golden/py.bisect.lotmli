@@ -3,3 +3,19 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn bisect_left[SupportsRichComparisonT](a: PyObject, x: SupportsRichComparisonT, lo: int = 0, hi: int? = None, key: None = None) -> int ! PyError
+fn bisect_left[SupportsRichComparisonT](a: PyObject, x: SupportsRichComparisonT, lo: int, hi: int, key: None = None) -> int ! PyError
+fn bisect_left[SupportsRichComparisonT](a: PyObject, x: SupportsRichComparisonT, lo: int = 0, hi: int, key: None = None) -> int ! PyError
+fn bisect_left[SupportsRichComparisonT](a: PyObject, x: SupportsRichComparisonT, lo: int = 0, hi: int? = None, key: PyObject) -> int ! PyError
+fn bisect_left[SupportsRichComparisonT](a: PyObject, x: SupportsRichComparisonT, lo: int, hi: int, key: PyObject) -> int ! PyError
+fn bisect_left[SupportsRichComparisonT](a: PyObject, x: SupportsRichComparisonT, lo: int = 0, hi: int, key: PyObject) -> int ! PyError
+fn bisect_right[SupportsRichComparisonT](a: PyObject, x: SupportsRichComparisonT, lo: int = 0, hi: int? = None, key: None = None) -> int ! PyError
+fn bisect_right[SupportsRichComparisonT](a: PyObject, x: SupportsRichComparisonT, lo: int, hi: int, key: None = None) -> int ! PyError
+fn bisect_right[SupportsRichComparisonT](a: PyObject, x: SupportsRichComparisonT, lo: int = 0, hi: int, key: None = None) -> int ! PyError
+fn bisect_right[SupportsRichComparisonT](a: PyObject, x: SupportsRichComparisonT, lo: int = 0, hi: int? = None, key: PyObject) -> int ! PyError
+fn bisect_right[SupportsRichComparisonT](a: PyObject, x: SupportsRichComparisonT, lo: int, hi: int, key: PyObject) -> int ! PyError
+fn bisect_right[SupportsRichComparisonT](a: PyObject, x: SupportsRichComparisonT, lo: int = 0, hi: int, key: PyObject) -> int ! PyError
+fn insort_left[SupportsRichComparisonT](a: [SupportsRichComparisonT], x: SupportsRichComparisonT, lo: int = 0, hi: int? = None, key: None = None) -> None ! PyError
+fn insort_left[_T](a: [_T], x: _T, lo: int = 0, hi: int? = None, key: PyObject) -> None ! PyError
+fn insort_right[SupportsRichComparisonT](a: [SupportsRichComparisonT], x: SupportsRichComparisonT, lo: int = 0, hi: int? = None, key: None = None) -> None ! PyError
+fn insort_right[_T](a: [_T], x: _T, lo: int = 0, hi: int? = None, key: PyObject) -> None ! PyError

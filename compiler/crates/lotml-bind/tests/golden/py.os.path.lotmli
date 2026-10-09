@@ -3,3 +3,147 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn normcase(s: PyObject) -> str ! PyError
+fn normcase(s: str) -> str ! PyError
+fn normcase(s: bytes) -> bytes ! PyError
+fn isabs(s: str) -> bool ! PyError
+fn join(path: PyObject) -> PyObject ! PyError
+fn join(path: str) -> str ! PyError
+fn splitdrive(p: PyObject) -> (str, str) ! PyError
+fn splitdrive(p: str) -> (str, str) ! PyError
+fn splitdrive(p: bytes) -> (bytes, bytes) ! PyError
+fn split(p: PyObject) -> (str, str) ! PyError
+fn split(p: str) -> (str, str) ! PyError
+fn split(p: bytes) -> (bytes, bytes) ! PyError
+fn splitext(p: PyObject) -> (str, str) ! PyError
+fn splitext(p: str) -> (str, str) ! PyError
+fn splitext(p: bytes) -> (bytes, bytes) ! PyError
+fn basename(p: PyObject) -> str ! PyError
+fn basename(p: str) -> str ! PyError
+fn basename(p: bytes) -> bytes ! PyError
+fn dirname(p: PyObject) -> str ! PyError
+fn dirname(p: str) -> str ! PyError
+fn dirname(p: bytes) -> bytes ! PyError
+fn commonprefix(m: [PyObject]) -> PyObject ! PyError
+fn commonprefix(m: [str]) -> str ! PyError
+fn commonprefix[SupportsRichComparisonT](m: [[SupportsRichComparisonT]]) -> PyObject ! PyError
+fn getsize(filename: PyObject) -> int ! PyError
+fn getmtime(filename: PyObject) -> f64 ! PyError
+fn getatime(filename: PyObject) -> f64 ! PyError
+fn getctime(filename: PyObject) -> f64 ! PyError
+fn islink(path: PyObject) -> bool ! PyError
+fn exists(path: PyObject) -> bool ! PyError
+fn lexists(path: PyObject) -> bool ! PyError
+fn isdir(s: PyObject) -> bool ! PyError
+fn isfile(path: PyObject) -> bool ! PyError
+fn ismount(path: PyObject) -> bool ! PyError
+fn expanduser(path: PyObject) -> str ! PyError
+fn expanduser(path: str) -> str ! PyError
+fn expanduser(path: bytes) -> bytes ! PyError
+fn expandvars(path: PyObject) -> str ! PyError
+fn expandvars(path: str) -> str ! PyError
+fn expandvars(path: bytes) -> bytes ! PyError
+fn normpath(path: PyObject) -> str ! PyError
+fn normpath(path: str) -> str ! PyError
+fn normpath(path: bytes) -> bytes ! PyError
+fn abspath(path: PyObject) -> str ! PyError
+fn abspath(path: str) -> str ! PyError
+fn abspath(path: bytes) -> bytes ! PyError
+fn realpath(path: PyObject, strict: PyObject = False) -> str ! PyError
+fn realpath(path: str, strict: PyObject = False) -> str ! PyError
+fn realpath(path: bytes, strict: PyObject = False) -> bytes ! PyError
+fn relpath(path: PyObject, start: PyObject? = None) -> PyObject ! PyError
+fn relpath(path: str, start: str? = None) -> str ! PyError
+fn samefile(f1: PyObject, f2: PyObject) -> bool ! PyError
+fn sameopenfile(fp1: int, fp2: int) -> bool ! PyError
+fn samestat(s1: PyObject, s2: PyObject) -> bool ! PyError
+fn commonpath(paths: [PyObject]) -> PyObject ! PyError
+fn commonpath(paths: [str]) -> str ! PyError
+fn isjunction(path: str) -> bool ! PyError
+fn splitroot(path: str) -> (str, str, str) ! PyError
+fn splitroot(path: bytes) -> (bytes, bytes, bytes) ! PyError
+fn splitroot(path: PyObject) -> (PyObject, PyObject, PyObject) ! PyError
+fn splitroot(p: str) -> (str, str, str) ! PyError
+fn splitroot(p: bytes) -> (bytes, bytes, bytes) ! PyError
+fn splitroot(p: PyObject) -> (PyObject, PyObject, PyObject) ! PyError
+fn isdevdrive(path: str) -> bool ! PyError
+fn isreserved(path: str) -> bool ! PyError
+
+# Not bound:
+#   curdir: `posixpath` neither defines nor re-exports it
+#   pardir: `posixpath` neither defines nor re-exports it
+#   sep: `posixpath` neither defines nor re-exports it
+#   pathsep: `posixpath` neither defines nor re-exports it
+#   defpath: `posixpath` neither defines nor re-exports it
+#   altsep: `ntpath` neither defines nor re-exports it
+#   extsep: `posixpath` neither defines nor re-exports it
+#   devnull: `posixpath` neither defines nor re-exports it
+#   supports_unicode_filenames: `posixpath` neither defines nor re-exports it
+#   ALLOW_MISSING: `genericpath` neither defines nor re-exports it
+#   ALL_BUT_LAST: `genericpath` neither defines nor re-exports it
+#   normcase: overload 1 of 4: an earlier one takes the same parameters, so no call is given it
+#   normcase: overload 2 of 4: an earlier one takes the same parameters, so no call is given it
+#   normcase: overload 3 of 4: an earlier one takes the same parameters, so no call is given it
+#   normcase: overload 3 of 4: an earlier one takes the same parameters, so no call is given it
+#   normcase: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   normcase: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   normcase: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   join: overload 3 of 3: an earlier one takes the same parameters, so no call is given it
+#   splitdrive: overload 1 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitdrive: overload 2 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitdrive: overload 3 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitdrive: overload 3 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitdrive: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitdrive: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitdrive: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   split: overload 1 of 4: an earlier one takes the same parameters, so no call is given it
+#   split: overload 2 of 4: an earlier one takes the same parameters, so no call is given it
+#   split: overload 3 of 4: an earlier one takes the same parameters, so no call is given it
+#   split: overload 3 of 4: an earlier one takes the same parameters, so no call is given it
+#   split: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   split: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   split: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitext: overload 1 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitext: overload 2 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitext: overload 3 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitext: overload 3 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitext: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitext: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitext: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   basename: overload 1 of 4: an earlier one takes the same parameters, so no call is given it
+#   basename: overload 2 of 4: an earlier one takes the same parameters, so no call is given it
+#   basename: overload 3 of 4: an earlier one takes the same parameters, so no call is given it
+#   basename: overload 3 of 4: an earlier one takes the same parameters, so no call is given it
+#   basename: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   basename: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   basename: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   dirname: overload 1 of 4: an earlier one takes the same parameters, so no call is given it
+#   dirname: overload 2 of 4: an earlier one takes the same parameters, so no call is given it
+#   dirname: overload 3 of 4: an earlier one takes the same parameters, so no call is given it
+#   dirname: overload 3 of 4: an earlier one takes the same parameters, so no call is given it
+#   dirname: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   dirname: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   dirname: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   commonprefix: overload 3 of 10: an earlier one takes the same parameters, so no call is given it
+#   commonprefix: overload 5 of 10: an earlier one takes the same parameters, so no call is given it
+#   commonprefix: overload 6 of 10: an earlier one takes the same parameters, so no call is given it
+#   commonprefix: overload 7 of 10: an earlier one takes the same parameters, so no call is given it
+#   commonprefix: overload 8 of 10: an earlier one takes the same parameters, so no call is given it
+#   commonprefix: overload 9 of 10: an earlier one takes the same parameters, so no call is given it
+#   commonprefix: overload 10 of 10: an earlier one takes the same parameters, so no call is given it
+#   expanduser: overload 1 of 2: an earlier one takes the same parameters, so no call is given it
+#   expandvars: overload 1 of 2: an earlier one takes the same parameters, so no call is given it
+#   normpath: overload 1 of 2: an earlier one takes the same parameters, so no call is given it
+#   normpath: overload 2 of 2: an earlier one takes the same parameters, so no call is given it
+#   abspath: overload 1 of 2: an earlier one takes the same parameters, so no call is given it
+#   realpath: overload 1 of 4: an earlier one takes the same parameters, so no call is given it
+#   realpath: overload 3 of 4: an earlier one takes the same parameters, so no call is given it
+#   realpath: overload 3 of 4: an earlier one takes the same parameters, so no call is given it
+#   realpath: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   realpath: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   relpath: overload 2 of 3: an earlier one takes the same parameters, so no call is given it
+#   commonpath: overload 3 of 3: an earlier one takes the same parameters, so no call is given it
+#   splitroot: overload 2 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitroot: overload 2 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitroot: overload 4 of 4: an earlier one takes the same parameters, so no call is given it
+#   splitroot: overload 4 of 4: an earlier one takes the same parameters, so no call is given it

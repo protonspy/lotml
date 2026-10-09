@@ -607,20 +607,15 @@ pub fn bind(module: &str, stub: Option<&Path>, out: &Path) -> Result<bool, Failu
             "`{module}` names a C library, whose interface is written by hand: bindings/{module}.lotmli (adr:0013)"
         )));
     }
-    let (source, said) = match stub {
-        Some(given) => {
-            let name = given.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            (crate::stubs::read(given).map_err(Failure)?, format!("{name}, the stub given"))
-        }
-        None => {
-            let here = std::env::current_dir().ok();
-            let project = here.as_deref().and_then(project_of);
-            let found =
-                crate::stubs::find(module, || crate::stubs::environment(project.as_deref())).map_err(Failure)?;
-            (found.text, found.said)
-        }
-    };
-    let text = lotml_bind::binder::interface(module, &source, &said)
+    let here = std::env::current_dir().ok();
+    let project = here.as_deref().and_then(project_of);
+    let environment = || crate::stubs::environment(project.as_deref());
+    let found = match stub {
+        Some(given) => crate::stubs::given(module, given, environment),
+        None => crate::stubs::find(module, environment),
+    }
+    .map_err(Failure)?;
+    let text = lotml_bind::binder::interface_with(module, &found.text, &found.said, &found.parts)
         .map_err(|lotml_bind::binder::Refused(why)| Failure(format!("cannot bind `{module}`: {why}")))?;
     let (interface, problems) = lotml_check::interface(&text);
     if let Some(problem) = problems.first() {

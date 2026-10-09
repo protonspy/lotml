@@ -18,8 +18,15 @@ fn the_corpus_s_standard_library_binds_as_its_goldens_say() {
     let mut differ = Vec::new();
     for module in corpus["stdlib"]["modules"].as_array().expect("the standard-library modules") {
         let module = module.as_str().expect("a module name");
-        let Found::Stub { text, .. } = find(module) else { panic!("typeshed has no stub for `{module}`") };
-        let bound = lotml_bind::binder::interface(module, text, "typeshed").expect("the stub binds");
+        let Found::Stub { text, path } = find(module) else { panic!("typeshed has no stub for `{module}`") };
+        // The stubs it re-exports from are typeshed's too (specs/python-reexports).
+        let mut read = |part: &str| match find(part) {
+            Found::Stub { text, path } => Some((text.to_string(), lotml_bind::binder::package_of(part, &path))),
+            _ => None,
+        };
+        let parts = lotml_bind::binder::sources(&lotml_bind::binder::package_of(module, &path), text, &mut read)
+            .expect("its re-exports are read");
+        let bound = lotml_bind::binder::interface_with(module, text, "typeshed", &parts).expect("the stub binds");
         let file = golden.join(format!("py.{module}.lotmli"));
         if bless {
             std::fs::create_dir_all(&golden).expect("the golden directory");

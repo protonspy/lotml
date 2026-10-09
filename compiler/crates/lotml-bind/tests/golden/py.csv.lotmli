@@ -3,6 +3,13 @@
 # Every function returns `T ! PyError`: a stub does not say what a call raises.
 # A parameter written `= todo()` is optional: Python supplies its default.
 # A `PyObject` is a value no LotML type describes: convert it with `value()`.
+fn field_size_limit(new_limit: int = todo()) -> int ! PyError
+fn get_dialect(name: str) -> Dialect ! PyError
+fn list_dialects() -> [str] ! PyError
+fn reader(iterable: [str], dialect: PyObject = "excel", delimiter: str = ",", quotechar: str? = "\"", escapechar: str? = None, doublequote: bool = True, skipinitialspace: bool = False, lineterminator: str = "\x0d\n", quoting: PyObject = 0, strict: bool = False) -> PyObject ! PyError
+fn register_dialect(name: str, dialect: PyObject = "excel", delimiter: str = ",", quotechar: str? = "\"", escapechar: str? = None, doublequote: bool = True, skipinitialspace: bool = False, lineterminator: str = "\x0d\n", quoting: PyObject = 0, strict: bool = False) -> None ! PyError
+fn unregister_dialect(name: str) -> None ! PyError
+fn writer(fileobj: PyObject, dialect: PyObject = "excel", delimiter: str = ",", quotechar: str? = "\"", escapechar: str? = None, doublequote: bool = True, skipinitialspace: bool = False, lineterminator: str = "\x0d\n", quoting: PyObject = 0, strict: bool = False) -> PyObject ! PyError
 
 class Dialect:
     fn Dialect() -> Dialect ! PyError
@@ -46,6 +53,14 @@ class Sniffer:
     fn sniff(self, sample: str, delimiters: str? = None) -> PyObject ! PyError
     fn has_header(self, sample: str) -> bool ! PyError
 
+class Error
+
 # Not bound:
+#   QUOTE_ALL: `_csv` neither defines nor re-exports it
+#   QUOTE_MINIMAL: `_csv` neither defines nor re-exports it
+#   QUOTE_NONE: `_csv` neither defines nor re-exports it
+#   QUOTE_NONNUMERIC: `_csv` neither defines nor re-exports it
+#   QUOTE_NOTNULL: `_csv` neither defines nor re-exports it
+#   QUOTE_STRINGS: `_csv` neither defines nor re-exports it
 #   DictReader.__iter__, __next__, __class_getitem__: dunder methods, which operators would call
 #   DictWriter.__class_getitem__: dunder methods, which operators would call

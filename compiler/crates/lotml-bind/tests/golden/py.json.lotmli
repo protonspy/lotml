@@ -8,3 +8,37 @@ fn dump(obj: PyObject, fp: PyObject, skipkeys: bool = False, ensure_ascii: bool 
 fn loads(s: PyObject, cls: PyObject? = None, object_hook: PyObject? = None, parse_float: PyObject? = None, parse_int: PyObject? = None, parse_constant: PyObject? = None, object_pairs_hook: PyObject? = None, array_hook: PyObject? = None) -> PyObject ! PyError
 fn load(fp: PyObject, cls: PyObject? = None, object_hook: PyObject? = None, parse_float: PyObject? = None, parse_int: PyObject? = None, parse_constant: PyObject? = None, object_pairs_hook: PyObject? = None, array_hook: PyObject? = None) -> PyObject ! PyError
 fn detect_encoding(b: PyObject) -> PyObject ! PyError
+
+class JSONDecodeError:
+    fn JSONDecodeError(msg: str, doc: str, pos: int) -> JSONDecodeError ! PyError
+    msg: str
+    doc: str
+    pos: int
+    lineno: int
+    colno: int
+
+class JSONDecoder:
+    fn JSONDecoder(object_hook: PyObject? = None, parse_float: PyObject? = None, parse_int: PyObject? = None, parse_constant: PyObject? = None, strict: bool = True, object_pairs_hook: PyObject? = None, array_hook: PyObject? = None) -> JSONDecoder ! PyError
+    array_hook: PyObject?
+    object_hook: PyObject
+    parse_float: PyObject
+    parse_int: PyObject
+    parse_constant: PyObject
+    strict: bool
+    object_pairs_hook: PyObject
+    fn decode(self, s: str, _w: PyObject = todo()) -> PyObject ! PyError
+    fn raw_decode(self, s: str, idx: int = 0) -> (PyObject, int) ! PyError
+
+class JSONEncoder:
+    fn JSONEncoder(skipkeys: bool = False, ensure_ascii: bool = True, check_circular: bool = True, allow_nan: bool = True, sort_keys: bool = False, indent: PyObject? = None, separators: (str, str)? = None, default: PyObject? = None) -> JSONEncoder ! PyError
+    item_separator: str
+    key_separator: str
+    skipkeys: bool
+    ensure_ascii: bool
+    check_circular: bool
+    allow_nan: bool
+    sort_keys: bool
+    indent: PyObject
+    fn default(self, o: PyObject) -> PyObject ! PyError
+    fn encode(self, o: PyObject) -> str ! PyError
+    fn iterencode(self, o: PyObject, _one_shot: bool = False) -> PyObject ! PyError
