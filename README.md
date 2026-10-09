@@ -38,10 +38,10 @@ code more often, and so that the people reviewing that code can trust what they 
 - **A compiler built as the agent's tool** — `check`, `explain`, `digest`, `show`, an LSP server
   and an MCP server, all answering in versioned JSON.
 - **`test` blocks in the language**, reporting the values a failed comparison saw.
+- **Two targets from one IR**: CPython for `run` and `test`, native code through LLVM for `build`.
 
 Every design decision is backed by a measurement or a checked source, not an opinion: see
-[the study](docs/wiki/pages/llm-oriented-language.md) and the
-[decision records](docs/adr/).
+[the study](docs/wiki/pages/llm-oriented-language.md) and the [decision records](docs/adr/).
 
 ## A taste
 
@@ -65,21 +65,179 @@ test "median of three":
 checker forces you to handle. The full language fits in one example-driven page:
 [`reference/lotml.md`](reference/lotml.md).
 
+## The language
+
+Blocks are indented by 4 spaces after a line ending in `:`, comments start with `#`, and every
+parameter and return type is annotated; locals are inferred. What reads like Python means what
+Python means. The rest is where LotML deliberately differs.
+
+### Types
+
+| Type | Written | Notes |
+|---|---|---|
+| Integers | `int` (= `i64`), `i8` … `i32`, `u8` … `u64` | Fixed width. Overflow stops the program in every build; `wrapping_add` for modular arithmetic |
+| Floats | `f64`, `f32` | `/` always returns `f64`; no other implicit conversion — `1 + 2.0` is a type error |
+| Text | `str` | Immutable; f-string format specs are checked against the value's type |
+| Collections | `[T]` · `{K: V}` · `{T}` · `(A, B)` | Values: `ys = xs` copies |
+| Optional | `T?` | The only type that admits `None`; `x is not None` narrows, `x ?? default` unwraps |
+| Result | `T ! E` | A `T` or an error `E`; `fail e` returns the error, `expr?` propagates it |
+| Records | `type Point(x: f64, y: f64)` | One line, built positionally or by name, compared field by field |
+| Sum types | `type Shape = Circle(r: f64) \| Rect(w: f64, h: f64) \| Empty` | `match` must cover every variant |
+| Generics | `fn first[T](xs: [T]) -> T?`, `fn largest[T: Ord](…)` | Bounds name traits |
+| Trait objects | `[dyn Show]` | Values of different types sharing a trait |
+
+### Errors are values
+
+```
+type ParseErr = Empty | NotNumber(text: str) | Negative(value: int)
+
+fn parse(s: str) -> int ! ParseErr:
+    if s == "":
+        fail Empty
+    n = s.to_int() ?? fail NotNumber(s)
+    if n < 0:
+        fail Negative(n)
+    return n
+
+fn describe(s: str) -> str:
+    match parse(s):
+        case Ok(n):
+            return f"number {n}"
+        case Err(NotNumber(text)):
+            return f"not a number: {text}"
+        case Err(_):
+            return "invalid"
+```
+
+There is no `raise`, `try` or `except`: a failure is a value of the return type, so every way a
+function can fail is in its signature. The program stops only on a broken invariant — an index out
+of range, an absent key, overflow, division by zero, a failed `assert`, or `todo()`, which fills any
+hole so an unfinished program still compiles.
+
+### Values, not references
+
+Every value — list, dict, record — is copied on assignment and on a call, so nothing changes
+behind a reader's back. Only a `var` may be reassigned or mutated, and assigning to an immutable is
+a compile error, not a new binding. A function changes its caller's value only when the parameter
+says so:
+
+```
+fn add_all(inout xs: [int], values: [int]):
+    for v in values:
+        xs.append(v)
+
+fn consume(sink log: [str]) -> int:
+    return len(log)
+
+var xs = [1]
+add_all(&xs, [2, 3])         # xs is [1, 2, 3]
+n = consume(lines)           # lines can no longer be used
+```
+
+Copies are cheap. Native code counts references and copies a value only when it changes while
+shared, reusing a cell nobody else holds; the Python target copies where a `var` or an `inout` is
+involved ([adr 0008](docs/adr/0008-value-semantics-with-reuse-before-borrowing.md)).
+
+### Methods, traits and concurrency
+
+```
+type Counter(count: int)
+
+impl Counter:
+    fn bump(inout self):
+        self.count += 1
+
+trait Show:
+    fn show(self) -> str
+
+impl Show for Counter:
+    fn show(self) -> str:
+        return f"Counter({self.count})"
+
+fn squares(xs: [int]) -> [int]:
+    return parallel([lambda: x * x for x in xs])
+```
+
+No classes and no inheritance: methods live in `impl`, shared behaviour in traits. Concurrency is
+colorless — `parallel(tasks)` runs each task at once and returns their results in order, with no
+`async` to mark and nothing to `await`.
+
+### Left out on purpose
+
+`class`, `def`, `raise`, `try`, `except`, `finally`, `with`, `yield`, decorators,
+`async`/`await`, `global`, `nonlocal`, `*args`/`**kwargs`, `isinstance`, `Any`, dunder names, and
+truthiness of anything but `bool` — `if` and `while` take only a `bool`.
+
+## Architecture
+
+<p align="center">
+  <img src=".github/assets/architecture.png" alt="LotML architecture: a .lot source flows through lotml-syntax, lotml-bind, lotml-check and lotml-ir, backed by lotml-db's incremental queries; lotml-ir feeds lotml-py, for the Python target of lotml run and test, and lotml-llvm with the C runtime, for the native executable of lotml build; lotml-diag, lotml-fmt and lotml-ide sit beside the pipeline; the Python harness drives the lotml CLI" width="100%">
+</p>
+
+The compiler is a Rust workspace, one crate per stage:
+
+| Crate | What it does |
+|---|---|
+| [`lotml-syntax`](compiler/crates/lotml-syntax/) | The lexer, the syntax tree and a tolerant recursive-descent parser, which also reads a file still being written |
+| [`lotml-bind`](compiler/crates/lotml-bind/) | A Python module's stub read as a LotML interface without running Python, and the typeshed stubs lotml carries |
+| [`lotml-check`](compiler/crates/lotml-check/) | Types, mutability, exhaustive `match`, results and optionals |
+| [`lotml-db`](compiler/crates/lotml-db/) | Salsa incremental queries: a query whose inputs did not change answers from memory |
+| [`lotml-ir`](compiler/crates/lotml-ir/) | The one IR every target reads; monomorphization and reference counts for the native target |
+| [`lotml-py`](compiler/crates/lotml-py/) | The Python backend and its runtime, and the CPython it runs on |
+| [`lotml-llvm`](compiler/crates/lotml-llvm/) | The LLVM backend: native executables and shared libraries with a C header |
+| [`lotml-runtime`](compiler/crates/lotml-runtime/) | The C runtime, compiled into every native program |
+| [`lotml-diag`](compiler/crates/lotml-diag/) | Diagnostics an agent can act on: stable codes, the alternatives that would have fitted, fixes marked safe or not |
+| [`lotml-fmt`](compiler/crates/lotml-fmt/) | The one canonical form |
+| [`lotml-ide`](compiler/crates/lotml-ide/) | The questions an editor and an agent ask — definitions, references, types, outlines — and symbol-addressed edits and renames |
+| [`lotml`](compiler/crates/lotml/) | The command line, and the LSP and MCP servers over `lotml-ide` |
+
+One lowering turns the checked program into one IR, which both targets read
+([adr 0020](docs/adr/0020-one-ir-between-the-checker-and-every-backend.md)). `run` and `test` use
+the Python target, which reaches every Python library; `build` makes a native executable, or with
+`--shared` a library C calls, through LLVM, and a native program runs without Python
+([adr 0025](docs/adr/0025-two-targets-python-for-run-llvm-for-build.md)). Generics stay generic
+until the native target asks for them, and reference counting exists only there. Every target is
+held to the same parity suite. [The pipeline, narrated](docs/codewiki/compiler-pipeline.md) says
+where each step lives.
+
+### Interop
+
+- **Python** — a module is imported by its origin, and its interface is generated from its type
+  stub when it is imported: `from py.textwrap import dedent`, then `text = dedent(raw)?`. Every
+  call into Python returns `T ! PyError`, since any of them can fail. Classes cross as nominal
+  handles, overloads as ordered signatures, type variables as type parameters
+  ([adr 0029](docs/adr/0029-foreign-modules-are-imported-by-origin-and-their-interfaces-generated.md),
+  [adr 0032](docs/adr/0032-a-python-module-is-bound-at-check-time-from-stubs-read-in-rust.md)).
+  A project's dependencies come from its `uv.lock`.
+- **C, calling in** — a C library is imported from a hand-written interface,
+  `bindings/c.<library>.lotmli`: `from c.m import cos`.
+- **C, calling out** — `lotml build --shared` exports the functions whose signatures C can call,
+  with a generated header and no new syntax
+  ([adr 0024](docs/adr/0024-c-abi-exports-chosen-by-signature-without-new-syntax.md)).
+
+### The compiler as the agent's tool
+
+Diagnostics, test reports and runs answer in versioned JSON with `--json`, and every error has a
+stable code.
+
+| Command | What it answers |
+|---|---|
+| `lotml check [--json] [--prefix] [--fix] [--since REV]` | Syntax, type and mutability errors; `--prefix` says whether a half-written file can still be completed |
+| `lotml explain E0204` | What an error code means and how to fix it |
+| `lotml digest <paths>` | The types and documented signatures of a project, without bodies |
+| `lotml show <symbol> <paths>` | A symbol as written, and the functions and types it uses |
+| `lotml fmt [--check] <paths>` | The canonical form |
+| `lotml test [--json]` | The `test` blocks, with the values a failed comparison saw |
+| `lotml bind <module>` | The interface of a Python module, or why it has none |
+| `lotml lsp` · `lotml mcp` | The Language Server Protocol, and the same tools over MCP |
+| `lotml init` | `AGENTS.md`, the guide and the MCP server set up for Claude Code, Codex or Cursor |
+
 ## Getting started
 
 [Releases](https://github.com/protonspy/lotml/releases) hold `lotml` built for Linux (x86_64),
 Windows (x86_64) and macOS (Apple silicon): each archive holds the binary, this README and the
 licence and the pinned uv with its licences, beside the VS Code extension's `.vsix` and a
 `SHA256SUMS`. The binary carries its runtimes, and a native build needs `clang` 17 or later.
-`run` and `test` need no Python of yours: lotml runs CPython 3.14 through the uv beside it,
-and the first run downloads it once, saying from where. The interpreter is, in order,
-`LOTML_PYTHON`; for `run` and `test`, the project's virtual environment (`VIRTUAL_ENV`, else
-its `.venv`); the CPython 3.14 uv already installed; a download of it through uv; and, with
-no uv, `python3`, `python` or `py -3` on the path. `--offline` (or `LOTML_OFFLINE=1`) never
-downloads, failing instead with what is missing, and `run --json` and `test --json` record
-the interpreter's path and version and uv's version. uv runs from lotml's own cache with its
-configuration files ignored, so a project's `uv.toml` or `.python-version` changes neither
-the interpreter uv gives nor where it comes from.
 
 To build it instead, with Rust 1.97+:
 
@@ -98,56 +256,47 @@ lotml init                  # set a project up for coding agents: AGENTS.md, gui
 lotml explain E0204         # explain an error code
 ```
 
-### File icons and VS Code
+### Which Python runs
 
-The lotus on a page marks LotML files in Windows Explorer, for the current user, with no
-administrator needed:
+`run` and `test` need no Python of yours: lotml runs CPython 3.14 through the uv beside it, and
+the first run downloads it once, saying from where. The interpreter is, in order:
+
+1. `LOTML_PYTHON`;
+2. for `run` and `test`, the project's virtual environment (`VIRTUAL_ENV`, else its `.venv`);
+3. the CPython 3.14 uv already installed;
+4. a download of it through uv;
+5. with no uv, `python3`, `python` or `py -3` on the path.
+
+A uv lotml finds but will not run is an error naming why, never a fallback to the path.
+`--offline` (or `LOTML_OFFLINE=1`) never downloads, failing instead with what is missing, and
+`run --json` and `test --json` record the interpreter's path and version and uv's version. uv runs
+from lotml's own cache with its configuration files ignored, so a project's `uv.toml` or
+`.python-version` changes neither the interpreter uv gives nor where it comes from
+([adr 0026](docs/adr/0026-lotml-ships-uv-and-runs-python-3-14-by-default.md)).
+
+### Editors
+
+The VS Code extension in [`editors/vscode/`](editors/vscode/) gives LotML files the lotus icon and
+starts the language server for them; its README says how to build and install it. On Windows, the
+same icon marks LotML files in Explorer for the current user, with no administrator needed:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File editors\windows\register.ps1   # -Remove takes it back
 ```
 
-The VS Code extension in [`editors/vscode/`](editors/vscode/) gives LotML files the same icon and
-starts the language server for them; its README says how to build and install it.
+The tree-sitter grammar is in [`reference/`](reference/).
 
 ## Repository
 
 | Path | What lives there |
 |---|---|
-| [`compiler/`](compiler/) | The Rust compiler: syntax, checker, the IR every target reads, the Python and LLVM backends and the C runtime, formatter, LSP and MCP servers |
+| [`compiler/`](compiler/) | The Rust compiler: the crates above |
 | [`reference/`](reference/) | The language reference and the tree-sitter grammar |
 | [`editors/`](editors/) | The file icon, its Windows Explorer association and the VS Code extension |
 | [`harness/`](harness/) | The evaluation harness that measures models writing LotML |
 | [`research/`](research/) | Reproducible experiments: token cost, Python leakage, editing robustness |
 | [`docs/`](docs/) | Knowledge base: wiki, ADRs, glossary, stack |
 | [`plans/`](plans/) · [`specs/`](specs/) | The roadmap and the feature specs it is built from |
-
-## How it compiles
-
-```
-source ─► parser ─► checker ─► IR (lotml-ir) ─┬─► Python backend ─► CPython      lotml run, lotml test
-                                               └─► mono, counts ─► LLVM backend ─► clang ─► native
-                                                                                  lotml build [--shared]
-```
-
-One lowering turns the checked program into one IR, which both targets read
-([adr 0020](docs/adr/0020-one-ir-between-the-checker-and-every-backend.md)). `run` and `test` use
-the Python target, which reaches every Python library; `build` makes a native executable, or with
-`--shared` a library C calls, through LLVM, and a native program runs without Python
-([adr 0025](docs/adr/0025-two-targets-python-for-run-llvm-for-build.md)). Every target is held to
-the same parity suite. [The pipeline, narrated](docs/codewiki/compiler-pipeline.md) says where
-each step lives.
-
-## Status
-
-LotML is a research project, built phase by phase, each phase closed by a measured gate
-([roadmap](plans/lotml-roadmap.md)):
-
-- [x] **Phase 0** — syntax settled by measurement (variant B, significant indentation)
-- [x] **Phase 1** — v1 on the Python target (gate missed on pass@1 and overridden: [adr 0011](docs/adr/0011-proceed-to-phase-2-past-the-failed-phase-1-gate.md))
-- [x] **Phase 2** — agent tooling: LSP, MCP, symbol-addressed edits, Python interop, colorless concurrency, C FFI, tree-sitter grammar
-- [x] **Phase 3** — a native target within 2× C on numeric code (gate missed and overridden: [adr 0019](docs/adr/0019-proceed-to-phase-4-past-the-failed-phase-3-gate.md))
-- [ ] **Phase 4** — native through LLVM on one IR, `lotml build` native by default, C ABI exports *(done: [plan](plans/ir-architecture.md))*; effects as capabilities, `where` contracts
 
 ## Development
 
@@ -157,111 +306,10 @@ cargo test --manifest-path compiler/Cargo.toml
 cargo clippy --manifest-path compiler/Cargo.toml --locked --all-targets -- -D warnings
 ```
 
-The project is spec-driven; `CLAUDE.md` and `.claude/rules/` describe the workflow.
-
-## References
-
-The design rests on 83 papers, downloaded and checked: 1,047 quotes, each found verbatim in its
-source by [`research/literature/verify.py`](research/literature/verify.py). How the check works and
-what it corrected is in [source verification](docs/wiki/pages/source-verification.md); the list
-with versions and SHA-256 is [`research/literature/sources.json`](research/literature/sources.json).
-
-<details>
-<summary>All 83 papers, newest first</summary>
-
-- Dmytro Ustynov (2026). *Beyond Human-Readable: Rethinking Software Engineering Conventions for the Agentic Development Era*. [arXiv:2604.07502](https://arxiv.org/abs/2604.07502) — 13 quotes
-- Alexandru-Radu Moraru et al. (2026). *Beyond the Traceback: Using LLMs for Adaptive Explanations of Programming Errors*. [arXiv:2608.20896](https://arxiv.org/abs/2608.20896) — 10 quotes
-- Chen Shen et al. (2026). *Bridging the Knowledge Void: Inference-time Acquisition of Unfamiliar Programming Languages for Coding Tasks*. [arXiv:2602.06976](https://arxiv.org/abs/2602.06976) — 17 quotes
-- Junhang Cheng et al. (2026). *CangjieBench: Benchmarking LLMs on a Low-Resource General-Purpose Programming Language*. [arXiv:2603.14501](https://arxiv.org/abs/2603.14501) — 12 quotes
-- Myeongsoo Kim et al. (2026). *CODESTRUCT: Code Agents over Structured Action Spaces*. [arXiv:2604.05407](https://arxiv.org/abs/2604.05407) — 11 quotes
-- Pengcheng Xu (2026). *Does a Language Server Save Tokens for Coding Agents? A Measurement Methodology and Preliminary Study*. [arXiv:2608.13568](https://arxiv.org/abs/2608.13568) — 17 quotes
-- Aman Sharma and Paras Chopra (2026). *EsoLang-Bench: Evaluating Genuine Reasoning in Large Language Models via Esoteric Programming Languages*. [arXiv:2603.09678](https://arxiv.org/abs/2603.09678) — 13 quotes
-- Aman Sharma et al. (2026). *Frontier Coding Agents Use Metaprogramming to Adapt to Unfamiliar Programming Languages*. [arXiv:2606.10933](https://arxiv.org/abs/2606.10933) — 10 quotes
-- Niels Mündler-Sasahara et al. (2026). *Generative Compilation: On-the-Fly Compiler Feedback as AI Generates Code*. [arXiv:2607.13921](https://arxiv.org/abs/2607.13921) — 13 quotes
-- Johin Johny Arimbur (2026). *How Many Tries Does It Take? Iterative Self-Repair in LLM Code Generation Across Model Scales and Benchmarks*. [arXiv:2604.10508](https://arxiv.org/abs/2604.10508) — 11 quotes
-- Alessandro Schena et al. (2026). *Large Language Models and Language Server Protocol: a match made in context*. [arXiv:2609.03086](https://arxiv.org/abs/2609.03086) — 10 quotes
-- Alessandro Giagnorio et al. (2026). *No Resource, No Benchmarks, No Problem? Evaluating and Improving LLMs for Code Generation in No-Resource Languages*. [arXiv:2606.16827](https://arxiv.org/abs/2606.16827) — 17 quotes
-- Nguyet-Anh H. Lang et al. (2026). *Perish or Flourish? A Holistic Evaluation of Large Language Models for Code Generation in Functional Programming*. [arXiv:2601.02060](https://arxiv.org/abs/2601.02060) — 9 quotes
-- Louis Lalonde et al. (2026). *Revisiting Feedback-Driven LLM Code Repair: A Replication and Exploratory Java Extension*. [arXiv:2609.00362](https://arxiv.org/abs/2609.00362) — 8 quotes
-- Paul Kronlund-Drouault (2026). *Semantic Prefix Oracles for LLM Decoding: Contracts and Differential Validation*. [arXiv:2609.35425](https://arxiv.org/abs/2609.35425) — 12 quotes
-- Jaideep Ray et al. (2026). *Structured Feedback Improves Repair in an LLM Agent Loop*. [arXiv:2607.14167](https://arxiv.org/abs/2607.14167) — 12 quotes
-- Vinayshekhar Bannihatti Kumar et al. (2026). *Syntax Without Semantics: Teaching Large Language Models to Code in an Unseen Language*. [arXiv:2605.15607](https://arxiv.org/abs/2605.15607) — 13 quotes
-- Matteo Biagiola et al. (2026). *The Alignment Problem in Constrained Code Generation*. [arXiv:2606.21619](https://arxiv.org/abs/2606.21619) — 20 quotes
-- Zixuan Wu et al. (2026). *The Best Programming Language for Tokenmaxxing: An Investigation of Coding Agent Behavior Across Programming Languages*. [arXiv:2607.22807](https://arxiv.org/abs/2607.22807) — 24 quotes
-- Wei Cheng et al. (2026). *To Diff or Not to Diff? Structure-Aware and Adaptive Output Formats for Efficient LLM-based Code Editing*. [arXiv:2604.27296](https://arxiv.org/abs/2604.27296) — 11 quotes
-- Shriram Krishnamurthi and Matthew Flatt (2026). *Type-Error Ablation and AI Coding Agents*. [arXiv:2606.01522](https://arxiv.org/abs/2606.01522) — 20 quotes
-- Rodrigo Pato Nogueira et al. (2026). *Unreliable in Practice? A Comprehensive Study of Errors in LLM-Generated Code*. [arXiv:2608.00661](https://arxiv.org/abs/2608.00661) — 15 quotes
-- Zike Li et al. (2025). *A Preliminary Study on the Robustness of Code Generation by Large Language Models*. [arXiv:2503.20197](https://arxiv.org/abs/2503.20197) — 9 quotes
-- Aleksander Boruch-Gruszecki et al. (2025). *Agnostics: Learning to Code in Any Programming Language via Reinforcement with a Universal Learning Environment*. [arXiv:2508.04865](https://arxiv.org/abs/2508.04865) — 15 quotes
-- Saif Khalfan Saif Al Mazrouei (2025). *Anka: A Domain-Specific Language for Reliable LLM Code Generation*. [arXiv:2512.23214](https://arxiv.org/abs/2512.23214) — 10 quotes
-- Debangshu Banerjee et al. (2025). *CRANE: Reasoning with constrained LLM generation*. [arXiv:2502.09061](https://arxiv.org/abs/2502.09061) — 14 quotes
-- Evgeniy Glukhov et al. (2025). *Diff-XYZ: A Benchmark for Evaluating Diff Understanding*. [arXiv:2510.12487](https://arxiv.org/abs/2510.12487) — 9 quotes
-- Saibo Geng et al. (2025). *JSONSchemaBench: A Rigorous Benchmark of Structured Outputs for Language Models*. [arXiv:2501.10868](https://arxiv.org/abs/2501.10868) — 15 quotes
-- Aditya Thimmaiah et al. (2025). *LLMs Lean on Priors, Not Programming Language Semantics*. [arXiv:2510.03415](https://arxiv.org/abs/2510.03415) — 10 quotes
-- Lorenzo Lee Solano et al. (2025). *Narrowing the Gap: Supervised Fine-Tuning of Open-Source LLMs as a Viable Alternative to Proprietary Models for Pedagogical Tools*. [arXiv:2507.05305](https://arxiv.org/abs/2507.05305) — 10 quotes
-- Behnam Mohammadi (2025). *Pel, A Programming Language for Orchestrating AI Agents*. [arXiv:2505.13453](https://arxiv.org/abs/2505.13453) — 11 quotes
-- Micheline Bénédicte Moumoula et al. (2025). *Programming Language Confusion: When Code LLMs Can't Keep their Languages Straight*. [arXiv:2503.13620](https://arxiv.org/abs/2503.13620) — 13 quotes
-- Stephen Mell et al. (2025). *Quasar: A Programming Language Specialized for LLM Code Actions*. [arXiv:2506.12202](https://arxiv.org/abs/2506.12202) — 14 quotes
-- David Jiahao Fu et al. (2025). *SLMFix: Leveraging Small Language Models for Domain Specific Language Error Fixing with Reinforcement Learning*. [arXiv:2511.19422](https://arxiv.org/abs/2511.19422) — 10 quotes
-- Muntasir Adnan and Carlos C. N. Kuhn (2025). *The Debugging Decay Index: Rethinking Debugging Strategies for Code LLMs*. [arXiv:2506.18403](https://arxiv.org/abs/2506.18403) — 9 quotes
-- Dangfeng Pan et al. (2025). *The Hidden Cost of Readability: How Code Formatting Silently Consumes Your LLM Budget*. [arXiv:2508.13666](https://arxiv.org/abs/2508.13666) — 11 quotes
-- Zhensu Sun et al. (2025). *Token Sugar: Making Source Code Sweeter for LLMs through Token-Efficient Shorthand*. [arXiv:2512.08266](https://arxiv.org/abs/2512.08266) — 11 quotes
-- Niels Mündler et al. (2025). *Type-Constrained Code Generation with Language Models*. [arXiv:2504.09246](https://arxiv.org/abs/2504.09246) — 22 quotes
-- Chunqiu Steven Xia et al. (2024). *Agentless: Demystifying LLM-based Software Engineering Agents*. [arXiv:2407.01489](https://arxiv.org/abs/2407.01489) — 12 quotes
-- Zhensu Sun et al. (2024). *AI Coders Are Among Us: Rethinking Programming Language Grammar Towards Efficient Code Generation*. [arXiv:2404.16333](https://arxiv.org/abs/2404.16333) — 21 quotes
-- Manushree Vijayvergiya et al. (2024). *AI-Assisted Assessment of Coding Practices in Modern Code Review*. [arXiv:2405.13565](https://arxiv.org/abs/2405.13565) — 10 quotes
-- Anton Semenkin et al. (2024). *Full Line Code Completion: Bringing AI to Desktop*. [arXiv:2405.08704](https://arxiv.org/abs/2405.08704) — 10 quotes
-- Kanghee Park et al. (2024). *Grammar-Aligned Decoding*. [arXiv:2405.21047](https://arxiv.org/abs/2405.21047) — 7 quotes
-- Xufeng Yao et al. (2024). *HDLdebugger: Streamlining HDL debugging with Large Language Models*. [arXiv:2403.11671](https://arxiv.org/abs/2403.11671) — 10 quotes
-- Kyle Wong et al. (2024). *Investigating the Transferability of Code Repair for Low-Resource Programming Languages*. [arXiv:2406.14867](https://arxiv.org/abs/2406.14867) — 10 quotes
-- Peiyang Song et al. (2024). *Lean Copilot: Large Language Models as Copilots for Theorem Proving in Lean*. [arXiv:2404.12534](https://arxiv.org/abs/2404.12534) — 10 quotes
-- Zhi Rui Tam et al. (2024). *Let Me Speak Freely? A Study on the Impact of Format Restrictions on Performance of Large Language Models*. [arXiv:2408.02442](https://arxiv.org/abs/2408.02442) — 14 quotes
-- Maciej Pankiewicz and Ryan S. Baker (2024). *Navigating Compiler Errors with AI Assistance -- A Study of GPT Hints in an Introductory Programming Course*. [arXiv:2403.12737](https://arxiv.org/abs/2403.12737) — 10 quotes
-- Eddie Antonio Santos and Brett A. Becker (2024). *Not the Silver Bullet: LLM-enhanced Programming Error Messages are Ineffective in Practice*. [arXiv:2409.18661](https://arxiv.org/abs/2409.18661) — 10 quotes
-- Nam Le Hai et al. (2024). *On the Impacts of Contexts on Repository-Level Code Generation*. [arXiv:2406.11927](https://arxiv.org/abs/2406.11927) — 11 quotes
-- Guangsheng Ou et al. (2024). *RustRepoTrans: Repository-level Code Translation Benchmark Targeting Rust*. [arXiv:2411.13990](https://arxiv.org/abs/2411.13990) — 16 quotes
-- Andrew Blinn et al. (2024). *Statically Contextualizing Large Language Models with Typed Holes*. [arXiv:2409.00921](https://arxiv.org/abs/2409.00921) — 14 quotes
-- John Yang et al. (2024). *SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering*. [arXiv:2405.15793](https://arxiv.org/abs/2405.15793) — 23 quotes
-- Shubham Ugare et al. (2024). *SynCode: LLM Generation with Grammar Augmentation*. [arXiv:2403.01632](https://arxiv.org/abs/2403.01632) — 15 quotes
-- Federico Mora et al. (2024). *Synthetic Programming Elicitation for Text-to-Code in Very Low-Resource Programming and Formal Languages*. [arXiv:2406.03636](https://arxiv.org/abs/2406.03636) — 14 quotes
-- Kunhao Zheng et al. (2024). *What Makes Large Language Models Reason in (Multi-Turn) Code Generation?*. [arXiv:2410.08105](https://arxiv.org/abs/2410.08105) — 10 quotes
-- Shihan Dou et al. (2024). *What's Wrong with Your Code Generated by Large Language Models? An Extensive Study*. [arXiv:2407.06153](https://arxiv.org/abs/2407.06153) — 9 quotes
-- Yixin Dong et al. (2024). *XGrammar: Flexible and Efficient Structured Generation Engine for Large Language Models*. [arXiv:2411.15100](https://arxiv.org/abs/2411.15100) — 11 quotes
-- Saurabh Pujar et al. (2023). *Automated Code generation for Information Technology Tasks in YAML through Large Language Models*. [arXiv:2305.02783](https://arxiv.org/abs/2305.02783) — 10 quotes
-- Andrew Taylor et al. (2023). *Dcc --help: Generating Context-Aware Compiler Error Explanations with Large Language Models*. [arXiv:2308.11873](https://arxiv.org/abs/2308.11873) — 10 quotes
-- Brandon T. Willard and Rémi Louf (2023). *Efficient Guided Generation for Large Language Models*. [arXiv:2307.09702](https://arxiv.org/abs/2307.09702) — 6 quotes
-- Pantazis Deligiannis et al. (2023). *Fixing Rust Compilation Errors using LLMs*. [arXiv:2308.05177](https://arxiv.org/abs/2308.05177) — 17 quotes
-- Harshit Joshi et al. (2023). *FLAME: A small language model for spreadsheet formulas*. [arXiv:2301.13779](https://arxiv.org/abs/2301.13779) — 10 quotes
-- Nalin Wadhwa et al. (2023). *Frustrated with Code Quality Issues? LLMs can Help!*. [arXiv:2309.12938](https://arxiv.org/abs/2309.12938) — 10 quotes
-- Tung Phung et al. (2023). *Generating High-Precision Feedback for Programming Syntax Errors using Large Language Models*. [arXiv:2302.04662](https://arxiv.org/abs/2302.04662) — 10 quotes
-- Lakshya A Agrawal et al. (2023). *Guiding Language Models of Code with Global Context using Monitors*. [arXiv:2306.10763](https://arxiv.org/abs/2306.10763) — 11 quotes
-- Theo X. Olausson et al. (2023). *Is Self-Repair a Silver Bullet for Code Generation?*. [arXiv:2306.09896](https://arxiv.org/abs/2306.09896) — 9 quotes
-- Federico Cassano et al. (2023). *Knowledge Transfer from High-Resource to Low-Resource Programming Languages for Code LLMs*. [arXiv:2308.09895](https://arxiv.org/abs/2308.09895) — 16 quotes
-- Yun-Da Tsai et al. (2023). *RTLFixer: Automatically Fixing RTL Syntax Errors with Large Language Models*. [arXiv:2311.16543](https://arxiv.org/abs/2311.16543) — 10 quotes
-- Xinyun Chen et al. (2023). *Teaching Large Language Models to Self-Debug*. [arXiv:2304.05128](https://arxiv.org/abs/2304.05128) — 14 quotes
-- Dimitri Racordon et al. (2022). *Implementation Strategies for Mutable Value Semantics*. [PDF](https://www.jot.fm/issues/issue_2022_02/article2.pdf) — 21 quotes
-- Federico Cassano et al. (2022). *MultiPL-E: A Scalable and Extensible Approach to Benchmarking Neural Code Generation*. [arXiv:2208.08227](https://arxiv.org/abs/2208.08227) — 18 quotes
-- Rohan Bavishi et al. (2022). *Neurosymbolic Repair for Low-Code Formula Languages*. [arXiv:2207.11765](https://arxiv.org/abs/2207.11765) — 10 quotes
-- Harshit Joshi et al. (2022). *Repair Is Nearly Generation: Multilingual Program Repair with LLMs*. [arXiv:2208.11640](https://arxiv.org/abs/2208.11640) — 10 quotes
-- Juho Leinonen et al. (2022). *Using Large Language Models to Enhance Programming Error Messages*. [arXiv:2210.11630](https://arxiv.org/abs/2210.11630) — 10 quotes
-- Michihiro Yasunaga and Percy Liang (2021). *Break-It-Fix-It: Unsupervised Learning for Program Repair*. [arXiv:2106.06600](https://arxiv.org/abs/2106.06600) — 11 quotes
-- Alex Reinking et al. (2021). *Perceus: Garbage Free Reference Counting with Reuse*. [PDF](https://xnning.github.io/papers/perceus.pdf) — 20 quotes
-- Toufique Ahmed et al. (2021). *SYNFIX: Automatically Fixing Syntax Errors using Compiler Diagnostics*. [arXiv:2104.14671](https://arxiv.org/abs/2104.14671) — 13 quotes
-- Michihiro Yasunaga and Percy Liang (2020). *Graph-based, Self-Supervised Program Repair from Diagnostic Feedback*. [arXiv:2005.10636](https://arxiv.org/abs/2005.10636) — 11 quotes
-- Sebastian Ullrich and Leonardo de Moura (2019). *Counting Immutable Beans: Reference Counting Optimized for Purely Functional Programming*. [arXiv:1908.05647](https://arxiv.org/abs/1908.05647) — 18 quotes
-- Jiho Choi et al. (2018). *Biased Reference Counting: Minimizing Atomic Operations in Garbage Collection*. [PDF](https://iacoma.cs.uiuc.edu/iacoma-papers/pact18.pdf) — 13 quotes
-- Michael Pradel and Koushik Sen (2018). *DeepBugs: A Learning Approach to Name-based Bug Detection*. [arXiv:1805.11683](https://arxiv.org/abs/1805.11683) — 10 quotes
-- Baishakhi Ray et al. (2015). *On the "Naturalness" of Buggy Code*. [arXiv:1506.01159](https://arxiv.org/abs/1506.01159) — 11 quotes
-
-</details>
-
-## Topics
-
-`programming-language` · `compiler` · `rust` · `python` · `llm` · `ai-agents` · `code-generation` ·
-`static-typing` · `transpiler` · `language-design` · `mcp` · `lsp`
-
-#lotml #ProgrammingLanguages #LLM #AIAgents #Compilers #RustLang #Python #LanguageDesign
-#CodeGeneration #OpenSource
+The project is spec-driven; `CLAUDE.md` and `.claude/rules/` describe the workflow. The design
+rests on 83 papers, each quote checked verbatim against its source: the list is
+[`research/literature/sources.json`](research/literature/sources.json), and how the check works is
+[source verification](docs/wiki/pages/source-verification.md).
 
 ## License
 
