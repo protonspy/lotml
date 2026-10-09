@@ -64,5 +64,8 @@ the 36 imports and runs under `lotml run` with no `lotml bind`
 - **A submodule re-exported as a module**, `from os import path as path`: import `py.os.path`.
 - **Inheritance from a generic base.** Its members take fresh type arguments, and its constructor
   is not inherited (`docs/notes.md`).
+- **Python calling native LotML.** Python calls the Python target's modules today; loading a
+  `lotml build --shared` library from CPython is proposed in
+  adr:0037-cpython-loads-a-shared-lotml-library-through-a-generated-checked-ctypes-module.
 - **Limits a hostile stub cannot pass.** 8 MiB, a nesting of 100, 20 000 tokens a line, 64
   overloads and 16 type parameters a name, 4 re-exporting modules deep and 256 in all.
