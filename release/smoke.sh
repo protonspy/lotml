@@ -12,7 +12,13 @@ unpacked=$1
 part=${2:-both}
 lotml="$unpacked/lotml"
 if [ -f "$lotml.exe" ]; then lotml="$lotml.exe"; fi
-work=$(mktemp -d)
+# On Windows lotml keeps its cache only inside the user's profile, which a runner's temporary
+# directory is not; the cache is what uv runs from.
+if [ -n "${LOCALAPPDATA:-}" ]; then
+  work=$(mktemp -d -p "$(cygpath -u "$LOCALAPPDATA")" lotml-smoke.XXXXXX)
+else
+  work=$(mktemp -d)
+fi
 trap 'rm -rf "$work"' EXIT
 cd "$work"
 printf 'fn main():\n    print("ran")\n' > hello.lotml
