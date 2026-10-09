@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/python-generics
-delivery: in-review
+delivery: merged
 pr: 61
 ---
 
