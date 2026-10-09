@@ -90,6 +90,9 @@ pub struct Program {
     pub foreign: BTreeMap<String, BTreeMap<String, FnSig>>,
     /// The Python modules whose interface the compiler marked, with the mark.
     pub marks: HashMap<String, crate::interface::Mark>,
+    /// The Python classes a name means, each by its full name (adr:0034): `date` for
+    /// `py.datetime.date` once imported, and in an interface its own classes.
+    pub py_classes: HashMap<String, String>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -528,6 +531,9 @@ impl Program {
                 let lowered: Vec<Ty> = args.iter().map(|a| self.lower(a, scope)).collect();
                 if name.name == "Heap" && lowered.len() == 1 {
                     return Ty::Heap(Box::new(lowered[0].clone()));
+                }
+                if let Some(qualified) = self.py_classes.get(&name.name) {
+                    return Ty::Adt(qualified.clone(), Vec::new());
                 }
                 if let Some(def) = self.types.get(&name.name) {
                     let wanted = def.params().len();

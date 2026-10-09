@@ -5,18 +5,31 @@
 use std::collections::{BTreeMap, HashMap};
 
 use lotml_diag::Diagnostic;
-use lotml_syntax::ast::Item;
+use lotml_syntax::ast::{ClassDef, Item};
 use lotml_syntax::parse_interface;
 
-use crate::program::{FnSig, Program};
+use crate::program::{FnSig, Method, Program};
 use crate::ty::Ty;
 
-/// A Python module's functions, as its interface declares them.
+/// A Python module's functions and classes, as its interface declares them.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Interface {
     pub(crate) functions: BTreeMap<String, FnSig>,
+    /// Its classes by the name the module gives them (adr:0034).
+    pub(crate) classes: BTreeMap<String, PyClass>,
     /// What the compiler said of it on its first line, for the checker to warn at the import.
     pub(crate) mark: Mark,
+}
+
+/// A Python class an interface declares, its types written by their module (`py.datetime.date`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PyClass {
+    /// Its bases among the interface's classes, by their full names.
+    pub bases: Vec<String>,
+    pub attributes: BTreeMap<String, Ty>,
+    pub constructor: Option<FnSig>,
+    /// Its methods (with a receiver) and static methods (without).
+    pub methods: BTreeMap<String, Method>,
 }
 
 /// What the compiler says of an interface on its first line (specs/bind-on-import/ R1.6, R2.2).
@@ -33,6 +46,11 @@ pub enum Mark {
 impl Interface {
     pub fn names(&self) -> impl Iterator<Item = &str> {
         self.functions.keys().map(String::as_str)
+    }
+
+    /// The classes it declares, by the name the module gives them.
+    pub fn classes(&self) -> impl Iterator<Item = (&str, &PyClass)> {
+        self.classes.iter().map(|(name, class)| (name.as_str(), class))
     }
 }
 
@@ -74,7 +92,7 @@ pub fn is_c_library(module: &str) -> bool {
 /// Read the interface of `module`: a C library's when it is named `c.<library>`, a Python
 /// module's otherwise.
 pub fn interface_of(module: &str, text: &str) -> (Interface, Vec<Diagnostic>) {
-    if is_c_library(module) { c_interface(text) } else { interface(text) }
+    if is_c_library(module) { c_interface(text) } else { python_interface(module, text) }
 }
 
 /// The types C and lotml pass by value: what a C function may take, and what it may return.
@@ -155,68 +173,148 @@ pub fn c_interface(text: &str) -> (Interface, Vec<Diagnostic>) {
     }
     diagnostics.append(&mut program.diagnostics);
     diagnostics.sort_by_key(|d| d.span.start);
-    (Interface { functions, mark: Mark::None }, diagnostics)
+    (Interface { functions, classes: BTreeMap::new(), mark: Mark::None }, diagnostics)
 }
 
-/// Read an interface: the functions it declares, and what is wrong with it. A function that
-/// is wrong is left out, so the rest stay usable.
+/// Read an interface: the functions and classes it declares, and what is wrong with it. A
+/// declaration that is wrong is left out, so the rest stay usable. With no module named, a class's
+/// type is written `py._.<Class>`; [`interface_of`] writes it by the module it is read for.
 pub fn interface(text: &str) -> (Interface, Vec<Diagnostic>) {
+    python_interface("py._", text)
+}
+
+/// A Python interface read for `module` (`py.datetime`): each class it declares is the type
+/// `py.datetime.<Class>` (adr:0034).
+fn python_interface(module: &str, text: &str) -> (Interface, Vec<Diagnostic>) {
     let parsed = parse_interface(text);
     let mut diagnostics: Vec<Diagnostic> = parsed.errors.iter().map(crate::syntax).collect();
     let mut program = Program::with_prelude();
+    for item in &parsed.module.items {
+        if let Item::Class(c) = item
+            && program.py_classes.insert(c.name.name.clone(), format!("{module}.{}", c.name.name)).is_some()
+        {
+            diagnostics.push(Diagnostic::error("E0210", c.name.span, format!("`{}` is declared twice", c.name.name)));
+        }
+    }
     let mut functions = BTreeMap::new();
+    let mut classes = BTreeMap::new();
     for item in &parsed.module.items {
         let f = match item {
             Item::Fn(f) => f,
+            Item::Class(c) => {
+                let class = python_class(c, &mut program, &mut diagnostics);
+                classes.insert(c.name.name.clone(), class);
+                continue;
+            }
             Item::Error(_) => continue,
             other => {
                 diagnostics.push(Diagnostic::error(
                     "E0221",
                     other.span(),
-                    "an interface declares Python functions: signatures, nothing else",
+                    "an interface declares Python functions and classes: signatures, nothing else",
                 ));
                 continue;
             }
         };
-        if f.body.is_some() {
-            diagnostics.push(Diagnostic::error(
-                "E0221",
-                f.name.span,
-                format!("`{}` has a body: an interface declares only its signature", f.name.name),
-            ));
-            continue;
-        }
-        if !f.type_params.is_empty() {
-            diagnostics.push(Diagnostic::error(
-                "E0221",
-                f.name.span,
-                format!("`{}` has type parameters, which a Python function's binding cannot check", f.name.name),
-            ));
-            continue;
-        }
-        let before = program.diagnostics.len();
-        let sig = program.signature(f, &[], None);
-        if program.diagnostics.len() > before {
-            continue;
-        }
-        if sig.error != Some(Ty::Adt("PyError".into(), vec![])) {
-            diagnostics.push(
-                Diagnostic::error(
-                    "E0221",
-                    f.name.span,
-                    format!("`{}` must return `T ! PyError`: any call into Python can fail", f.name.name),
-                )
-                .note("write `-> None ! PyError` for a function with no value to return"),
-            );
-            continue;
-        }
-        if functions.insert(f.name.name.clone(), sig).is_some() {
+        let Some(sig) = python_signature(f, None, &mut program, &mut diagnostics) else { continue };
+        if functions.insert(f.name.name.clone(), sig).is_some() || classes.contains_key(&f.name.name) {
             diagnostics.push(Diagnostic::error("E0210", f.name.span, format!("`{}` is declared twice", f.name.name)));
         }
     }
     diagnostics.append(&mut program.diagnostics);
     diagnostics.sort_by_key(|d| d.span.start);
-    (Interface { functions, mark: mark_of(text) }, diagnostics)
+    (Interface { functions, classes, mark: mark_of(text) }, diagnostics)
+}
+
+/// The signature of `f`, a function of the interface or a member of a class whose type is
+/// `self_ty`, or `None` with the reason reported: it has a body, type parameters, or does not
+/// fail with `PyError`.
+fn python_signature(
+    f: &lotml_syntax::ast::FnDef,
+    self_ty: Option<&Ty>,
+    program: &mut Program,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<FnSig> {
+    if f.body.is_some() {
+        diagnostics.push(Diagnostic::error(
+            "E0221",
+            f.name.span,
+            format!("`{}` has a body: an interface declares only its signature", f.name.name),
+        ));
+        return None;
+    }
+    if !f.type_params.is_empty() {
+        diagnostics.push(Diagnostic::error(
+            "E0221",
+            f.name.span,
+            format!("`{}` has type parameters, which a Python function's binding cannot check", f.name.name),
+        ));
+        return None;
+    }
+    let before = program.diagnostics.len();
+    let sig = program.signature(f, &[], self_ty);
+    if program.diagnostics.len() > before {
+        return None;
+    }
+    if sig.error != Some(Ty::Adt("PyError".into(), vec![])) {
+        diagnostics.push(
+            Diagnostic::error(
+                "E0221",
+                f.name.span,
+                format!("`{}` must return `T ! PyError`: any call into Python can fail", f.name.name),
+            )
+            .note("write `-> None ! PyError` for a function with no value to return"),
+        );
+        return None;
+    }
+    Some(sig)
+}
+
+/// A class block read: its bases among the interface's classes, its attributes, its constructor
+/// (the function named after it), its methods (taking `self`) and its static methods.
+fn python_class(c: &ClassDef, program: &mut Program, diagnostics: &mut Vec<Diagnostic>) -> PyClass {
+    let own = Ty::Adt(program.py_classes[&c.name.name].clone(), vec![]);
+    let mut class = PyClass::default();
+    for base in &c.bases {
+        match program.py_classes.get(&base.name) {
+            Some(qualified) => class.bases.push(qualified.clone()),
+            None => diagnostics.push(Diagnostic::error(
+                "E0221",
+                base.span,
+                format!("`{}` is no class this interface declares, so it cannot be a base", base.name),
+            )),
+        }
+    }
+    for attribute in &c.attributes {
+        let Some(name) = &attribute.name else { continue };
+        let before = program.diagnostics.len();
+        let ty = program.lower(&attribute.ty, &[]);
+        if program.diagnostics.len() == before && class.attributes.insert(name.name.clone(), ty).is_some() {
+            diagnostics.push(Diagnostic::error("E0210", name.span, format!("`{}` is declared twice", name.name)));
+        }
+    }
+    for m in &c.methods {
+        let has_self = m.params.first().is_some_and(|p| p.name.name == "self");
+        let Some(sig) = python_signature(m, has_self.then_some(&own), program, diagnostics) else { continue };
+        if m.name.name == c.name.name {
+            if has_self || sig.ret != own {
+                diagnostics.push(Diagnostic::error(
+                    "E0221",
+                    m.name.span,
+                    format!("the constructor `{}` takes no `self` and returns `{}`", m.name.name, c.name.name),
+                ));
+                continue;
+            }
+            class.constructor = Some(sig);
+            continue;
+        }
+        let receiver = has_self.then(|| m.params[0].convention);
+        let method = Method { sig, receiver, owner_params: Vec::new() };
+        if class.methods.insert(m.name.name.clone(), method).is_some() || class.attributes.contains_key(&m.name.name) {
+            diagnostics.push(Diagnostic::error("E0210", m.name.span, format!("`{}` is declared twice", m.name.name)));
+        }
+    }
+    class
 }
 
 /// The modules whose interface carries a mark, with it.
