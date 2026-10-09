@@ -364,6 +364,9 @@ steps = math.floor(d)
   `date.today()?`; each call and attribute read can fail, and nothing else works on the object.
   A function the stub overloads is called as any other, the call taking the first overload its
   arguments fit: `listdir(".")?` is a `[str]`. It is called, never passed as a value (E0226).
+  A generic one takes its type arguments from the call, `nlargest(2, xs)?` a list of what `xs`
+  holds, and a generic class is named with them: `p: Pattern[str] = compile("a+")?`; a value
+  read through it is checked as that type, and `m is None` asks whether a value is there.
 - A C library is imported from its interface, written by hand in `bindings/c.<library>.lotmli`:
   `from c.m import cos`. Its functions take and return numbers, `bool` and (taken only) `str`,
   and cannot fail.
