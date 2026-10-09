@@ -2206,7 +2206,12 @@ impl<'p> Body<'p> {
             return Ty::Error;
         }
         if let Some(class) = self.py_class(&ty) {
-            if let Some(attribute) = self.py_attribute(&class, &name.name) {
+            if let Some((owner, attribute)) = self.py_attribute_of(&class, &name.name) {
+                let params = self.program.py_params.get(&owner).cloned().unwrap_or_default();
+                let Ty::Adt(_, type_args) = self.resolve(&ty) else { unreachable!("a Python class's value") };
+                let args =
+                    if owner == class { self.owner_args(&params, &type_args) } else { self.owner_args(&params, &[]) };
+                let attribute = attribute.substitute(&params, &args);
                 return Ty::Result(Box::new(attribute), Box::new(Ty::Adt("PyError".into(), vec![])));
             }
             let names = self.py_members(&class);
@@ -3129,9 +3134,12 @@ impl<'p> Body<'p> {
                     }
                 }
             }
-            Ty::Adt(type_name, _) if self.program.py_attributes.contains_key(&type_name) => {
+            Ty::Adt(type_name, type_args) if self.program.py_attributes.contains_key(&type_name) => {
                 match self.py_method(&type_name, &name.name) {
-                    Some(m) => self.user_method(&m, object, &[], args, span, name),
+                    Some(m) => {
+                        let owner_args = self.owner_args(&m.owner_params, &type_args);
+                        self.user_method(&m, object, &owner_args, args, span, name)
+                    }
                     None => {
                         self.arg_types(args, &[]);
                         let names = self.py_members(&type_name);
@@ -3272,7 +3280,22 @@ impl<'p> Body<'p> {
 
     /// The type of the attribute `name` of the Python class `class` or of a base it declares.
     fn py_attribute(&self, class: &str, name: &str) -> Option<Ty> {
-        self.py_lineage(class).iter().find_map(|c| self.program.py_attributes.get(c).and_then(|a| a.get(name)).cloned())
+        self.py_attribute_of(class, name).map(|(_, ty)| ty)
+    }
+
+    /// The attribute `name` of the Python class `class` or of a base it declares, with the class
+    /// that declares it.
+    fn py_attribute_of(&self, class: &str, name: &str) -> Option<(String, Ty)> {
+        self.py_lineage(class)
+            .into_iter()
+            .find_map(|c| self.program.py_attributes.get(&c).and_then(|a| a.get(name)).cloned().map(|ty| (c, ty)))
+    }
+
+    /// The type arguments a generic Python class's member takes from a receiver typed with
+    /// `given`: those, when they are the member's class's, else a fresh variable each, since a
+    /// base's arguments are not written (adr:0036).
+    fn owner_args(&mut self, params: &[String], given: &[Ty]) -> Vec<Ty> {
+        if params.len() == given.len() { given.to_vec() } else { params.iter().map(|_| self.infer.fresh()).collect() }
     }
 
     /// Every member name of the Python class `class` and its bases, for an alternative.

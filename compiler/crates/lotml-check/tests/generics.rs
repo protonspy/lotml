@@ -139,3 +139,33 @@ fn a_type_argument_the_boundary_does_not_carry_is_refused() {
         "from py.re import nlargest, compile\n\nfn f() -> None ! PyError:\n    top = nlargest(1, [compile(\"a\")?])?\n";
     assert!(codes(&check(handle)).is_empty(), "a Python class's value does: {:?}", codes(&check(handle)));
 }
+
+fn clean(body: &str) {
+    let source = format!("from py.re import compile, Pattern\n\n{body}");
+    let checked = check(&source);
+    assert!(checked.diagnostics.is_empty(), "{source}\n{:?}", codes(&checked));
+}
+
+#[test]
+fn a_generic_class_s_value_is_typed_with_its_arguments_and_its_members_substituted() {
+    clean("fn f() -> [str] ! PyError:\n    p: Pattern[str] = compile(\"a\")?\n    return p.split(\"a,b\")?\n");
+    clean("fn f() -> str ! PyError:\n    p = compile(\"a\")?\n    return p.pattern?\n");
+    clean("fn f() -> [int] ! PyError:\n    p = compile(\"a\")?\n    return p.mapped(3)?\n");
+    clean(
+        "fn f() -> bytes ! PyError:\n    p = Pattern(b\"a\")?\n    return p.pattern?\n"
+            .replace("b\"a\"", "raw")
+            .replace("fn f()", "fn f(raw: bytes)")
+            .as_str(),
+    );
+    clean("fn f() -> str ! PyError:\n    return Pattern.escape(\"a.b\")?\n");
+}
+
+#[test]
+fn a_generic_class_s_arguments_are_checked() {
+    let source = "from py.re import compile, Pattern\n\nfn f() -> [int] ! PyError:\n    p = compile(\"a\")?\n    return p.split(\"a\")?\n";
+    let found = codes(&check(source));
+    assert!(found.len() == 1 && found[0].starts_with("E0204"), "a `[str]` is no `[int]`: {found:?}");
+    let source = "from py.re import Pattern\n\nfn f(p: Pattern[str, int]) -> None:\n    pass\n";
+    let found = codes(&check(source));
+    assert!(found.iter().any(|m| m.starts_with("E0202") && m.contains("takes 1 type arguments")), "{found:?}");
+}

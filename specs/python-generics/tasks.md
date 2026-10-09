@@ -5,7 +5,7 @@
   _Depends 1.1_
 - [x] 1.3 (TDD) Infer a generic Python call's type arguments, refuse one the boundary does not carry, and record each Python call's instantiated signature by its span — R4.1, R4.2
   _Depends 1.2_
-- [ ] 1.4 (Unit) Type a generic Python class's value with its arguments in a program, and its methods and attributes with them substituted — R4.3
+- [x] 1.4 (Unit) Type a generic Python class's value with its arguments in a program, and its methods and attributes with them substituted — R4.3
   _Depends 1.3_
 - [ ] 1.5 (TDD) Choose among generic overloads, and among a method's overloads by the receiver's type arguments — R4.4
   _Depends 1.4_
