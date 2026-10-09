@@ -72,6 +72,63 @@ jobs:
       - name: Test
         run: cargo test --manifest-path compiler/Cargo.toml --locked -p lotml-llvm
 
+  release-archive:
+    # A release archive on a machine with no Python (plans/python-via-uv.md 3.2): built as
+    # release.yml builds one, unpacked, then run with nothing on the path, so CPython 3.14 comes
+    # through the uv beside lotml; and offline, where it must fail naming what is missing.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
+          rustup default "$RUST_TOOLCHAIN"
+      - name: Build
+        run: cargo build --manifest-path compiler/Cargo.toml --locked --release -p lotml --target "$TARGET"
+      - name: Archive
+        run: |
+          exe=lotml
+          python=python3
+          if [ "$RUNNER_OS" = Windows ]; then exe=lotml.exe; python=python; fi
+          name="lotml-ci-$TARGET"
+          mkdir -p "dist/$name"
+          cp "compiler/target/$TARGET/release/$exe" README.md LICENSE "dist/$name/"
+          "$python" release/uv.py fetch "$TARGET" "dist/$name"
+          if [ "$RUNNER_OS" = Windows ]; then
+            (cd dist && 7z a -tzip "$name.zip" "$name" > /dev/null)
+            archive="dist/$name.zip"
+          else
+            tar -C dist -czf "dist/$name.tar.gz" "$name"
+            archive="dist/$name.tar.gz"
+          fi
+          "$python" release/uv.py check "$archive" "$TARGET"
+          echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
+      - name: Unpack
+        run: |
+          mkdir "$RUNNER_TEMP/unpacked"
+          if [ "$RUNNER_OS" = Windows ]; then
+            7z x "$ARCHIVE" -o"$RUNNER_TEMP/unpacked" > /dev/null
+          else
+            tar -C "$RUNNER_TEMP/unpacked" -xzf "$ARCHIVE"
+          fi
+      - name: With no Python
+        run: bash release/smoke.sh "$RUNNER_TEMP/unpacked/lotml-ci-$TARGET" both
+
   harness:
     runs-on: ubuntu-latest
     steps:
