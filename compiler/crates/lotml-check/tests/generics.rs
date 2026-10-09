@@ -169,3 +169,56 @@ fn a_generic_class_s_arguments_are_checked() {
     let found = codes(&check(source));
     assert!(found.iter().any(|m| m.starts_with("E0202") && m.contains("takes 1 type arguments")), "{found:?}");
 }
+
+const OVER: &str = "\
+fn first[T](xs: [T]) -> T ! PyError
+fn first(xs: str) -> str ! PyError
+fn make(raw: str) -> Pat[str] ! PyError
+fn make(raw: bytes) -> Pat[bytes] ! PyError
+
+class Pat[S]:
+    fn search(self: Pat[str], s: str) -> str ! PyError
+    fn search(self: Pat[bytes], s: bytes) -> bytes ! PyError
+";
+
+fn over(body: &str) -> (String, lotml_check::Checked) {
+    let (read, problems) = interface_of("py.o", OVER);
+    assert!(problems.is_empty(), "{:?}", messages(&problems));
+    let interfaces = lotml_check::Interfaces::from([("py.o".to_string(), read)]);
+    let source = format!("from py.o import first, make, Pat\n\ntype P(x: int)\n\n{body}");
+    let parsed = lotml_syntax::parse(&source);
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    let checked = lotml_check::check_resolved_with(&parsed.module, &source, &interfaces);
+    (source, checked)
+}
+
+/// The overload and the result recorded for `call` in `body`, which checks clean.
+fn chose(body: &str, call: &str) -> (usize, Ty) {
+    let (source, checked) = over(body);
+    assert!(checked.diagnostics.is_empty(), "{source}\n{:?}", codes(&checked));
+    let start = source.find(call).unwrap() as u32;
+    let at = lotml_syntax::span::Span { start, end: start + call.len() as u32 };
+    let recorded = checked.py_calls.get(&at).unwrap_or_else(|| panic!("nothing recorded at `{call}`"));
+    (recorded.overload, recorded.sig.ret.clone())
+}
+
+#[test]
+fn a_generic_overload_is_chosen_and_recorded_as_instantiated() {
+    let int = Ty::primitive("int").unwrap();
+    assert_eq!(chose("fn f() -> int ! PyError:\n    return first([1, 2])?\n", "first([1, 2])"), (0, int));
+    assert_eq!(chose("fn f() -> str ! PyError:\n    return first(\"ab\")?\n", "first(\"ab\")"), (1, Ty::Str));
+    let (_, checked) = over("fn f() -> None ! PyError:\n    x = first([P(1)])?\n");
+    let found = codes(&checked);
+    assert!(found.len() == 1 && found[0].starts_with("E0204") && found[0].contains("`P`"), "{found:?}");
+}
+
+#[test]
+fn a_method_s_overloads_are_chosen_by_the_receiver_s_type_arguments() {
+    let text = "fn f() -> str ! PyError:\n    p = make(\"a\")?\n    return p.search(\"x\")?\n";
+    assert_eq!(chose(text, "p.search(\"x\")"), (0, Ty::Str));
+    let raw = "fn f(raw: bytes) -> bytes ! PyError:\n    p = make(raw)?\n    return p.search(raw)?\n";
+    assert_eq!(chose(raw, "p.search(raw)"), (1, Ty::Bytes));
+    let (_, checked) = over("fn f(raw: bytes) -> None ! PyError:\n    p = make(\"a\")?\n    x = p.search(raw)?\n");
+    let found = codes(&checked);
+    assert!(found.len() == 1 && found[0].starts_with("E0204"), "a `Pat[str]` searches no bytes: {found:?}");
+}
