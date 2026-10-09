@@ -869,3 +869,89 @@ fn bind_refuses_a_stub_it_cannot_parse_saying_where() {
     let said = String::from_utf8_lossy(&out.stderr);
     assert!(said.contains("does not parse, at line 2"), "{said}");
 }
+
+const TWICE_PY: &str = "\
+def twice(x):
+    return x * 2
+
+class Pad:
+    def __init__(self, start):
+        self.start = start
+    def grow(self, by):
+        return self.start + by
+";
+
+const TWICE_LOTMLI: &str = "\
+fn twice(x: int) -> int ! PyError
+fn twice(x: str) -> str ! PyError
+
+class Pad:
+    fn Pad(start: int) -> Pad ! PyError
+    fn Pad(start: str) -> Pad ! PyError
+    fn grow(self, by: int) -> int ! PyError
+    fn grow(self, by: str) -> str ! PyError
+";
+
+#[test]
+fn an_overloaded_call_runs_through_the_overload_the_checker_gave_it() {
+    let program = "\
+from py.twice import twice, Pad
+
+fn main() -> None ! PyError:
+    n: int = twice(21)?
+    s: str = twice(\"ab\")?
+    print(n, s)
+    p = Pad(3)?
+    q = Pad(\"x\")?
+    k: int = p.grow(2)?
+    t: str = q.grow(\"y\")?
+    print(k, t)
+";
+    let dir = scratch(
+        "python-overloads",
+        &[(".git", ""), ("twice.py", TWICE_PY), ("bindings/py.twice.lotmli", TWICE_LOTMLI), ("main.lot", program)],
+    );
+    let checked = lotml(&["check", "main.lot"], &dir);
+    assert!(checked.status.success(), "{}", stdout(&checked));
+    let out = lotml(&["run", "main.lot"], &dir);
+    assert_eq!(
+        stdout(&out),
+        "42 abab\n5 xy\n",
+        "each call converts and checks by its own overload: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn a_keyword_argument_reaches_python_by_its_name_past_a_parameter_left_to_its_default() {
+    let module = "\
+def f(a, b=10, c=20):
+    return a * 100 + b * 10 + c
+
+class Acc:
+    def __init__(self):
+        pass
+    def add(self, a, b=1, c=2):
+        return a + b * 10 + c * 100
+";
+    let interface = "\
+fn f(a: int, b: int = todo(), c: int = todo()) -> int ! PyError
+
+class Acc:
+    fn Acc() -> Acc ! PyError
+    fn add(self, a: int, b: int = todo(), c: int = todo()) -> int ! PyError
+";
+    let program = "\
+from py.kw import f, Acc
+
+fn main() -> None ! PyError:
+    print(f(1, c=3)?, f(1, c=3, b=2)?)
+    print(Acc()?.add(5, c=7)?)
+";
+    let dir = scratch(
+        "python-keywords",
+        &[(".git", ""), ("kw.py", module), ("bindings/py.kw.lotmli", interface), ("main.lot", program)],
+    );
+    let out = lotml(&["run", "main.lot"], &dir);
+    assert_eq!(stdout(&out), "203 123\n715\n", "{}", String::from_utf8_lossy(&out.stderr));
+}

@@ -630,6 +630,8 @@ pub enum Expr {
         module: String,
         function: String,
         args: Vec<Operand>,
+        /// The names of the last `keywords.len()` arguments, which are passed by keyword.
+        keywords: Vec<String>,
         params: Vec<Ty>,
         ret: Ty,
     },
@@ -639,6 +641,8 @@ pub enum Expr {
         object: Operand,
         method: String,
         args: Vec<Operand>,
+        /// The names of the last `keywords.len()` arguments, which are passed by keyword.
+        keywords: Vec<String>,
         params: Vec<Ty>,
         ret: Ty,
     },

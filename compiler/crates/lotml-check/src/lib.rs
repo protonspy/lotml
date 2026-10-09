@@ -115,6 +115,15 @@ pub struct Checked {
 }
 
 impl Checked {
+    /// The overload of `sig` the call at `call` was given (adr:0035): `sig` itself for a function
+    /// with no overloads, or a call the checker gave none.
+    pub fn py_overload<'a>(&self, call: Span, sig: &'a FnSig) -> &'a FnSig {
+        match self.py_overloads.get(&call) {
+            Some(&chosen) if chosen > 0 => sig.overloads.get(chosen - 1).unwrap_or(sig),
+            _ => sig,
+        }
+    }
+
     /// The method or static method `name` of the Python class `class`, or of the nearest base it
     /// declares that has one (adr:0034).
     pub fn py_method(&self, class: &str, name: &str) -> Option<&Method> {
