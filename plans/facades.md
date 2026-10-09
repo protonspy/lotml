@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: 710209c6be8b38193c38f39fa497a22b88602ac9b889077e9e75f50990d21aeb
+checksum: c7bdb0230c248df0d785164ac6eaee40108fbfbde7e7c7b09a8cec2632a7f1bd
 ---
 
 # Facades
@@ -32,7 +32,8 @@ index, and the index's CI runs their tests against the real libraries.
 - `compiler/crates/lotml-bind/` and `compiler/crates/lotml/src/files.rs` — the project's
   environment and what is found in it
 - `compiler/crates/lotml-py/` and `compiler/crates/lotml-llvm/` — linking modules on each target
-- `facades/` — the reference facades and `facades/index.toml`
+- `facades/` — the reference facades
+- `index/packages.toml` — the package index, the allowlist lotml fetches
 - `docs/wiki/pages/` — writing a facade
 
 ## References
@@ -42,6 +43,8 @@ index, and the index's CI runs their tests against the real libraries.
 - `specs/llvm-modules/` — a program of several LotML modules built into one native executable
 - `specs/lotml-packages/` — a wheel carrying LotML source, found in the project's environment as a
   second module root
+- `specs/package-index/` — the allowlist: fetched, cached, failing closed, checked against `uv.lock`
+  before installing and against the environment before any Python starts, and a project's own list
 - `specs/redis-facade/` — `lotml-redis`, the reference facade over a stateful client
 - `specs/python-callbacks/` — a LotML function passed to Python, every argument checked when
   Python calls it
@@ -73,10 +76,11 @@ index, and the index's CI runs their tests against the real libraries.
   with `package` and `facade` in the glossary; the owner accepts it before 2.2
 - [ ] 2.2 (Unit) Write and build the spec lotml-packages: a wheel carrying LotML source and its
   lotml range, its manifest read from the wheel's files, found in the environment from `uv.lock`
-  as a second module root under adr:0029's confinement and size caps, imported bare, two
-  candidates for one name an error, no `py.` suggested for a name a package provides, a missing
-  environment reported with the command that makes it, a `lotml check` that runs no Python, and a
-  pure package built natively
+  as a second module root for direct dependencies only, read from lotml's cache environment and
+  never a project `.venv`, under adr:0029's confinement and size caps, the package's source hash
+  in `lotml.lock`, imported bare, embedded names unclaimable, two candidates for one name an error,
+  no `py.` suggested for a name a package provides, a missing environment reported with the
+  command that makes it, a `lotml check` that runs no Python, and a pure package built natively
   _Depends 1.3, 2.1_
 - [ ] 2.3 (Unit) Write and build the spec redis-facade: `lotml-redis` under `facades/redis/`,
   connecting, reading, writing, expiring and pipelining keys, redis' exceptions mapped to error
@@ -90,13 +94,16 @@ index, and the index's CI runs their tests against the real libraries.
   `facades/`
   _Depends 2.3_
 - [ ] 2.6 (Unit) Publish `lotml-redis` to PyPI from a facade release workflow with its own tag
-  scheme, through trusted publishing; the owner registers the pending publisher and approves the
-  first upload
+  scheme, through trusted publishing with a PEP 740 attestation, from a protected environment
+  whose publish job alone holds the OIDC token; the owner registers the pending publisher and
+  approves the first upload
   _Depends 2.3_
-- [ ] 2.7 (Unit) Write `facades/index.toml` and the CI job that fetches each entry's wheel from
-  PyPI, checks its hash and runs its tests without secrets, on fork pull requests too, with
-  timeouts and PyPI as the only index, and a wiki page on writing a facade drawn from 2.3
-  _Depends 2.6_
+- [ ] 2.7 (Unit) Write and build the spec package-index: `index/packages.toml` with `lotml-redis`
+  as its first entry, lotml fetching and caching it and failing closed, a lock or an environment
+  holding an unlisted LotML package refused, revocation, the project's own list warned, and the CI
+  job that verifies each new entry's attestation and hash and runs its tests on `pull_request`,
+  read-only, with no secrets or OIDC; and a wiki page on writing a facade drawn from 2.3
+  _Depends 2.2, 2.6_
 - [ ] 3.1 (Unit) Write a proposed ADR on a LotML function crossing to Python as a callable: each
   argument Python passes checked against the LotML signature and copied, a wrong one raised in
   Python, what a `T ! E` return and a panic become in Python, which thread runs it, and how a
@@ -107,7 +114,9 @@ index, and the index's CI runs their tests against the real libraries.
 - [ ] 3.3 (Unit) Write and build the spec fastapi-facade: `lotml-fastapi` under
   `facades/fastapi/`, routes registered by a call with LotML handlers, path, query and JSON body
   decoded into LotML values and checked, responses encoded, served by uvicorn, tested through
-  FastAPI's `TestClient`
+  FastAPI's `TestClient`, with request size and nesting capped before the boundary, handlers
+  serialized into the runtime, error and panic text kept out of responses, and uvicorn bound to
+  `127.0.0.1` unless asked
   _Depends 2.7, 3.2_
 - [ ] 3.4 (Unit) Publish `lotml-fastapi` as 2.6 published `lotml-redis`, then add it to the index
   _Depends 3.3_
@@ -121,6 +130,8 @@ index, and the index's CI runs their tests against the real libraries.
 - A project depending on a pure LotML package builds it into a native executable.
 - A LotML program serves a FastAPI route whose JSON body is checked against a LotML record, and
   its test passes through `TestClient`.
-- `lotml-redis` and `lotml-fastapi` are on PyPI and in `facades/index.toml`, and the index's CI job
-  is green.
+- `lotml-redis` and `lotml-fastapi` are on PyPI and in `index/packages.toml`, and the index's CI
+  job is green.
+- A project whose lock names a LotML package missing from the index, or listed with another hash,
+  installs nothing and is told which distribution was refused.
 - adr:0038 and the module record are accepted, or superseded by the records that replaced them.
