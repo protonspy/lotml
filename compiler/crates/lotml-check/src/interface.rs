@@ -322,6 +322,15 @@ pub(crate) fn marks(interfaces: &Interfaces) -> HashMap<String, Mark> {
     interfaces.iter().filter(|(_, i)| i.mark != Mark::None).map(|(module, i)| (module.clone(), i.mark)).collect()
 }
 
+/// The classes of each interface, by the name its module gives them.
+pub(crate) fn classes(interfaces: &Interfaces) -> HashMap<String, BTreeMap<String, PyClass>> {
+    interfaces
+        .iter()
+        .filter(|(_, i)| !i.classes.is_empty())
+        .map(|(module, i)| (module.clone(), i.classes.clone()))
+        .collect()
+}
+
 /// The functions of each interface, as the checker keeps them.
 pub(crate) fn functions(interfaces: &Interfaces) -> HashMap<String, BTreeMap<String, FnSig>> {
     interfaces.iter().map(|(module, i)| (module.clone(), i.functions.clone())).collect()

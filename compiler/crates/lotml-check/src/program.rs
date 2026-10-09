@@ -93,6 +93,13 @@ pub struct Program {
     /// The Python classes a name means, each by its full name (adr:0034): `date` for
     /// `py.datetime.date` once imported, and in an interface its own classes.
     pub py_classes: HashMap<String, String>,
+    /// The classes of each Python module there is an interface for, by the name the module
+    /// gives them.
+    pub available_classes: HashMap<String, BTreeMap<String, crate::interface::PyClass>>,
+    /// The attributes of each Python class an imported module declares, by its full name.
+    pub py_attributes: HashMap<String, BTreeMap<String, Ty>>,
+    /// The bases of each Python class an imported module declares, by full names.
+    pub py_bases: HashMap<String, Vec<String>>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -103,10 +110,12 @@ impl Program {
     pub fn collect(
         module: &ast::Module,
         interfaces: &HashMap<String, BTreeMap<String, FnSig>>,
+        classes: &HashMap<String, BTreeMap<String, crate::interface::PyClass>>,
         marks: &HashMap<String, crate::interface::Mark>,
     ) -> Program {
         let mut program = Program::with_prelude();
         program.available = interfaces.clone();
+        program.available_classes = classes.clone();
         program.marks = marks.clone();
         let mut seen: HashMap<String, Span> = HashMap::new();
         let mut declare = |program: &mut Program, name: &ast::Ident| {
@@ -147,6 +156,16 @@ impl Program {
                 }
                 Item::Fn(f) => declare(&mut program, &f.name),
                 Item::Trait(t) => declare(&mut program, &t.name),
+                // A Python class imported by name is a type the signatures may use (adr:0034);
+                // its members, and a clash with a name declared here, come with the import below.
+                Item::Import(import) => {
+                    let path = import.module.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(".");
+                    for name in &import.names {
+                        if program.available_classes.get(&path).is_some_and(|c| c.contains_key(&name.name)) {
+                            program.py_classes.insert(name.name.clone(), format!("{path}.{}", name.name));
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -328,11 +347,39 @@ impl Program {
 
     /// `import m` or `from m import f` of a Python module with an interface: its functions are
     /// called like lotml's own, and each returns `T ! PyError`.
-    fn import_python(&mut self, import: &ast::Import, path: &str, functions: BTreeMap<String, FnSig>) {
+    fn import_python(&mut self, import: &ast::Import, path: &str, mut functions: BTreeMap<String, FnSig>) {
         if import.names.is_empty() {
             self.modules.insert(path.to_string());
         }
+        // A module's classes, wherever their values come from (adr:0034): their members by the
+        // class's full name, and each constructor among the module's functions, `py.m.C(...)`.
+        let classes = self.available_classes.get(path).cloned().unwrap_or_default();
+        for (local, class) in &classes {
+            let qualified = format!("{path}.{local}");
+            self.methods.insert(qualified.clone(), class.methods.clone());
+            self.py_attributes.insert(qualified.clone(), class.attributes.clone());
+            self.py_bases.insert(qualified, class.bases.clone());
+            if let Some(constructor) = &class.constructor {
+                functions.entry(local.clone()).or_insert_with(|| constructor.clone());
+            }
+        }
         for name in &import.names {
+            if classes.contains_key(&name.name) {
+                if self.functions.contains_key(&name.name) || self.types.contains_key(&name.name) {
+                    self.diagnostics.push(Diagnostic::error(
+                        "E0210",
+                        name.span,
+                        format!("`{}` is declared twice: imported from `{path}` and declared in this file", name.name),
+                    ));
+                    continue;
+                }
+                self.py_classes.insert(name.name.clone(), format!("{path}.{}", name.name));
+                if let Some(constructor) = functions.get(&name.name) {
+                    self.functions.insert(name.name.clone(), constructor.clone());
+                }
+                self.imported.insert(name.name.clone(), path.to_string());
+                continue;
+            }
             let Some(sig) = functions.get(&name.name) else {
                 self.diagnostics.push(
                     Diagnostic::error("E0216", name.span, format!("`{path}`'s interface has no `{}`", name.name))

@@ -1170,8 +1170,12 @@ impl<'p> Body<'p> {
     fn lower(&mut self, t: &TypeExpr) -> Ty {
         let scope: Vec<String> = self.type_params.keys().cloned().collect();
         // Lowering only reads the program's declarations; diagnostics go to this body.
-        let mut scratch =
-            Program { types: self.program.types.clone(), traits: self.program.traits.clone(), ..Program::default() };
+        let mut scratch = Program {
+            types: self.program.types.clone(),
+            traits: self.program.traits.clone(),
+            py_classes: self.program.py_classes.clone(),
+            ..Program::default()
+        };
         let ty = scratch.lower(t, &scope);
         self.diagnostics.extend(scratch.diagnostics);
         ty

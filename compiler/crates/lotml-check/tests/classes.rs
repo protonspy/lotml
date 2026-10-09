@@ -72,3 +72,50 @@ fn a_class_holds_only_what_python_can_check() {
     let (_, problems) = c_interface("class point:\n    x: int\n");
     assert!(problems.iter().any(|d| d.code == "E0221"), "a C interface declares no class");
 }
+
+fn interfaces() -> lotml_check::Interfaces {
+    let (read, problems) = interface_of("py.datetime", DATETIME);
+    assert!(problems.is_empty());
+    lotml_check::Interfaces::from([("py.datetime".to_string(), read)])
+}
+
+fn codes(source: &str) -> Vec<&'static str> {
+    let parsed = lotml_syntax::parse(source);
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    lotml_check::check_resolved_with(&parsed.module, source, &interfaces()).diagnostics.iter().map(|d| d.code).collect()
+}
+
+fn messages(source: &str) -> Vec<String> {
+    let parsed = lotml_syntax::parse(source);
+    lotml_check::check_resolved_with(&parsed.module, source, &interfaces())
+        .diagnostics
+        .iter()
+        .map(|d| d.message.clone())
+        .collect()
+}
+
+#[test]
+fn an_imported_class_is_a_type_and_its_name_calls_its_constructor() {
+    let source = "from py.datetime import date\n\nfn first() -> date ! PyError:\n    d: date = date(2026, 1, 8)?\n    return d\n";
+    assert_eq!(codes(source), Vec::<&str>::new());
+    let wrong = "from py.datetime import date\n\nfn first() -> date ! PyError:\n    return date(\"2026\", 1, 8)?\n";
+    assert_eq!(codes(wrong), ["E0204"], "the constructor's parameters are checked");
+    let unwrapped = "from py.datetime import date\n\nfn first() -> date:\n    return date(2026, 1, 8)\n";
+    assert!(
+        messages(unwrapped).iter().any(|m| m.contains("py.datetime.date ! PyError")),
+        "a constructor can fail: {:?}",
+        messages(unwrapped)
+    );
+}
+
+#[test]
+fn a_class_is_reached_by_its_module_s_path_too() {
+    let source = "import py.datetime\n\nfn first() -> None ! PyError:\n    d = py.datetime.date(2026, 1, 8)?\n";
+    assert_eq!(codes(source), Vec::<&str>::new());
+}
+
+#[test]
+fn a_class_imported_beside_a_record_of_its_name_is_declared_twice() {
+    let source = "from py.datetime import date\n\ntype date(year: int)\n";
+    assert!(codes(source).contains(&"E0210"), "{:?}", messages(source));
+}
