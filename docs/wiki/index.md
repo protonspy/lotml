@@ -48,6 +48,7 @@ fixed documents, not pages, and neither is ever an orphan.
 
 - [[prior-art-compilers]] — sixteen projects that compile or run Python, read against lotml's compiler: verdict, what is rejected, what may be copied
 - [[target-parity]] — proving `lotml run` and `lotml build` agree: floors, fuzzing, every test in every mode
+- [[python-interop]] — a program calling Python through `py.<module>`: what each kind of value becomes, what can fail, what is still out
 - [[compiler-performance]] — where checking, building and running spend time, and what the prior art does about it
 
 ### Training a small coder

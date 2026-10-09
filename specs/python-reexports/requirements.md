@@ -2,7 +2,7 @@
 autonomy: auto
 ci: wait
 branch: feat/python-reexports
-delivery: in-review
+delivery: merged
 pr: 62
 ---
 

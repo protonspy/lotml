@@ -4,7 +4,7 @@ ci: wait
 pr: per-group
 merge: manual
 status: approved
-checksum: f16c8ffeac713699fceed9c40e997e835fa6cbd712181288d42dd9a519309563
+checksum: 31107254d01c13040c7b935712e1039cd94bbb68cf9b6c7c0769c83e8a4f8371
 ---
 
 # Python compatibility
@@ -94,7 +94,7 @@ the typed share each spec added.
   _Depends 2.4_
 - [x] 3.3 (Unit) Write and build the spec python-generics, the coverage report run before and after
   _Depends 3.1_
-- [ ] 4.1 (Unit) Write the wiki page on calling Python from LotML through `py.<module>`
+- [x] 4.1 (Unit) Write the wiki page on calling Python from LotML through `py.<module>`
   _Depends 2.4_
 - [x] 2.6 (Unit) Write and build the spec rust-binder: `lotml bind` reads a stub with
       `ruff_python_parser` in Rust and needs no Python, with typeshed's `stdlib`
@@ -107,11 +107,11 @@ the typed share each spec added.
       it, so 2.4 runs the binding-coverage corpus's PyPI modules
   _Depends 2.5_
   _Reason the owner split 2.4 into three specs on 2026-10-08, one PR each; this is adr:0033's install_
-- [ ] 4.2 (Unit) Write a proposed ADR on CPython loading a `lotml build --shared`
+- [x] 4.2 (Unit) Write a proposed ADR on CPython loading a `lotml build --shared`
       library through a generated loader that keeps adr:0012's checked, copying
       boundary, or on leaving it out with the reason
   _Reason review of the literature on 2026-10-08: the IR report's --pyext and research/prior-art/studies/lpython.md idea 6 are planned nowhere, and adr:0012 covers the Python target only, so Out of scope's 'adr:0012 already settles' does not reach native libraries_
-- [ ] 3.4 (Unit) Write and build the spec python-reexports: a stub's names re-exported
+- [x] 3.4 (Unit) Write and build the spec python-reexports: a stub's names re-exported
       from its submodules or another module (`from .core import where`, `from posixpath
       import *`) bound as the module's own, the coverage report run before and after
   _Depends 2.4_
