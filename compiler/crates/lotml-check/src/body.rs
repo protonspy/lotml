@@ -233,13 +233,7 @@ impl<'p> Body<'p> {
 
     /// Whether `ty` is or holds a `PyObject` proper, as against only Python classes' values.
     fn holds_py_handle(&self, ty: &Ty) -> bool {
-        match self.resolve(ty) {
-            Ty::PyObject => true,
-            Ty::List(t) | Ty::Set(t) | Ty::Optional(t) | Ty::Heap(t) => self.holds_py_handle(&t),
-            Ty::Dict(k, v) | Ty::Result(k, v) => self.holds_py_handle(&k) || self.holds_py_handle(&v),
-            Ty::Tuple(items) => items.iter().any(|t| self.holds_py_handle(t)),
-            _ => false,
-        }
+        self.holds(ty, false)
     }
 
     /// Whether `found` fits `expected`, a type holding a `PyObject`, part by part: `[int]` where
@@ -275,15 +269,21 @@ impl<'p> Body<'p> {
     /// Whether `ty` is or holds a `PyObject`, a record's and a variant's fields included: what
     /// printing, formatting, comparing, hashing or ordering would hand to Python's own methods.
     fn holds_object(&self, ty: &Ty) -> bool {
-        fn walk(b: &Body<'_>, ty: &Ty, seen: &mut Vec<String>) -> bool {
+        self.holds(ty, true)
+    }
+
+    /// Whether `ty` is or holds a `PyObject`, or, with `classes`, a Python class's value too: a
+    /// record's and a variant's fields included.
+    fn holds(&self, ty: &Ty, classes: bool) -> bool {
+        fn walk(b: &Body<'_>, ty: &Ty, classes: bool, seen: &mut Vec<String>) -> bool {
             match b.resolve(ty) {
                 Ty::PyObject => true,
-                Ty::Adt(name, _) if b.program.py_attributes.contains_key(&name) => true,
-                Ty::List(t) | Ty::Set(t) | Ty::Optional(t) | Ty::Heap(t) => walk(b, &t, seen),
-                Ty::Dict(k, v) | Ty::Result(k, v) => walk(b, &k, seen) || walk(b, &v, seen),
-                Ty::Tuple(items) => items.iter().any(|t| walk(b, t, seen)),
+                Ty::Adt(name, _) if b.program.py_attributes.contains_key(&name) => classes,
+                Ty::List(t) | Ty::Set(t) | Ty::Optional(t) | Ty::Heap(t) => walk(b, &t, classes, seen),
+                Ty::Dict(k, v) | Ty::Result(k, v) => walk(b, &k, classes, seen) || walk(b, &v, classes, seen),
+                Ty::Tuple(items) => items.iter().any(|t| walk(b, t, classes, seen)),
                 Ty::Adt(name, args) => {
-                    if args.iter().any(|t| walk(b, t, seen)) {
+                    if args.iter().any(|t| walk(b, t, classes, seen)) {
                         return true;
                     }
                     if seen.contains(&name) {
@@ -297,12 +297,12 @@ impl<'p> Body<'p> {
                         }
                         None => Vec::new(),
                     };
-                    fields.iter().any(|t| walk(b, t, seen))
+                    fields.iter().any(|t| walk(b, t, classes, seen))
                 }
                 _ => false,
             }
         }
-        walk(self, ty, &mut Vec::new())
+        walk(self, ty, classes, &mut Vec::new())
     }
 
     /// Whether `ty` is known in full, no part of it left to inference.
